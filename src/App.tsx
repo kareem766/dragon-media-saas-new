@@ -6,6 +6,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import CRM from './pages/CRM'
+import CustomerDetail from './pages/CustomerDetail'
 import Pipeline from './pages/Pipeline'
 import Services from './pages/Services'
 import Campaigns from './pages/Campaigns'
@@ -27,6 +28,7 @@ export default function App() {
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/crm" element={<CRM />} />
+            <Route path="/crm/customer/:id" element={<CustomerDetail />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/services" element={<Services />} />
             <Route path="/campaigns" element={<Campaigns />} />
