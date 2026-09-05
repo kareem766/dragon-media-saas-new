@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Badge, Button, Table, statusTone } from '../components/ui'
-import { IconPlus } from '../components/Icon'
+import { IconPlus, IconSearch } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
 
@@ -35,6 +35,8 @@ export default function CRM() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [convertingId, setConvertingId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('الكل')
   const [form, setForm] = useState({ name: '', company: '', phone: '', source: '' })
 
   const loadData = async () => {
@@ -95,6 +97,21 @@ export default function CRM() {
     if (!error) setTab('customers')
   }
 
+  const q = search.trim().toLowerCase()
+  const filteredLeads = leads.filter(l => {
+    const matchesSearch = !q || l.name.toLowerCase().includes(q) || (l.phone ?? '').includes(q) || (l.company ?? '').toLowerCase().includes(q)
+    const matchesStatus = statusFilter === 'الكل' || l.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+  const filteredCustomers = customers.filter(c => {
+    const matchesSearch = !q || c.name.toLowerCase().includes(q) || (c.phone ?? '').includes(q) || (c.email ?? '').toLowerCase().includes(q)
+    const matchesStatus = statusFilter === 'الكل' || c.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
+  const leadStatuses = ['الكل', 'جديد', 'تم التواصل', 'مهتم', 'غير مهتم']
+  const customerStatuses = ['الكل', 'نشط', 'غير نشط']
+
   if (orgLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -123,14 +140,29 @@ export default function CRM() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="inline-flex bg-white border border-sand-200 rounded-xl p-1">
-          <button onClick={() => setTab('leads')} className={`px-4 py-2 rounded-lg text-sm font-semibold ${tab === 'leads' ? 'bg-ink-900 text-sand-50' : 'text-ink-900/60'}`}>العملاء المحتملون</button>
-          <button onClick={() => setTab('customers')} className={`px-4 py-2 rounded-lg text-sm font-semibold ${tab === 'customers' ? 'bg-ink-900 text-sand-50' : 'text-ink-900/60'}`}>العملاء</button>
+          <button onClick={() => { setTab('leads'); setStatusFilter('الكل') }} className={`px-4 py-2 rounded-lg text-sm font-semibold ${tab === 'leads' ? 'bg-ink-900 text-sand-50' : 'text-ink-900/60'}`}>العملاء المحتملون</button>
+          <button onClick={() => { setTab('customers'); setStatusFilter('الكل') }} className={`px-4 py-2 rounded-lg text-sm font-semibold ${tab === 'customers' ? 'bg-ink-900 text-sand-50' : 'text-ink-900/60'}`}>العملاء</button>
         </div>
         {tab === 'leads' && (
           <Button onClick={() => setShowForm(v => !v)}>
             <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة عميل محتمل</span>
           </Button>
         )}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <div className="flex items-center gap-2 bg-white border border-sand-200 rounded-full px-4 py-2 flex-1 min-w-[220px]">
+          <IconSearch className="w-4 h-4 text-ink-900/40" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="بحث بالاسم، الهاتف، أو الشركة..."
+            className="bg-transparent outline-none text-sm w-full placeholder:text-ink-900/40"
+          />
+        </div>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="border border-sand-200 rounded-full px-4 py-2 text-sm outline-none bg-white">
+          {(tab === 'leads' ? leadStatuses : customerStatuses).map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
 
       {showForm && (
@@ -151,11 +183,11 @@ export default function CRM() {
 
       <Card className="p-2 sm:p-4">
         {tab === 'leads' ? (
-          leads.length === 0 ? (
-            <div className="text-center py-12 text-sm text-ink-900/40">لا يوجد عملاء محتملون بعد — ابدأ بإضافة أول عميل محتمل</div>
+          filteredLeads.length === 0 ? (
+            <div className="text-center py-12 text-sm text-ink-900/40">لا توجد نتائج مطابقة</div>
           ) : (
             <Table head={['الاسم', 'الشركة', 'الهاتف', 'المصدر', 'الحالة', 'تاريخ الإضافة', '']}>
-              {leads.map(l => (
+              {filteredLeads.map(l => (
                 <tr key={l.id} className="hover:bg-sand-50">
                   <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{l.name}</td>
                   <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{l.company ?? '—'}</td>
@@ -176,12 +208,12 @@ export default function CRM() {
               ))}
             </Table>
           )
-        ) : customers.length === 0 ? (
-          <div className="text-center py-12 text-sm text-ink-900/40">لا يوجد عملاء بعد</div>
+        ) : filteredCustomers.length === 0 ? (
+          <div className="text-center py-12 text-sm text-ink-900/40">لا توجد نتائج مطابقة</div>
         ) : (
           <Table head={['العميل', 'الهاتف', 'البريد الإلكتروني', 'إجمالي المبيعات', 'الوسوم', 'الحالة']}>
-            {customers.map(c => (
-              <tr key={c.id} className="hover:bg-sand-50">
+            {filteredCustomers.map(c => (
+              <tr key={c.id} className="hover:bg-sand-50 cursor-pointer" onClick={() => { window.location.hash = `#/crm/customer/${c.id}` }}>
                 <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{c.name}</td>
                 <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap" dir="ltr">{c.phone ?? '—'}</td>
                 <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap" dir="ltr">{c.email ?? '—'}</td>
