@@ -31,7 +31,7 @@ export default function Ryan() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || 'حدث خطأ')
+        setError(`${data.error || 'حدث خطأ'} — ${JSON.stringify(data.details ?? '')}`.slice(0, 300))
         return
       }
       setMessages(prev => [...prev, { role: 'model', text: data.reply }])
