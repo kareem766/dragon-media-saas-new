@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, Badge, Button } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
@@ -148,13 +149,15 @@ export default function Pipeline() {
                   <div className="text-xs text-ink-900/45 mb-3 px-1">{total.toLocaleString('ar-EG')} ج.م</div>
                   <div className="space-y-3">
                     {stageDeals.map(d => (
-                      <Card key={d.id} className="p-3.5">
-                        <div className="font-semibold text-sm text-ink-950 leading-snug">{d.title}</div>
-                        <div className="text-xs text-ink-900/50 mt-1.5">{d.customers?.name ?? 'بدون عميل'}</div>
-                        <div className="flex items-center justify-between mt-3">
-                          <Badge tone="gold">{Number(d.value).toLocaleString('ar-EG')} ج.م</Badge>
-                        </div>
-                      </Card>
+                      <Link key={d.id} to={`/pipeline/deal/${d.id}`}>
+                        <Card className="p-3.5 hover:border-ink-700 transition-colors">
+                          <div className="font-semibold text-sm text-ink-950 leading-snug">{d.title}</div>
+                          <div className="text-xs text-ink-900/50 mt-1.5">{d.customers?.name ?? 'بدون عميل'}</div>
+                          <div className="flex items-center justify-between mt-3">
+                            <Badge tone="gold">{Number(d.value).toLocaleString('ar-EG')} ج.م</Badge>
+                          </div>
+                        </Card>
+                      </Link>
                     ))}
                     {stageDeals.length === 0 && (
                       <div className="text-xs text-ink-900/30 text-center py-6 border border-dashed border-sand-200 rounded-xl">لا توجد صفقات</div>
