@@ -10,12 +10,13 @@ interface OrgData {
   phone: string | null
   email: string | null
   timezone: string | null
+  business_type: string | null
 }
 
 export default function Settings() {
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
   const [active, setActive] = useState(tabs[0])
-  const [org, setOrg] = useState<OrgData>({ name: '', phone: '', email: '', timezone: 'Africa/Cairo' })
+  const [org, setOrg] = useState<OrgData>({ name: '', phone: '', email: '', timezone: 'Africa/Cairo', business_type: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -23,7 +24,7 @@ export default function Settings() {
   useEffect(() => {
     if (!organizationId || !supabase) return
     const sb = supabase
-    sb.from('organizations').select('name, phone, email, timezone').eq('id', organizationId).single()
+    sb.from('organizations').select('name, phone, email, timezone, business_type').eq('id', organizationId).single()
       .then(({ data }) => {
         if (data) setOrg(data as OrgData)
         setLoading(false)
@@ -39,6 +40,7 @@ export default function Settings() {
       phone: org.phone,
       email: org.email,
       timezone: org.timezone,
+      business_type: org.business_type,
     }).eq('id', organizationId)
     setSaving(false)
     setSaved(true)
@@ -76,6 +78,20 @@ export default function Settings() {
         {active === 'بيانات الشركة' && (
           <div className="space-y-4 max-w-md">
             <Field label="اسم الشركة" value={org.name} onChange={v => setOrg({ ...org, name: v })} />
+            <div>
+              <label className="text-xs text-ink-900/50">نوع النشاط</label>
+              <select value={org.business_type ?? ''} onChange={e => setOrg({ ...org, business_type: e.target.value })} className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white">
+                <option value="">اختر نوع النشاط</option>
+                <option value="عقارات">عقارات</option>
+                <option value="مطاعم">مطاعم</option>
+                <option value="عيادات">عيادات</option>
+                <option value="تعليم">مراكز تعليمية</option>
+                <option value="سيارات">معارض سيارات</option>
+                <option value="تجارة إلكترونية">تجارة إلكترونية</option>
+                <option value="سوشيال ميديا">تسويق وسوشيال ميديا</option>
+                <option value="أخرى">أخرى</option>
+              </select>
+            </div>
             <Field label="البريد الإلكتروني للتواصل" value={org.email ?? ''} onChange={v => setOrg({ ...org, email: v })} />
             <Field label="رقم الهاتف" value={org.phone ?? ''} onChange={v => setOrg({ ...org, phone: v })} />
             <Field label="المنطقة الزمنية" value={org.timezone ?? ''} onChange={v => setOrg({ ...org, timezone: v })} />
@@ -117,7 +133,7 @@ export default function Settings() {
         )}
         {active === 'إعدادات الذكاء الاصطناعي' && (
           <div className="max-w-md">
-            <p className="text-sm text-ink-900/55">سيتم تفعيل هذا القسم بعد ربط RYAN بمزود ذكاء اصطناعي حقيقي.</p>
+            <p className="text-sm text-ink-900/55">RYAN يعمل حاليًا بـ Google Gemini. إعدادات مخصصة أكثر ستُضاف لاحقًا.</p>
           </div>
         )}
         {active === 'الفوترة' && (
