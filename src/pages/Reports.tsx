@@ -22,14 +22,16 @@ export default function Reports() {
 
   useEffect(() => {
     if (!organizationId || !supabase) return
+    const sb = supabase
+    const orgId = organizationId
     const load = async () => {
       setLoading(true)
       const [leadsRes, customersRes, dealsRes, tasksRes, campaignsRes] = await Promise.all([
-        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
-        supabase.from('customers').select('status').eq('organization_id', organizationId),
-        supabase.from('deals').select('value').eq('organization_id', organizationId),
-        supabase.from('tasks').select('status').eq('organization_id', organizationId),
-        supabase.from('campaigns').select('id', { count: 'exact', head: true }).eq('organization_id', organizationId),
+        sb.from('leads').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+        sb.from('customers').select('status').eq('organization_id', orgId),
+        sb.from('deals').select('value').eq('organization_id', orgId),
+        sb.from('tasks').select('status').eq('organization_id', orgId),
+        sb.from('campaigns').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
       ])
 
       const customers = customersRes.data ?? []
