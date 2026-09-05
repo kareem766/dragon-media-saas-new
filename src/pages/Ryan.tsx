@@ -86,6 +86,13 @@ export default function Ryan() {
               {m.actionTaken === 'create_lead' && (
                 <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم تسجيل العميل في CRM تلقائيًا</div>
               )}
+              {m.actionTaken === 'create_deal' && (
+                <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم إنشاء صفقة جديدة في مسار المبيعات</div>
+              )}
+              {m.actionTaken === 'book_appointment' && (
+                <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم حجز الموعد بنجاح</div>
+              )}
+
             </div>
           ))}
           {sending && <div className="text-xs text-ink-900/40">ريان بيكتب...</div>}
