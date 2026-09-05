@@ -1,13 +1,17 @@
 import React, { useState } from 'react'
-import { Card, Badge, Button, StatCard } from '../components/ui'
+import { Card, Badge, Button } from '../components/ui'
 import { IconSpark } from '../components/Icon'
+import { supabase } from '../lib/supabaseClient'
+import { useOrganization } from '../lib/useOrganization'
 
 interface ChatMessage {
   role: 'user' | 'model'
   text: string
+  actionTaken?: string | null
 }
 
 export default function Ryan() {
+  const { organizationId } = useOrganization()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -15,7 +19,7 @@ export default function Ryan() {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    if (!input.trim() || !supabase) return
     const userMessage = input.trim()
     setInput('')
     setError(null)
@@ -23,18 +27,27 @@ export default function Ryan() {
     setSending(true)
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+
+      let companyName = 'الشركة'
+      if (organizationId) {
+        const { data: org } = await supabase.from('organizations').select('name').eq('id', organizationId).single()
+        if (org?.name) companyName = org.name
+      }
+
       const history = messages.map(m => ({ role: m.role, parts: [{ text: m.text }] }))
       const res = await fetch('/api/ryan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage, history, companyName: 'Dragon Media' }),
+        body: JSON.stringify({ message: userMessage, history, companyName, accessToken }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(`${data.error || 'حدث خطأ'} — ${JSON.stringify(data.details ?? '')}`.slice(0, 300))
         return
       }
-      setMessages(prev => [...prev, { role: 'model', text: data.reply }])
+      setMessages(prev => [...prev, { role: 'model', text: data.reply, actionTaken: data.actionTaken }])
     } catch {
       setError('تعذر الاتصال بـ RYAN، حاول تاني')
     } finally {
@@ -51,7 +64,7 @@ export default function Ryan() {
           </div>
           <div>
             <h2 className="text-xl font-bold">RYAN AI</h2>
-            <p className="text-sand-100/60 text-sm mt-1">مساعد المبيعات وخدمة العملاء الذكي الخاص بـ Dragon Media</p>
+            <p className="text-sand-100/60 text-sm mt-1">موظف المبيعات وخدمة العملاء الذكي — بيقدر يسجّل عملاء محتملين فعليًا في CRM</p>
           </div>
           <Badge tone="success">يعمل الآن</Badge>
         </div>
@@ -61,11 +74,18 @@ export default function Ryan() {
         <h3 className="font-bold text-ink-950 mb-4">جرّب RYAN مباشرة</h3>
         <div className="border border-sand-200 rounded-xl h-80 overflow-y-auto p-4 space-y-3 bg-sand-50/50">
           {messages.length === 0 && (
-            <div className="text-sm text-ink-900/40 text-center py-10">اكتب رسالة زي ما العميل هيكتبها، وشوف رد ريان</div>
+            <div className="text-sm text-ink-900/40 text-center py-10">
+              جرّب تكتب حاجة زي: "أنا مهتم بالخدمة، اسمي محمد ورقمي 01012345678" وشوف ريان بيسجّلك فعليًا في CRM
+            </div>
           )}
           {messages.map((m, i) => (
-            <div key={i} className={`max-w-[80%] rounded-2xl p-3 text-sm ${m.role === 'user' ? 'bg-white border border-sand-200 mr-auto rounded-tr-sm' : 'bg-ink-900 text-sand-50 ml-auto rounded-tl-sm'}`}>
-              {m.text}
+            <div key={i}>
+              <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${m.role === 'user' ? 'bg-white border border-sand-200 mr-auto rounded-tr-sm' : 'bg-ink-900 text-sand-50 ml-auto rounded-tl-sm'}`}>
+                {m.text}
+              </div>
+              {m.actionTaken === 'create_lead' && (
+                <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم تسجيل العميل في CRM تلقائيًا</div>
+              )}
             </div>
           ))}
           {sending && <div className="text-xs text-ink-900/40">ريان بيكتب...</div>}
@@ -83,10 +103,12 @@ export default function Ryan() {
       </Card>
 
       <Card className="p-5">
-        <h3 className="font-bold text-ink-950 mb-3">شخصية RYAN</h3>
-        <p className="text-sm text-ink-900/55 leading-relaxed">
-          ريان بيتكلم باللهجة المصرية العامية، وبيخاطب العملاء بـ"حضرتك" و"أستاذ / أستاذة" متبوعة بالاسم. الأسلوب ودود واحترافي في نفس الوقت، ومصمم عشان يمثل صوت Dragon Media في كل قنوات التواصل. بيشتغل حاليًا بـ Google Gemini.
-        </p>
+        <h3 className="font-bold text-ink-950 mb-3">قدرات RYAN الحالية</h3>
+        <ul className="text-sm text-ink-900/55 space-y-2">
+          <li>✅ الرد على استفسارات العملاء</li>
+          <li>✅ تسجيل عميل محتمل جديد تلقائيًا في CRM عند إبداء اهتمام حقيقي</li>
+          <li>⏳ إنشاء صفقة، حجز موعد، تلخيص المحادثة — قريبًا</li>
+        </ul>
       </Card>
     </div>
   )
