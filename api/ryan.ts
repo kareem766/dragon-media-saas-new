@@ -17,9 +17,66 @@ const tools = [
           required: ['name'],
         },
       },
+      {
+        name: 'create_deal',
+        description: 'إنشاء صفقة بيعية جديدة في مسار المبيعات عندما يوافق العميل مبدئيًا على شراء خدمة أو منتج معين',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            title: { type: 'STRING', description: 'عنوان الصفقة، مثل اسم الخدمة أو المنتج المطلوب' },
+            value: { type: 'NUMBER', description: 'القيمة التقديرية للصفقة بالجنيه المصري إن ذُكرت' },
+            customer_name: { type: 'STRING', description: 'اسم العميل المرتبط بالصفقة إن كان موجودًا في النظام كعميل' },
+          },
+          required: ['title'],
+        },
+      },
+      {
+        name: 'book_appointment',
+        description: 'حجز موعد للعميل عندما يطلب حجز استشارة أو موعد لخدمة معينة',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            customer_name: { type: 'STRING', description: 'اسم العميل' },
+            service_name: { type: 'STRING', description: 'اسم الخدمة المطلوب حجز موعد لها' },
+            date: { type: 'STRING', description: 'تاريخ الموعد بصيغة YYYY-MM-DD' },
+            time: { type: 'STRING', description: 'وقت الموعد بصيغة HH:MM بنظام 24 ساعة' },
+          },
+          required: ['date', 'time'],
+        },
+      },
     ],
   },
 ]
+
+async function runFunction(supabase: any, name: string, args: any) {
+  if (name === 'create_lead') {
+    const { error } = await supabase.rpc('ai_create_lead', {
+      p_name: args.name,
+      p_phone: args.phone || null,
+      p_company: args.company || null,
+      p_source: args.source || 'RYAN AI',
+    })
+    return { error }
+  }
+  if (name === 'create_deal') {
+    const { error } = await supabase.rpc('ai_create_deal', {
+      p_title: args.title,
+      p_value: args.value || 0,
+      p_customer_name: args.customer_name || null,
+    })
+    return { error }
+  }
+  if (name === 'book_appointment') {
+    const { error } = await supabase.rpc('ai_book_appointment', {
+      p_customer_name: args.customer_name || null,
+      p_service_name: args.service_name || null,
+      p_date: args.date,
+      p_time: args.time,
+    })
+    return { error }
+  }
+  return { error: { message: 'أداة غير معروفة' } }
+}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -46,7 +103,12 @@ export default async function handler(req: any, res: any) {
     ? createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: `Bearer ${accessToken}` } } })
     : null
 
-  const systemPrompt = `أنت "ريان"، موظف مبيعات وخدمة عملاء ذكي يعمل داخل نظام إدارة العملاء لصالح شركة ${companyName || 'العميل'}. تتحدث باللهجة المصرية العامية بأسلوب ودود ومحترف. تخاطب العميل بـ"حضرتك" أو "أستاذ/أستاذة". لما عميل يبدي اهتمام حقيقي أو يطلب حد يتواصل معاه، استخدم أداة create_lead لتسجيله فورًا قبل ما ترد عليه، من غير ما تسأله إذن. بعد التسجيل أخبره إن فريق المبيعات هيتواصل معاه قريبًا.`
+  const today = new Date().toISOString().slice(0, 10)
+  const systemPrompt = `أنت "ريان"، موظف مبيعات وخدمة عملاء ذكي يعمل داخل نظام إدارة العملاء لصالح شركة ${companyName || 'العميل'}. تتحدث باللهجة المصرية العامية بأسلوب ودود ومحترف. تخاطب العميل بـ"حضرتك" أو "أستاذ/أستاذة". النهاردة تاريخ ${today}.
+لما عميل يبدي اهتمام حقيقي أو يطلب حد يتواصل معاه، استخدم أداة create_lead لتسجيله فورًا.
+لما عميل يوافق مبدئيًا على شراء خدمة أو منتج، استخدم أداة create_deal.
+لما عميل يطلب حجز موعد أو استشارة، استخدم أداة book_appointment (لو التاريخ غير واضح اسأله يحدده قبل ما تستخدم الأداة).
+لا تسأل العميل إذن قبل استخدام أي أداة، نفّذها مباشرة وبعدها أخبره إنك خلّصت.`
 
   const contents: any[] = [
     { role: 'user', parts: [{ text: systemPrompt }] },
@@ -67,22 +129,12 @@ export default async function handler(req: any, res: any) {
     const functionCallPart = parts?.find((p: any) => p.functionCall)
     if (functionCallPart && supabase) {
       const { name, args } = functionCallPart.functionCall
-      let functionResult: any = { success: false }
-
-      if (name === 'create_lead') {
-        const { error } = await supabase.rpc('ai_create_lead', {
-          p_name: args.name,
-          p_phone: args.phone || null,
-          p_company: args.company || null,
-          p_source: args.source || 'RYAN AI',
-        })
-        functionResult = error ? { success: false, error: error.message } : { success: true }
-        if (!error) actionTaken = 'create_lead'
-      }
+      const { error } = await runFunction(supabase, name, args)
+      const functionResult = error ? { success: false, error: error.message } : { success: true }
+      if (!error) actionTaken = name
 
       contents.push({ role: 'model', parts: [functionCallPart] })
       contents.push({ role: 'user', parts: [{ functionResponse: { name, response: functionResult } }] })
-
 
       response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
