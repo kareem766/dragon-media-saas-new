@@ -123,4 +123,80 @@ export default function CRM() {
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="inline-flex bg-white border border-sand-200 rounded-xl p-1">
-          
+          <button onClick={() => setTab('leads')} className={`px-4 py-2 rounded-lg text-sm font-semibold ${tab === 'leads' ? 'bg-ink-900 text-sand-50' : 'text-ink-900/60'}`}>العملاء المحتملون</button>
+          <button onClick={() => setTab('customers')} className={`px-4 py-2 rounded-lg text-sm font-semibold ${tab === 'customers' ? 'bg-ink-900 text-sand-50' : 'text-ink-900/60'}`}>العملاء</button>
+        </div>
+        {tab === 'leads' && (
+          <Button onClick={() => setShowForm(v => !v)}>
+            <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة عميل محتمل</span>
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <Card className="p-5">
+          <form onSubmit={handleAddLead} className="grid sm:grid-cols-2 gap-3">
+            <input required placeholder="الاسم" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
+            <input placeholder="الشركة" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
+            <input placeholder="الهاتف" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" dir="ltr" />
+            <input placeholder="المصدر (واتساب، فيسبوك...)" value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
+            {error && <div className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">{error}</div>}
+            <div className="sm:col-span-2 flex gap-2">
+              <Button type="submit" disabled={saving}>{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>إلغاء</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      <Card className="p-2 sm:p-4">
+        {tab === 'leads' ? (
+          leads.length === 0 ? (
+            <div className="text-center py-12 text-sm text-ink-900/40">لا يوجد عملاء محتملون بعد — ابدأ بإضافة أول عميل محتمل</div>
+          ) : (
+            <Table head={['الاسم', 'الشركة', 'الهاتف', 'المصدر', 'الحالة', 'تاريخ الإضافة', '']}>
+              {leads.map(l => (
+                <tr key={l.id} className="hover:bg-sand-50">
+                  <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{l.name}</td>
+                  <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{l.company ?? '—'}</td>
+                  <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap" dir="ltr">{l.phone ?? '—'}</td>
+                  <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{l.source ?? '—'}</td>
+                  <td className="py-3 px-3"><Badge tone={statusTone(l.status)}>{l.status}</Badge></td>
+                  <td className="py-3 px-3 text-ink-900/50 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('ar-EG')}</td>
+                  <td className="py-3 px-3">
+                    <button
+                      onClick={() => handleConvert(l)}
+                      disabled={convertingId === l.id}
+                      className="text-xs font-semibold text-gold-600 hover:underline whitespace-nowrap disabled:opacity-50"
+                    >
+                      {convertingId === l.id ? 'جاري التحويل...' : 'تحويل لعميل'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )
+        ) : customers.length === 0 ? (
+          <div className="text-center py-12 text-sm text-ink-900/40">لا يوجد عملاء بعد</div>
+        ) : (
+          <Table head={['العميل', 'الهاتف', 'البريد الإلكتروني', 'إجمالي المبيعات', 'الوسوم', 'الحالة']}>
+            {customers.map(c => (
+              <tr key={c.id} className="hover:bg-sand-50">
+                <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{c.name}</td>
+                <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap" dir="ltr">{c.phone ?? '—'}</td>
+                <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap" dir="ltr">{c.email ?? '—'}</td>
+                <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{c.total_spent.toLocaleString('ar-EG')} ج.م</td>
+                <td className="py-3 px-3">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {(c.tags ?? []).map(t => <Badge key={t}>{t}</Badge>)}
+                  </div>
+                </td>
+                <td className="py-3 px-3"><Badge tone={statusTone(c.status)}>{c.status}</Badge></td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
+    </div>
+  )
+}
