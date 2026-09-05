@@ -81,7 +81,8 @@ export default async function handler(req: any, res: any) {
       }
 
       contents.push({ role: 'model', parts: [functionCallPart] })
-      contents.push({ role: 'function', parts: [{ functionResponse: { name, response: functionResult } }] })
+      contents.push({ role: 'user', parts: [{ functionResponse: { name, response: functionResult } }] })
+
 
       response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
