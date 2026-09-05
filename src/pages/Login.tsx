@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabaseClient'
 import { IconDragon } from '../components/Icon'
 
 export default function Login() {
@@ -9,6 +10,7 @@ export default function Login() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -20,13 +22,34 @@ export default function Login() {
     setError(null)
     setInfo(null)
     setSubmitting(true)
+
     if (mode === 'login') {
       const { error } = await signIn(email, password)
       if (error) setError(error)
+      setSubmitting(false)
+      return
+    }
+
+    const { error: signUpError } = await signUp(email, password, fullName)
+    if (signUpError) {
+      setError(signUpError)
+      setSubmitting(false)
+      return
+    }
+
+    if (inviteCode.trim() && supabase) {
+      const { error: redeemError } = await supabase.rpc('redeem_invite_code', {
+        p_code: inviteCode.trim().toUpperCase(),
+        p_full_name: fullName,
+      })
+      if (redeemError) {
+        setError(`تم إنشاء الحساب، لكن كود الدعوة غير صالح: ${redeemError.message}`)
+        setSubmitting(false)
+        return
+      }
+      setInfo('تم إنشاء الحساب والانضمام للمؤسسة بنجاح!')
     } else {
-      const { error } = await signUp(email, password, fullName)
-      if (error) setError(error)
-      else setInfo('تم إنشاء الحساب! تحقق من بريدك الإلكتروني لتأكيد التسجيل قبل الدخول.')
+      setInfo('تم إنشاء الحساب! لاحظ أنك تحتاج كود دعوة من مديرك للانضمام لمؤسسة.')
     }
     setSubmitting(false)
   }
@@ -69,16 +92,28 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             {mode === 'signup' && (
-              <div>
-                <label className="text-xs text-ink-900/50">الاسم الكامل</label>
-                <input
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  required
-                  className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white"
-                  placeholder="اسمك بالكامل"
-                />
-              </div>
+              <>
+                <div>
+                  <label className="text-xs text-ink-900/50">الاسم الكامل</label>
+                  <input
+                    value={fullName}
+                    onChange={e => setFullName(e.target.value)}
+                    required
+                    className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white"
+                    placeholder="اسمك بالكامل"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-ink-900/50">كود الدعوة (لو معاك واحد من مديرك)</label>
+                  <input
+                    value={inviteCode}
+                    onChange={e => setInviteCode(e.target.value)}
+                    className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white"
+                    placeholder="مثال: A1B2C3D4"
+                    dir="ltr"
+                  />
+                </div>
+              </>
             )}
             <div>
               <label className="text-xs text-ink-900/50">البريد الإلكتروني</label>
