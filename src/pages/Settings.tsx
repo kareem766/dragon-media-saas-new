@@ -1,10 +1,65 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, Button, Badge } from '../components/ui'
+import { supabase } from '../lib/supabaseClient'
+import { useOrganization } from '../lib/useOrganization'
 
 const tabs = ['بيانات الشركة', 'الإشعارات', 'التكاملات', 'إعدادات واتساب', 'إعدادات الذكاء الاصطناعي', 'الفوترة']
 
+interface OrgData {
+  name: string
+  phone: string | null
+  email: string | null
+  timezone: string | null
+}
+
 export default function Settings() {
+  const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
   const [active, setActive] = useState(tabs[0])
+  const [org, setOrg] = useState<OrgData>({ name: '', phone: '', email: '', timezone: 'Africa/Cairo' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (!organizationId || !supabase) return
+    const sb = supabase
+    sb.from('organizations').select('name, phone, email, timezone').eq('id', organizationId).single()
+      .then(({ data }) => {
+        if (data) setOrg(data as OrgData)
+        setLoading(false)
+      })
+  }, [organizationId])
+
+  const handleSave = async () => {
+    if (!supabase || !organizationId) return
+    setSaving(true)
+    setSaved(false)
+    await supabase.from('organizations').update({
+      name: org.name,
+      phone: org.phone,
+      email: org.email,
+      timezone: org.timezone,
+    }).eq('id', organizationId)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  if (orgLoading || loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (orgError || !organizationId) {
+    return (
+      <div className="text-center py-20 text-sm text-red-600">
+        {orgError ?? 'تعذر تحديد المؤسسة الخاصة بحسابك'}
+      </div>
+    )
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
@@ -20,11 +75,14 @@ export default function Settings() {
       <Card className="p-6">
         {active === 'بيانات الشركة' && (
           <div className="space-y-4 max-w-md">
-            <Field label="اسم الشركة" value="Dragon Media" />
-            <Field label="البريد الإلكتروني للتواصل" value="info@dragonmedia.com" />
-            <Field label="رقم الهاتف" value="01000000000" />
-            <Field label="المنطقة الزمنية" value="القاهرة (GMT+2)" />
-            <Button className="mt-2">حفظ التغييرات</Button>
+            <Field label="اسم الشركة" value={org.name} onChange={v => setOrg({ ...org, name: v })} />
+            <Field label="البريد الإلكتروني للتواصل" value={org.email ?? ''} onChange={v => setOrg({ ...org, email: v })} />
+            <Field label="رقم الهاتف" value={org.phone ?? ''} onChange={v => setOrg({ ...org, phone: v })} />
+            <Field label="المنطقة الزمنية" value={org.timezone ?? ''} onChange={v => setOrg({ ...org, timezone: v })} />
+            <div className="flex items-center gap-3">
+              <Button onClick={handleSave} disabled={saving}>{saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}</Button>
+              {saved && <span className="text-sm text-emerald-600">تم الحفظ ✓</span>}
+            </div>
           </div>
         )}
         {active === 'الإشعارات' && (
@@ -35,37 +93,36 @@ export default function Settings() {
                 <input type="checkbox" defaultChecked className="w-4 h-4 accent-ink-900" />
               </label>
             ))}
+            <p className="text-xs text-ink-900/40">إعدادات الإشعارات دي شكلية حاليًا — هتشتغل فعليًا لما نربط نظام إرسال إشعارات حقيقي.</p>
           </div>
         )}
         {active === 'التكاملات' && (
           <div className="grid sm:grid-cols-2 gap-3">
-            {['واتساب بيزنس', 'فيسبوك ماسنجر', 'إنستجرام', 'تليجرام', 'Supabase', 'بوابة الدفع'].map(i => (
+            {['واتساب بيزنس', 'فيسبوك ماسنجر', 'إنستجرام', 'تليجرام', 'بوابة الدفع'].map(i => (
               <div key={i} className="border border-sand-200 rounded-xl p-4 flex items-center justify-between">
                 <span className="text-sm font-medium text-ink-900">{i}</span>
                 <Badge>غير متصل</Badge>
               </div>
             ))}
+            <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4 flex items-center justify-between">
+              <span className="text-sm font-medium text-ink-900">Supabase (قاعدة البيانات)</span>
+              <Badge tone="success">متصل</Badge>
+            </div>
           </div>
         )}
         {active === 'إعدادات واتساب' && (
-          <div className="space-y-4 max-w-md">
-            <Field label="رقم واتساب بيزنس" value="غير مضاف بعد" />
-            <Field label="معرّف رقم الهاتف (Phone Number ID)" value="—" />
-            <p className="text-xs text-ink-900/45">هيتم تفعيل الربط الفعلي بعد توصيل حساب Meta Business.</p>
+          <div className="max-w-md">
+            <p className="text-sm text-ink-900/55">سيتم تفعيل هذا القسم بعد ربط حساب Meta Business الحقيقي.</p>
           </div>
         )}
         {active === 'إعدادات الذكاء الاصطناعي' && (
-          <div className="space-y-4 max-w-md">
-            <Field label="اسم الوكيل" value="RYAN" />
-            <Field label="اللهجة" value="مصرية عامية" />
-            <Field label="أسلوب المخاطبة" value="حضرتك / أستاذ + الاسم" />
-            <Button className="mt-2">تعديل شخصية الوكيل</Button>
+          <div className="max-w-md">
+            <p className="text-sm text-ink-900/55">سيتم تفعيل هذا القسم بعد ربط RYAN بمزود ذكاء اصطناعي حقيقي.</p>
           </div>
         )}
         {active === 'الفوترة' && (
           <div className="max-w-md">
-            <Field label="الباقة الحالية" value="النمو — 6,000 ج.م/شهريًا" />
-            <Field label="طريقة الدفع" value="غير مضافة" />
+            <p className="text-sm text-ink-900/55">سيتم تفعيل هذا القسم بعد ربط بوابة دفع حقيقية.</p>
           </div>
         )}
       </Card>
@@ -73,11 +130,11 @@ export default function Settings() {
   )
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
       <label className="text-xs text-ink-900/50">{label}</label>
-      <input defaultValue={value} className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
+      <input value={value} onChange={e => onChange(e.target.value)} className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
     </div>
   )
 }
