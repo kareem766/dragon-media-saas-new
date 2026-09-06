@@ -15,10 +15,11 @@ export function usePermissions() {
 
   useEffect(() => {
     if (!supabase || !user) { setLoading(false); return }
-    supabase.from('users').select('role').eq('id', user.id).single()
+    const sb = supabase
+    sb.from('users').select('role').eq('id', user.id).single()
       .then(async ({ data: userRow }) => {
         if (!userRow) { setLoading(false); return }
-        const { data } = await supabase.from('role_permissions').select('resource, can_view, can_edit, can_delete').eq('role', userRow.role)
+        const { data } = await sb.from('role_permissions').select('resource, can_view, can_edit, can_delete').eq('role', userRow.role)
         if (data) {
           const map: Record<string, Permission> = {}
           data.forEach(p => { map[p.resource] = { can_view: p.can_view, can_edit: p.can_edit, can_delete: p.can_delete } })
