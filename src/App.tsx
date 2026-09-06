@@ -19,6 +19,8 @@ import Automations from './pages/Automations'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminPayments from './pages/AdminPayments'
 import AdminAuditLogs from './pages/AdminAuditLogs'
+import AdminSettings from './pages/AdminSettings'
+import Support from './pages/Support'
 import Plans from './pages/Plans'
 import PaymentRequest from './pages/PaymentRequest'
 import Tasks from './pages/Tasks'
@@ -36,6 +38,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
+          <Route path="/support" element={<Support />} />
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/crm" element={<CRM />} />
@@ -49,6 +52,7 @@ export default function App() {
             <Route path="/automations" element={<Automations />} />
             <Route path="/admin" element={<AdminDashboard />} />            <Route path="/admin/payments" element={<AdminPayments />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/plans" element={<Plans />} />
             <Route path="/billing/pay" element={<PaymentRequest />} />
             <Route path="/tasks" element={<Tasks />} />
