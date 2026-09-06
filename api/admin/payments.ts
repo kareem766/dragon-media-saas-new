@@ -41,6 +41,14 @@ export default async function handler(req: any, res: any) {
         status: 'active',
         renewal_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       }).eq('organization_id', request.organization_id)
+      await admin.from('audit_logs').insert({
+        actor_id: authData.user.id,
+        organization_id: request.organization_id,
+        action: 'approve_payment',
+        entity: 'payment_requests',
+        entity_id: requestId,
+        new_value: { status: 'approved', plan_id: request.plan_id },
+      })
       res.status(200).json({ success: true })
       return
     }
@@ -49,6 +57,14 @@ export default async function handler(req: any, res: any) {
       if (!request) { res.status(404).json({ error: 'الطلب غير موجود' }); return }
       await admin.from('payment_requests').update({ status: 'rejected', rejection_reason: reason, reviewed_by: authData.user.id, reviewed_at: new Date().toISOString() }).eq('id', requestId)
       await admin.from('subscriptions').update({ status: 'pending_payment' }).eq('organization_id', request.organization_id)
+      await admin.from('audit_logs').insert({
+        actor_id: authData.user.id,
+        organization_id: request.organization_id,
+        action: 'reject_payment',
+        entity: 'payment_requests',
+        entity_id: requestId,
+        new_value: { status: 'rejected', reason },
+      })
       res.status(200).json({ success: true })
       return
     }
