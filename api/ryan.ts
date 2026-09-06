@@ -51,27 +51,19 @@ const tools = [
 async function runFunction(supabase: any, name: string, args: any) {
   if (name === 'create_lead') {
     const { error } = await supabase.rpc('ai_create_lead', {
-      p_name: args.name,
-      p_phone: args.phone || null,
-      p_company: args.company || null,
-      p_source: args.source || 'RYAN AI',
+      p_name: args.name, p_phone: args.phone || null, p_company: args.company || null, p_source: args.source || 'RYAN AI',
     })
     return { error }
   }
   if (name === 'create_deal') {
     const { error } = await supabase.rpc('ai_create_deal', {
-      p_title: args.title,
-      p_value: args.value || 0,
-      p_customer_name: args.customer_name || null,
+      p_title: args.title, p_value: args.value || 0, p_customer_name: args.customer_name || null,
     })
     return { error }
   }
   if (name === 'book_appointment') {
     const { error } = await supabase.rpc('ai_book_appointment', {
-      p_customer_name: args.customer_name || null,
-      p_service_name: args.service_name || null,
-      p_date: args.date,
-      p_time: args.time,
+      p_customer_name: args.customer_name || null, p_service_name: args.service_name || null, p_date: args.date, p_time: args.time,
     })
     return { error }
   }
@@ -79,10 +71,7 @@ async function runFunction(supabase: any, name: string, args: any) {
 }
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'الطريقة غير مسموحة' })
-    return
-  }
+  if (req.method !== 'POST') { res.status(405).json({ error: 'الطريقة غير مسموحة' }); return }
 
   const apiKey = process.env.GEMINI_API_KEY
   const supabaseUrl = process.env.VITE_SUPABASE_URL
@@ -94,21 +83,27 @@ export default async function handler(req: any, res: any) {
   }
 
   const { message, history, companyName, accessToken } = req.body || {}
-  if (!message) {
-    res.status(400).json({ error: 'الرسالة مطلوبة' })
-    return
-  }
+  if (!message) { res.status(400).json({ error: 'الرسالة مطلوبة' }); return }
 
   const supabase = accessToken
     ? createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: `Bearer ${accessToken}` } } })
     : null
+
+  let knowledgeText = ''
+  if (supabase) {
+    const { data: kb } = await supabase.from('knowledge_base').select('title, content').limit(15)
+    if (kb && kb.length > 0) {
+      knowledgeText = '\n\nمعلومات عن الشركة يجب استخدامها عند الرد (لا تخترع معلومات غيرها عن الشركة إن وُجدت):\n' +
+        kb.map((k: any) => `- ${k.title}: ${k.content}`).join('\n')
+    }
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const systemPrompt = `أنت "ريان"، موظف مبيعات وخدمة عملاء ذكي يعمل داخل نظام إدارة العملاء لصالح شركة ${companyName || 'العميل'}. تتحدث باللهجة المصرية العامية بأسلوب ودود ومحترف. تخاطب العميل بـ"حضرتك" أو "أستاذ/أستاذة". النهاردة تاريخ ${today}.
 لما عميل يبدي اهتمام حقيقي أو يطلب حد يتواصل معاه، استخدم أداة create_lead لتسجيله فورًا.
 لما عميل يوافق مبدئيًا على شراء خدمة أو منتج، استخدم أداة create_deal.
 لما عميل يطلب حجز موعد أو استشارة، استخدم أداة book_appointment (لو التاريخ غير واضح اسأله يحدده قبل ما تستخدم الأداة).
-لا تسأل العميل إذن قبل استخدام أي أداة، نفّذها مباشرة وبعدها أخبره إنك خلّصت.`
+لا تسأل العميل إذن قبل استخدام أي أداة، نفّذها مباشرة وبعدها أخبره إنك خلّصت.${knowledgeText}`
 
   const contents: any[] = [
     { role: 'user', parts: [{ text: systemPrompt }] },
@@ -145,10 +140,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const reply = parts?.find((p: any) => p.text)?.text
-    if (!reply) {
-      res.status(502).json({ error: 'لم يتم استلام رد من الذكاء الاصطناعي', details: data })
-      return
-    }
+    if (!reply) { res.status(502).json({ error: 'لم يتم استلام رد من الذكاء الاصطناعي', details: data }); return }
     res.status(200).json({ reply, actionTaken })
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'حدث خطأ غير متوقع' })
