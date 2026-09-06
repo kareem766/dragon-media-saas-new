@@ -44,7 +44,7 @@ export function useSubscription() {
   }, [organizationId, orgLoading])
 
   const isActive = subscription?.status === 'active' || subscription?.status === 'trialing'
-  const hasFeature = (key: string) => Boolean(subscription?.plan?.features?.[key])
+  const hasFeature = (key: string) => isActive && Boolean(subscription?.plan?.features?.[key])
 
   return { subscription, loading, isActive, hasFeature }
 }
