@@ -1,0 +1,106 @@
+import React, { useEffect, useState } from 'react'
+import { Card, StatCard, Badge } from '../components/ui'
+import { supabase } from '../lib/supabaseClient'
+
+interface OrgRow {
+  id: string
+  name: string
+  business_type: string | null
+  plan: string
+  created_at: string
+  usersCount: number
+  leadsCount: number
+  customersCount: number
+  dealsValue: number
+}
+
+interface Overview {
+  totals: { organizations: number; users: number; leads: number; customers: number; dealsValue: number }
+  organizations: OrgRow[]
+}
+
+export default function AdminDashboard() {
+  const [data, setData] = useState<Overview | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      if (!supabase) return
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      const res = await fetch('/api/admin/overview', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error || 'حدث خطأ')
+        setLoading(false)
+        return
+      }
+      setData(json)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return <div className="text-center py-20 text-sm text-red-600">{error}</div>
+  }
+
+  return (
+    <div dir="rtl" className="min-h-screen bg-sand-50 p-6 space-y-6">
+      <h1 className="text-2xl font-bold text-ink-950">لوحة تحكم Dragon Media — إدارة المنصة</h1>
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard label="عدد الشركات" value={String(data.totals.organizations)} accent="gold" />
+        <StatCard label="إجمالي المستخدمين" value={String(data.totals.users)} />
+        <StatCard label="إجمالي العملاء المحتملين" value={String(data.totals.leads)} />
+        <StatCard label="إجمالي العملاء" value={String(data.totals.customers)} accent="clay" />
+        <StatCard label="إجمالي قيمة الصفقات" value={`${data.totals.dealsValue.toLocaleString('ar-EG')} ج.م`} />
+      </div>
+
+      <Card className="p-2 sm:p-4">
+        <div className="p-3 font-bold text-ink-950">الشركات المسجلة على المنصة</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-ink-900/45 border-b border-sand-200">
+                <th className="text-right font-medium py-3 px-3">الشركة</th>
+                <th className="text-right font-medium py-3 px-3">النشاط</th>
+                <th className="text-right font-medium py-3 px-3">الباقة</th>
+                <th className="text-right font-medium py-3 px-3">المستخدمين</th>
+                <th className="text-right font-medium py-3 px-3">العملاء المحتملين</th>
+                <th className="text-right font-medium py-3 px-3">العملاء</th>
+                <th className="text-right font-medium py-3 px-3">قيمة الصفقات</th>
+                <th className="text-right font-medium py-3 px-3">تاريخ التسجيل</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sand-100">
+              {data.organizations.map(o => (
+                <tr key={o.id} className="hover:bg-sand-50">
+                  <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{o.name}</td>
+                  <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{o.business_type ?? '—'}</td>
+                  <td className="py-3 px-3"><Badge tone="gold">{o.plan}</Badge></td>
+                  <td className="py-3 px-3 text-ink-900/70">{o.usersCount}</td>
+                  <td className="py-3 px-3 text-ink-900/70">{o.leadsCount}</td>
+                  <td className="py-3 px-3 text-ink-900/70">{o.customersCount}</td>
+                  <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{o.dealsValue.toLocaleString('ar-EG')} ج.م</td>
+                  <td className="py-3 px-3 text-ink-900/50 whitespace-nowrap">{new Date(o.created_at).toLocaleDateString('ar-EG')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
