@@ -75,6 +75,7 @@ export default function Ryan() {
           </div>
           <Badge tone="success">يعمل الآن</Badge>
         </div>
+        <a href="#/ryan/knowledge" className="text-xs text-gold-400 hover:underline mt-3 inline-block">إدارة قاعدة المعرفة ←</a>
       </Card>
 
       <Card className="p-5">
@@ -118,7 +119,7 @@ export default function Ryan() {
       <Card className="p-5">
         <h3 className="font-bold text-ink-950 mb-3">قدرات RYAN الحالية</h3>
         <ul className="text-sm text-ink-900/55 space-y-2">
-          <li>✅ الرد على استفسارات العملاء</li>
+          <li>✅ الرد على استفسارات العملاء (باستخدام قاعدة المعرفة الخاصة بشركتك)</li>
           <li>✅ تسجيل عميل محتمل جديد تلقائيًا في CRM عند إبداء اهتمام حقيقي</li>
           <li>✅ إنشاء صفقة، حجز موعد</li>
           <li>⏳ تلخيص المحادثة، Human Handoff — قريبًا</li>
