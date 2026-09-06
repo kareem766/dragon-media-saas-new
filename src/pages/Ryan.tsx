@@ -3,6 +3,8 @@ import { Card, Badge, Button } from '../components/ui'
 import { IconSpark } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useSubscription } from '../lib/useSubscription'
+import FeatureLocked from '../components/FeatureLocked'
 
 interface ChatMessage {
   role: 'user' | 'model'
@@ -12,6 +14,7 @@ interface ChatMessage {
 
 export default function Ryan() {
   const { organizationId } = useOrganization()
+  const { hasFeature, loading: subLoading } = useSubscription()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -55,6 +58,10 @@ export default function Ryan() {
     }
   }
 
+  if (!subLoading && !hasFeature('ryan')) {
+    return <FeatureLocked featureName="RYAN AI" />
+  }
+
   return (
     <div className="space-y-6">
       <Card className="p-6 bg-ink-950 text-sand-100 border-0">
@@ -92,7 +99,6 @@ export default function Ryan() {
               {m.actionTaken === 'book_appointment' && (
                 <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم حجز الموعد بنجاح</div>
               )}
-
             </div>
           ))}
           {sending && <div className="text-xs text-ink-900/40">ريان بيكتب...</div>}
@@ -114,7 +120,8 @@ export default function Ryan() {
         <ul className="text-sm text-ink-900/55 space-y-2">
           <li>✅ الرد على استفسارات العملاء</li>
           <li>✅ تسجيل عميل محتمل جديد تلقائيًا في CRM عند إبداء اهتمام حقيقي</li>
-          <li>⏳ إنشاء صفقة، حجز موعد، تلخيص المحادثة — قريبًا</li>
+          <li>✅ إنشاء صفقة، حجز موعد</li>
+          <li>⏳ تلخيص المحادثة، Human Handoff — قريبًا</li>
         </ul>
       </Card>
     </div>
