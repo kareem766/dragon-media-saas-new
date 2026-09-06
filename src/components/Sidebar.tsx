@@ -14,6 +14,7 @@ const items = [
   { to: '/campaigns', label: 'الحملات التسويقية', icon: IconMegaphone },
   { to: '/inbox', label: 'صندوق المحادثات', icon: IconChat },
   { to: '/ryan', label: 'RYAN AI', icon: IconSpark },
+  { to: '/automations', label: 'الأتمتة', icon: IconSettings },
   { to: '/tasks', label: 'المهام والمتابعات', icon: IconCheck },
   { to: '/appointments', label: 'المواعيد', icon: IconCalendar },
   { to: '/billing', label: 'الفواتير والاشتراكات', icon: IconCard },
