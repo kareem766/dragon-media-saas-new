@@ -77,6 +77,7 @@ export default function AdminDashboard() {
         <div className="flex gap-4">
           <a href="#/admin/payments" className="text-sm font-semibold text-gold-600 hover:underline">مراجعة طلبات الدفع ←</a>
           <a href="#/admin/audit-logs" className="text-sm font-semibold text-gold-600 hover:underline">سجل النشاط ←</a>
+          <a href="#/admin/settings" className="text-sm font-semibold text-gold-600 hover:underline">إعدادات المنصة ←</a>
         </div>
       </div>
 
