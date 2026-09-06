@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Card, StatCard, Badge } from '../components/ui'
+import { Card, StatCard, Badge, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 
 interface OrgRow {
@@ -12,6 +12,7 @@ interface OrgRow {
   leadsCount: number
   customersCount: number
   dealsValue: number
+  suspended?: boolean
 }
 
 interface Overview {
@@ -23,26 +24,39 @@ export default function AdminDashboard() {
   const [data, setData] = useState<Overview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [actingId, setActingId] = useState<string | null>(null)
 
-  useEffect(() => {
-    const load = async () => {
-      if (!supabase) return
-      const { data: sessionData } = await supabase.auth.getSession()
-      const token = sessionData.session?.access_token
-      const res = await fetch('/api/admin/overview', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const json = await res.json()
-      if (!res.ok) {
-        setError(json.error || 'حدث خطأ')
-        setLoading(false)
-        return
-      }
-      setData(json)
-      setLoading(false)
-    }
+  const load = async () => {
+    if (!supabase) return
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    const [overviewRes, orgsRes] = await Promise.all([
+      fetch('/api/admin/overview', { headers: { Authorization: `Bearer ${token}` } }),
+      supabase.from('organizations').select('id, suspended'),
+    ])
+    const json = await overviewRes.json()
+    if (!overviewRes.ok) { setError(json.error || 'حدث خطأ'); setLoading(false); return }
+    const suspendedMap = new Map((orgsRes.data ?? []).map((o: any) => [o.id, o.suspended]))
+    json.organizations = json.organizations.map((o: OrgRow) => ({ ...o, suspended: suspendedMap.get(o.id) }))
+    setData(json)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const toggleSuspend = async (org: OrgRow) => {
+    if (!supabase) return
+    setActingId(org.id)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData.session?.access_token
+    await fetch('/api/admin/organizations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: org.suspended ? 'activate' : 'suspend', organizationId: org.id }),
+    })
+    setActingId(null)
     load()
-  }, [])
+  }
 
   if (loading) {
     return (
@@ -60,7 +74,10 @@ export default function AdminDashboard() {
     <div dir="rtl" className="min-h-screen bg-sand-50 p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-ink-950">لوحة تحكم Dragon Media — إدارة المنصة</h1>
-        <a href="#/admin/payments" className="text-sm font-semibold text-gold-600 hover:underline">مراجعة طلبات الدفع ←</a>
+        <div className="flex gap-4">
+          <a href="#/admin/payments" className="text-sm font-semibold text-gold-600 hover:underline">مراجعة طلبات الدفع ←</a>
+          <a href="#/admin/audit-logs" className="text-sm font-semibold text-gold-600 hover:underline">سجل النشاط ←</a>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -81,10 +98,10 @@ export default function AdminDashboard() {
                 <th className="text-right font-medium py-3 px-3">النشاط</th>
                 <th className="text-right font-medium py-3 px-3">الباقة</th>
                 <th className="text-right font-medium py-3 px-3">المستخدمين</th>
-                <th className="text-right font-medium py-3 px-3">العملاء المحتملين</th>
                 <th className="text-right font-medium py-3 px-3">العملاء</th>
                 <th className="text-right font-medium py-3 px-3">قيمة الصفقات</th>
-                <th className="text-right font-medium py-3 px-3">تاريخ التسجيل</th>
+                <th className="text-right font-medium py-3 px-3">الحالة</th>
+                <th className="text-right font-medium py-3 px-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sand-100">
@@ -94,10 +111,14 @@ export default function AdminDashboard() {
                   <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{o.business_type ?? '—'}</td>
                   <td className="py-3 px-3"><Badge tone="gold">{o.plan}</Badge></td>
                   <td className="py-3 px-3 text-ink-900/70">{o.usersCount}</td>
-                  <td className="py-3 px-3 text-ink-900/70">{o.leadsCount}</td>
                   <td className="py-3 px-3 text-ink-900/70">{o.customersCount}</td>
                   <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{o.dealsValue.toLocaleString('ar-EG')} ج.م</td>
-                  <td className="py-3 px-3 text-ink-900/50 whitespace-nowrap">{new Date(o.created_at).toLocaleDateString('ar-EG')}</td>
+                  <td className="py-3 px-3"><Badge tone={o.suspended ? 'danger' : 'success'}>{o.suspended ? 'موقوفة' : 'نشطة'}</Badge></td>
+                  <td className="py-3 px-3">
+                    <Button variant="secondary" onClick={() => toggleSuspend(o)} disabled={actingId === o.id}>
+                      {o.suspended ? 'تفعيل' : 'تعليق'}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
