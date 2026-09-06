@@ -25,6 +25,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [actingId, setActingId] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   const load = async () => {
     if (!supabase) return
@@ -44,18 +45,41 @@ export default function AdminDashboard() {
 
   useEffect(() => { load() }, [])
 
-  const toggleSuspend = async (org: OrgRow) => {
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3000)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  const handleAction = async (org: OrgRow) => {
+    const willSuspend = !org.suspended
+    const confirmed = window.confirm(
+      willSuspend ? 'هل أنت متأكد من تعليق هذه الشركة؟' : 'هل أنت متأكد من تفعيل هذه الشركة؟'
+    )
+    if (!confirmed) return
+
     if (!supabase) return
     setActingId(org.id)
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData.session?.access_token
-    await fetch('/api/admin/organizations', {
+    const res = await fetch('/api/admin/organizations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: org.suspended ? 'activate' : 'suspend', organizationId: org.id }),
+      body: JSON.stringify({ action: willSuspend ? 'suspend' : 'activate', organizationId: org.id }),
     })
     setActingId(null)
-    load()
+
+    if (!res.ok) {
+      setToast('حدث خطأ أثناء تنفيذ العملية')
+      return
+    }
+
+    setData(prev => prev ? {
+      ...prev,
+      organizations: prev.organizations.map(o => o.id === org.id ? { ...o, suspended: willSuspend } : o),
+    } : prev)
+
+    setToast(willSuspend ? `تم تعليق شركة "${org.name}" بنجاح` : `تم تفعيل شركة "${org.name}" بنجاح`)
   }
 
   if (loading) {
@@ -71,7 +95,13 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-sand-50 p-6 space-y-6">
+    <div dir="rtl" className="min-h-screen bg-sand-50 p-6 space-y-6 relative">
+      {toast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-ink-950 text-sand-50 text-sm px-5 py-3 rounded-xl shadow-lg">
+          {toast}
+        </div>
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold text-ink-950">لوحة تحكم Dragon Media — إدارة المنصة</h1>
         <div className="flex gap-4">
@@ -117,8 +147,8 @@ export default function AdminDashboard() {
                   <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{o.dealsValue.toLocaleString('ar-EG')} ج.م</td>
                   <td className="py-3 px-3"><Badge tone={o.suspended ? 'danger' : 'success'}>{o.suspended ? 'موقوفة' : 'نشطة'}</Badge></td>
                   <td className="py-3 px-3">
-                    <Button variant="secondary" onClick={() => toggleSuspend(o)} disabled={actingId === o.id}>
-                      {o.suspended ? 'تفعيل' : 'تعليق'}
+                    <Button variant="secondary" onClick={() => handleAction(o)} disabled={actingId === o.id}>
+                      {actingId === o.id ? '...' : o.suspended ? 'تفعيل' : 'تعليق'}
                     </Button>
                   </td>
                 </tr>
