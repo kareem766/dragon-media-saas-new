@@ -3,6 +3,8 @@ import { Card, Badge, Button, Table, statusTone } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useSubscription } from '../lib/useSubscription'
+import FeatureLocked from '../components/FeatureLocked'
 
 interface DBCampaign {
   id: string
@@ -22,6 +24,7 @@ const channelLabels: Record<string, string> = {
 
 export default function Campaigns() {
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
+  const { hasFeature, loading: subLoading } = useSubscription()
   const [campaigns, setCampaigns] = useState<DBCampaign[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -62,6 +65,10 @@ export default function Campaigns() {
     setForm({ name: '', channel: 'whatsapp', audience: '', scheduledAt: '' })
     setShowForm(false)
     loadData()
+  }
+
+  if (!subLoading && !hasFeature('campaigns')) {
+    return <FeatureLocked featureName="الحملات التسويقية" />
   }
 
   if (orgLoading) {
