@@ -4,19 +4,19 @@ import { AuthProvider } from './lib/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 import Dashboard from './pages/Dashboard'
 import CRM from './pages/CRM'
 import CustomerDetail from './pages/CustomerDetail'
 import DealDetail from './pages/DealDetail'
-import Automations from './pages/Automations'
-import AdminDashboard from './pages/AdminDashboard'
-import Privacy from './pages/Privacy'
-import Terms from './pages/Terms'
 import Pipeline from './pages/Pipeline'
 import Services from './pages/Services'
 import Campaigns from './pages/Campaigns'
 import Inbox from './pages/Inbox'
 import Ryan from './pages/Ryan'
+import Automations from './pages/Automations'
+import AdminDashboard from './pages/AdminDashboard'
 import Tasks from './pages/Tasks'
 import Appointments from './pages/Appointments'
 import Billing from './pages/Billing'
@@ -29,7 +29,6 @@ export default function App() {
     <AuthProvider>
       <HashRouter>
         <Routes>
-        <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
@@ -39,12 +38,12 @@ export default function App() {
             <Route path="/crm/customer/:id" element={<CustomerDetail />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/pipeline/deal/:id" element={<DealDetail />} />
-            <Route path="/automations" element={<Automations />} />
-            <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/services" element={<Services />} />
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/ryan" element={<Ryan />} />
+            <Route path="/automations" element={<Automations />} />
+            <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/billing" element={<Billing />} />
