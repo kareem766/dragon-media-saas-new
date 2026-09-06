@@ -1,43 +1,59 @@
 import React from 'react'
-import { Card, Badge, Table, statusTone, StatCard } from '../components/ui'
-import { invoices } from '../data/sampleData'
+import { useNavigate } from 'react-router-dom'
+import { Card, Badge, Button } from '../components/ui'
+import { useSubscription } from '../lib/useSubscription'
 
-const plans = [
-  { name: 'أساسي', price: '2,500', features: ['CRM أساسي', 'خدمة عملاء عبر قناة واحدة', 'تقارير شهرية'] },
-  { name: 'النمو', price: '6,000', features: ['كل مميزات الأساسي', 'RYAN AI', 'صندوق محادثات موحد', 'حملات تسويقية'], highlighted: true },
-  { name: 'المؤسسات', price: 'حسب الطلب', features: ['كل مميزات النمو', 'وكلاء AI متعددون', 'صلاحيات متقدمة', 'دعم مخصص'] },
-]
+const statusLabels: Record<string, { label: string; tone: 'success' | 'warning' | 'danger' | 'default' }> = {
+  trialing: { label: 'فترة تجريبية', tone: 'success' },
+  pending_payment: { label: 'بانتظار الدفع', tone: 'warning' },
+  pending_review: { label: 'قيد المراجعة', tone: 'warning' },
+  active: { label: 'نشط', tone: 'success' },
+  past_due: { label: 'متأخر السداد', tone: 'danger' },
+  expired: { label: 'منتهي', tone: 'danger' },
+  cancelled: { label: 'ملغي', tone: 'default' },
+  suspended: { label: 'موقوف', tone: 'danger' },
+  no_subscription: { label: 'بدون اشتراك', tone: 'default' },
+}
 
 export default function Billing() {
-  return (
-    <div className="space-y-6">
-      <div className="grid sm:grid-cols-3 gap-4">
-        {plans.map(p => (
-          <Card key={p.name} className={`p-6 ${p.highlighted ? 'border-gold-500 border-2' : ''}`}>
-            {p.highlighted && <Badge tone="gold">الأكثر طلبًا</Badge>}
-            <h3 className="font-bold text-lg text-ink-950 mt-2">{p.name}</h3>
-            <div className="text-2xl font-bold text-ink-950 mt-2">{p.price} {p.price !== 'حسب الطلب' && <span className="text-sm font-normal text-ink-900/50">ج.م / شهريًا</span>}</div>
-            <ul className="mt-4 space-y-2 text-sm text-ink-900/60">
-              {p.features.map(f => <li key={f}>• {f}</li>)}
-            </ul>
-          </Card>
-        ))}
-      </div>
+  const navigate = useNavigate()
+  const { subscription, loading } = useSubscription()
 
-      <Card className="p-2 sm:p-4">
-        <div className="p-3 font-bold text-ink-950">سجل الفواتير</div>
-        <Table head={['رقم الفاتورة', 'العميل', 'الباقة', 'المبلغ', 'الحالة', 'تاريخ الاستحقاق']}>
-          {invoices.map(i => (
-            <tr key={i.id} className="hover:bg-sand-50">
-              <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{i.id}</td>
-              <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{i.customer}</td>
-              <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{i.plan}</td>
-              <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{i.amount.toLocaleString('ar-EG')} ج.م</td>
-              <td className="py-3 px-3"><Badge tone={statusTone(i.status)}>{i.status}</Badge></td>
-              <td className="py-3 px-3 text-ink-900/50 whitespace-nowrap">{i.dueDate}</td>
-            </tr>
-          ))}
-        </Table>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  const status = subscription?.status ?? 'no_subscription'
+  const info = statusLabels[status] ?? statusLabels.no_subscription
+
+  return (
+    <div className="space-y-6 max-w-lg">
+      <Card className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs text-ink-900/45">حالة الاشتراك</div>
+            <div className="text-lg font-bold text-ink-950 mt-1">{subscription?.plan?.name ?? 'لا توجد باقة'}</div>
+          </div>
+          <Badge tone={info.tone}>{info.label}</Badge>
+        </div>
+        {subscription?.plan && (
+          <div className="text-sm text-ink-900/60 mt-3">{subscription.plan.price.toLocaleString('ar-EG')} ج.م / شهريًا</div>
+        )}
+        {subscription?.renewal_date && (
+          <div className="text-xs text-ink-900/45 mt-2">التجديد القادم: {new Date(subscription.renewal_date).toLocaleDateString('ar-EG')}</div>
+        )}
+        <div className="flex gap-2 mt-4">
+          <Button onClick={() => navigate('/plans')} variant={status === 'active' || status === 'trialing' ? 'secondary' : 'primary'}>
+            {status === 'active' || status === 'trialing' ? 'تغيير الباقة' : 'اختيار باقة'}
+          </Button>
+          {status === 'pending_payment' && (
+            <Button onClick={() => navigate('/billing/pay')}>إرسال بيانات الدفع</Button>
+          )}
+        </div>
       </Card>
     </div>
   )
