@@ -17,6 +17,9 @@ import Inbox from './pages/Inbox'
 import Ryan from './pages/Ryan'
 import Automations from './pages/Automations'
 import AdminDashboard from './pages/AdminDashboard'
+import AdminPayments from './pages/AdminPayments'
+import Plans from './pages/Plans'
+import PaymentRequest from './pages/PaymentRequest'
 import Tasks from './pages/Tasks'
 import Appointments from './pages/Appointments'
 import Billing from './pages/Billing'
@@ -44,6 +47,9 @@ export default function App() {
             <Route path="/ryan" element={<Ryan />} />
             <Route path="/automations" element={<Automations />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/payments" element={<AdminPayments />} />
+            <Route path="/plans" element={<Plans />} />
+            <Route path="/billing/pay" element={<PaymentRequest />} />
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/appointments" element={<Appointments />} />
             <Route path="/billing" element={<Billing />} />
