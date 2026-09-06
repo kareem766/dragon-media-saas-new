@@ -21,6 +21,7 @@ import AdminPayments from './pages/AdminPayments'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminSettings from './pages/AdminSettings'
 import AdminPlans from './pages/AdminPlans'
+import KnowledgeBase from './pages/KnowledgeBase'
 import Support from './pages/Support'
 import Plans from './pages/Plans'
 import PaymentRequest from './pages/PaymentRequest'
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/ryan" element={<Ryan />} />
+            <Route path="/ryan/knowledge" element={<KnowledgeBase />} />
             <Route path="/automations" element={<Automations />} />
             <Route path="/admin" element={<AdminDashboard />} />            <Route path="/admin/payments" element={<AdminPayments />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
