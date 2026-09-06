@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import CRM from './pages/CRM'
 import CustomerDetail from './pages/CustomerDetail'
 import DealDetail from './pages/DealDetail'
+import Automations from './pages/Automations'
 import Pipeline from './pages/Pipeline'
 import Services from './pages/Services'
 import Campaigns from './pages/Campaigns'
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/crm/customer/:id" element={<CustomerDetail />} />
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/pipeline/deal/:id" element={<DealDetail />} />
+            <Route path="/automations" element={<Automations />} />
             <Route path="/services" element={<Services />} />
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/inbox" element={<Inbox />} />
