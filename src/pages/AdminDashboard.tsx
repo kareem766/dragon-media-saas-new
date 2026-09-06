@@ -58,7 +58,10 @@ export default function AdminDashboard() {
 
   return (
     <div dir="rtl" className="min-h-screen bg-sand-50 p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-ink-950">لوحة تحكم Dragon Media — إدارة المنصة</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl font-bold text-ink-950">لوحة تحكم Dragon Media — إدارة المنصة</h1>
+        <a href="#/admin/payments" className="text-sm font-semibold text-gold-600 hover:underline">مراجعة طلبات الدفع ←</a>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="عدد الشركات" value={String(data.totals.organizations)} accent="gold" />
