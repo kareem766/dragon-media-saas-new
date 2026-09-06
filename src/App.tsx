@@ -20,6 +20,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminPayments from './pages/AdminPayments'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminSettings from './pages/AdminSettings'
+import AdminPlans from './pages/AdminPlans'
 import Support from './pages/Support'
 import Plans from './pages/Plans'
 import PaymentRequest from './pages/PaymentRequest'
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/admin" element={<AdminDashboard />} />            <Route path="/admin/payments" element={<AdminPayments />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/plans" element={<AdminPlans />} />
             <Route path="/plans" element={<Plans />} />
             <Route path="/billing/pay" element={<PaymentRequest />} />
             <Route path="/tasks" element={<Tasks />} />
