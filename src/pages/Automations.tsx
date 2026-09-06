@@ -3,6 +3,8 @@ import { Card, Badge, Button } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useSubscription } from '../lib/useSubscription'
+import FeatureLocked from '../components/FeatureLocked'
 
 interface DBAutomation {
   id: string
@@ -16,6 +18,7 @@ interface DBAutomation {
 
 export default function Automations() {
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
+  const { hasFeature, loading: subLoading } = useSubscription()
   const [automations, setAutomations] = useState<DBAutomation[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -56,6 +59,10 @@ export default function Automations() {
     if (!supabase) return
     await supabase.from('automations').update({ active: !a.active }).eq('id', a.id)
     loadData()
+  }
+
+  if (!subLoading && !hasFeature('automations')) {
+    return <FeatureLocked featureName="الأتمتة" />
   }
 
   if (orgLoading || loading) {
