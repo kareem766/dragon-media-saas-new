@@ -10,6 +10,8 @@ import CustomerDetail from './pages/CustomerDetail'
 import DealDetail from './pages/DealDetail'
 import Automations from './pages/Automations'
 import AdminDashboard from './pages/AdminDashboard'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
 import Pipeline from './pages/Pipeline'
 import Services from './pages/Services'
 import Campaigns from './pages/Campaigns'
@@ -27,7 +29,10 @@ export default function App() {
     <AuthProvider>
       <HashRouter>
         <Routes>
+        <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/crm" element={<CRM />} />
