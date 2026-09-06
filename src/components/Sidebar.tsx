@@ -5,6 +5,7 @@ import {
   IconSpark, IconCheck, IconCalendar, IconCard, IconChart, IconShield,
   IconSettings, IconDragon
 } from './Icon'
+import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 
 const items = [
   { to: '/', label: 'الرئيسية', icon: IconGrid, end: true },
@@ -24,6 +25,8 @@ const items = [
 ]
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { isAdmin } = useIsPlatformAdmin()
+
   return (
     <>
       {open && (
@@ -60,6 +63,20 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
               <span>{label}</span>
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[15px] transition-colors mt-2 pt-3 border-t border-white/10 ${
+                  isActive ? 'bg-gold-500/15 text-gold-400 font-semibold' : 'text-gold-400/80 hover:bg-white/5'
+                }`
+              }
+            >
+              <IconShield className="w-5 h-5 shrink-0" />
+              <span>لوحة تحكم المنصة</span>
+            </NavLink>
+          )}
         </nav>
 
         <div className="p-4 border-t border-white/10">
