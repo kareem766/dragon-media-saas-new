@@ -24,6 +24,8 @@ import AdminPlans from './pages/AdminPlans'
 import KnowledgeBase from './pages/KnowledgeBase'
 import AdminRoles from './pages/AdminRoles'
 import HandoffRequests from './pages/HandoffRequests'
+import Tickets from './pages/Tickets'
+import AdminTickets from './pages/AdminTickets'
 import Support from './pages/Support'
 import Plans from './pages/Plans'
 import PaymentRequest from './pages/PaymentRequest'
@@ -55,6 +57,8 @@ export default function App() {
             <Route path="/ryan" element={<Ryan />} />
             <Route path="/ryan/knowledge" element={<KnowledgeBase />} />
             <Route path="/ryan/handoff" element={<HandoffRequests />} />
+            <Route path="/tickets" element={<Tickets />} />
+            <Route path="/admin/tickets" element={<AdminTickets />} />
             <Route path="/automations" element={<Automations />} />
             <Route path="/admin" element={<AdminDashboard />} />            <Route path="/admin/payments" element={<AdminPayments />} />
             <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
