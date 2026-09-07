@@ -110,6 +110,7 @@ export default function AdminDashboard() {
           <a href="#/admin/settings" className="text-sm font-semibold text-gold-600 hover:underline">إعدادات المنصة ←</a>
           <a href="#/admin/plans" className="text-sm font-semibold text-gold-600 hover:underline">إدارة الباقات ←</a>
           <a href="#/admin/roles" className="text-sm font-semibold text-gold-600 hover:underline">الأدوار والصلاحيات ←</a>
+          <a href="#/admin/tickets" className="text-sm font-semibold text-gold-600 hover:underline">تذاكر الدعم ←</a>
         </div>
       </div>
 
