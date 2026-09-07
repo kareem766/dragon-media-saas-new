@@ -19,10 +19,11 @@ export default function Ryan() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [paused, setPaused] = useState(false)
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || !supabase) return
+    if (!input.trim() || !supabase || paused) return
     const userMessage = input.trim()
     setInput('')
     setError(null)
@@ -51,6 +52,9 @@ export default function Ryan() {
         return
       }
       setMessages(prev => [...prev, { role: 'model', text: data.reply, actionTaken: data.actionTaken }])
+      if (data.actionTaken === 'request_human_handoff') {
+        setPaused(true)
+      }
     } catch {
       setError('تعذر الاتصال بـ RYAN، حاول تاني')
     } finally {
@@ -75,7 +79,10 @@ export default function Ryan() {
           </div>
           <Badge tone="success">يعمل الآن</Badge>
         </div>
-        <a href="#/ryan/knowledge" className="text-xs text-gold-400 hover:underline mt-3 inline-block">إدارة قاعدة المعرفة ←</a>
+        <div className="flex gap-4 mt-3">
+          <a href="#/ryan/knowledge" className="text-xs text-gold-400 hover:underline">إدارة قاعدة المعرفة ←</a>
+          <a href="#/ryan/handoff" className="text-xs text-gold-400 hover:underline">طلبات التحويل للدعم ←</a>
+        </div>
       </Card>
 
       <Card className="p-5">
@@ -83,7 +90,7 @@ export default function Ryan() {
         <div className="border border-sand-200 rounded-xl h-80 overflow-y-auto p-4 space-y-3 bg-sand-50/50">
           {messages.length === 0 && (
             <div className="text-sm text-ink-900/40 text-center py-10">
-              جرّب تكتب حاجة زي: "أنا مهتم بالخدمة، اسمي محمد ورقمي 01012345678" وشوف ريان بيسجّلك فعليًا في CRM
+              جرّب تكتب حاجة زي: "عايز أكلم حد من فريقكم" وشوف ريان بيوقف نفسه ويسجّل طلب تحويل
             </div>
           )}
           {messages.map((m, i) => (
@@ -91,28 +98,30 @@ export default function Ryan() {
               <div className={`max-w-[80%] rounded-2xl p-3 text-sm ${m.role === 'user' ? 'bg-white border border-sand-200 mr-auto rounded-tr-sm' : 'bg-ink-900 text-sand-50 ml-auto rounded-tl-sm'}`}>
                 {m.text}
               </div>
-              {m.actionTaken === 'create_lead' && (
-                <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم تسجيل العميل في CRM تلقائيًا</div>
-              )}
-              {m.actionTaken === 'create_deal' && (
-                <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم إنشاء صفقة جديدة في مسار المبيعات</div>
-              )}
-              {m.actionTaken === 'book_appointment' && (
-                <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم حجز الموعد بنجاح</div>
-              )}
+              {m.actionTaken === 'create_lead' && <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم تسجيل العميل في CRM تلقائيًا</div>}
+              {m.actionTaken === 'create_deal' && <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم إنشاء صفقة جديدة في مسار المبيعات</div>}
+              {m.actionTaken === 'book_appointment' && <div className="text-xs text-emerald-600 mt-1.5 mr-1">✅ تم حجز الموعد بنجاح</div>}
+              {m.actionTaken === 'request_human_handoff' && <div className="text-xs text-gold-600 mt-1.5 mr-1">👤 تم تحويل المحادثة لفريق الدعم</div>}
             </div>
           ))}
           {sending && <div className="text-xs text-ink-900/40">ريان بيكتب...</div>}
         </div>
+        {paused && (
+          <div className="mt-3 flex items-center justify-between bg-gold-500/10 border border-gold-500/30 rounded-lg px-4 py-3">
+            <span className="text-sm text-ink-950">ريان متوقف مؤقتًا — تم تحويل المحادثة لفريق بشري</span>
+            <Button variant="secondary" onClick={() => setPaused(false)}>استئناف ريان</Button>
+          </div>
+        )}
         {error && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">{error}</div>}
         <form onSubmit={handleSend} className="flex gap-2 mt-3">
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="اكتب رسالة تجريبية..."
-            className="flex-1 border border-sand-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-ink-700"
+            placeholder={paused ? 'ريان متوقف مؤقتًا...' : 'اكتب رسالة تجريبية...'}
+            disabled={paused}
+            className="flex-1 border border-sand-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-ink-700 disabled:bg-sand-100"
           />
-          <Button type="submit" disabled={sending}>إرسال</Button>
+          <Button type="submit" disabled={sending || paused}>إرسال</Button>
         </form>
       </Card>
 
@@ -122,7 +131,7 @@ export default function Ryan() {
           <li>✅ الرد على استفسارات العملاء (باستخدام قاعدة المعرفة الخاصة بشركتك)</li>
           <li>✅ تسجيل عميل محتمل جديد تلقائيًا في CRM عند إبداء اهتمام حقيقي</li>
           <li>✅ إنشاء صفقة، حجز موعد</li>
-          <li>⏳ تلخيص المحادثة، Human Handoff — قريبًا</li>
+          <li>✅ تحويل المحادثة لموظف بشري عند الطلب</li>
         </ul>
       </Card>
     </div>
