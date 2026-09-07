@@ -44,6 +44,18 @@ const tools = [
           required: ['date', 'time'],
         },
       },
+      {
+        name: 'request_human_handoff',
+        description: 'تحويل المحادثة لموظف بشري عندما يطلب العميل صراحة التحدث مع شخص حقيقي، أو عندما يكون الطلب معقدًا جدًا ولا يمكنك التعامل معه بثقة',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            customer_name: { type: 'STRING', description: 'اسم العميل إن كان معروفًا' },
+            reason: { type: 'STRING', description: 'سبب طلب التحويل باختصار' },
+          },
+          required: ['reason'],
+        },
+      },
     ],
   },
 ]
@@ -64,6 +76,12 @@ async function runFunction(supabase: any, name: string, args: any) {
   if (name === 'book_appointment') {
     const { error } = await supabase.rpc('ai_book_appointment', {
       p_customer_name: args.customer_name || null, p_service_name: args.service_name || null, p_date: args.date, p_time: args.time,
+    })
+    return { error }
+  }
+  if (name === 'request_human_handoff') {
+    const { error } = await supabase.rpc('ai_request_handoff', {
+      p_customer_name: args.customer_name || null, p_reason: args.reason,
     })
     return { error }
   }
@@ -103,7 +121,8 @@ export default async function handler(req: any, res: any) {
 لما عميل يبدي اهتمام حقيقي أو يطلب حد يتواصل معاه، استخدم أداة create_lead لتسجيله فورًا.
 لما عميل يوافق مبدئيًا على شراء خدمة أو منتج، استخدم أداة create_deal.
 لما عميل يطلب حجز موعد أو استشارة، استخدم أداة book_appointment (لو التاريخ غير واضح اسأله يحدده قبل ما تستخدم الأداة).
-لا تسأل العميل إذن قبل استخدام أي أداة، نفّذها مباشرة وبعدها أخبره إنك خلّصت.${knowledgeText}`
+لما عميل يطلب صراحة التحدث مع موظف بشري، أو الموضوع معقد وخارج نطاق معرفتك، استخدم أداة request_human_handoff فورًا وأخبره إن فريق حقيقي هيتواصل معاه قريبًا — وبعدها توقف عن محاولة حل المشكلة بنفسك في نفس المحادثة.
+لا تسأل العميل إذن قبل استخدام أي أداة، نفّذها مباشرة.${knowledgeText}`
 
   const contents: any[] = [
     { role: 'user', parts: [{ text: systemPrompt }] },
