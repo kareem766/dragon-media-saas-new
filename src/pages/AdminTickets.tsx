@@ -134,13 +134,15 @@ export default function AdminTickets() {
       ) : (
         <div className="space-y-3">
           {tickets.map(t => (
-            <Card key={t.id} className="p-4 flex items-center justify-between flex-wrap gap-3 cursor-pointer hover:border-ink-700" onClick={() => openTicket(t.id)}>
-              <div>
-                <div className="font-semibold text-sm text-ink-950">{t.subject}</div>
-                <div className="text-xs text-ink-900/45 mt-1">{t.organizations?.name} · {t.priority}</div>
-              </div>
-              <Badge tone={statusTones[t.status]}>{statusLabels[t.status]}</Badge>
-            </Card>
+            <div key={t.id} onClick={() => openTicket(t.id)} className="cursor-pointer">
+              <Card className="p-4 flex items-center justify-between flex-wrap gap-3 hover:border-ink-700">
+                <div>
+                  <div className="font-semibold text-sm text-ink-950">{t.subject}</div>
+                  <div className="text-xs text-ink-900/45 mt-1">{t.organizations?.name} · {t.priority}</div>
+                </div>
+                <Badge tone={statusTones[t.status]}>{statusLabels[t.status]}</Badge>
+              </Card>
+            </div>
           ))}
         </div>
       )}
