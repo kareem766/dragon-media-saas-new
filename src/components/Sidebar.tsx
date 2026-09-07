@@ -21,6 +21,7 @@ const items = [
   { to: '/billing', label: 'الفواتير والاشتراكات', icon: IconCard },
   { to: '/reports', label: 'التقارير', icon: IconChart },
   { to: '/users', label: 'المستخدمون والصلاحيات', icon: IconShield },
+  { to: '/tickets', label: 'الدعم الفني', icon: IconChat },
   { to: '/settings', label: 'الإعدادات', icon: IconSettings },
 ]
 
