@@ -3,6 +3,7 @@ import { Card, Badge, Button, Table, statusTone } from '../components/ui'
 import { IconPlus, IconSearch } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { usePermissions } from '../lib/usePermissions'
 
 interface DBLead {
   id: string
@@ -27,6 +28,7 @@ interface DBCustomer {
 
 export default function CRM() {
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
+  const { can } = usePermissions()
   const [tab, setTab] = useState<'leads' | 'customers'>('leads')
   const [leads, setLeads] = useState<DBLead[]>([])
   const [customers, setCustomers] = useState<DBCustomer[]>([])
@@ -35,6 +37,7 @@ export default function CRM() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [convertingId, setConvertingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('الكل')
   const [form, setForm] = useState({ name: '', company: '', phone: '', source: '' })
@@ -95,6 +98,20 @@ export default function CRM() {
     setConvertingId(null)
     loadData()
     if (!error) setTab('customers')
+  }
+
+  const handleDeleteLead = async (lead: DBLead) => {
+    if (!supabase) return
+    const confirmed = window.confirm(`هل أنت متأكد من حذف "${lead.name}"؟ لا يمكن التراجع عن هذا الإجراء.`)
+    if (!confirmed) return
+    setDeletingId(lead.id)
+    const { error } = await supabase.from('leads').delete().eq('id', lead.id)
+    setDeletingId(null)
+    if (error) {
+      alert('تعذر الحذف — ليس لديك صلاحية كافية أو حدث خطأ')
+      return
+    }
+    loadData()
   }
 
   const q = search.trim().toLowerCase()
@@ -195,14 +212,23 @@ export default function CRM() {
                   <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{l.source ?? '—'}</td>
                   <td className="py-3 px-3"><Badge tone={statusTone(l.status)}>{l.status}</Badge></td>
                   <td className="py-3 px-3 text-ink-900/50 whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('ar-EG')}</td>
-                  <td className="py-3 px-3">
+                  <td className="py-3 px-3 whitespace-nowrap">
                     <button
                       onClick={() => handleConvert(l)}
                       disabled={convertingId === l.id}
-                      className="text-xs font-semibold text-gold-600 hover:underline whitespace-nowrap disabled:opacity-50"
+                      className="text-xs font-semibold text-gold-600 hover:underline whitespace-nowrap disabled:opacity-50 ml-3"
                     >
                       {convertingId === l.id ? 'جاري التحويل...' : 'تحويل لعميل'}
                     </button>
+                    {can('leads', 'delete') && (
+                      <button
+                        onClick={() => handleDeleteLead(l)}
+                        disabled={deletingId === l.id}
+                        className="text-xs font-semibold text-red-500 hover:underline whitespace-nowrap disabled:opacity-50"
+                      >
+                        {deletingId === l.id ? 'جاري الحذف...' : 'حذف'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
