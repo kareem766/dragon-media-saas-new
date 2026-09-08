@@ -24,6 +24,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminPayments from './pages/AdminPayments'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminSettings from './pages/AdminSettings'
+import AdminBranding from './pages/AdminBranding'
 import AdminPlans from './pages/AdminPlans'
 import AdminRoles from './pages/AdminRoles'
 import AdminTickets from './pages/AdminTickets'
@@ -65,6 +66,7 @@ export default function App() {
               <Route path="/admin/payments" element={<AdminPayments />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/admin/branding" element={<AdminBranding />} />
               <Route path="/admin/plans" element={<AdminPlans />} />
               <Route path="/admin/roles" element={<AdminRoles />} />
               <Route path="/admin/tickets" element={<AdminTickets />} />
