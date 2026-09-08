@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Card, StatCard, Badge, statusTone } from '../components/ui'
+import { Card, StatCard, Badge, statusTone, Skeleton } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
 
@@ -69,7 +69,6 @@ export default function Dashboard() {
 
       const deals = (dealsRes.data ?? []) as unknown as { value: number; pipeline_stages: { name: string } | null }[]
       const wonDeals = deals.filter(d => d.pipeline_stages?.name === 'تم التعاقد')
-      const lostDeals = deals.filter(d => d.pipeline_stages?.name === 'مغلق - خسرنا')
       const openDeals = deals.filter(d => d.pipeline_stages?.name !== 'تم التعاقد' && d.pipeline_stages?.name !== 'مغلق - خسرنا')
 
       setData({
@@ -86,15 +85,20 @@ export default function Dashboard() {
       setTasks((tasksRes.data ?? []) as TaskRow[])
       setAppointments((appointmentsTodayRes.data ?? []) as unknown as AppointmentRow[])
       setLoading(false)
-      void lostDeals
     }
     load()
   }, [organizationId])
 
   if (orgLoading || loading || !data) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="h-48" />
+          <Skeleton className="h-48" />
+        </div>
       </div>
     )
   }
