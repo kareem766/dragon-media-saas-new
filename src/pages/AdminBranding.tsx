@@ -95,9 +95,9 @@ export default function AdminBranding() {
       if (error) throw error;
       await refresh();
       setToast('تم حفظ التعديلات بنجاح');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setToast('حدث خطأ أثناء الحفظ');
+      setToast(`خطأ: ${err?.message || JSON.stringify(err)}`.slice(0, 200));
     } finally {
       setSaving(false);
     }
