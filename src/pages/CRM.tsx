@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Badge, Button, Table, statusTone } from '../components/ui'
+import { Card, Badge, Button, Table, statusTone, Skeleton } from '../components/ui'
 import { IconPlus, IconSearch } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
 import { usePermissions } from '../lib/usePermissions'
+import { useToast } from '../lib/ToastContext'
 
 interface DBLead {
   id: string
@@ -29,6 +30,7 @@ interface DBCustomer {
 export default function CRM() {
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
   const { can } = usePermissions()
+  const { showToast } = useToast()
   const [tab, setTab] = useState<'leads' | 'customers'>('leads')
   const [leads, setLeads] = useState<DBLead[]>([])
   const [customers, setCustomers] = useState<DBCustomer[]>([])
@@ -76,6 +78,7 @@ export default function CRM() {
     }
     setForm({ name: '', company: '', phone: '', source: '' })
     setShowForm(false)
+    showToast('تم إضافة العميل المحتمل بنجاح')
     loadData()
   }
 
@@ -92,6 +95,7 @@ export default function CRM() {
     })
     if (!error) {
       await supabase.from('leads').update({ deleted_at: new Date().toISOString() }).eq('id', lead.id)
+      showToast('تم تحويل العميل المحتمل لعميل بنجاح')
     }
     setConvertingId(null)
     loadData()
@@ -106,9 +110,10 @@ export default function CRM() {
     const { error } = await supabase.from('leads').update({ deleted_at: new Date().toISOString() }).eq('id', lead.id)
     setDeletingId(null)
     if (error) {
-      alert('تعذر الحذف — ليس لديك صلاحية كافية أو حدث خطأ')
+      showToast('تعذر الحذف — ليس لديك صلاحية كافية أو حدث خطأ')
       return
     }
+    showToast('تم حذف العميل المحتمل بنجاح')
     loadData()
   }
 
@@ -129,8 +134,9 @@ export default function CRM() {
 
   if (orgLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      <div className="space-y-5">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64" />
       </div>
     )
   }
@@ -145,8 +151,9 @@ export default function CRM() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      <div className="space-y-5">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64" />
       </div>
     )
   }
