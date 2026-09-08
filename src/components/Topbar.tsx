@@ -28,7 +28,9 @@ export default function Topbar({ title, onMenuClick }: { title: string; onMenuCl
           <IconSearch className="w-4 h-4 text-ink-900/40" />
           <input
             placeholder="بحث عن عميل، صفقة، أو مهمة..."
-            className="bg-transparent outline-none text-sm w-full placeholder:text-ink-900/40"
+            onFocus={() => { window.location.hash = '#/search' }}
+            readOnly
+            className="bg-transparent outline-none text-sm w-full placeholder:text-ink-900/40 cursor-pointer"
           />
         </div>
 
