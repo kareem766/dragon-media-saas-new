@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase'; // عدل المسار ده لو مختلف عندك
+import { supabase } from '../lib/supabaseClient';
 
 export interface BrandingSettings {
   id: string;
