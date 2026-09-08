@@ -46,7 +46,7 @@ export default function CRM() {
     if (!supabase || !organizationId) return
     setLoading(true)
     const [leadsRes, customersRes] = await Promise.all([
-      supabase.from('leads').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false }),
+      supabase.from('leads').select('*').eq('organization_id', organizationId).is('deleted_at', null).order('created_at', { ascending: false }),,
       supabase.from('customers').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false }),
     ])
     if (leadsRes.data) setLeads(leadsRes.data as DBLead[])
@@ -105,7 +105,7 @@ export default function CRM() {
     const confirmed = window.confirm(`هل أنت متأكد من حذف "${lead.name}"؟ لا يمكن التراجع عن هذا الإجراء.`)
     if (!confirmed) return
     setDeletingId(lead.id)
-    const { error } = await supabase.from('leads').delete().eq('id', lead.id)
+    const { error } = await supabase.from('leads').update({ deleted_at: new Date().toISOString() }).eq('id', lead.id)
     setDeletingId(null)
     if (error) {
       alert('تعذر الحذف — ليس لديك صلاحية كافية أو حدث خطأ')
