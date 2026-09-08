@@ -21,6 +21,7 @@ const titles: Record<string, string> = {
   '/reports': 'التقارير',
   '/users': 'المستخدمون والصلاحيات',
   '/settings': 'الإعدادات',
+  '/admin/branding': 'هوية المنصة',
 }
 
 export default function Layout() {
