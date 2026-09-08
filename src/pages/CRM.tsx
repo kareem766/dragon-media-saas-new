@@ -45,10 +45,8 @@ export default function CRM() {
   const loadData = async () => {
     if (!supabase || !organizationId) return
     setLoading(true)
-    const [leadsRes, customersRes] = await Promise.all([
-      supabase.from('leads').select('*').eq('organization_id', organizationId).is('deleted_at', null).order('created_at', { ascending: false }),,
-      supabase.from('customers').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false }),
-    ])
+    const leadsRes = await supabase.from('leads').select('*').eq('organization_id', organizationId).is('deleted_at', null).order('created_at', { ascending: false })
+    const customersRes = await supabase.from('customers').select('*').eq('organization_id', organizationId).order('created_at', { ascending: false })
     if (leadsRes.data) setLeads(leadsRes.data as DBLead[])
     if (customersRes.data) setCustomers(customersRes.data as DBCustomer[])
     setLoading(false)
@@ -93,7 +91,7 @@ export default function CRM() {
       total_spent: 0,
     })
     if (!error) {
-      await supabase.from('leads').delete().eq('id', lead.id)
+      await supabase.from('leads').update({ deleted_at: new Date().toISOString() }).eq('id', lead.id)
     }
     setConvertingId(null)
     loadData()
@@ -102,7 +100,7 @@ export default function CRM() {
 
   const handleDeleteLead = async (lead: DBLead) => {
     if (!supabase) return
-    const confirmed = window.confirm(`هل أنت متأكد من حذف "${lead.name}"؟ لا يمكن التراجع عن هذا الإجراء.`)
+    const confirmed = window.confirm(`هل أنت متأكد من حذف "${lead.name}"؟`)
     if (!confirmed) return
     setDeletingId(lead.id)
     const { error } = await supabase.from('leads').update({ deleted_at: new Date().toISOString() }).eq('id', lead.id)
