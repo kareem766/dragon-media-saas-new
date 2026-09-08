@@ -108,6 +108,7 @@ export default function AdminDashboard() {
           <a href="#/admin/payments" className="text-sm font-semibold text-gold-600 hover:underline">مراجعة طلبات الدفع ←</a>
           <a href="#/admin/audit-logs" className="text-sm font-semibold text-gold-600 hover:underline">سجل النشاط ←</a>
           <a href="#/admin/settings" className="text-sm font-semibold text-gold-600 hover:underline">إعدادات المنصة ←</a>
+          <a href="#/admin/branding" className="text-sm font-semibold text-gold-600 hover:underline">هوية المنصة ←</a>
           <a href="#/admin/plans" className="text-sm font-semibold text-gold-600 hover:underline">إدارة الباقات ←</a>
           <a href="#/admin/roles" className="text-sm font-semibold text-gold-600 hover:underline">الأدوار والصلاحيات ←</a>
           <a href="#/admin/tickets" className="text-sm font-semibold text-gold-600 hover:underline">تذاكر الدعم ←</a>
