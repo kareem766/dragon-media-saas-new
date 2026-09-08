@@ -18,6 +18,12 @@ export default async function handler(req: any, res: any) {
   const { data: callerRow } = await admin.from('users').select('is_platform_admin').eq('id', authData.user.id).single()
   if (!callerRow?.is_platform_admin) { res.status(403).json({ error: 'هذه الصفحة مخصصة لمدير المنصة فقط' }); return }
 
+  if (req.method === 'GET' && req.query?.messages) {
+    const { data } = await admin.from('support_ticket_messages').select('*').eq('ticket_id', req.query.messages).order('created_at', { ascending: true })
+    res.status(200).json({ messages: data ?? [] })
+    return
+  }
+
   if (req.method === 'GET') {
     const { data: tickets } = await admin.from('support_tickets').select('*, organizations(name)').order('updated_at', { ascending: false })
     res.status(200).json({ tickets: tickets ?? [] })
@@ -38,12 +44,6 @@ export default async function handler(req: any, res: any) {
       return
     }
     res.status(400).json({ error: 'إجراء غير معروف' })
-    return
-  }
-
-  if (req.method === 'GET' && req.query?.messages) {
-    const { data } = await admin.from('support_ticket_messages').select('*').eq('ticket_id', req.query.messages).order('created_at', { ascending: true })
-    res.status(200).json({ messages: data ?? [] })
     return
   }
 
