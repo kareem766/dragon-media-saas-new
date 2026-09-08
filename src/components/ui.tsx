@@ -63,3 +63,7 @@ export function statusTone(status: string): 'default' | 'success' | 'warning' | 
   if (danger.includes(status)) return 'danger'
   return 'default'
 }
+
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse bg-sand-200 rounded-lg ${className}`} />
+}
