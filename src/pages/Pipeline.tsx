@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Card, Badge, Button } from '../components/ui'
+import { Card, Badge, Button, Skeleton } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 
 interface Stage {
   id: string
@@ -27,6 +28,7 @@ interface DBCustomerOption {
 
 export default function Pipeline() {
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
+  const { showToast } = useToast()
   const [stages, setStages] = useState<Stage[]>([])
   const [deals, setDeals] = useState<DBDeal[]>([])
   const [customers, setCustomers] = useState<DBCustomerOption[]>([])
@@ -73,13 +75,14 @@ export default function Pipeline() {
     }
     setForm({ title: '', value: '', customerId: '', stageId: '' })
     setShowForm(false)
+    showToast('تم إضافة الصفقة بنجاح')
     loadData()
   }
 
-  if (orgLoading) {
+  if (orgLoading || loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      <div className="flex gap-4">
+        {[1,2,3].map(i => <Skeleton key={i} className="h-64 w-72 shrink-0" />)}
       </div>
     )
   }
@@ -88,14 +91,6 @@ export default function Pipeline() {
     return (
       <div className="text-center py-20 text-sm text-red-600">
         {orgError ?? 'تعذر تحديد المؤسسة الخاصة بحسابك'}
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
       </div>
     )
   }
