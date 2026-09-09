@@ -103,10 +103,9 @@ export default function Plans() {
             : 0
 
           return (
+            <div key={p.id} style={p.is_popular ? { borderColor: 'var(--brand-accent, #B4903D)' } as React.CSSProperties : undefined}>
             <Card
-              key={p.id}
               className={`p-6 flex flex-col relative ${p.is_popular ? 'border-2' : ''}`}
-              style={p.is_popular ? { borderColor: 'var(--brand-accent, #B4903D)' } : {}}
             >
               {p.is_popular && (
                 <div
