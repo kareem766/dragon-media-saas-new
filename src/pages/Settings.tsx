@@ -23,6 +23,13 @@ interface OrgData {
   logo_url: string
 }
 
+interface NotificationPreferences {
+  new_lead: boolean
+  new_message: boolean
+  overdue_tasks: boolean
+  weekly_report_email: boolean
+}
+
 const initialOrg: OrgData = {
   name: '',
   manager_name: '',
@@ -32,6 +39,13 @@ const initialOrg: OrgData = {
   timezone: 'Africa/Cairo',
   business_type: '',
   logo_url: '',
+}
+
+const initialNotificationPreferences: NotificationPreferences = {
+  new_lead: true,
+  new_message: true,
+  overdue_tasks: true,
+  weekly_report_email: false,
 }
 
 export default function Settings() {
@@ -49,6 +63,14 @@ export default function Settings() {
 
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+
+  const [notificationPreferences, setNotificationPreferences] =
+    useState<NotificationPreferences>(initialNotificationPreferences)
+
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationsSaving, setNotificationsSaving] = useState(false)
+  const [notificationsSaved, setNotificationsSaved] = useState(false)
+  const [notificationsError, setNotificationsError] = useState('')
 
   const updateOrg = (field: keyof OrgData, value: string) => {
     setOrg(prev => ({
@@ -104,29 +126,120 @@ export default function Settings() {
     loadOrganization()
   }, [organizationId])
 
+  useEffect(() => {
+    const loadNotificationPreferences = async () => {
+      if (!organizationId || !supabase) return
+
+      setNotificationsLoading(true)
+      setNotificationsError('')
+
+      try {
+        const {
+          data: userData,
+          error: userError,
+        } = await supabase.auth.getUser()
+
+        if (userError) {
+          throw userError
+        }
+
+        const userId = userData.user?.id
+
+        if (!userId) {
+          throw new Error('تعذر تحديد المستخدم الحالي.')
+        }
+
+        const {
+          data,
+          error: fetchError,
+        } = await supabase
+          .from('notification_preferences')
+          .select(
+            'new_lead, new_message, overdue_tasks, weekly_report_email'
+          )
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        if (fetchError) {
+          throw fetchError
+        }
+
+        if (data) {
+          setNotificationPreferences({
+            new_lead: data.new_lead ?? true,
+            new_message: data.new_message ?? true,
+            overdue_tasks: data.overdue_tasks ?? true,
+            weekly_report_email: data.weekly_report_email ?? false,
+          })
+        } else {
+          const {
+            data: createdData,
+            error: createError,
+          } = await supabase
+            .from('notification_preferences')
+            .insert({
+              user_id: userId,
+              organization_id: organizationId,
+              ...initialNotificationPreferences,
+            })
+            .select(
+              'new_lead, new_message, overdue_tasks, weekly_report_email'
+            )
+            .single()
+
+          if (createError) {
+            throw createError
+          }
+
+          if (createdData) {
+            setNotificationPreferences({
+              new_lead: createdData.new_lead ?? true,
+              new_message: createdData.new_message ?? true,
+              overdue_tasks: createdData.overdue_tasks ?? true,
+              weekly_report_email:
+                createdData.weekly_report_email ?? false,
+            })
+          }
+        }
+      } catch (err: any) {
+        setNotificationsError(
+          err?.message ||
+            'تعذر تحميل إعدادات الإشعارات.'
+        )
+      } finally {
+        setNotificationsLoading(false)
+      }
+    }
+
+    loadNotificationPreferences()
+  }, [organizationId])
+
   const validate = () => {
-  if (!org.name.trim()) {
-    return 'اسم الشركة مطلوب.'
-  }
-
-  if (org.email.trim()) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-    if (!emailRegex.test(org.email.trim())) {
-      return 'يرجى إدخال بريد إلكتروني صحيح.'
+    if (!org.name.trim()) {
+      return 'اسم الشركة مطلوب.'
     }
-  }
 
-  if (org.phone.trim()) {
-    const phoneDigits = org.phone.replace(/\D/g, '')
+    if (org.email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
-      return 'يرجى إدخال رقم هاتف صحيح.'
+      if (!emailRegex.test(org.email.trim())) {
+        return 'يرجى إدخال بريد إلكتروني صحيح.'
+      }
     }
-  }
 
-  return null
-}
+    if (org.phone.trim()) {
+      const phoneDigits = org.phone.replace(/\D/g, '')
+
+      if (
+        phoneDigits.length < 8 ||
+        phoneDigits.length > 15
+      ) {
+        return 'يرجى إدخال رقم هاتف صحيح.'
+      }
+    }
+
+    return null
+  }
 
   const handleSave = async () => {
     if (!supabase || !organizationId) return
@@ -144,17 +257,23 @@ export default function Settings() {
     setSaving(true)
 
     try {
-      const { error: updateError } = await supabase
+      const {
+        error: updateError,
+      } = await supabase
         .from('organizations')
         .update({
           name: org.name.trim(),
-          manager_name: org.manager_name.trim() || null,
+          manager_name:
+            org.manager_name.trim() || null,
           phone: org.phone.trim() || null,
           email: org.email.trim() || null,
           address: org.address.trim() || null,
-          timezone: org.timezone || 'Africa/Cairo',
-          business_type: org.business_type || null,
-          logo_url: org.logo_url.trim() || null,
+          timezone:
+            org.timezone || 'Africa/Cairo',
+          business_type:
+            org.business_type || null,
+          logo_url:
+            org.logo_url.trim() || null,
         })
         .eq('id', organizationId)
 
@@ -169,12 +288,94 @@ export default function Settings() {
       }, 2500)
     } catch (err: any) {
       setError(
-        err?.message || 'تعذر حفظ بيانات الشركة. حاول مرة أخرى.'
+        err?.message ||
+          'تعذر حفظ بيانات الشركة. حاول مرة أخرى.'
       )
     } finally {
       setSaving(false)
     }
   }
+
+  const updateNotificationPreference = (
+    field: keyof NotificationPreferences,
+    value: boolean
+  ) => {
+    setNotificationPreferences(prev => ({
+      ...prev,
+      [field]: value,
+    }))
+
+    setNotificationsSaved(false)
+    setNotificationsError('')
+  }
+
+  const handleSaveNotificationPreferences =
+    async () => {
+      if (!supabase || !organizationId) return
+
+      setNotificationsSaving(true)
+      setNotificationsSaved(false)
+      setNotificationsError('')
+
+      try {
+        const {
+          data: userData,
+          error: userError,
+        } = await supabase.auth.getUser()
+
+        if (userError) {
+          throw userError
+        }
+
+        const userId = userData.user?.id
+
+        if (!userId) {
+          throw new Error(
+            'تعذر تحديد المستخدم الحالي.'
+          )
+        }
+
+        const {
+          error: upsertError,
+        } = await supabase
+          .from('notification_preferences')
+          .upsert(
+            {
+              user_id: userId,
+              organization_id: organizationId,
+              new_lead:
+                notificationPreferences.new_lead,
+              new_message:
+                notificationPreferences.new_message,
+              overdue_tasks:
+                notificationPreferences.overdue_tasks,
+              weekly_report_email:
+                notificationPreferences.weekly_report_email,
+              updated_at: new Date().toISOString(),
+            },
+            {
+              onConflict: 'user_id',
+            }
+          )
+
+        if (upsertError) {
+          throw upsertError
+        }
+
+        setNotificationsSaved(true)
+
+        window.setTimeout(() => {
+          setNotificationsSaved(false)
+        }, 2500)
+      } catch (err: any) {
+        setNotificationsError(
+          err?.message ||
+            'تعذر حفظ إعدادات الإشعارات.'
+        )
+      } finally {
+        setNotificationsSaving(false)
+      }
+    }
 
   if (orgLoading || loading) {
     return (
@@ -187,7 +388,8 @@ export default function Settings() {
   if (orgError || !organizationId) {
     return (
       <div className="text-center py-20 text-sm text-red-600">
-        {orgError ?? 'تعذر تحديد المؤسسة الخاصة بحسابك'}
+        {orgError ??
+          'تعذر تحديد المؤسسة الخاصة بحسابك'}
       </div>
     )
   }
@@ -230,10 +432,14 @@ export default function Settings() {
                   {org.logo_url ? (
                     <img
                       src={org.logo_url}
-                      alt={org.name || 'شعار الشركة'}
+                      alt={
+                        org.name ||
+                        'شعار الشركة'
+                      }
                       className="w-full h-full object-contain"
                       onError={e => {
-                        e.currentTarget.style.display = 'none'
+                        e.currentTarget.style.display =
+                          'none'
                       }}
                     />
                   ) : (
@@ -251,7 +457,10 @@ export default function Settings() {
                   <input
                     value={org.logo_url}
                     onChange={e =>
-                      updateOrg('logo_url', e.target.value)
+                      updateOrg(
+                        'logo_url',
+                        e.target.value
+                      )
                     }
                     placeholder="https://..."
                     dir="ltr"
@@ -270,7 +479,9 @@ export default function Settings() {
               label="اسم الشركة"
               required
               value={org.name}
-              onChange={value => updateOrg('name', value)}
+              onChange={value =>
+                updateOrg('name', value)
+              }
             />
 
             {/* Manager */}
@@ -278,7 +489,10 @@ export default function Settings() {
               label="اسم المسؤول / المدير"
               value={org.manager_name}
               onChange={value =>
-                updateOrg('manager_name', value)
+                updateOrg(
+                  'manager_name',
+                  value
+                )
               }
             />
 
@@ -291,7 +505,10 @@ export default function Settings() {
               <select
                 value={org.business_type}
                 onChange={e =>
-                  updateOrg('business_type', e.target.value)
+                  updateOrg(
+                    'business_type',
+                    e.target.value
+                  )
                 }
                 className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white"
               >
@@ -365,7 +582,10 @@ export default function Settings() {
               <textarea
                 value={org.address}
                 onChange={e =>
-                  updateOrg('address', e.target.value)
+                  updateOrg(
+                    'address',
+                    e.target.value
+                  )
                 }
                 rows={3}
                 placeholder="أدخل عنوان مقر الشركة"
@@ -382,7 +602,10 @@ export default function Settings() {
               <select
                 value={org.timezone}
                 onChange={e =>
-                  updateOrg('timezone', e.target.value)
+                  updateOrg(
+                    'timezone',
+                    e.target.value
+                  )
                 }
                 className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white"
               >
@@ -440,32 +663,115 @@ export default function Settings() {
 
         {/* Notifications */}
         {active === 'الإشعارات' && (
-          <div className="space-y-3 max-w-md">
-            {[
-              'إشعار عند وجود عميل محتمل جديد',
-              'إشعار عند رسالة جديدة في الإنبوكس',
-              'تذكير بالمهام المتأخرة',
-              'تقرير أداء أسبوعي بالبريد',
-            ].map(n => (
-              <label
-                key={n}
-                className="flex items-center justify-between border border-sand-200 rounded-xl px-4 py-3"
-              >
-                <span className="text-sm text-ink-900">
-                  {n}
-                </span>
+          <div className="space-y-6 max-w-2xl">
+            <div>
+              <h2 className="text-lg font-semibold text-ink-900">
+                إعدادات الإشعارات
+              </h2>
 
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  className="w-4 h-4 accent-ink-900"
-                />
-              </label>
-            ))}
+              <p className="text-sm text-ink-900/50 mt-1">
+                تحكم في أنواع الإشعارات التي تريد استقبالها على حسابك.
+              </p>
+            </div>
 
-            <p className="text-xs text-ink-900/40">
-              إعدادات الإشعارات دي شكلية حاليًا — هتشتغل فعليًا لما نربط نظام إرسال إشعارات حقيقي.
-            </p>
+            {notificationsLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="w-7 h-7 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  <NotificationToggle
+                    label="إشعار عند وجود عميل محتمل جديد"
+                    description="استقبل إشعارًا عند إضافة Lead جديد إلى مؤسستك."
+                    checked={
+                      notificationPreferences.new_lead
+                    }
+                    onChange={value =>
+                      updateNotificationPreference(
+                        'new_lead',
+                        value
+                      )
+                    }
+                  />
+
+                  <NotificationToggle
+                    label="إشعار عند رسالة جديدة في الإنبوكس"
+                    description="استقبل إشعارًا عند وصول رسالة جديدة."
+                    checked={
+                      notificationPreferences.new_message
+                    }
+                    onChange={value =>
+                      updateNotificationPreference(
+                        'new_message',
+                        value
+                      )
+                    }
+                  />
+
+                  <NotificationToggle
+                    label="تذكير بالمهام المتأخرة"
+                    description="استقبل تنبيهًا عند وجود مهام تجاوزت موعدها."
+                    checked={
+                      notificationPreferences.overdue_tasks
+                    }
+                    onChange={value =>
+                      updateNotificationPreference(
+                        'overdue_tasks',
+                        value
+                      )
+                    }
+                  />
+
+                  <NotificationToggle
+                    label="تقرير أداء أسبوعي بالبريد"
+                    description="استقبل ملخصًا أسبوعيًا لأداء مؤسستك عبر البريد الإلكتروني."
+                    checked={
+                      notificationPreferences.weekly_report_email
+                    }
+                    onChange={value =>
+                      updateNotificationPreference(
+                        'weekly_report_email',
+                        value
+                      )
+                    }
+                  />
+                </div>
+
+                {notificationsError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {notificationsError}
+                  </div>
+                )}
+
+                {notificationsSaved && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    تم حفظ إعدادات الإشعارات بنجاح.
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    onClick={
+                      handleSaveNotificationPreferences
+                    }
+                    disabled={
+                      notificationsSaving
+                    }
+                  >
+                    {notificationsSaving
+                      ? 'جاري الحفظ...'
+                      : 'حفظ إعدادات الإشعارات'}
+                  </Button>
+
+                  {notificationsSaving && (
+                    <span className="text-xs text-ink-900/40">
+                      يتم حفظ الإعدادات...
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -536,6 +842,41 @@ export default function Settings() {
   )
 }
 
+function NotificationToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4 border border-sand-200 rounded-xl px-4 py-4 cursor-pointer hover:bg-sand-50 transition-colors">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-ink-900">
+          {label}
+        </div>
+
+        <div className="text-xs text-ink-900/45 mt-1">
+          {description}
+        </div>
+      </div>
+
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e =>
+          onChange(e.target.checked)
+        }
+        className="w-5 h-5 accent-ink-900 shrink-0"
+      />
+    </label>
+  )
+}
+
 function Field({
   label,
   value,
@@ -570,7 +911,9 @@ function Field({
         value={value}
         dir={dir}
         placeholder={placeholder}
-        onChange={e => onChange(e.target.value)}
+        onChange={e =>
+          onChange(e.target.value)
+        }
         className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700"
       />
     </div>
