@@ -2,10 +2,11 @@ import React, { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import { IconDragon } from '../components/Icon'
+import { useBranding } from '../hooks/useBranding'
 
 export default function Login() {
   const { session, signIn, signUp } = useAuth()
+  const { branding, logoUrl } = useBranding()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -54,14 +55,14 @@ export default function Login() {
     setSubmitting(false)
   }
 
+  const platformName = branding?.platform_name || 'Dragon Media'
+
   return (
     <div dir="rtl" className="min-h-screen flex bg-sand-50">
       <div className="hidden lg:flex lg:w-1/2 bg-ink-950 text-sand-100 flex-col justify-between p-12">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gold-500 flex items-center justify-center text-ink-950">
-            <IconDragon className="w-6 h-6" />
-          </div>
-          <span className="font-bold text-xl">Dragon Media</span>
+          <img src={logoUrl} alt={platformName} className="w-11 h-11 rounded-xl object-contain bg-white/5" />
+          <span className="font-bold text-xl">{platformName}</span>
         </div>
         <div>
           <h1 className="text-3xl font-bold leading-snug">
@@ -71,16 +72,14 @@ export default function Login() {
             CRM، مسار مبيعات، حملات تسويقية، وصندوق محادثات موحد — مع RYAN AI يشتغل معاك على مدار الساعة.
           </p>
         </div>
-        <p className="text-xs text-sand-100/40">© 2026 Dragon Media</p>
+        <p className="text-xs text-sand-100/40">© 2026 {platformName}</p>
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="w-10 h-10 rounded-lg bg-gold-500 flex items-center justify-center text-ink-950">
-              <IconDragon className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-lg text-ink-950">Dragon Media</span>
+            <img src={logoUrl} alt={platformName} className="w-10 h-10 rounded-lg object-contain" />
+            <span className="font-bold text-lg text-ink-950">{platformName}</span>
           </div>
 
           <h2 className="text-2xl font-bold text-ink-950">
