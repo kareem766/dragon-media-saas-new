@@ -118,12 +118,16 @@ export default function Settings() {
     }
 
     if (org.phone.trim()) {
-      const phoneRegex = /^[0-9+\-\s()]{7,20}$/
+  const normalizedPhone = org.phone
+    .trim()
+    .replace(/[\s()-]/g, '')
 
-      if (!phoneRegex.test(org.phone.trim())) {
-        return 'يرجى إدخال رقم هاتف صحيح.'
-      }
-    }
+  const phoneRegex = /^\+?[1-9]\d{7,14}$/
+
+  if (!phoneRegex.test(normalizedPhone)) {
+    return 'يرجى إدخال رقم هاتف صحيح، مثل +201012345678.'
+  }
+}
 
     return null
   }
