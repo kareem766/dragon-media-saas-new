@@ -80,7 +80,7 @@ export default function App() {
               <Route path="/billing" element={<Billing />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/users" element={<Users />} />
-              <Route path="/account" element={<Account />} />.
+              <Route path="/account" element={<Account />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>
