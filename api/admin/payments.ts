@@ -86,52 +86,28 @@ export default async function handler(req: any, res: any) {
     }
 
     if (action === 'reject') {
-      const { data: request } = await admin
-        .from('payment_requests')
-        .select('organization_id')
-        .eq('id', requestId)
-        .single()
+      const { data, error } = await userClient.rpc(
+        'reject_payment_request',
+        {
+          p_request_id: requestId,
+          p_reviewer_id: authData.user.id,
+          p_reason: reason,
+        }
+      )
 
-      if (!request) {
-        res.status(404).json({
-          error: 'الطلب غير موجود',
+      if (error) {
+        res.status(400).json({
+          error: error.message,
         })
 
         return
       }
 
-      await admin
-        .from('payment_requests')
-        .update({
-          status: 'rejected',
-          rejection_reason: reason,
-          reviewed_by: authData.user.id,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', requestId)
-
-      await admin
-        .from('subscriptions')
-        .update({
-          status: 'pending_payment',
-        })
-        .eq('organization_id', request.organization_id)
-
-      await admin.from('audit_logs').insert({
-        actor_id: authData.user.id,
-        organization_id: request.organization_id,
-        action: 'reject_payment',
-        entity: 'payment_requests',
-        entity_id: requestId,
-        new_value: {
-          status: 'rejected',
-          reason,
-        },
-      })
-
-      res.status(200).json({
-        success: true,
-      })
+      res.status(200).json(
+        data ?? {
+          success: true,
+        }
+      )
 
       return
     }
