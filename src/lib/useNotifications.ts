@@ -76,15 +76,17 @@ export function useNotifications() {
 
   // Realtime notifications
   useEffect(() => {
-    if (!supabase || !organizationId) {
+    const client = supabase
+
+    if (!client || !organizationId) {
       return
     }
 
     let cancelled = false
-    let channel: ReturnType<typeof supabase.channel> | null = null
+    let channel: ReturnType<typeof client.channel> | null = null
 
     const subscribe = async () => {
-      const { data: userData } = await supabase.auth.getUser()
+      const { data: userData } = await client.auth.getUser()
 
       const userId = userData.user?.id
 
@@ -92,7 +94,7 @@ export function useNotifications() {
         return
       }
 
-      channel = supabase
+      channel = client
         .channel(`notifications-hook-${userId}`)
         .on(
           'postgres_changes',
@@ -114,8 +116,8 @@ export function useNotifications() {
     return () => {
       cancelled = true
 
-      if (channel && supabase) {
-        supabase.removeChannel(channel)
+      if (channel) {
+        client.removeChannel(channel)
       }
     }
   }, [organizationId, load])
