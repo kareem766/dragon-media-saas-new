@@ -26,10 +26,21 @@ export default function Account() {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [newEmail, setNewEmail] = useState('');
 
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [showCurrentPassword, setShowCurrentPassword] =
+    useState(false);
+  const [showNewPassword, setShowNewPassword] =
+    useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [changingEmail, setChangingEmail] = useState(false);
-  const [sendingPasswordReset, setSendingPasswordReset] =
+  const [changingPassword, setChangingPassword] =
     useState(false);
 
   const [message, setMessage] = useState('');
@@ -41,7 +52,7 @@ export default function Account() {
   };
 
   // ---------------------------------------------------------
-  // Load account data
+  // Load account
   // ---------------------------------------------------------
 
   const loadAccount = async () => {
@@ -54,7 +65,6 @@ export default function Account() {
     clearMessages();
 
     try {
-      // Always get the latest authenticated user
       const {
         data: authUserData,
         error: authUserError,
@@ -66,15 +76,16 @@ export default function Account() {
 
       const currentUser = authUserData.user || user;
 
-      // Load profile from users table
-      const { data: userData, error: userError } =
-        await supabase
-          .from('users')
-          .select(
-            'full_name, email, role, active, organization_id'
-          )
-          .eq('id', currentUser.id)
-          .maybeSingle();
+      const {
+        data: userData,
+        error: userError,
+      } = await supabase
+        .from('users')
+        .select(
+          'full_name, email, role, active, organization_id'
+        )
+        .eq('id', currentUser.id)
+        .maybeSingle();
 
       if (userError) {
         throw userError;
@@ -99,7 +110,6 @@ export default function Account() {
         organizationData = data;
       }
 
-      // Auth metadata is the fallback source for the personal name
       const authFullName =
         currentUser.user_metadata?.full_name ||
         currentUser.user_metadata?.name ||
@@ -110,13 +120,20 @@ export default function Account() {
         currentUser.user_metadata?.picture ||
         '';
 
-      setProfile(userData as UserProfile | null);
-      setOrganization(organizationData);
+      setProfile(
+        userData as UserProfile | null
+      );
 
+      setOrganization(
+        organizationData
+      );
+
+      // Auth is the primary source for the display name
+      // so Account and Topbar remain synchronized.
       setFullName(
-       authFullName ||
-         userData?.full_name ||
-         ''
+        authFullName ||
+          userData?.full_name ||
+          ''
       );
 
       setAvatarUrl(authAvatar);
@@ -131,18 +148,7 @@ export default function Account() {
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    const initialize = async () => {
-      if (!mounted) return;
-      await loadAccount();
-    };
-
-    initialize();
-
-    return () => {
-      mounted = false;
-    };
+    loadAccount();
   }, [user?.id]);
 
   // ---------------------------------------------------------
@@ -224,7 +230,6 @@ export default function Account() {
     setSavingProfile(true);
 
     try {
-      // 1. Update Supabase Auth metadata
       const {
         error: authError,
       } = await supabase.auth.updateUser({
@@ -239,14 +244,13 @@ export default function Account() {
         throw authError;
       }
 
-      // 2. Keep users table synchronized
       const {
         error: profileError,
       } = await supabase
         .from('users')
         .update({
           full_name: cleanName,
-          email: email,
+          email,
         })
         .eq('id', user.id);
 
@@ -254,9 +258,6 @@ export default function Account() {
         throw profileError;
       }
 
-      // 3. Get fresh Auth user
-      // This is important so Account and Topbar
-      // use the exact same updated data.
       const {
         data: refreshedAuth,
         error: refreshError,
@@ -296,19 +297,6 @@ export default function Account() {
                 email:
                   refreshedUser.email ||
                   email,
-              }
-            : current
-        );
-      } else {
-        setFullName(cleanName);
-        setAvatarUrl(cleanAvatar);
-
-        setProfile((current) =>
-          current
-            ? {
-                ...current,
-                full_name: cleanName,
-                email,
               }
             : current
         );
@@ -387,46 +375,111 @@ export default function Account() {
   };
 
   // ---------------------------------------------------------
-  // Password reset
+  // Change password
   // ---------------------------------------------------------
 
-  const handlePasswordReset = async () => {
-    if (!supabase || !email) {
+  const handleChangePassword = async () => {
+    if (!user || !supabase) {
       return;
     }
 
     clearMessages();
-    setSendingPasswordReset(true);
+
+    if (!email) {
+      setError(
+        'تعذر تحديد البريد الإلكتروني للحساب.'
+      );
+      return;
+    }
+
+    if (!currentPassword) {
+      setError(
+        'أدخل كلمة المرور الحالية.'
+      );
+      return;
+    }
+
+    if (!newPassword) {
+      setError(
+        'أدخل كلمة المرور الجديدة.'
+      );
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError(
+        'كلمة المرور الجديدة يجب أن تحتوي على 8 أحرف أو أكثر.'
+      );
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      setError(
+        'كلمة المرور الجديدة يجب أن تكون مختلفة عن الحالية.'
+      );
+      return;
+    }
+
+    if (!confirmPassword) {
+      setError(
+        'أكد كلمة المرور الجديدة.'
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError(
+        'تأكيد كلمة المرور غير مطابق لكلمة المرور الجديدة.'
+      );
+      return;
+    }
+
+    setChangingPassword(true);
 
     try {
-      const redirectTo =
-        `${window.location.origin}` +
-        `${window.location.pathname}#/account`;
-
+      // 1. Verify current password
       const {
-        error: resetError,
+        error: signInError,
       } =
-        await supabase.auth.resetPasswordForEmail(
+        await supabase.auth.signInWithPassword({
           email,
-          {
-            redirectTo,
-          }
-        );
+          password:
+            currentPassword,
+        });
 
-      if (resetError) {
-        throw resetError;
+      if (signInError) {
+        throw new Error(
+          'كلمة المرور الحالية غير صحيحة.'
+        );
       }
 
+      // 2. Update password
+      const {
+        error: updateError,
+      } =
+        await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // 3. Clear password fields
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+
       setMessage(
-        'تم إرسال رابط تغيير كلمة المرور إلى بريدك الإلكتروني.'
+        'تم تغيير كلمة المرور بنجاح.'
       );
     } catch (err: any) {
       setError(
         err?.message ||
-          'تعذر إرسال رابط تغيير كلمة المرور.'
+          'تعذر تغيير كلمة المرور.'
       );
     } finally {
-      setSendingPasswordReset(false);
+      setChangingPassword(false);
     }
   };
 
@@ -438,26 +491,30 @@ export default function Account() {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
+
           <div className="h-9 w-9 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
 
           <p className="text-sm text-slate-500">
             جاري تحميل بيانات الحساب...
           </p>
+
         </div>
       </div>
     );
   }
 
   // ---------------------------------------------------------
-  // No authenticated user
+  // No user
   // ---------------------------------------------------------
 
   if (!user) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+
         <p className="text-sm font-medium text-red-700">
           لم يتم العثور على جلسة مستخدم صالحة.
         </p>
+
       </div>
     );
   }
@@ -472,12 +529,15 @@ export default function Account() {
       {/* Header */}
 
       <div>
+
         <div className="flex items-center gap-2">
+
           <span className="h-2 w-2 rounded-full bg-blue-600" />
 
           <span className="text-xs font-semibold text-blue-600">
             الحساب الشخصي
           </span>
+
         </div>
 
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
@@ -487,12 +547,14 @@ export default function Account() {
         <p className="mt-1 text-sm text-slate-500">
           إدارة بياناتك الشخصية وأمان حسابك في Dragon Media.
         </p>
+
       </div>
 
-      {/* Success */}
+      {/* Messages */}
 
       {message && (
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+
           <span className="mt-0.5 font-bold text-emerald-600">
             ✓
           </span>
@@ -500,13 +562,13 @@ export default function Account() {
           <p className="text-sm font-medium text-emerald-700">
             {message}
           </p>
+
         </div>
       )}
 
-      {/* Error */}
-
       {error && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+
           <span className="mt-0.5 font-bold text-red-600">
             !
           </span>
@@ -514,10 +576,11 @@ export default function Account() {
           <p className="text-sm font-medium text-red-700">
             {error}
           </p>
+
         </div>
       )}
 
-      {/* Profile hero */}
+      {/* Profile */}
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
 
@@ -529,14 +592,15 @@ export default function Account() {
 
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
 
-            {/* Avatar */}
-
             <div className="relative shrink-0">
 
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
-                  alt={fullName || 'المستخدم'}
+                  alt={
+                    fullName ||
+                    'المستخدم'
+                  }
                   className="h-24 w-24 rounded-2xl object-cover shadow-lg ring-4 ring-white"
                   onError={() =>
                     setAvatarUrl('')
@@ -555,14 +619,14 @@ export default function Account() {
                     : 'bg-slate-400'
                 }`}
               />
-            </div>
 
-            {/* User summary */}
+            </div>
 
             <div className="min-w-0 flex-1">
 
               <h2 className="truncate text-xl font-bold text-slate-900">
-                {fullName || 'المستخدم'}
+                {fullName ||
+                  'المستخدم'}
               </h2>
 
               <p className="mt-1 truncate text-sm text-slate-500">
@@ -595,8 +659,6 @@ export default function Account() {
 
         </div>
 
-        {/* Personal information */}
-
         <div className="p-6 sm:p-8">
 
           <div className="mb-6">
@@ -612,8 +674,6 @@ export default function Account() {
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">
-
-            {/* Full name */}
 
             <div>
 
@@ -636,8 +696,6 @@ export default function Account() {
 
             </div>
 
-            {/* Current email */}
-
             <div>
 
               <label className="mb-2 block text-sm font-semibold text-slate-700">
@@ -657,8 +715,6 @@ export default function Account() {
               </p>
 
             </div>
-
-            {/* Avatar */}
 
             <div className="md:col-span-2">
 
@@ -705,14 +761,16 @@ export default function Account() {
 
           </div>
 
-          {/* Save */}
-
           <div className="mt-6 flex justify-end">
 
             <button
               type="button"
-              onClick={handleSaveProfile}
-              disabled={savingProfile}
+              onClick={
+                handleSaveProfile
+              }
+              disabled={
+                savingProfile
+              }
               className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {savingProfile
@@ -726,7 +784,7 @@ export default function Account() {
 
       </section>
 
-      {/* Change email */}
+      {/* Email */}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
 
@@ -768,7 +826,9 @@ export default function Account() {
 
           <button
             type="button"
-            onClick={handleChangeEmail}
+            onClick={
+              handleChangeEmail
+            }
             disabled={
               changingEmail ||
               !newEmail.trim()
@@ -784,48 +844,137 @@ export default function Account() {
 
       </section>
 
-      {/* Security */}
+      {/* Password */}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
 
         <div className="mb-6">
 
           <h3 className="text-base font-bold text-slate-900">
-            الأمان
+            تغيير كلمة المرور
           </h3>
 
           <p className="mt-1 text-xs text-slate-500">
-            حافظ على أمان حسابك من خلال تحديث كلمة المرور بشكل دوري.
+            أدخل كلمة المرور الحالية ثم اختر كلمة مرور جديدة لحماية حسابك.
           </p>
 
         </div>
 
-        <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-5">
 
-          <div>
+          {/* Current password */}
 
-            <p className="text-sm font-bold text-slate-800">
-              كلمة المرور
+          <PasswordInput
+            label="كلمة المرور الحالية"
+            value={currentPassword}
+            onChange={(value) => {
+              setCurrentPassword(value);
+              clearMessages();
+            }}
+            show={showCurrentPassword}
+            onToggle={() =>
+              setShowCurrentPassword(
+                (value) => !value
+              )
+            }
+            placeholder="أدخل كلمة المرور الحالية"
+          />
+
+          {/* New password */}
+
+          <PasswordInput
+            label="كلمة المرور الجديدة"
+            value={newPassword}
+            onChange={(value) => {
+              setNewPassword(value);
+              clearMessages();
+            }}
+            show={showNewPassword}
+            onToggle={() =>
+              setShowNewPassword(
+                (value) => !value
+              )
+            }
+            placeholder="8 أحرف على الأقل"
+          />
+
+          {/* Confirm */}
+
+          <PasswordInput
+            label="تأكيد كلمة المرور الجديدة"
+            value={confirmPassword}
+            onChange={(value) => {
+              setConfirmPassword(
+                value
+              );
+              clearMessages();
+            }}
+            show={showConfirmPassword}
+            onToggle={() =>
+              setShowConfirmPassword(
+                (value) => !value
+              )
+            }
+            placeholder="أعد كتابة كلمة المرور الجديدة"
+          />
+
+          {/* Password requirements */}
+
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+
+            <p className="mb-2 text-xs font-bold text-slate-700">
+              متطلبات كلمة المرور
             </p>
 
-            <p className="mt-1 text-xs leading-5 text-slate-500">
-              سيتم إرسال رابط آمن إلى بريدك الإلكتروني لإنشاء كلمة مرور جديدة.
-            </p>
+            <div className="space-y-1.5 text-xs">
+
+              <Requirement
+                valid={
+                  newPassword.length >= 8
+                }
+                text="8 أحرف على الأقل"
+              />
+
+              <Requirement
+                valid={
+                  !!newPassword &&
+                  newPassword ===
+                    confirmPassword
+                }
+                text="كلمة المرور والتأكيد متطابقان"
+              />
+
+              <Requirement
+                valid={
+                  !!newPassword &&
+                  newPassword !==
+                    currentPassword
+                }
+                text="مختلفة عن كلمة المرور الحالية"
+              />
+
+            </div>
 
           </div>
 
-          <button
-            type="button"
-            onClick={handlePasswordReset}
-            disabled={
-              sendingPasswordReset
-            }
-            className="shrink-0 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {sendingPasswordReset
-              ? 'جاري الإرسال...'
-              : 'تغيير كلمة المرور'}
-          </button>
+          <div className="flex justify-end">
+
+            <button
+              type="button"
+              onClick={
+                handleChangePassword
+              }
+              disabled={
+                changingPassword
+              }
+              className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {changingPassword
+                ? 'جاري تغيير كلمة المرور...'
+                : 'تغيير كلمة المرور'}
+            </button>
+
+          </div>
 
         </div>
 
@@ -885,6 +1034,99 @@ export default function Account() {
 
       </section>
 
+    </div>
+  );
+}
+
+// ---------------------------------------------------------
+// Password input
+// ---------------------------------------------------------
+
+function PasswordInput({
+  label,
+  value,
+  onChange,
+  show,
+  onToggle,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  show: boolean;
+  onToggle: () => void;
+  placeholder: string;
+}) {
+  return (
+    <div>
+
+      <label className="mb-2 block text-sm font-semibold text-slate-700">
+        {label}
+      </label>
+
+      <div className="relative">
+
+        <input
+          type={
+            show
+              ? 'text'
+              : 'password'
+          }
+          value={value}
+          onChange={(event) =>
+            onChange(
+              event.target.value
+            )
+          }
+          placeholder={placeholder}
+          dir="ltr"
+          autoComplete="new-password"
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pl-14 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+        />
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute left-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+          aria-label={
+            show
+              ? 'إخفاء كلمة المرور'
+              : 'إظهار كلمة المرور'
+          }
+        >
+          {show ? 'إخفاء' : 'إظهار'}
+        </button>
+
+      </div>
+
+    </div>
+  );
+}
+
+// ---------------------------------------------------------
+// Password requirement
+// ---------------------------------------------------------
+
+function Requirement({
+  valid,
+  text,
+}: {
+  valid: boolean;
+  text: string;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 ${
+        valid
+          ? 'text-emerald-600'
+          : 'text-slate-500'
+      }`}
+    >
+      <span className="font-bold">
+        {valid ? '✓' : '○'}
+      </span>
+
+      <span>{text}</span>
     </div>
   );
 }
