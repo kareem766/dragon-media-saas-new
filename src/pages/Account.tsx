@@ -114,9 +114,9 @@ export default function Account() {
       setOrganization(organizationData);
 
       setFullName(
-        userData?.full_name ||
-          authFullName ||
-          ''
+       authFullName ||
+         userData?.full_name ||
+         ''
       );
 
       setAvatarUrl(authAvatar);
