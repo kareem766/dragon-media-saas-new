@@ -16,6 +16,7 @@ import Pipeline from './pages/Pipeline'
 import Services from './pages/Services'
 import Campaigns from './pages/Campaigns'
 import Inbox from './pages/Inbox'
+import Account from './pages/Account';
 import Ryan from './pages/Ryan'
 import KnowledgeBase from './pages/KnowledgeBase'
 import HandoffRequests from './pages/HandoffRequests'
@@ -79,6 +80,7 @@ export default function App() {
               <Route path="/billing" element={<Billing />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/users" element={<Users />} />
+              <Route path="/account" element={<Account />} />.
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Routes>
