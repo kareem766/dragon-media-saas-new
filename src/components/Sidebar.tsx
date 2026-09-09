@@ -6,6 +6,7 @@ import {
   IconSettings, IconDragon
 } from './Icon'
 import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
+import { useBranding } from '../hooks/useBranding'
 
 const items = [
   { to: '/', label: 'الرئيسية', icon: IconGrid, end: true },
@@ -27,6 +28,8 @@ const items = [
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { isAdmin } = useIsPlatformAdmin()
+  const { branding, logoUrl } = useBranding()
+  const platformName = branding?.platform_name || 'Dragon Media'
 
   return (
     <>
@@ -35,12 +38,10 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
       )}
       <aside className={`fixed lg:static z-40 h-full w-72 shrink-0 bg-ink-950 text-sand-100 flex flex-col transition-transform duration-200
         ${open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}>
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-          <div className="w-10 h-10 rounded-lg bg-gold-500/90 flex items-center justify-center text-ink-950">
-            <IconDragon className="w-6 h-6" />
-          </div>
+<div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
+          <img src={logoUrl} alt={platformName} className="w-10 h-10 rounded-lg object-contain bg-white/5" />
           <div>
-            <div className="font-bold text-lg leading-tight">Dragon Media</div>
+            <div className="font-bold text-lg leading-tight">{platformName}</div>
             <div className="text-xs text-sand-100/50">منصة التسويق والمبيعات</div>
           </div>
         </div>
