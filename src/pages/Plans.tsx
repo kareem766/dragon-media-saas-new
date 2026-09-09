@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Badge, Button } from '../components/ui'
+import { Badge, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useSubscription } from '../lib/useSubscription'
 
@@ -103,9 +103,10 @@ export default function Plans() {
             : 0
 
           return (
-            <div key={p.id} style={p.is_popular ? { borderColor: 'var(--brand-accent, #B4903D)' } as React.CSSProperties : undefined}>
-            <Card
-              className={`p-6 flex flex-col relative ${p.is_popular ? 'border-2' : ''}`}
+            <div
+              key={p.id}
+              className={`bg-white rounded-2xl p-6 flex flex-col relative border ${p.is_popular ? 'border-2' : 'border-sand-200'}`}
+              style={p.is_popular ? { borderColor: 'var(--brand-accent, #B4903D)' } : undefined}
             >
               {p.is_popular && (
                 <div
@@ -154,12 +155,12 @@ export default function Plans() {
               >
                 {isCurrentPlan ? 'باقتك الحالية' : selecting === p.id ? 'جاري الاختيار...' : subscription?.plan ? 'ترقية الباقة' : 'اشترك الآن'}
               </Button>
-            </Card>
+            </div>
           )
         })}
       </div>
 
-      <Card className="p-2 sm:p-5 overflow-x-auto">
+      <div className="bg-white border border-sand-200 rounded-2xl p-2 sm:p-5 overflow-x-auto">
         <h2 className="font-bold text-ink-950 px-3 pt-3">مقارنة تفصيلية بين الباقات</h2>
         <table className="w-full text-sm mt-4">
           <thead>
@@ -189,7 +190,7 @@ export default function Plans() {
             ))}
           </tbody>
         </table>
-      </Card>
+      </div>
     </div>
   )
 }
