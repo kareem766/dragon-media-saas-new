@@ -105,39 +105,28 @@ export default function Settings() {
   }, [organizationId])
 
   const validate = () => {
-    if (!org.name.trim()) {
-      return 'اسم الشركة مطلوب.'
-    }
-
-    if (org.email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-      if (!emailRegex.test(org.email.trim())) {
-        return 'يرجى إدخال بريد إلكتروني صحيح.'
-      }
-    }
-
-    if (org.phone.trim()) {
-      const normalizedPhone = org.phone
-        .trim()
-        .replace(/[\s()-]/g, '')
-
-      // Supports Egyptian and international phone formats.
-      // Examples:
-      // 01012345678
-      // +201012345678
-      // 00201012345678
-      // +966501234567
-      const phoneRegex =
-        /^(?:01[0125]\d{8}|\+?[1-9]\d{7,14}|00201[0125]\d{8})$/
-
-      if (!phoneRegex.test(normalizedPhone)) {
-        return 'يرجى إدخال رقم هاتف صحيح، مثل +201012345678.'
-      }
-    }
-
-    return null
+  if (!org.name.trim()) {
+    return 'اسم الشركة مطلوب.'
   }
+
+  if (org.email.trim()) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+    if (!emailRegex.test(org.email.trim())) {
+      return 'يرجى إدخال بريد إلكتروني صحيح.'
+    }
+  }
+
+  if (org.phone.trim()) {
+    const phoneDigits = org.phone.replace(/\D/g, '')
+
+    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+      return 'يرجى إدخال رقم هاتف صحيح.'
+    }
+  }
+
+  return null
+}
 
   const handleSave = async () => {
     if (!supabase || !organizationId) return
