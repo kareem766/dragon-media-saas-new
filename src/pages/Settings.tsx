@@ -118,16 +118,23 @@ export default function Settings() {
     }
 
     if (org.phone.trim()) {
-  const normalizedPhone = org.phone
-    .trim()
-    .replace(/[\s()-]/g, '')
+      const normalizedPhone = org.phone
+        .trim()
+        .replace(/[\s()-]/g, '')
 
-  const phoneRegex = /^\+?[1-9]\d{7,14}$/
+      // Supports Egyptian and international phone formats.
+      // Examples:
+      // 01012345678
+      // +201012345678
+      // 00201012345678
+      // +966501234567
+      const phoneRegex =
+        /^(?:01[0125]\d{8}|\+?[1-9]\d{7,14}|00201[0125]\d{8})$/
 
-  if (!phoneRegex.test(normalizedPhone)) {
-    return 'يرجى إدخال رقم هاتف صحيح، مثل +201012345678.'
-  }
-}
+      if (!phoneRegex.test(normalizedPhone)) {
+        return 'يرجى إدخال رقم هاتف صحيح، مثل +201012345678.'
+      }
+    }
 
     return null
   }
@@ -227,15 +234,18 @@ export default function Settings() {
               </p>
             </div>
 
-            {/* Logo */}
+            {/* Company Logo */}
             <div className="border border-sand-200 rounded-xl p-4">
               <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-xl border border-sand-200 bg-sand-50 flex items-center justify-center overflow-hidden">
+                <div className="w-20 h-20 rounded-xl border border-sand-200 bg-sand-50 flex items-center justify-center overflow-hidden shrink-0">
                   {org.logo_url ? (
                     <img
                       src={org.logo_url}
                       alt={org.name || 'شعار الشركة'}
                       className="w-full h-full object-contain"
+                      onError={e => {
+                        e.currentTarget.style.display = 'none'
+                      }}
                     />
                   ) : (
                     <span className="text-xs text-ink-900/40 text-center px-2">
@@ -260,13 +270,13 @@ export default function Settings() {
                   />
 
                   <p className="text-xs text-ink-900/40 mt-1.5">
-                    يمكن ربط الشعار برابط صورة عام. رفع الملفات إلى Storage يمكن إضافته لاحقًا بدون تغيير بيانات الشركة الحالية.
+                    أدخل رابط صورة الشعار لحفظه مع بيانات الشركة.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Company name */}
+            {/* Company Name */}
             <Field
               label="اسم الشركة"
               required
@@ -278,10 +288,12 @@ export default function Settings() {
             <Field
               label="اسم المسؤول / المدير"
               value={org.manager_name}
-              onChange={value => updateOrg('manager_name', value)}
+              onChange={value =>
+                updateOrg('manager_name', value)
+              }
             />
 
-            {/* Business type */}
+            {/* Business Type */}
             <div>
               <label className="text-xs text-ink-900/50">
                 نوع النشاط
@@ -294,15 +306,41 @@ export default function Settings() {
                 }
                 className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white"
               >
-                <option value="">اختر نوع النشاط</option>
-                <option value="عقارات">عقارات</option>
-                <option value="مطاعم">مطاعم</option>
-                <option value="عيادات">عيادات</option>
-                <option value="تعليم">مراكز تعليمية</option>
-                <option value="سيارات">معارض سيارات</option>
-                <option value="تجارة إلكترونية">تجارة إلكترونية</option>
-                <option value="سوشيال ميديا">تسويق وسوشيال ميديا</option>
-                <option value="أخرى">أخرى</option>
+                <option value="">
+                  اختر نوع النشاط
+                </option>
+
+                <option value="عقارات">
+                  عقارات
+                </option>
+
+                <option value="مطاعم">
+                  مطاعم
+                </option>
+
+                <option value="عيادات">
+                  عيادات
+                </option>
+
+                <option value="تعليم">
+                  مراكز تعليمية
+                </option>
+
+                <option value="سيارات">
+                  معارض سيارات
+                </option>
+
+                <option value="تجارة إلكترونية">
+                  تجارة إلكترونية
+                </option>
+
+                <option value="سوشيال ميديا">
+                  تسويق وسوشيال ميديا
+                </option>
+
+                <option value="أخرى">
+                  أخرى
+                </option>
               </select>
             </div>
 
@@ -310,7 +348,9 @@ export default function Settings() {
             <Field
               label="البريد الإلكتروني للتواصل"
               value={org.email}
-              onChange={value => updateOrg('email', value)}
+              onChange={value =>
+                updateOrg('email', value)
+              }
               type="email"
               dir="ltr"
             />
@@ -319,9 +359,12 @@ export default function Settings() {
             <Field
               label="رقم الهاتف"
               value={org.phone}
-              onChange={value => updateOrg('phone', value)}
+              onChange={value =>
+                updateOrg('phone', value)
+              }
               type="tel"
               dir="ltr"
+              placeholder="+201012345678"
             />
 
             {/* Address */}
@@ -357,25 +400,29 @@ export default function Settings() {
                 <option value="Africa/Cairo">
                   القاهرة — Africa/Cairo
                 </option>
+
                 <option value="Asia/Riyadh">
                   الرياض — Asia/Riyadh
                 </option>
+
                 <option value="Asia/Dubai">
                   دبي — Asia/Dubai
                 </option>
+
                 <option value="UTC">
                   UTC
                 </option>
               </select>
             </div>
 
-            {/* Messages */}
+            {/* Error */}
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
 
+            {/* Success */}
             {saved && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                 تم حفظ بيانات الشركة بنجاح.
@@ -388,7 +435,9 @@ export default function Settings() {
                 onClick={handleSave}
                 disabled={saving}
               >
-                {saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+                {saving
+                  ? 'جاري الحفظ...'
+                  : 'حفظ التغييرات'}
               </Button>
 
               {saving && (
@@ -400,6 +449,7 @@ export default function Settings() {
           </div>
         )}
 
+        {/* Notifications */}
         {active === 'الإشعارات' && (
           <div className="space-y-3 max-w-md">
             {[
@@ -430,6 +480,7 @@ export default function Settings() {
           </div>
         )}
 
+        {/* Integrations */}
         {active === 'التكاملات' && (
           <div className="grid sm:grid-cols-2 gap-3">
             {[
@@ -465,6 +516,7 @@ export default function Settings() {
           </div>
         )}
 
+        {/* WhatsApp */}
         {active === 'إعدادات واتساب' && (
           <div className="max-w-md">
             <p className="text-sm text-ink-900/55">
@@ -473,6 +525,7 @@ export default function Settings() {
           </div>
         )}
 
+        {/* AI */}
         {active === 'إعدادات الذكاء الاصطناعي' && (
           <div className="max-w-md">
             <p className="text-sm text-ink-900/55">
@@ -481,6 +534,7 @@ export default function Settings() {
           </div>
         )}
 
+        {/* Billing */}
         {active === 'الفوترة' && (
           <div className="max-w-md">
             <p className="text-sm text-ink-900/55">
@@ -500,6 +554,7 @@ function Field({
   type = 'text',
   dir,
   required = false,
+  placeholder,
 }: {
   label: string
   value: string
@@ -507,6 +562,7 @@ function Field({
   type?: string
   dir?: 'rtl' | 'ltr'
   required?: boolean
+  placeholder?: string
 }) {
   return (
     <div>
@@ -524,6 +580,7 @@ function Field({
         type={type}
         value={value}
         dir={dir}
+        placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
         className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700"
       />
