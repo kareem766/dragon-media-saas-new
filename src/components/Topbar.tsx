@@ -61,8 +61,8 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
     };
   }, []);
   const handleAccount = () => {
-    setAccountOpen(false);
-    navigate('/settings');
+  setAccountOpen(false);
+  navigate('/account');
   };
   const handleSettings = () => {
     setAccountOpen(false);
