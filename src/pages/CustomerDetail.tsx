@@ -207,11 +207,12 @@ export default function CustomerDetail() {
           .limit(20),
 
         sb
-          .from('tasks')
-          .select('id,title,due_date,priority,status')
-          .eq('organization_id', organizationId)
-          .order('due_date', { ascending: true })
-          .limit(50),
+         .from('tasks')
+         .select('id,title,due_date,priority,status')
+         .eq('organization_id', organizationId)
+         .eq('customer_id', id)
+         .order('due_date', { ascending: true })
+         .limit(50),
 
         sb
           .from('conversations')
@@ -238,12 +239,10 @@ export default function CustomerDetail() {
       setAppointments((appointmentsRes.data || []) as unknown as Appointment[])
       setActivities((activitiesRes.data || []) as Activity[])
       setConversations((conversationsRes.data || []) as Conversation[])
-      setUsers((usersRes.data || []) as User[])
-
-      const customerTasks = ((tasksRes.data || []) as Task[]).filter(
-        task => false
-      )
-
+      setUsers((usersRes.data || []) as User[])  
+  
+      const customerTasks = (tasksRes.data || []) as Task[
+      
       setTasks(customerTasks)
 
       setForm({
