@@ -52,6 +52,20 @@ function renderTaskTitle(
     .replace(/\{phone\}/g, lead.phone || '')
 }
 
+/**
+ * Executes a lead-stale automation.
+ *
+ * Deduplication is handled atomically inside Supabase through:
+ *
+ * execute_automation_task_once()
+ *
+ * The database function:
+ * 1. Attempts to claim the automation run.
+ * 2. Uses the unique constraint on automation_runs.
+ * 3. Creates the task only when the claim succeeds.
+ * 4. Returns false when the same automation already processed
+ *    the same lead.
+ */
 async function executeLeadStaleAutomation(
   supabase: SupabaseClient,
   automation: Automation
@@ -72,8 +86,7 @@ async function executeLeadStaleAutomation(
       processed: 0,
       created: 0,
       skipped: 0,
-      error:
-        'Invalid automation hours configuration',
+      error: 'Invalid automation hours configuration',
     }
   }
 
@@ -119,8 +132,7 @@ async function executeLeadStaleAutomation(
       processed: 0,
       created: 0,
       skipped: 0,
-      error:
-        'Failed to load stale leads',
+      error: 'Failed to load stale leads',
     }
   }
 
@@ -140,124 +152,73 @@ async function executeLeadStaleAutomation(
       ?.priority ||
     'متوسطة'
 
+  const dueDate =
+    new Date()
+      .toISOString()
+      .slice(0, 10)
+
   for (const lead of leadList) {
-    // -------------------------------------------------------
-    // Deduplication
-    // -------------------------------------------------------
-
-    const {
-      data: previousRun,
-      error: previousRunError,
-    } = await supabase
-      .from('automation_runs')
-      .select('id')
-      .eq(
-        'automation_id',
-        automation.id
-      )
-      .eq(
-        'target_table',
-        'leads'
-      )
-      .eq(
-        'target_id',
-        lead.id
-      )
-      .limit(1)
-      .maybeSingle()
-
-    if (previousRunError) {
-      console.error(
-        `[automation-run] Failed to check previous run for lead ${lead.id}:`,
-        previousRunError
-      )
-
-      throw new Error(
-        'Failed to check automation execution history'
-      )
-    }
-
-    if (previousRun) {
-      skipped++
-      continue
-    }
-
-    // -------------------------------------------------------
-    // Create Task
-    // -------------------------------------------------------
-
     const taskTitle =
       renderTaskTitle(
         titleTemplate,
         lead
       )
 
+    /**
+     * Atomic execution + deduplication.
+     *
+     * The RPC uses the unique constraint:
+     *
+     * (automation_id, target_id)
+     *
+     * If another execution already processed this lead,
+     * the RPC returns false and no duplicate task is created.
+     */
     const {
-      error: taskError,
-    } = await supabase
-      .from('tasks')
-      .insert({
-        organization_id:
+      data: executionResult,
+      error: executionError,
+    } = await supabase.rpc(
+      'execute_automation_task_once',
+      {
+        p_automation_id:
+          automation.id,
+
+        p_organization_id:
           automation.organization_id,
 
-        title: taskTitle,
+        p_target_id:
+          lead.id,
 
-        assigned_to:
+        p_title:
+          taskTitle,
+
+        p_assigned_to:
           lead.assigned_to,
 
-        due_date:
-          new Date()
-            .toISOString()
-            .slice(0, 10),
+        p_due_date:
+          dueDate,
 
-        priority,
-      })
+        p_priority:
+          priority,
+      }
+    )
 
-    if (taskError) {
+    if (executionError) {
       console.error(
-        `[automation-run] Failed to create task for lead ${lead.id}:`,
-        taskError
+        `[automation-run] Failed to execute task action for lead ${lead.id}:`,
+        executionError
       )
 
       throw new Error(
-        `Failed to create task for lead ${lead.id}`
+        `Failed to execute automation action for lead ${lead.id}`
       )
     }
 
-    // -------------------------------------------------------
-    // Log successful automation run
-    // -------------------------------------------------------
-
-    const {
-      error: runError,
-    } = await supabase
-      .from('automation_runs')
-      .insert({
-        automation_id:
-          automation.id,
-
-        target_table:
-          'leads',
-
-        target_id:
-          lead.id,
-      })
-
-    if (runError) {
-      console.error(
-        `[automation-run] Task created but automation run could not be logged for lead ${lead.id}:`,
-        runError
-      )
-
-      /*
-       * The Task already exists.
-       * Do not create another Task during this execution.
-       * The error is logged for investigation.
-       */
-      continue
+    if (executionResult === true) {
+      created++
+    } else {
+      skipped++
     }
-
-    created++
   }
 
   return {
