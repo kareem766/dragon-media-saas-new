@@ -8,10 +8,12 @@ type Automation = {
   trigger_event: string
   config?: {
     hours?: number
+    days?: number
   } | null
   action_type: string
   action_config?: {
     title_template?: string
+    body_template?: string
     priority?: string
   } | null
   active: boolean
@@ -29,6 +31,24 @@ type Lead = {
   deleted_at: string | null
 }
 
+type Task = {
+  id: string
+  organization_id: string | null
+  title: string
+  assigned_to: string | null
+  due_date: string | null
+  priority: string | null
+  status: string | null
+}
+
+type ExecutionSummary = {
+  success: boolean
+  processed: number
+  created: number
+  skipped: number
+  error?: string
+}
+
 type SupabaseClient = ReturnType<typeof createClient>
 
 function jsonError(
@@ -42,7 +62,7 @@ function jsonError(
   })
 }
 
-function renderTaskTitle(
+function renderLeadTaskTitle(
   template: string,
   lead: Lead
 ): string {
@@ -52,8 +72,32 @@ function renderTaskTitle(
     .replace(/\{phone\}/g, lead.phone || '')
 }
 
+function renderTaskNotificationTitle(
+  template: string,
+  task: Task
+): string {
+  return template
+    .replace(/\{title\}/g, task.title || 'مهمة')
+    .replace(/\{priority\}/g, task.priority || 'متوسطة')
+}
+
+function renderTaskNotificationBody(
+  template: string,
+  task: Task
+): string {
+  return template
+    .replace(/\{title\}/g, task.title || 'مهمة')
+    .replace(/\{priority\}/g, task.priority || 'متوسطة')
+    .replace(/\{due_date\}/g, task.due_date || '')
+}
+
 /**
- * Executes a lead-stale automation.
+ * =========================================================
+ * LEAD STALE AUTOMATION
+ * =========================================================
+ *
+ * Finds leads that stayed in "جديد" longer than the
+ * configured number of hours and creates a follow-up task.
  *
  * Deduplication is handled atomically inside Supabase through:
  *
@@ -69,13 +113,7 @@ function renderTaskTitle(
 async function executeLeadStaleAutomation(
   supabase: SupabaseClient,
   automation: Automation
-): Promise<{
-  success: boolean
-  processed: number
-  created: number
-  skipped: number
-  error?: string
-}> {
+): Promise<ExecutionSummary> {
   const hours = Number(
     automation.config?.hours ?? 24
   )
@@ -91,8 +129,7 @@ async function executeLeadStaleAutomation(
   }
 
   const staleBefore = new Date(
-    Date.now() -
-      hours * 60 * 60 * 1000
+    Date.now() - hours * 60 * 60 * 1000
   ).toISOString()
 
   const {
@@ -136,38 +173,33 @@ async function executeLeadStaleAutomation(
     }
   }
 
-  const leadList =
-    (leads ?? []) as Lead[]
+  const leadList = (leads ?? []) as Lead[]
 
   let created = 0
   let skipped = 0
 
   const titleTemplate =
-    automation.action_config
-      ?.title_template ||
+    automation.action_config?.title_template ||
     'تابع مع {name} - عميل محتمل بدون رد'
 
   const priority =
-    automation.action_config
-      ?.priority ||
+    automation.action_config?.priority ||
     'متوسطة'
 
-  const dueDate =
-    new Date()
-      .toISOString()
-      .slice(0, 10)
+  const dueDate = new Date()
+    .toISOString()
+    .slice(0, 10)
 
   for (const lead of leadList) {
-    const taskTitle =
-      renderTaskTitle(
-        titleTemplate,
-        lead
-      )
+    const taskTitle = renderLeadTaskTitle(
+      titleTemplate,
+      lead
+    )
 
     /**
      * Atomic execution + deduplication.
      *
-     * The RPC uses the unique constraint:
+     * The RPC uses:
      *
      * (automation_id, target_id)
      *
@@ -229,16 +261,188 @@ async function executeLeadStaleAutomation(
   }
 }
 
+/**
+ * =========================================================
+ * TASK DUE → NOTIFICATION AUTOMATION
+ * =========================================================
+ *
+ * Finds active/non-completed tasks whose due date is today
+ * or already overdue, then creates a notification for the
+ * assigned employee.
+ *
+ * The database RPC:
+ *
+ * execute_task_due_notification_once()
+ *
+ * guarantees that the same automation does not generate
+ * the same task notification more than once.
+ */
+async function executeTaskDueNotificationAutomation(
+  supabase: SupabaseClient,
+  automation: Automation
+): Promise<ExecutionSummary> {
+  const {
+    data: tasks,
+    error: tasksError,
+  } = await supabase
+    .from('tasks')
+    .select(
+      `
+        id,
+        organization_id,
+        title,
+        assigned_to,
+        due_date,
+        priority,
+        status
+      `
+    )
+    .eq(
+      'organization_id',
+      automation.organization_id
+    )
+    .not('assigned_to', 'is', null)
+    .not('due_date', 'is', null)
+    .neq('status', 'مكتملة')
+    .neq('status', 'مكتمل')
+
+  if (tasksError) {
+    console.error(
+      `[automation-run] Failed to load due tasks for ${automation.id}:`,
+      tasksError
+    )
+
+    return {
+      success: false,
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      error: 'Failed to load due tasks',
+    }
+  }
+
+  const taskList = (tasks ?? []) as Task[]
+
+  const today = new Date()
+    .toISOString()
+    .slice(0, 10)
+
+  /**
+   * V1 semantics:
+   *
+   * A task is considered due when:
+   *
+   * due_date <= today
+   *
+   * This covers:
+   * - tasks due today
+   * - overdue tasks
+   *
+   * Future tasks are ignored.
+   */
+  const dueTasks = taskList.filter(
+    (task) =>
+      Boolean(task.assigned_to) &&
+      Boolean(task.due_date) &&
+      String(task.due_date) <= today
+  )
+
+  let created = 0
+  let skipped = 0
+
+  const titleTemplate =
+    automation.action_config?.title_template ||
+    'مهمة مستحقة: {title}'
+
+  const bodyTemplate =
+    automation.action_config?.body_template ||
+    'لديك مهمة مستحقة تحتاج إلى متابعة: {title}'
+
+  const link = '/tasks'
+
+  for (const task of dueTasks) {
+    if (
+      !task.assigned_to ||
+      !task.due_date ||
+      !task.organization_id
+    ) {
+      skipped++
+      continue
+    }
+
+    const notificationTitle =
+      renderTaskNotificationTitle(
+        titleTemplate,
+        task
+      )
+
+    const notificationBody =
+      renderTaskNotificationBody(
+        bodyTemplate,
+        task
+      )
+
+    const {
+      data: notificationCreated,
+      error: notificationError,
+    } = await supabase.rpc(
+      'execute_task_due_notification_once',
+      {
+        p_organization_id:
+          automation.organization_id,
+
+        p_task_id:
+          task.id,
+
+        p_user_id:
+          task.assigned_to,
+
+        p_title:
+          notificationTitle,
+
+        p_body:
+          notificationBody,
+
+        p_link:
+          link,
+      }
+    )
+
+    if (notificationError) {
+      console.error(
+        `[automation-run] Failed to create task notification for ${task.id}:`,
+        notificationError
+      )
+
+      throw new Error(
+        `Failed to create notification for task ${task.id}`
+      )
+    }
+
+    if (notificationCreated === true) {
+      created++
+    } else {
+      skipped++
+    }
+  }
+
+  return {
+    success: true,
+    processed: dueTasks.length,
+    created,
+    skipped,
+  }
+}
+
+/**
+ * =========================================================
+ * AUTOMATION DISPATCHER
+ * =========================================================
+ */
 async function executeAutomation(
   supabase: SupabaseClient,
   automation: Automation
-): Promise<{
-  success: boolean
-  processed: number
-  created: number
-  skipped: number
-  error?: string
-}> {
+): Promise<ExecutionSummary> {
   switch (
     automation.trigger_event
   ) {
@@ -263,6 +467,27 @@ async function executeAutomation(
       )
     }
 
+    case 'task_due': {
+      if (
+        automation.action_type !==
+        'create_notification'
+      ) {
+        return {
+          success: false,
+          processed: 0,
+          created: 0,
+          skipped: 0,
+          error:
+            `Unsupported action "${automation.action_type}" for task_due`,
+        }
+      }
+
+      return executeTaskDueNotificationAutomation(
+        supabase,
+        automation
+      )
+    }
+
     default:
       return {
         success: false,
@@ -275,6 +500,11 @@ async function executeAutomation(
   }
 }
 
+/**
+ * =========================================================
+ * VERCEL HANDLER
+ * =========================================================
+ */
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -429,11 +659,21 @@ export default async function handler(
         success: true,
         message:
           'No active automations found',
+
         processed: 0,
+
         succeeded: 0,
+
         failed: 0,
+
         created_tasks: 0,
+
         skipped_tasks: 0,
+
+        created_notifications: 0,
+
+        skipped_notifications: 0,
+
         results: [],
       })
     }
@@ -444,14 +684,20 @@ export default async function handler(
 
     let succeeded = 0
     let failed = 0
+
     let createdTasks = 0
     let skippedTasks = 0
+
+    let createdNotifications = 0
+    let skippedNotifications = 0
 
     const results: Array<{
       automation_id: string
       automation_name?:
         | string
         | null
+      trigger_event: string
+      action_type: string
       status:
         | 'success'
         | 'failed'
@@ -478,6 +724,12 @@ export default async function handler(
 
           automation_name:
             automation.name,
+
+          trigger_event:
+            automation.trigger_event,
+
+          action_type:
+            automation.action_type,
 
           status: 'failed',
 
@@ -513,6 +765,12 @@ export default async function handler(
             automation_name:
               automation.name,
 
+            trigger_event:
+              automation.trigger_event,
+
+            action_type:
+              automation.action_type,
+
             status: 'failed',
 
             processed:
@@ -534,11 +792,27 @@ export default async function handler(
 
         succeeded++
 
-        createdTasks +=
-          executionResult.created
+        if (
+          automation.trigger_event ===
+          'lead_stale'
+        ) {
+          createdTasks +=
+            executionResult.created
 
-        skippedTasks +=
-          executionResult.skipped
+          skippedTasks +=
+            executionResult.skipped
+        }
+
+        if (
+          automation.trigger_event ===
+          'task_due'
+        ) {
+          createdNotifications +=
+            executionResult.created
+
+          skippedNotifications +=
+            executionResult.skipped
+        }
 
         results.push({
           automation_id:
@@ -546,6 +820,12 @@ export default async function handler(
 
           automation_name:
             automation.name,
+
+          trigger_event:
+            automation.trigger_event,
+
+          action_type:
+            automation.action_type,
 
           status: 'success',
 
@@ -577,6 +857,12 @@ export default async function handler(
 
           automation_name:
             automation.name,
+
+          trigger_event:
+            automation.trigger_event,
+
+          action_type:
+            automation.action_type,
 
           status: 'failed',
 
@@ -611,6 +897,12 @@ export default async function handler(
 
       skipped_tasks:
         skippedTasks,
+
+      created_notifications:
+        createdNotifications,
+
+      skipped_notifications:
+        skippedNotifications,
 
       results,
     })
