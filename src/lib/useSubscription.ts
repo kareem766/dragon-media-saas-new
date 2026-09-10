@@ -165,11 +165,14 @@ export function useSubscription() {
     subscription?.status ?? 'no_subscription'
 
   /*
-   * نحسب الأيام اعتمادًا على تاريخ التجديد الموجود
-   * في قاعدة البيانات.
+   * نحسب عدد الأيام المتبقية اعتمادًا على renewal_date.
    *
-   * استخدمنا UTC لتجنب اختلاف الحساب بسبب timezone
-   * الجهاز.
+   * مثال:
+   * renewal_date = اليوم
+   * daysRemaining = 0
+   *
+   * وهذا لا يعني أن الاشتراك منتهي،
+   * بل يعني أنه ينتهي اليوم.
    */
   const daysRemaining = (() => {
     if (!subscription?.renewal_date) {
@@ -189,11 +192,7 @@ export function useSubscription() {
         .split('-')
         .map(Number)
 
-    if (
-      !year ||
-      !month ||
-      !day
-    ) {
+    if (!year || !month || !day) {
       return null
     }
 
@@ -213,16 +212,45 @@ export function useSubscription() {
   })()
 
   /*
-   * الحالة الحقيقية للاشتراك.
+   * نحدد هل تاريخ التجديد مر بالفعل.
    *
-   * مهم:
-   * حتى لو كانت status = active،
-   * الاشتراك يصبح منتهيًا بمجرد مرور renewal_date.
+   * مهم جدًا:
+   * renewal_date = اليوم
+   * => الاشتراك ليس منتهيًا.
+   *
+   * الانتهاء يحدث فقط عندما يكون renewal_date
+   * قبل تاريخ اليوم.
    */
-  const isDateExpired =
-    subscription?.renewal_date !== null &&
-    subscription?.renewal_date !== undefined &&
-    daysRemaining === 0
+  const isDateExpired = (() => {
+    if (!subscription?.renewal_date) {
+      return false
+    }
+
+    const today = new Date()
+
+    const todayUTC = Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate()
+    )
+
+    const [year, month, day] =
+      subscription.renewal_date
+        .split('-')
+        .map(Number)
+
+    if (!year || !month || !day) {
+      return false
+    }
+
+    const renewalUTC = Date.UTC(
+      year,
+      month - 1,
+      day
+    )
+
+    return renewalUTC < todayUTC
+  })()
 
   const isSubscriptionStatusActive =
     rawStatus === 'active' ||
@@ -237,10 +265,14 @@ export function useSubscription() {
     rawStatus === 'canceled'
 
   /*
-   * الاشتراك فعال فقط إذا:
+   * الاشتراك فعال إذا:
    *
-   * 1. الحالة active/trialing
-   * 2. ولم ينتهِ التاريخ.
+   * 1. الحالة active أو trialing
+   * 2. تاريخ التجديد لم يمر بعد.
+   *
+   * بالتالي:
+   * renewal_date = اليوم
+   * => isActive = true
    */
   const isActive =
     isSubscriptionStatusActive &&
@@ -254,7 +286,7 @@ export function useSubscription() {
       isDateExpired)
 
   /*
-   * حالة العرض في الواجهة.
+   * الحالة التي تستخدمها الواجهة.
    */
   let accessState: SubscriptionAccessState = 'unknown'
 
