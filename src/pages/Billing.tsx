@@ -126,13 +126,21 @@ export default function Billing() {
   const [dataLoading, setDataLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const supabaseClient = supabase
+
   const loadBillingData = useCallback(async () => {
+    if (!supabaseClient) {
+      setError('تعذر الاتصال بقاعدة البيانات حاليًا.')
+      setDataLoading(false)
+      return
+    }
+
     setDataLoading(true)
     setError('')
 
     try {
       const [requestsResult, invoicesResult] = await Promise.all([
-        supabase
+        supabaseClient
           .from('payment_requests')
           .select(`
             id,
@@ -150,7 +158,7 @@ export default function Billing() {
           `)
           .order('created_at', { ascending: false }),
 
-        supabase
+        supabaseClient
           .from('invoices')
           .select(`
             id,
@@ -181,7 +189,7 @@ export default function Billing() {
       if (loadedInvoices.length > 0) {
         const invoiceIds = loadedInvoices.map((invoice) => invoice.id)
 
-        const paymentsResult = await supabase
+        const paymentsResult = await supabaseClient
           .from('payments')
           .select(`
             id,
@@ -207,7 +215,7 @@ export default function Billing() {
     } finally {
       setDataLoading(false)
     }
-  }, [])
+  }, [supabaseClient])
 
   useEffect(() => {
     void loadBillingData()
