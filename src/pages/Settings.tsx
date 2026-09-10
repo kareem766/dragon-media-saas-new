@@ -36,7 +36,6 @@ interface Integration {
   provider: string
   connected: boolean | null
   status: string
-  config: Record<string, unknown> | null
   metadata: Record<string, unknown>
   connected_at: string | null
   last_verified_at: string | null
@@ -66,27 +65,32 @@ const integrationProviders = [
   {
     provider: 'whatsapp',
     name: 'واتساب بيزنس',
-    description: 'ربط WhatsApp Business واستقبال وإرسال الرسائل.',
+    description:
+      'ربط WhatsApp Business واستقبال وإرسال الرسائل.',
   },
   {
     provider: 'facebook',
     name: 'فيسبوك ماسنجر',
-    description: 'ربط صفحات Facebook وإدارة محادثات Messenger.',
+    description:
+      'ربط صفحات Facebook وإدارة محادثات Messenger.',
   },
   {
     provider: 'instagram',
     name: 'إنستجرام',
-    description: 'ربط حساب Instagram وإدارة الرسائل.',
+    description:
+      'ربط حساب Instagram وإدارة الرسائل.',
   },
   {
     provider: 'telegram',
     name: 'تليجرام',
-    description: 'ربط Telegram Bot وإدارة المحادثات.',
+    description:
+      'ربط Telegram Bot وإدارة المحادثات.',
   },
   {
     provider: 'paymob',
     name: 'بوابة الدفع',
-    description: 'ربط بوابة الدفع والعمليات المالية.',
+    description:
+      'ربط بوابة الدفع والعمليات المالية.',
   },
 ]
 
@@ -99,7 +103,8 @@ export default function Settings() {
 
   const [active, setActive] = useState(tabs[0])
 
-  const [org, setOrg] = useState<OrgData>(initialOrg)
+  const [org, setOrg] =
+    useState<OrgData>(initialOrg)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -107,20 +112,51 @@ export default function Settings() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
 
-  const [notificationPreferences, setNotificationPreferences] =
-    useState<NotificationPreferences>(initialNotificationPreferences)
+  const [
+    notificationPreferences,
+    setNotificationPreferences,
+  ] = useState<NotificationPreferences>(
+    initialNotificationPreferences
+  )
 
-  const [notificationsLoading, setNotificationsLoading] = useState(false)
-  const [notificationsSaving, setNotificationsSaving] = useState(false)
-  const [notificationsSaved, setNotificationsSaved] = useState(false)
-  const [notificationsError, setNotificationsError] = useState('')
+  const [
+    notificationsLoading,
+    setNotificationsLoading,
+  ] = useState(false)
+
+  const [
+    notificationsSaving,
+    setNotificationsSaving,
+  ] = useState(false)
+
+  const [
+    notificationsSaved,
+    setNotificationsSaved,
+  ] = useState(false)
+
+  const [
+    notificationsError,
+    setNotificationsError,
+  ] = useState('')
 
   // Integrations
-  const [integrations, setIntegrations] = useState<Integration[]>([])
-  const [integrationsLoading, setIntegrationsLoading] = useState(false)
-  const [integrationsError, setIntegrationsError] = useState('')
+  const [integrations, setIntegrations] =
+    useState<Integration[]>([])
 
-  const updateOrg = (field: keyof OrgData, value: string) => {
+  const [
+    integrationsLoading,
+    setIntegrationsLoading,
+  ] = useState(false)
+
+  const [
+    integrationsError,
+    setIntegrationsError,
+  ] = useState('')
+
+  const updateOrg = (
+    field: keyof OrgData,
+    value: string
+  ) => {
     setOrg(prev => ({
       ...prev,
       [field]: value,
@@ -141,7 +177,10 @@ export default function Settings() {
       setError('')
 
       try {
-        const { data, error: fetchError } = await supabase
+        const {
+          data,
+          error: fetchError,
+        } = await supabase
           .from('organizations')
           .select(
             'name, manager_name, phone, email, address, timezone, business_type, logo_url'
@@ -156,18 +195,22 @@ export default function Settings() {
         if (data) {
           setOrg({
             name: data.name ?? '',
-            manager_name: data.manager_name ?? '',
+            manager_name:
+              data.manager_name ?? '',
             phone: data.phone ?? '',
             email: data.email ?? '',
             address: data.address ?? '',
-            timezone: data.timezone ?? 'Africa/Cairo',
-            business_type: data.business_type ?? '',
+            timezone:
+              data.timezone ?? 'Africa/Cairo',
+            business_type:
+              data.business_type ?? '',
             logo_url: data.logo_url ?? '',
           })
         }
       } catch (err: any) {
         setError(
-          err?.message || 'تعذر تحميل بيانات الشركة.'
+          err?.message ||
+            'تعذر تحميل بيانات الشركة.'
         )
       } finally {
         setLoading(false)
@@ -181,95 +224,120 @@ export default function Settings() {
    * Load notification preferences
    */
   useEffect(() => {
-    const loadNotificationPreferences = async () => {
-      if (!organizationId || !supabase) return
+    const loadNotificationPreferences =
+      async () => {
+        if (!organizationId || !supabase) return
 
-      setNotificationsLoading(true)
-      setNotificationsError('')
+        setNotificationsLoading(true)
+        setNotificationsError('')
 
-      try {
-        const {
-          data: userData,
-          error: userError,
-        } = await supabase.auth.getUser()
-
-        if (userError) {
-          throw userError
-        }
-
-        const userId = userData.user?.id
-
-        if (!userId) {
-          throw new Error('تعذر تحديد المستخدم الحالي.')
-        }
-
-        const {
-          data,
-          error: fetchError,
-        } = await supabase
-          .from('notification_preferences')
-          .select(
-            'new_lead, new_message, overdue_tasks, weekly_report_email'
-          )
-          .eq('user_id', userId)
-          .maybeSingle()
-
-        if (fetchError) {
-          throw fetchError
-        }
-
-        if (data) {
-          setNotificationPreferences({
-            new_lead: data.new_lead ?? true,
-            new_message: data.new_message ?? true,
-            overdue_tasks: data.overdue_tasks ?? true,
-            weekly_report_email: data.weekly_report_email ?? false,
-          })
-        } else {
+        try {
           const {
-            data: createdData,
-            error: createError,
+            data: userData,
+            error: userError,
+          } = await supabase.auth.getUser()
+
+          if (userError) {
+            throw userError
+          }
+
+          const userId = userData.user?.id
+
+          if (!userId) {
+            throw new Error(
+              'تعذر تحديد المستخدم الحالي.'
+            )
+          }
+
+          const {
+            data,
+            error: fetchError,
           } = await supabase
-            .from('notification_preferences')
-            .insert({
-              user_id: userId,
-              organization_id: organizationId,
-              ...initialNotificationPreferences,
-            })
+            .from(
+              'notification_preferences'
+            )
             .select(
               'new_lead, new_message, overdue_tasks, weekly_report_email'
             )
-            .single()
+            .eq('user_id', userId)
+            .maybeSingle()
 
-          if (createError) {
-            throw createError
+          if (fetchError) {
+            throw fetchError
           }
 
-          if (createdData) {
+          if (data) {
             setNotificationPreferences({
-              new_lead: createdData.new_lead ?? true,
-              new_message: createdData.new_message ?? true,
-              overdue_tasks: createdData.overdue_tasks ?? true,
+              new_lead:
+                data.new_lead ?? true,
+              new_message:
+                data.new_message ?? true,
+              overdue_tasks:
+                data.overdue_tasks ?? true,
               weekly_report_email:
-                createdData.weekly_report_email ?? false,
+                data.weekly_report_email ??
+                false,
             })
+          } else {
+            const {
+              data: createdData,
+              error: createError,
+            } = await supabase
+              .from(
+                'notification_preferences'
+              )
+              .insert({
+                user_id: userId,
+                organization_id:
+                  organizationId,
+                ...initialNotificationPreferences,
+              })
+              .select(
+                'new_lead, new_message, overdue_tasks, weekly_report_email'
+              )
+              .single()
+
+            if (createError) {
+              throw createError
+            }
+
+            if (createdData) {
+              setNotificationPreferences({
+                new_lead:
+                  createdData.new_lead ??
+                  true,
+                new_message:
+                  createdData.new_message ??
+                  true,
+                overdue_tasks:
+                  createdData.overdue_tasks ??
+                  true,
+                weekly_report_email:
+                  createdData.weekly_report_email ??
+                  false,
+              })
+            }
           }
+        } catch (err: any) {
+          setNotificationsError(
+            err?.message ||
+              'تعذر تحميل إعدادات الإشعارات.'
+          )
+        } finally {
+          setNotificationsLoading(false)
         }
-      } catch (err: any) {
-        setNotificationsError(
-          err?.message ||
-            'تعذر تحميل إعدادات الإشعارات.'
-        )
-      } finally {
-        setNotificationsLoading(false)
       }
-    }
 
     loadNotificationPreferences()
   }, [organizationId])
 
   /*
    * Load integrations from Supabase
+   *
+   * IMPORTANT:
+   * config is intentionally NOT selected here.
+   * Sensitive credentials must never be exposed
+   * to the browser.
    */
   const loadIntegrations = async () => {
     if (!organizationId || !supabase) return
@@ -285,21 +353,22 @@ export default function Settings() {
         .from('integrations')
         .select(
           `
-.select(
-  `
-    id,
-    organization_id,
-    provider,
-    connected,
-    status,
-    metadata,
-    connected_at,
-    last_verified_at,
-    error_message,
-    updated_at
-  `
-)
-        .eq('organization_id', organizationId)
+            id,
+            organization_id,
+            provider,
+            connected,
+            status,
+            metadata,
+            connected_at,
+            last_verified_at,
+            error_message,
+            updated_at
+          `
+        )
+        .eq(
+          'organization_id',
+          organizationId
+        )
         .order('provider', {
           ascending: true,
         })
@@ -331,7 +400,9 @@ export default function Settings() {
   /*
    * Find integration by provider
    */
-  const getIntegration = (provider: string) => {
+  const getIntegration = (
+    provider: string
+  ) => {
     return integrations.find(
       integration =>
         integration.provider.toLowerCase() ===
@@ -370,7 +441,9 @@ export default function Settings() {
       }
     }
 
-    if (isIntegrationConnected(integration)) {
+    if (
+      isIntegrationConnected(integration)
+    ) {
       return {
         label: 'متصل',
         tone: 'success' as const,
@@ -418,7 +491,11 @@ export default function Settings() {
       const emailRegex =
         /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-      if (!emailRegex.test(org.email.trim())) {
+      if (
+        !emailRegex.test(
+          org.email.trim()
+        )
+      ) {
         return 'يرجى إدخال بريد إلكتروني صحيح.'
       }
     }
@@ -442,7 +519,8 @@ export default function Settings() {
    * Save organization
    */
   const handleSave = async () => {
-    if (!supabase || !organizationId) return
+    if (!supabase || !organizationId)
+      return
 
     setSaved(false)
     setError('')
@@ -464,12 +542,17 @@ export default function Settings() {
         .update({
           name: org.name.trim(),
           manager_name:
-            org.manager_name.trim() || null,
-          phone: org.phone.trim() || null,
-          email: org.email.trim() || null,
-          address: org.address.trim() || null,
+            org.manager_name.trim() ||
+            null,
+          phone:
+            org.phone.trim() || null,
+          email:
+            org.email.trim() || null,
+          address:
+            org.address.trim() || null,
           timezone:
-            org.timezone || 'Africa/Cairo',
+            org.timezone ||
+            'Africa/Cairo',
           business_type:
             org.business_type || null,
           logo_url:
@@ -517,7 +600,8 @@ export default function Settings() {
    */
   const handleSaveNotificationPreferences =
     async () => {
-      if (!supabase || !organizationId) return
+      if (!supabase || !organizationId)
+        return
 
       setNotificationsSaving(true)
       setNotificationsSaved(false)
@@ -548,7 +632,8 @@ export default function Settings() {
           .upsert(
             {
               user_id: userId,
-              organization_id: organizationId,
+              organization_id:
+                organizationId,
               new_lead:
                 notificationPreferences.new_lead,
               new_message:
@@ -805,12 +890,15 @@ export default function Settings() {
                 <option value="Africa/Cairo">
                   القاهرة — Africa/Cairo
                 </option>
+
                 <option value="Asia/Riyadh">
                   الرياض — Asia/Riyadh
                 </option>
+
                 <option value="Asia/Dubai">
                   دبي — Asia/Dubai
                 </option>
+
                 <option value="UTC">
                   UTC
                 </option>
@@ -980,7 +1068,9 @@ export default function Settings() {
                 <button
                   type="button"
                   onClick={loadIntegrations}
-                  disabled={integrationsLoading}
+                  disabled={
+                    integrationsLoading
+                  }
                   className="text-sm px-3 py-2 rounded-lg border border-sand-200 hover:bg-sand-50 transition-colors disabled:opacity-50"
                 >
                   {integrationsLoading
@@ -1002,103 +1092,103 @@ export default function Settings() {
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-4">
-                {integrationProviders.map(item => {
-                  const integration =
-                    getIntegration(
-                      item.provider
-                    )
+                {integrationProviders.map(
+                  item => {
+                    const integration =
+                      getIntegration(
+                        item.provider
+                      )
 
-                  const status =
-                    getIntegrationStatus(
-                      integration
-                    )
+                    const status =
+                      getIntegrationStatus(
+                        integration
+                      )
 
-                  const connected =
-                    isIntegrationConnected(
-                      integration
-                    )
+                    const connected =
+                      isIntegrationConnected(
+                        integration
+                      )
 
-                  return (
-                    <div
-                      key={item.provider}
-                      className={`border rounded-xl p-5 transition-colors ${
-                        connected
-                          ? 'border-emerald-200 bg-emerald-50/40'
-                          : 'border-sand-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-ink-900">
-                            {item.name}
+                    return (
+                      <div
+                        key={item.provider}
+                        className={`border rounded-xl p-5 transition-colors ${
+                          connected
+                            ? 'border-emerald-200 bg-emerald-50/40'
+                            : 'border-sand-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-ink-900">
+                              {item.name}
+                            </div>
+
+                            <p className="text-xs text-ink-900/50 mt-1.5 leading-5">
+                              {item.description}
+                            </p>
                           </div>
 
-                          <p className="text-xs text-ink-900/50 mt-1.5 leading-5">
-                            {item.description}
-                          </p>
-                        </div>
-
-                        <Badge
-                          tone={
-                            status.tone
-                          }
-                        >
-                          {status.label}
-                        </Badge>
-                      </div>
-
-                      {integration?.connected_at && (
-                        <div className="mt-4 pt-3 border-t border-sand-200/70">
-                          <div className="text-xs text-ink-900/45">
-                            تاريخ الاتصال
-                          </div>
-
-                          <div
-                            className="text-xs text-ink-900/70 mt-1"
-                            dir="ltr"
+                          <Badge
+                            tone={status.tone}
                           >
-                            {new Date(
-                              integration.connected_at
-                            ).toLocaleString(
-                              'ar-EG'
-                            )}
-                          </div>
+                            {status.label}
+                          </Badge>
                         </div>
-                      )}
 
-                      {integration?.last_verified_at && (
-                        <div className="mt-3">
-                          <div className="text-xs text-ink-900/45">
-                            آخر تحقق
+                        {integration?.connected_at && (
+                          <div className="mt-4 pt-3 border-t border-sand-200/70">
+                            <div className="text-xs text-ink-900/45">
+                              تاريخ الاتصال
+                            </div>
+
+                            <div
+                              className="text-xs text-ink-900/70 mt-1"
+                              dir="ltr"
+                            >
+                              {new Date(
+                                integration.connected_at
+                              ).toLocaleString(
+                                'ar-EG'
+                              )}
+                            </div>
                           </div>
+                        )}
 
-                          <div
-                            className="text-xs text-ink-900/70 mt-1"
-                            dir="ltr"
-                          >
-                            {new Date(
-                              integration.last_verified_at
-                            ).toLocaleString(
-                              'ar-EG'
-                            )}
+                        {integration?.last_verified_at && (
+                          <div className="mt-3">
+                            <div className="text-xs text-ink-900/45">
+                              آخر تحقق
+                            </div>
+
+                            <div
+                              className="text-xs text-ink-900/70 mt-1"
+                              dir="ltr"
+                            >
+                              {new Date(
+                                integration.last_verified_at
+                              ).toLocaleString(
+                                'ar-EG'
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {integration?.error_message && (
-                        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                          {integration.error_message}
-                        </div>
-                      )}
+                        {integration?.error_message && (
+                          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                            {integration.error_message}
+                          </div>
+                        )}
 
-                      <div className="mt-4 text-xs text-ink-900/40">
-                        {integration
-                          ? `Provider: ${integration.provider}`
-                          : 'لم يتم إنشاء سجل لهذا التكامل بعد.'}
+                        <div className="mt-4 text-xs text-ink-900/40">
+                          {integration
+                            ? `Provider: ${integration.provider}`
+                            : 'لم يتم إنشاء سجل لهذا التكامل بعد.'}
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  }
+                )}
 
                 {/* Supabase */}
                 <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-5">
@@ -1138,7 +1228,9 @@ export default function Settings() {
 
             {(() => {
               const whatsapp =
-                getIntegration('whatsapp')
+                getIntegration(
+                  'whatsapp'
+                )
 
               const connected =
                 isIntegrationConnected(
