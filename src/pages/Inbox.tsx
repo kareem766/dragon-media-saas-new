@@ -64,7 +64,13 @@ const statusLabels: Record<Conversation['status'], string> = {
   closed: 'مغلقة',
 }
 
-function normalizeCustomer(customer: Conversation['customer']): Conversation['customer'] {
+function normalizeCustomer(
+  customer:
+    | Conversation['customer']
+    | Conversation['customer'][]
+    | null
+    | undefined
+) {
   if (!customer) return null
 
   if (Array.isArray(customer)) {
@@ -137,6 +143,7 @@ function getInitials(name: string) {
 
 export default function Inbox() {
   const { user } = useAuth()
+
   const {
     organizationId,
     loading: organizationLoading,
@@ -193,7 +200,9 @@ export default function Inbox() {
   }, [conversations, filter, search])
 
   const loadConversations = useCallback(async () => {
-    if (!supabase || !organizationId) {
+    const client = supabase
+
+    if (!client || !organizationId) {
       setConversations([])
       setLoadingConversations(false)
       return
@@ -202,7 +211,7 @@ export default function Inbox() {
     setLoadingConversations(true)
     setError(null)
 
-    const { data, error: queryError } = await supabase
+    const { data, error: queryError } = await client
       .from('conversations')
       .select(`
         id,
@@ -255,12 +264,14 @@ export default function Inbox() {
   }, [organizationId])
 
   const loadMessages = useCallback(async (conversationId: string) => {
-    if (!supabase) return
+    const client = supabase
+
+    if (!client) return
 
     setLoadingMessages(true)
     setMessageError(null)
 
-    const { data, error: queryError } = await supabase
+    const { data, error: queryError } = await client
       .from('messages')
       .select(`
         id,
@@ -291,9 +302,11 @@ export default function Inbox() {
 
   const markConversationRead = useCallback(
     async (conversationId: string) => {
-      if (!supabase) return
+      const client = supabase
 
-      const { error: rpcError } = await supabase.rpc(
+      if (!client) return
+
+      const { error: rpcError } = await client.rpc(
         'mark_conversation_read',
         {
           p_conversation_id: conversationId,
@@ -351,9 +364,11 @@ export default function Inbox() {
   ])
 
   useEffect(() => {
-    if (!supabase || !organizationId) return
+    const client = supabase
 
-    const conversationsChannel = supabase
+    if (!client || !organizationId) return
+
+    const conversationsChannel = client
       .channel(`inbox-conversations-${organizationId}`)
       .on(
         'postgres_changes',
@@ -368,7 +383,9 @@ export default function Inbox() {
             const deletedId = String(payload.old?.id ?? '')
 
             setConversations(current =>
-              current.filter(conversation => conversation.id !== deletedId)
+              current.filter(
+                conversation => conversation.id !== deletedId
+              )
             )
 
             setActiveConversationId(current =>
@@ -390,6 +407,7 @@ export default function Inbox() {
             }
 
             const next = [...current]
+
             next[existingIndex] = {
               ...next[existingIndex],
               ...normalized,
@@ -412,14 +430,16 @@ export default function Inbox() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(conversationsChannel)
+      client.removeChannel(conversationsChannel)
     }
   }, [organizationId])
 
   useEffect(() => {
-    if (!supabase || !organizationId) return
+    const client = supabase
 
-    const messagesChannel = supabase
+    if (!client || !organizationId) return
+
+    const messagesChannel = client
       .channel(`inbox-messages-${organizationId}`)
       .on(
         'postgres_changes',
@@ -434,7 +454,9 @@ export default function Inbox() {
           if (newMessage.conversation_id === activeConversationId) {
             setMessages(current => {
               if (
-                current.some(message => message.id === newMessage.id)
+                current.some(
+                  message => message.id === newMessage.id
+                )
               ) {
                 return current
               }
@@ -458,7 +480,10 @@ export default function Inbox() {
         payload => {
           const updatedMessage = payload.new as Message
 
-          if (updatedMessage.conversation_id !== activeConversationId) {
+          if (
+            updatedMessage.conversation_id !==
+            activeConversationId
+          ) {
             return
           }
 
@@ -477,7 +502,7 @@ export default function Inbox() {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(messagesChannel)
+      client.removeChannel(messagesChannel)
     }
   }, [
     organizationId,
@@ -496,7 +521,12 @@ export default function Inbox() {
 
     const content = reply.trim()
 
-    if (!content || !activeConversationId || !organizationId || !supabase) {
+    if (
+      !content ||
+      !activeConversationId ||
+      !organizationId ||
+      !supabase
+    ) {
       return
     }
 
@@ -508,7 +538,9 @@ export default function Inbox() {
     setSending(true)
     setMessageError(null)
 
-    const { data, error: insertError } = await supabase
+    const client = supabase
+
+    const { data, error: insertError } = await client
       .from('messages')
       .insert({
         conversation_id: activeConversationId,
@@ -583,6 +615,7 @@ export default function Inbox() {
           <div className="font-bold text-ink-950 mb-2">
             تعذر تحميل صندوق الوارد
           </div>
+
           <div className="text-sm text-red-600">
             {organizationError}
           </div>
@@ -642,6 +675,7 @@ export default function Inbox() {
               <div className="text-sm font-medium text-ink-950 mb-1">
                 تعذر تحميل المحادثات
               </div>
+
               <div className="text-xs text-red-600">
                 {error}
               </div>
@@ -651,6 +685,7 @@ export default function Inbox() {
               <div className="font-semibold text-sm text-ink-950">
                 لا توجد محادثات
               </div>
+
               <div className="text-xs text-ink-900/45 mt-1">
                 ستظهر المحادثات هنا عند وصولها.
               </div>
@@ -684,7 +719,9 @@ export default function Inbox() {
                         </span>
 
                         <span className="text-[11px] text-ink-900/40 shrink-0">
-                          {formatTime(conversation.last_message_at)}
+                          {formatTime(
+                            conversation.last_message_at
+                          )}
                         </span>
                       </div>
 
@@ -708,7 +745,7 @@ export default function Inbox() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 mt-2">
+                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         <Badge>
                           {channelLabels[conversation.channel]}
                         </Badge>
@@ -737,6 +774,7 @@ export default function Inbox() {
               <div className="font-bold text-ink-950">
                 صندوق المحادثات
               </div>
+
               <div className="text-sm text-ink-900/45 mt-1">
                 اختر محادثة لعرض الرسائل.
               </div>
@@ -787,6 +825,7 @@ export default function Inbox() {
                     <div className="font-semibold text-sm text-ink-950">
                       تعذر تحميل الرسائل
                     </div>
+
                     <div className="text-xs text-red-600 mt-1">
                       {messageError}
                     </div>
@@ -798,6 +837,7 @@ export default function Inbox() {
                     <div className="font-semibold text-sm text-ink-950">
                       لا توجد رسائل بعد
                     </div>
+
                     <div className="text-xs text-ink-900/45 mt-1">
                       ابدأ المحادثة من مربع الرد بالأسفل.
                     </div>
@@ -805,7 +845,8 @@ export default function Inbox() {
                 </div>
               ) : (
                 messages.map(message => {
-                  const isCustomer = message.sender_type === 'customer'
+                  const isCustomer =
+                    message.sender_type === 'customer'
 
                   return (
                     <div
