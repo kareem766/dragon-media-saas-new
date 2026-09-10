@@ -30,12 +30,36 @@ interface FinancialSummary {
   totalRevenue: number
   transactionCount: number
   averageTransaction: number
+  monthRevenue: number
+  previousMonthRevenue: number
+  yearRevenue: number
+  currentMonthCount: number
+  previousMonthCount: number
+  revenueChangePercent: number
 }
 
 interface FinancialMethod {
   method: string
   count: number
   revenue: number
+}
+
+interface FinancialPlan {
+  plan_id: string | null
+  plan_name: string
+  count: number
+  revenue: number
+}
+
+interface FinancialLifecycle {
+  activeSubscriptions: number
+  expiringSubscriptions: number
+  expiredSubscriptions: number
+  invoices: {
+    total: number
+    paid: number
+    pending: number
+  }
 }
 
 interface FinancialTransaction {
@@ -47,11 +71,16 @@ interface FinancialTransaction {
   organization_id: string
   subscription_id: string
   organization_name: string
+  invoice_status?: string
+  plan_id?: string | null
+  plan_name?: string
 }
 
 interface FinancialData {
   summary: FinancialSummary
+  lifecycle: FinancialLifecycle
   byMethod: FinancialMethod[]
+  byPlan: FinancialPlan[]
   transactions: FinancialTransaction[]
 }
 
@@ -86,16 +115,25 @@ const formatDateTime = (value: string) => {
   })
 }
 
+const formatPercent = (value: number) => {
+  const number = Number(value || 0)
+
+  return `${number >= 0 ? '+' : ''}${number.toFixed(1)}%`
+}
+
 export default function AdminDashboard() {
   const [data, setData] = useState<Overview | null>(null)
+
   const [financial, setFinancial] =
     useState<FinancialData | null>(null)
 
   const [error, setError] = useState<string | null>(null)
+
   const [financialError, setFinancialError] =
     useState<string | null>(null)
 
   const [loading, setLoading] = useState(true)
+
   const [financialLoading, setFinancialLoading] =
     useState(true)
 
@@ -108,6 +146,7 @@ export default function AdminDashboard() {
     useState('all')
 
   const [fromDate, setFromDate] = useState('')
+
   const [toDate, setToDate] = useState('')
 
   const loadOverview = async () => {
@@ -300,15 +339,36 @@ export default function AdminDashboard() {
     )
   }
 
-  const totalMethodRevenue = useMemo(
+  const maxPlanRevenue = useMemo(
     () =>
-      financial?.byMethod.reduce(
-        (sum, item) =>
-          sum + Number(item.revenue || 0),
-        0
-      ) ?? 0,
+      Math.max(
+        ...(financial?.byPlan ?? []).map(item =>
+          Number(item.revenue || 0)
+        ),
+        1
+      ),
     [financial]
   )
+
+  const maxMethodRevenue = useMemo(
+    () =>
+      Math.max(
+        ...(financial?.byMethod ?? []).map(item =>
+          Number(item.revenue || 0)
+        ),
+        1
+      ),
+    [financial]
+  )
+
+  const revenueChange = financial
+    ? Number(
+        financial.summary.revenueChangePercent || 0
+      )
+    : 0
+
+  const totalDisplayedRevenue =
+    financial?.summary.totalRevenue ?? 0
 
   if (loading) {
     return (
@@ -329,7 +389,7 @@ export default function AdminDashboard() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-sand-50 p-6 space-y-6 relative"
+      className="min-h-screen bg-sand-50 p-4 sm:p-6 space-y-6 relative"
     >
       {toast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-ink-950 text-sand-50 text-sm px-5 py-3 rounded-xl shadow-lg">
@@ -339,9 +399,15 @@ export default function AdminDashboard() {
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-ink-950">
-          لوحة تحكم Dragon Media — إدارة المنصة
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-ink-950">
+            لوحة تحكم Dragon Media — إدارة المنصة
+          </h1>
+
+          <p className="text-sm text-ink-900/50 mt-1">
+            نظرة شاملة على أداء المنصة والإيرادات والاشتراكات
+          </p>
+        </div>
 
         <div className="flex gap-4 flex-wrap">
           <a
@@ -432,7 +498,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Financial Dashboard */}
-      <Card className="p-5">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
           <div>
             <h2 className="text-lg font-bold text-ink-950">
@@ -530,8 +596,8 @@ export default function AdminDashboard() {
           </div>
         ) : financial ? (
           <>
-            {/* Financial stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            {/* Main financial stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <StatCard
                 label="إجمالي الإيرادات"
                 value={formatMoney(
@@ -541,9 +607,52 @@ export default function AdminDashboard() {
               />
 
               <StatCard
-                label="عدد المعاملات"
+                label="إيرادات الشهر الحالي"
+                value={formatMoney(
+                  financial.summary.monthRevenue
+                )}
+              />
+
+              <StatCard
+                label="إيرادات السنة الحالية"
+                value={formatMoney(
+                  financial.summary.yearRevenue
+                )}
+              />
+
+              <StatCard
+                label="نمو الإيرادات عن الشهر السابق"
+                value={formatPercent(
+                  revenueChange
+                )}
+                accent={
+                  revenueChange >= 0
+                    ? 'gold'
+                    : 'clay'
+                }
+              />
+            </div>
+
+            {/* Secondary financial stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <StatCard
+                label="إيرادات الشهر السابق"
+                value={formatMoney(
+                  financial.summary.previousMonthRevenue
+                )}
+              />
+
+              <StatCard
+                label="عدد معاملات الشهر الحالي"
                 value={String(
-                  financial.summary.transactionCount
+                  financial.summary.currentMonthCount
+                )}
+              />
+
+              <StatCard
+                label="عدد معاملات الشهر السابق"
+                value={String(
+                  financial.summary.previousMonthCount
                 )}
               />
 
@@ -555,8 +664,83 @@ export default function AdminDashboard() {
               />
             </div>
 
-            {/* Payment method breakdown */}
+            {/* Subscription lifecycle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <StatCard
+                label="الاشتراكات النشطة"
+                value={String(
+                  financial.lifecycle
+                    .activeSubscriptions
+                )}
+                accent="gold"
+              />
+
+              <StatCard
+                label="تنتهي خلال 3 أيام"
+                value={String(
+                  financial.lifecycle
+                    .expiringSubscriptions
+                )}
+              />
+
+              <StatCard
+                label="الاشتراكات المنتهية"
+                value={String(
+                  financial.lifecycle
+                    .expiredSubscriptions
+                )}
+                accent="clay"
+              />
+            </div>
+
+            {/* Invoice lifecycle */}
+            <div className="mb-6">
+              <div className="font-bold text-ink-950 mb-3">
+                ملخص الفواتير
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Card className="p-4">
+                  <div className="text-xs text-ink-900/50 mb-2">
+                    إجمالي الفواتير
+                  </div>
+
+                  <div className="text-xl font-bold text-ink-950">
+                    {formatMoney(
+                      financial.lifecycle.invoices.total
+                    )}
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <div className="text-xs text-ink-900/50 mb-2">
+                    الفواتير المدفوعة
+                  </div>
+
+                  <div className="text-xl font-bold text-ink-950">
+                    {formatMoney(
+                      financial.lifecycle.invoices.paid
+                    )}
+                  </div>
+                </Card>
+
+                <Card className="p-4">
+                  <div className="text-xs text-ink-900/50 mb-2">
+                    الفواتير المعلقة
+                  </div>
+
+                  <div className="text-xl font-bold text-ink-950">
+                    {formatMoney(
+                      financial.lifecycle.invoices.pending
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+
+            {/* Revenue analysis */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Payment method breakdown */}
               <Card className="p-4">
                 <div className="font-bold text-ink-950 mb-4">
                   توزيع الإيرادات حسب طريقة الدفع
@@ -570,18 +754,23 @@ export default function AdminDashboard() {
                   <div className="space-y-4">
                     {financial.byMethod.map(item => {
                       const percentage =
-                        totalMethodRevenue > 0
-                          ? (item.revenue /
-                              totalMethodRevenue) *
+                        totalDisplayedRevenue > 0
+                          ? (Number(item.revenue || 0) /
+                              totalDisplayedRevenue) *
                             100
                           : 0
+
+                      const barWidth =
+                        (Number(item.revenue || 0) /
+                          maxMethodRevenue) *
+                        100
 
                       return (
                         <div
                           key={item.method}
                           className="space-y-2"
                         >
-                          <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center justify-between text-sm gap-3">
                             <span className="font-semibold text-ink-950">
                               {methodLabels[
                                 item.method
@@ -589,7 +778,7 @@ export default function AdminDashboard() {
                                 item.method}
                             </span>
 
-                            <span className="text-ink-900/60">
+                            <span className="text-ink-900/60 whitespace-nowrap">
                               {formatMoney(
                                 item.revenue
                               )}
@@ -602,7 +791,7 @@ export default function AdminDashboard() {
                               style={{
                                 width: `${Math.min(
                                   100,
-                                  percentage
+                                  barWidth
                                 )}%`,
                               }}
                             />
@@ -610,8 +799,7 @@ export default function AdminDashboard() {
 
                           <div className="flex justify-between text-xs text-ink-900/45">
                             <span>
-                              {item.count}{' '}
-                              معاملة
+                              {item.count} معاملة
                             </span>
 
                             <span>
@@ -628,7 +816,85 @@ export default function AdminDashboard() {
                 )}
               </Card>
 
-              {/* Latest transactions */}
+              {/* Revenue by plan */}
+              <Card className="p-4">
+                <div className="font-bold text-ink-950 mb-4">
+                  الإيرادات حسب الباقة
+                </div>
+
+                {financial.byPlan.length === 0 ? (
+                  <div className="py-8 text-center text-sm text-ink-900/50">
+                    لا توجد بيانات باقات ضمن الفلاتر الحالية
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {financial.byPlan.map(item => {
+                      const percentage =
+                        totalDisplayedRevenue > 0
+                          ? (Number(item.revenue || 0) /
+                              totalDisplayedRevenue) *
+                            100
+                          : 0
+
+                      const barWidth =
+                        (Number(item.revenue || 0) /
+                          maxPlanRevenue) *
+                        100
+
+                      return (
+                        <div
+                          key={
+                            item.plan_id ??
+                            item.plan_name
+                          }
+                          className="space-y-2"
+                        >
+                          <div className="flex items-center justify-between text-sm gap-3">
+                            <span className="font-semibold text-ink-950">
+                              {item.plan_name}
+                            </span>
+
+                            <span className="text-ink-900/60 whitespace-nowrap">
+                              {formatMoney(
+                                item.revenue
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="h-2 rounded-full bg-sand-100 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-ink-950 transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  barWidth
+                                )}%`,
+                              }}
+                            />
+                          </div>
+
+                          <div className="flex justify-between text-xs text-ink-900/45">
+                            <span>
+                              {item.count} معاملة
+                            </span>
+
+                            <span>
+                              {percentage.toFixed(
+                                1
+                              )}
+                              %
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* Latest transactions */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
               <Card className="p-4">
                 <div className="font-bold text-ink-950 mb-4">
                   أحدث المعاملات
@@ -658,6 +924,10 @@ export default function AdminDashboard() {
                             </div>
 
                             <div className="text-xs text-ink-900/45 mt-1">
+                              {
+                                transaction.plan_name
+                              }{' '}
+                              •{' '}
                               {methodLabels[
                                 transaction.method
                               ] ||
@@ -679,6 +949,61 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </Card>
+
+              {/* Quick financial summary */}
+              <Card className="p-4">
+                <div className="font-bold text-ink-950 mb-4">
+                  ملخص الأداء المالي
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3 border-b border-sand-100 pb-3">
+                    <span className="text-sm text-ink-900/60">
+                      إجمالي المعاملات
+                    </span>
+
+                    <span className="font-bold text-ink-950">
+                      {financial.summary.transactionCount}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 border-b border-sand-100 pb-3">
+                    <span className="text-sm text-ink-900/60">
+                      الإيرادات الشهرية
+                    </span>
+
+                    <span className="font-bold text-ink-950">
+                      {formatMoney(
+                        financial.summary.monthRevenue
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 border-b border-sand-100 pb-3">
+                    <span className="text-sm text-ink-900/60">
+                      الإيرادات السنوية
+                    </span>
+
+                    <span className="font-bold text-ink-950">
+                      {formatMoney(
+                        financial.summary.yearRevenue
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-ink-900/60">
+                      متوسط المعاملة
+                    </span>
+
+                    <span className="font-bold text-ink-950">
+                      {formatMoney(
+                        financial.summary.averageTransaction
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </Card>
             </div>
 
             {/* Full transactions table */}
@@ -688,11 +1013,15 @@ export default function AdminDashboard() {
               </div>
 
               <div className="overflow-x-auto border border-sand-100 rounded-xl">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[950px]">
                   <thead>
                     <tr className="text-ink-900/45 bg-sand-50 border-b border-sand-100">
                       <th className="text-right font-medium py-3 px-3">
                         الشركة
+                      </th>
+
+                      <th className="text-right font-medium py-3 px-3">
+                        الباقة
                       </th>
 
                       <th className="text-right font-medium py-3 px-3">
@@ -730,6 +1059,13 @@ export default function AdminDashboard() {
                             {
                               transaction.organization_name
                             }
+                          </td>
+
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <Badge tone="gold">
+                              {transaction.plan_name ||
+                                'غير محددة'}
+                            </Badge>
                           </td>
 
                           <td className="py-3 px-3 font-bold text-ink-950 whitespace-nowrap">
@@ -784,7 +1120,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[850px]">
             <thead>
               <tr className="text-ink-900/45 border-b border-sand-200">
                 <th className="text-right font-medium py-3 px-3">
