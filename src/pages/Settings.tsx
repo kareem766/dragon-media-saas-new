@@ -285,19 +285,20 @@ export default function Settings() {
         .from('integrations')
         .select(
           `
-            id,
-            organization_id,
-            provider,
-            connected,
-            status,
-            config,
-            metadata,
-            connected_at,
-            last_verified_at,
-            error_message,
-            updated_at
-          `
-        )
+.select(
+  `
+    id,
+    organization_id,
+    provider,
+    connected,
+    status,
+    metadata,
+    connected_at,
+    last_verified_at,
+    error_message,
+    updated_at
+  `
+)
         .eq('organization_id', organizationId)
         .order('provider', {
           ascending: true,
