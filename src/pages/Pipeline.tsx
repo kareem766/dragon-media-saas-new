@@ -138,6 +138,16 @@ const normalize = (value: string) => {
   return trimmed || null
 }
 
+const normalizeDeal = (raw: any): Deal => ({
+  ...raw,
+  customers: Array.isArray(raw?.customers)
+    ? raw.customers[0] ?? null
+    : raw?.customers ?? null,
+  users: Array.isArray(raw?.users)
+    ? raw.users[0] ?? null
+    : raw?.users ?? null,
+})
+
 export default function Pipeline() {
   const {
     organizationId,
@@ -242,7 +252,7 @@ export default function Pipeline() {
       if (usersResult.error) throw usersResult.error
 
       setStages((stagesResult.data || []) as Stage[])
-      setDeals((dealsResult.data || []) as unknown as Deal[])
+      setDeals((dealsResult.data || []).map(normalizeDeal))
       setCustomers((customersResult.data || []) as Customer[])
       setUsers((usersResult.data || []) as UserOption[])
     } catch (err) {
@@ -505,10 +515,12 @@ export default function Pipeline() {
 
         if (updateError) throw updateError
 
+        const normalizedDeal = normalizeDeal(data)
+
         setDeals((current) =>
           current.map((deal) =>
             deal.id === editingDeal.id
-              ? (data as unknown as Deal)
+              ? normalizedDeal
               : deal
           )
         )
@@ -574,13 +586,15 @@ export default function Pipeline() {
 
         if (insertError) throw insertError
 
+        const normalizedDeal = normalizeDeal(data)
+
         setDeals((current) => [
-          data as unknown as Deal,
+          normalizedDeal,
           ...current,
         ])
 
         await recordActivity(
-          (data as Deal).id,
+          normalizedDeal.id,
           'إنشاء صفقة جديدة',
           `تم إنشاء الصفقة "${title}".`,
           'deal_created'
