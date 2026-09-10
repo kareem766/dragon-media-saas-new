@@ -60,9 +60,13 @@ const paymentRequestLabels: Record<string, { label: string; tone: Tone }> = {
 
 const invoiceStatusLabels: Record<string, { label: string; tone: Tone }> = {
   paid: { label: 'مدفوعة', tone: 'success' },
+  'مدفوعة': { label: 'مدفوعة', tone: 'success' },
+
   pending: { label: 'قيد الانتظار', tone: 'warning' },
   'قيد الانتظار': { label: 'قيد الانتظار', tone: 'warning' },
+
   overdue: { label: 'متأخرة', tone: 'danger' },
+
   cancelled: { label: 'ملغاة', tone: 'default' },
   'ملغاة': { label: 'ملغاة', tone: 'default' },
 }
