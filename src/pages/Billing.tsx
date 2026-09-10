@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, Badge, Button } from '../components/ui'
 import { useSubscription } from '../lib/useSubscription'
-import { supabase } from '../lib/supabase'
+import { supabase } from '../lib/supabaseClient'
 
 type Tone = 'success' | 'warning' | 'danger' | 'default'
 
@@ -61,8 +61,10 @@ const paymentRequestLabels: Record<string, { label: string; tone: Tone }> = {
 const invoiceStatusLabels: Record<string, { label: string; tone: Tone }> = {
   paid: { label: 'مدفوعة', tone: 'success' },
   pending: { label: 'قيد الانتظار', tone: 'warning' },
+  'قيد الانتظار': { label: 'قيد الانتظار', tone: 'warning' },
   overdue: { label: 'متأخرة', tone: 'danger' },
   cancelled: { label: 'ملغاة', tone: 'default' },
+  'ملغاة': { label: 'ملغاة', tone: 'default' },
 }
 
 function formatMoney(value: number | null | undefined) {
@@ -110,7 +112,13 @@ function getPaymentMethodLabel(method: string) {
 
 export default function Billing() {
   const navigate = useNavigate()
-  const { subscription, loading: subscriptionLoading } = useSubscription()
+
+  const {
+    subscription,
+    loading: subscriptionLoading,
+    isActive: subscriptionIsActive,
+    isExpired,
+  } = useSubscription()
 
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -164,7 +172,10 @@ export default function Billing() {
 
       const loadedInvoices = (invoicesResult.data ?? []) as Invoice[]
 
-      setPaymentRequests((requestsResult.data ?? []) as unknown as PaymentRequest[])
+      setPaymentRequests(
+        (requestsResult.data ?? []) as unknown as PaymentRequest[]
+      )
+
       setInvoices(loadedInvoices)
 
       if (loadedInvoices.length > 0) {
@@ -204,32 +215,48 @@ export default function Billing() {
 
   const loading = subscriptionLoading || dataLoading
 
-  const status = subscription?.status ?? 'no_subscription'
-  const info = statusLabels[status] ?? statusLabels.no_subscription
+  const rawStatus = subscription?.status ?? 'no_subscription'
 
-  const isActive =
-    status === 'active' ||
-    status === 'trialing'
+  /*
+   * لو الاشتراك status = active لكن تاريخ التجديد انتهى،
+   * نتعامل معه كـ expired في الواجهة.
+   */
+  const status =
+    isExpired &&
+    (rawStatus === 'active' || rawStatus === 'trialing')
+      ? 'expired'
+      : rawStatus
+
+  const info =
+    statusLabels[status] ?? statusLabels.no_subscription
+
+  const isActive = subscriptionIsActive
 
   const pendingRequest = useMemo(
-    () => paymentRequests.find((request) => request.status === 'pending_review'),
-    [paymentRequests]
-  )
-
-  const approvedRequests = useMemo(
-    () => paymentRequests.filter((request) => request.status === 'approved'),
+    () =>
+      paymentRequests.find(
+        (request) => request.status === 'pending_review'
+      ),
     [paymentRequests]
   )
 
   const totalPaid = useMemo(
-    () => payments.reduce((total, payment) => total + Number(payment.amount || 0), 0),
+    () =>
+      payments.reduce(
+        (total, payment) =>
+          total + Number(payment.amount || 0),
+        0
+      ),
     [payments]
   )
 
   const daysRemaining = useMemo(() => {
     if (!subscription?.renewal_date) return null
 
-    const renewal = new Date(`${subscription.renewal_date}T00:00:00Z`)
+    const renewal = new Date(
+      `${subscription.renewal_date}T00:00:00Z`
+    )
+
     const today = new Date()
 
     const todayUtc = new Date(
@@ -272,16 +299,27 @@ export default function Billing() {
       return 'الاشتراك موقوف حاليًا. تواصل مع الإدارة لمعرفة التفاصيل.'
     }
 
-    if (daysRemaining === 0) {
+    if (daysRemaining === 0 && isActive) {
       return 'اشتراكك ينتهي اليوم. يُرجى التجديد للحفاظ على الوصول للمنصة.'
     }
 
-    if (daysRemaining !== null && daysRemaining <= 7) {
-      return `متبقي ${daysRemaining} ${daysRemaining === 1 ? 'يوم' : 'أيام'} على التجديد.`
+    if (
+      daysRemaining !== null &&
+      daysRemaining <= 7 &&
+      isActive
+    ) {
+      return `متبقي ${daysRemaining} ${
+        daysRemaining === 1 ? 'يوم' : 'أيام'
+      } على التجديد.`
     }
 
     return 'اشتراكك فعال ويمكنك استخدام المنصة بشكل طبيعي.'
-  }, [subscription, status, daysRemaining])
+  }, [
+    subscription,
+    status,
+    daysRemaining,
+    isActive,
+  ])
 
   if (loading) {
     return (
@@ -292,7 +330,10 @@ export default function Billing() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-10" dir="rtl">
+    <div
+      className="space-y-6 max-w-5xl mx-auto pb-10"
+      dir="rtl"
+    >
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-ink-950">
@@ -367,11 +408,13 @@ export default function Billing() {
               </div>
 
               <div className="font-semibold text-ink-950 mt-1">
-                {daysRemaining === 0
-                  ? 'اليوم'
-                  : daysRemaining === 1
-                    ? 'يوم واحد'
-                    : `${daysRemaining} أيام`}
+                {!isActive && status === 'expired'
+                  ? 'منتهي'
+                  : daysRemaining === 0
+                    ? 'اليوم'
+                    : daysRemaining === 1
+                      ? 'يوم واحد'
+                      : `${daysRemaining} أيام`}
               </div>
             </div>
 
@@ -381,7 +424,9 @@ export default function Billing() {
               </div>
 
               <div className="font-semibold text-ink-950 mt-1">
-                {isActive ? 'الوصول متاح' : 'الوصول محدود'}
+                {isActive
+                  ? 'الوصول متاح'
+                  : 'الوصول محدود'}
               </div>
             </div>
           </div>
@@ -398,13 +443,17 @@ export default function Billing() {
             onClick={() => navigate('/plans')}
             variant={isActive ? 'secondary' : 'primary'}
           >
-            {isActive ? 'تغيير الباقة' : 'اختيار باقة'}
+            {isActive
+              ? 'تغيير الباقة'
+              : 'اختيار باقة'}
           </Button>
 
           {(status === 'pending_payment' ||
             status === 'expired' ||
             status === 'no_subscription') && (
-            <Button onClick={() => navigate('/billing/pay')}>
+            <Button
+              onClick={() => navigate('/billing/pay')}
+            >
               إرسال بيانات الدفع
             </Button>
           )}
@@ -415,7 +464,9 @@ export default function Billing() {
               onClick={() => {
                 document
                   .getElementById('payment-requests')
-                  ?.scrollIntoView({ behavior: 'smooth' })
+                  ?.scrollIntoView({
+                    behavior: 'smooth',
+                  })
               }}
             >
               متابعة طلب الدفع
@@ -470,92 +521,114 @@ export default function Billing() {
       </div>
 
       {/* Payment requests */}
-      <Card className="p-6" id="payment-requests">
-        <div className="flex items-center justify-between gap-3 mb-5">
-          <div>
-            <h2 className="text-lg font-bold text-ink-950">
-              طلبات الدفع
-            </h2>
+      <div id="payment-requests">
+        <Card className="p-6">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg font-bold text-ink-950">
+                طلبات الدفع
+              </h2>
 
-            <p className="text-xs text-ink-900/45 mt-1">
-              آخر الطلبات التي أرسلتها للإدارة
-            </p>
-          </div>
-        </div>
-
-        {paymentRequests.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-ink-900/15 p-8 text-center">
-            <div className="text-sm font-medium text-ink-950">
-              لا توجد طلبات دفع
-            </div>
-
-            <div className="text-xs text-ink-900/45 mt-1">
-              عند إرسال بيانات تحويل جديدة ستظهر هنا.
+              <p className="text-xs text-ink-900/45 mt-1">
+                آخر الطلبات التي أرسلتها للإدارة
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {paymentRequests.map((request) => {
-              const requestStatus =
-                paymentRequestLabels[request.status] ??
-                paymentRequestLabels.pending_review
 
-              return (
-                <div
-                  key={request.id}
-                  className="rounded-xl border border-ink-900/10 p-4"
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-ink-950">
-                          {request.plan?.name ?? 'باقة'}
-                        </span>
+          {paymentRequests.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-ink-900/15 p-8 text-center">
+              <div className="text-sm font-medium text-ink-950">
+                لا توجد طلبات دفع
+              </div>
 
-                        <Badge tone={requestStatus.tone}>
-                          {requestStatus.label}
-                        </Badge>
-                      </div>
+              <div className="text-xs text-ink-900/45 mt-1">
+                عند إرسال بيانات تحويل جديدة ستظهر هنا.
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {paymentRequests.map((request) => {
+                const requestStatus =
+                  paymentRequestLabels[request.status] ??
+                  paymentRequestLabels.pending_review
 
-                      <div className="text-sm text-ink-900/60 mt-2">
-                        {formatMoney(request.amount)}
-                        {' • '}
-                        {getPaymentMethodLabel(request.method)}
-                      </div>
+                return (
+                  <div
+                    key={request.id}
+                    className="rounded-xl border border-ink-900/10 p-4"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-ink-950">
+                            {request.plan?.name ?? 'باقة'}
+                          </span>
 
-                      <div className="text-xs text-ink-900/40 mt-1">
-                        رقم العملية: {request.reference}
-                      </div>
-
-                      <div className="text-xs text-ink-900/40 mt-1">
-                        تاريخ التحويل: {formatDate(request.payment_date)}
-                      </div>
-                    </div>
-
-                    <div className="text-xs text-ink-900/45">
-                      تم الإرسال:{' '}
-                      {formatDateTime(request.created_at)}
-                    </div>
-                  </div>
-
-                  {request.status === 'rejected' &&
-                    request.rejection_reason && (
-                      <div className="mt-4 rounded-lg bg-red-50 border border-red-100 p-3">
-                        <div className="text-xs font-semibold text-red-700">
-                          سبب الرفض
+                          <Badge tone={requestStatus.tone}>
+                            {requestStatus.label}
+                          </Badge>
                         </div>
 
-                        <div className="text-sm text-red-700/80 mt-1">
-                          {request.rejection_reason}
+                        <div className="text-sm text-ink-900/60 mt-2">
+                          {formatMoney(request.amount)}
+                          {' • '}
+                          {getPaymentMethodLabel(request.method)}
+                        </div>
+
+                        <div className="text-xs text-ink-900/40 mt-1">
+                          رقم العملية: {request.reference}
+                        </div>
+
+                        <div className="text-xs text-ink-900/40 mt-1">
+                          تاريخ التحويل:{' '}
+                          {formatDate(request.payment_date)}
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-ink-900/45">
+                        تم الإرسال:{' '}
+                        {formatDateTime(request.created_at)}
+                      </div>
+                    </div>
+
+                    {request.note && (
+                      <div className="mt-3 rounded-lg bg-ink-900/5 p-3">
+                        <div className="text-xs font-semibold text-ink-900/60">
+                          ملاحظتك
+                        </div>
+
+                        <div className="text-sm text-ink-900/70 mt-1">
+                          {request.note}
                         </div>
                       </div>
                     )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Card>
+
+                    {request.status === 'rejected' &&
+                      request.rejection_reason && (
+                        <div className="mt-4 rounded-lg bg-red-50 border border-red-100 p-3">
+                          <div className="text-xs font-semibold text-red-700">
+                            سبب الرفض
+                          </div>
+
+                          <div className="text-sm text-red-700/80 mt-1">
+                            {request.rejection_reason}
+                          </div>
+                        </div>
+                      )}
+
+                    {request.reviewed_at && (
+                      <div className="text-xs text-ink-900/40 mt-3">
+                        تمت المراجعة:{' '}
+                        {formatDateTime(request.reviewed_at)}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
 
       {/* Invoices */}
       <Card className="p-6">
@@ -583,8 +656,9 @@ export default function Billing() {
           <div className="space-y-3">
             {invoices.map((invoice) => {
               const invoiceStatus =
-                invoiceStatusLabels[invoice.status ?? 'pending'] ??
-                invoiceStatusLabels.pending
+                invoiceStatusLabels[
+                  invoice.status ?? 'pending'
+                ] ?? invoiceStatusLabels.pending
 
               return (
                 <div
@@ -660,7 +734,9 @@ export default function Billing() {
                     <div className="text-xs text-ink-900/45 mt-1">
                       طريقة الدفع:{' '}
                       {payment.method
-                        ? getPaymentMethodLabel(payment.method)
+                        ? getPaymentMethodLabel(
+                            payment.method
+                          )
                         : '—'}
                     </div>
 
