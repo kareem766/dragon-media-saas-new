@@ -26,18 +26,21 @@ interface SubscriptionData {
   plan: PlanData | null
 }
 
-type SubscriptionStatus =
+export type SubscriptionAccessState =
   | 'active'
-  | 'trialing'
   | 'expiring_soon'
+  | 'expires_today'
   | 'expired'
   | 'pending_payment'
   | 'cancelled'
   | 'no_subscription'
-  | string
+  | 'unknown'
 
 export function useSubscription() {
-  const { organizationId, loading: orgLoading } = useOrganization()
+  const {
+    organizationId,
+    loading: organizationLoading,
+  } = useOrganization()
 
   const [subscription, setSubscription] =
     useState<SubscriptionData | null>(null)
@@ -49,7 +52,7 @@ export function useSubscription() {
     let cancelled = false
 
     const loadSubscription = async () => {
-      if (orgLoading) {
+      if (organizationLoading) {
         return
       }
 
@@ -65,6 +68,12 @@ export function useSubscription() {
       setError(null)
 
       try {
+        /*
+         * الاشتراك الخاص بالـ Organization الحالية فقط.
+         *
+         * RLS في Supabase يمنع المستخدم من قراءة اشتراك
+         * Organization أخرى.
+         */
         const { data, error: subscriptionError } = await supabase
           .from('subscriptions')
           .select(`
@@ -89,6 +98,11 @@ export function useSubscription() {
             )
           `)
           .eq('organization_id', organizationId)
+          .order('renewal_date', {
+            ascending: false,
+            nullsFirst: false,
+          })
+          .limit(1)
           .maybeSingle()
 
         if (subscriptionError) {
@@ -128,8 +142,10 @@ export function useSubscription() {
         }
 
         setSubscription(null)
+
         setError(
-          err?.message || 'تعذر تحميل بيانات الاشتراك.'
+          err?.message ||
+            'تعذر تحميل بيانات الاشتراك.'
         )
       } finally {
         if (!cancelled) {
@@ -143,32 +159,150 @@ export function useSubscription() {
     return () => {
       cancelled = true
     }
-  }, [organizationId, orgLoading])
+  }, [organizationId, organizationLoading])
 
-  const status: SubscriptionStatus =
+  const rawStatus =
     subscription?.status ?? 'no_subscription'
 
   /*
-   * الاشتراك يعتبر فعالًا فقط عندما يكون:
-   * active أو trialing
+   * نحسب الأيام اعتمادًا على تاريخ التجديد الموجود
+   * في قاعدة البيانات.
    *
-   * أما expiring_soon فهو حالة تحذيرية
-   * لكنها لا تعني أن الاشتراك انتهى.
+   * استخدمنا UTC لتجنب اختلاف الحساب بسبب timezone
+   * الجهاز.
    */
-  const isActive =
-    status === 'active' ||
-    status === 'trialing' ||
-    status === 'expiring_soon'
+  const daysRemaining = (() => {
+    if (!subscription?.renewal_date) {
+      return null
+    }
 
-  const isExpired =
-    status === 'expired' ||
-    status === 'cancelled' ||
-    status === 'no_subscription'
+    const today = new Date()
+
+    const todayUTC = Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate()
+    )
+
+    const [year, month, day] =
+      subscription.renewal_date
+        .split('-')
+        .map(Number)
+
+    if (
+      !year ||
+      !month ||
+      !day
+    ) {
+      return null
+    }
+
+    const renewalUTC = Date.UTC(
+      year,
+      month - 1,
+      day
+    )
+
+    return Math.max(
+      0,
+      Math.ceil(
+        (renewalUTC - todayUTC) /
+          (1000 * 60 * 60 * 24)
+      )
+    )
+  })()
+
+  /*
+   * الحالة الحقيقية للاشتراك.
+   *
+   * مهم:
+   * حتى لو كانت status = active،
+   * الاشتراك يصبح منتهيًا بمجرد مرور renewal_date.
+   */
+  const isDateExpired =
+    subscription?.renewal_date !== null &&
+    subscription?.renewal_date !== undefined &&
+    daysRemaining === 0
+
+  const isSubscriptionStatusActive =
+    rawStatus === 'active' ||
+    rawStatus === 'trialing'
 
   const isPendingPayment =
-    status === 'pending_payment'
+    rawStatus === 'pending_payment' ||
+    rawStatus === 'pending_review'
 
-  const hasFeature = (key: string) => {
+  const isCancelled =
+    rawStatus === 'cancelled' ||
+    rawStatus === 'canceled'
+
+  /*
+   * الاشتراك فعال فقط إذا:
+   *
+   * 1. الحالة active/trialing
+   * 2. ولم ينتهِ التاريخ.
+   */
+  const isActive =
+    isSubscriptionStatusActive &&
+    !isDateExpired
+
+  const isExpired =
+    rawStatus === 'expired' ||
+    isCancelled ||
+    rawStatus === 'no_subscription' ||
+    (isSubscriptionStatusActive &&
+      isDateExpired)
+
+  /*
+   * حالة العرض في الواجهة.
+   */
+  let accessState: SubscriptionAccessState = 'unknown'
+
+  if (isExpired) {
+    accessState = 'expired'
+  } else if (isPendingPayment) {
+    accessState = 'pending_payment'
+  } else if (isActive) {
+    if (daysRemaining === 0) {
+      accessState = 'expires_today'
+    } else if (
+      daysRemaining !== null &&
+      daysRemaining <= 7
+    ) {
+      accessState = 'expiring_soon'
+    } else {
+      accessState = 'active'
+    }
+  } else {
+    accessState = 'unknown'
+  }
+
+  /*
+   * تاريخ انتهاء الاشتراك بصيغة عربية.
+   */
+  const formattedRenewalDate =
+    subscription?.renewal_date
+      ? new Intl.DateTimeFormat(
+          'ar-EG',
+          {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }
+        ).format(
+          new Date(
+            `${subscription.renewal_date}T00:00:00`
+          )
+        )
+      : null
+
+  /*
+   * التأكد من صلاحية Feature معينة
+   * حسب الباقة الحالية.
+   */
+  const hasFeature = (
+    key: string
+  ) => {
     if (!isActive) {
       return false
     }
@@ -178,49 +312,44 @@ export function useSubscription() {
     )
   }
 
-  const getLimit = (key: string) => {
+  /*
+   * الحصول على Limit من الباقة.
+   */
+  const getLimit = (
+    key: string
+  ) => {
     if (!isActive) {
       return 0
     }
 
-    return subscription?.plan?.limits?.[key] ?? 0
+    return (
+      subscription?.plan?.limits?.[key] ??
+      0
+    )
   }
-
-  const daysRemaining = (() => {
-    if (!subscription?.renewal_date) {
-      return null
-    }
-
-    const today = new Date()
-    const renewalDate = new Date(
-      `${subscription.renewal_date}T23:59:59`
-    )
-
-    const diff =
-      renewalDate.getTime() - today.getTime()
-
-    return Math.max(
-      0,
-      Math.ceil(diff / (1000 * 60 * 60 * 24))
-    )
-  })()
 
   return {
     subscription,
+
     loading,
     error,
 
-    status,
+    status: rawStatus,
+
+    accessState,
 
     isActive,
     isExpired,
     isPendingPayment,
 
+    daysRemaining,
+
+    formattedRenewalDate,
+
     hasFeature,
     getLimit,
 
-    daysRemaining,
-
-    plan: subscription?.plan ?? null,
+    plan:
+      subscription?.plan ?? null,
   }
 }
