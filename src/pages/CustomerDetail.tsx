@@ -1304,7 +1304,7 @@ export default function CustomerDetail() {
                                 : task.priority ===
                                     'متوسطة'
                                   ? 'gold'
-                                  : 'neutral'
+                                  : 'default'
                             }
                           >
                             {task.priority}
