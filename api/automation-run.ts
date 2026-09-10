@@ -62,7 +62,9 @@ async function executeLeadStaleAutomation(
   skipped: number
   error?: string
 }> {
-  const hours = Number(automation.config?.hours ?? 24)
+  const hours = Number(
+    automation.config?.hours ?? 24
+  )
 
   if (!Number.isFinite(hours) || hours <= 0) {
     return {
@@ -70,12 +72,14 @@ async function executeLeadStaleAutomation(
       processed: 0,
       created: 0,
       skipped: 0,
-      error: 'Invalid automation hours configuration',
+      error:
+        'Invalid automation hours configuration',
     }
   }
 
   const staleBefore = new Date(
-    Date.now() - hours * 60 * 60 * 1000
+    Date.now() -
+      hours * 60 * 60 * 1000
   ).toISOString()
 
   const {
@@ -84,9 +88,22 @@ async function executeLeadStaleAutomation(
   } = await supabase
     .from('leads')
     .select(
-      'id, organization_id, name, company, phone, status, assigned_to, created_at, deleted_at'
+      `
+        id,
+        organization_id,
+        name,
+        company,
+        phone,
+        status,
+        assigned_to,
+        created_at,
+        deleted_at
+      `
     )
-    .eq('organization_id', automation.organization_id)
+    .eq(
+      'organization_id',
+      automation.organization_id
+    )
     .eq('status', 'جديد')
     .is('deleted_at', null)
     .lte('created_at', staleBefore)
@@ -102,41 +119,50 @@ async function executeLeadStaleAutomation(
       processed: 0,
       created: 0,
       skipped: 0,
-      error: 'Failed to load stale leads',
+      error:
+        'Failed to load stale leads',
     }
   }
 
-  const leadList = (leads ?? []) as Lead[]
+  const leadList =
+    (leads ?? []) as Lead[]
 
   let created = 0
   let skipped = 0
 
   const titleTemplate =
-    automation.action_config?.title_template ||
+    automation.action_config
+      ?.title_template ||
     'تابع مع {name} - عميل محتمل بدون رد'
 
   const priority =
-    automation.action_config?.priority ||
-    'عالية'
+    automation.action_config
+      ?.priority ||
+    'متوسطة'
 
   for (const lead of leadList) {
-    /*
-     * Deduplication:
-     *
-     * Before creating a task, check whether this automation
-     * has already processed this Lead.
-     *
-     * automation_runs is the execution history table.
-     */
+    // -------------------------------------------------------
+    // Deduplication
+    // -------------------------------------------------------
+
     const {
       data: previousRun,
       error: previousRunError,
     } = await supabase
       .from('automation_runs')
       .select('id')
-      .eq('automation_id', automation.id)
-      .eq('target_table', 'leads')
-      .eq('target_id', lead.id)
+      .eq(
+        'automation_id',
+        automation.id
+      )
+      .eq(
+        'target_table',
+        'leads'
+      )
+      .eq(
+        'target_id',
+        lead.id
+      )
       .limit(1)
       .maybeSingle()
 
@@ -156,26 +182,35 @@ async function executeLeadStaleAutomation(
       continue
     }
 
-    const taskTitle = renderTaskTitle(
-      titleTemplate,
-      lead
-    )
+    // -------------------------------------------------------
+    // Create Task
+    // -------------------------------------------------------
 
-    /*
-     * Create the actual Task using only columns that exist
-     * in the current production schema.
-     */
+    const taskTitle =
+      renderTaskTitle(
+        titleTemplate,
+        lead
+      )
+
     const {
       error: taskError,
     } = await supabase
       .from('tasks')
       .insert({
-        organization_id: automation.organization_id,
+        organization_id:
+          automation.organization_id,
+
         title: taskTitle,
-        assigned_to: lead.assigned_to,
-        due_date: new Date().toISOString().slice(0, 10),
+
+        assigned_to:
+          lead.assigned_to,
+
+        due_date:
+          new Date()
+            .toISOString()
+            .slice(0, 10),
+
         priority,
-        status: 'جديدة',
       })
 
     if (taskError) {
@@ -189,32 +224,35 @@ async function executeLeadStaleAutomation(
       )
     }
 
-    /*
-     * Only record the automation run AFTER the Task
-     * has actually been created successfully.
-     */
+    // -------------------------------------------------------
+    // Log successful automation run
+    // -------------------------------------------------------
+
     const {
       error: runError,
     } = await supabase
       .from('automation_runs')
       .insert({
-        automation_id: automation.id,
-        target_table: 'leads',
-        target_id: lead.id,
+        automation_id:
+          automation.id,
+
+        target_table:
+          'leads',
+
+        target_id:
+          lead.id,
       })
 
     if (runError) {
       console.error(
-        `[automation-run] Task created but failed to log automation run for lead ${lead.id}:`,
+        `[automation-run] Task created but automation run could not be logged for lead ${lead.id}:`,
         runError
       )
 
       /*
-       * Important:
-       * The task already exists.
-       * Throwing here would cause the outer execution
-       * to report a failed automation even though the task
-       * was successfully created.
+       * The Task already exists.
+       * Do not create another Task during this execution.
+       * The error is logged for investigation.
        */
       continue
     }
@@ -240,9 +278,14 @@ async function executeAutomation(
   skipped: number
   error?: string
 }> {
-  switch (automation.trigger_event) {
+  switch (
+    automation.trigger_event
+  ) {
     case 'lead_stale': {
-      if (automation.action_type !== 'create_task') {
+      if (
+        automation.action_type !==
+        'create_task'
+      ) {
         return {
           success: false,
           processed: 0,
@@ -280,7 +323,10 @@ export default async function handler(
   // =========================================================
 
   if (req.method !== 'GET') {
-    res.setHeader('Allow', 'GET')
+    res.setHeader(
+      'Allow',
+      'GET'
+    )
 
     return jsonError(
       res,
@@ -293,7 +339,8 @@ export default async function handler(
   // 2. CRON SECRET
   // =========================================================
 
-  const cronSecret = process.env.CRON_SECRET
+  const cronSecret =
+    process.env.CRON_SECRET
 
   if (!cronSecret) {
     console.error(
@@ -316,7 +363,8 @@ export default async function handler(
 
   if (
     !authorization ||
-    authorization !== `Bearer ${cronSecret}`
+    authorization !==
+      `Bearer ${cronSecret}`
   ) {
     return jsonError(
       res,
@@ -354,16 +402,17 @@ export default async function handler(
   // 5. SERVICE ROLE CLIENT
   // =========================================================
 
-  const supabase = createClient(
-    supabaseUrl,
-    supabaseServiceKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  )
+  const supabase =
+    createClient(
+      supabaseUrl,
+      supabaseServiceKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
 
   try {
     // =======================================================
@@ -376,9 +425,21 @@ export default async function handler(
     } = await supabase
       .from('automations')
       .select(
-        'id, organization_id, name, trigger_event, config, action_type, action_config, active'
+        `
+          id,
+          organization_id,
+          name,
+          trigger_event,
+          config,
+          action_type,
+          action_config,
+          active
+        `
       )
-      .eq('active', true)
+      .eq(
+        'active',
+        true
+      )
 
     if (automationsError) {
       console.error(
@@ -397,10 +458,12 @@ export default async function handler(
       (automations ?? []) as Automation[]
 
     // =======================================================
-    // 7. NOTHING TO EXECUTE
+    // 7. NO ACTIVE AUTOMATIONS
     // =======================================================
 
-    if (automationList.length === 0) {
+    if (
+      automationList.length === 0
+    ) {
       return res.status(200).json({
         success: true,
         message:
@@ -410,6 +473,7 @@ export default async function handler(
         failed: 0,
         created_tasks: 0,
         skipped_tasks: 0,
+        results: [],
       })
     }
 
@@ -424,33 +488,44 @@ export default async function handler(
 
     const results: Array<{
       automation_id: string
-      automation_name?: string | null
-      status: 'success' | 'failed'
+      automation_name?:
+        | string
+        | null
+      status:
+        | 'success'
+        | 'failed'
       processed: number
       created: number
       skipped: number
       error?: string
     }> = []
 
-    for (const automation of automationList) {
-      const automationId =
-        automation.id
-
+    for (
+      const automation
+      of automationList
+    ) {
       if (
-        !automationId ||
+        !automation.id ||
         !automation.organization_id
       ) {
         failed++
 
         results.push({
           automation_id:
-            automationId || 'unknown',
+            automation.id ||
+            'unknown',
+
           automation_name:
             automation.name,
+
           status: 'failed',
+
           processed: 0,
+
           created: 0,
+
           skipped: 0,
+
           error:
             'Invalid automation configuration',
         })
@@ -465,21 +540,29 @@ export default async function handler(
             automation
           )
 
-        if (!executionResult.success) {
+        if (
+          !executionResult.success
+        ) {
           failed++
 
           results.push({
             automation_id:
               automation.id,
+
             automation_name:
               automation.name,
+
             status: 'failed',
+
             processed:
               executionResult.processed,
+
             created:
               executionResult.created,
+
             skipped:
               executionResult.skipped,
+
             error:
               executionResult.error ||
               'Automation execution failed',
@@ -499,13 +582,18 @@ export default async function handler(
         results.push({
           automation_id:
             automation.id,
+
           automation_name:
             automation.name,
+
           status: 'success',
+
           processed:
             executionResult.processed,
+
           created:
             executionResult.created,
+
           skipped:
             executionResult.skipped,
         })
@@ -525,12 +613,18 @@ export default async function handler(
         results.push({
           automation_id:
             automation.id,
+
           automation_name:
             automation.name,
+
           status: 'failed',
+
           processed: 0,
+
           created: 0,
+
           skipped: 0,
+
           error: message,
         })
       }
@@ -541,15 +635,22 @@ export default async function handler(
     // =======================================================
 
     return res.status(200).json({
-      success: failed === 0,
+      success:
+        failed === 0,
+
       processed:
         automationList.length,
+
       succeeded,
+
       failed,
+
       created_tasks:
         createdTasks,
+
       skipped_tasks:
         skippedTasks,
+
       results,
     })
   } catch (error) {
