@@ -28,6 +28,7 @@ import AdminSettings from './pages/AdminSettings'
 import AdminBranding from './pages/AdminBranding'
 import AdminPlans from './pages/AdminPlans'
 import AdminRoles from './pages/AdminRoles'
+import AdminRyanCredits from './pages/AdminRyanCredits'
 import AdminTickets from './pages/AdminTickets'
 import Tickets from './pages/Tickets'
 import Search from './pages/Search'
@@ -67,8 +68,12 @@ export default function App() {
               <Route path="/admin/payments" element={<AdminPayments />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
-              <Route path="/admin/branding" element={<AdminBranding />} />
+              <Route path="/admin/branding" element={<AdminBranding />} />        
               <Route path="/admin/plans" element={<AdminPlans />} />
+              <Route
+                path="/admin/ryan-credits"
+                element={<AdminRyanCredits />}
+              />
               <Route path="/admin/roles" element={<AdminRoles />} />
               <Route path="/admin/tickets" element={<AdminTickets />} />
               <Route path="/tickets" element={<Tickets />} />
