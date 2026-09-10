@@ -30,6 +30,20 @@ interface NotificationPreferences {
   weekly_report_email: boolean
 }
 
+interface Integration {
+  id: string
+  organization_id: string | null
+  provider: string
+  connected: boolean | null
+  status: string
+  config: Record<string, unknown> | null
+  metadata: Record<string, unknown>
+  connected_at: string | null
+  last_verified_at: string | null
+  error_message: string | null
+  updated_at: string | null
+}
+
 const initialOrg: OrgData = {
   name: '',
   manager_name: '',
@@ -48,6 +62,34 @@ const initialNotificationPreferences: NotificationPreferences = {
   weekly_report_email: false,
 }
 
+const integrationProviders = [
+  {
+    provider: 'whatsapp',
+    name: 'واتساب بيزنس',
+    description: 'ربط WhatsApp Business واستقبال وإرسال الرسائل.',
+  },
+  {
+    provider: 'facebook',
+    name: 'فيسبوك ماسنجر',
+    description: 'ربط صفحات Facebook وإدارة محادثات Messenger.',
+  },
+  {
+    provider: 'instagram',
+    name: 'إنستجرام',
+    description: 'ربط حساب Instagram وإدارة الرسائل.',
+  },
+  {
+    provider: 'telegram',
+    name: 'تليجرام',
+    description: 'ربط Telegram Bot وإدارة المحادثات.',
+  },
+  {
+    provider: 'paymob',
+    name: 'بوابة الدفع',
+    description: 'ربط بوابة الدفع والعمليات المالية.',
+  },
+]
+
 export default function Settings() {
   const {
     organizationId,
@@ -56,6 +98,7 @@ export default function Settings() {
   } = useOrganization()
 
   const [active, setActive] = useState(tabs[0])
+
   const [org, setOrg] = useState<OrgData>(initialOrg)
 
   const [loading, setLoading] = useState(true)
@@ -72,6 +115,11 @@ export default function Settings() {
   const [notificationsSaved, setNotificationsSaved] = useState(false)
   const [notificationsError, setNotificationsError] = useState('')
 
+  // Integrations
+  const [integrations, setIntegrations] = useState<Integration[]>([])
+  const [integrationsLoading, setIntegrationsLoading] = useState(false)
+  const [integrationsError, setIntegrationsError] = useState('')
+
   const updateOrg = (field: keyof OrgData, value: string) => {
     setOrg(prev => ({
       ...prev,
@@ -82,6 +130,9 @@ export default function Settings() {
     setError('')
   }
 
+  /*
+   * Load organization
+   */
   useEffect(() => {
     const loadOrganization = async () => {
       if (!organizationId || !supabase) return
@@ -126,6 +177,9 @@ export default function Settings() {
     loadOrganization()
   }, [organizationId])
 
+  /*
+   * Load notification preferences
+   */
   useEffect(() => {
     const loadNotificationPreferences = async () => {
       if (!organizationId || !supabase) return
@@ -214,13 +268,154 @@ export default function Settings() {
     loadNotificationPreferences()
   }, [organizationId])
 
+  /*
+   * Load integrations from Supabase
+   */
+  const loadIntegrations = async () => {
+    if (!organizationId || !supabase) return
+
+    setIntegrationsLoading(true)
+    setIntegrationsError('')
+
+    try {
+      const {
+        data,
+        error: fetchError,
+      } = await supabase
+        .from('integrations')
+        .select(
+          `
+            id,
+            organization_id,
+            provider,
+            connected,
+            status,
+            config,
+            metadata,
+            connected_at,
+            last_verified_at,
+            error_message,
+            updated_at
+          `
+        )
+        .eq('organization_id', organizationId)
+        .order('provider', {
+          ascending: true,
+        })
+
+      if (fetchError) {
+        throw fetchError
+      }
+
+      setIntegrations(data ?? [])
+    } catch (err: any) {
+      setIntegrationsError(
+        err?.message ||
+          'تعذر تحميل حالة التكاملات.'
+      )
+    } finally {
+      setIntegrationsLoading(false)
+    }
+  }
+
+  /*
+   * Load integrations when organization is ready
+   */
+  useEffect(() => {
+    if (!organizationId) return
+
+    loadIntegrations()
+  }, [organizationId])
+
+  /*
+   * Find integration by provider
+   */
+  const getIntegration = (provider: string) => {
+    return integrations.find(
+      integration =>
+        integration.provider.toLowerCase() ===
+        provider.toLowerCase()
+    )
+  }
+
+  /*
+   * Determine whether integration is connected
+   */
+  const isIntegrationConnected = (
+    integration?: Integration
+  ) => {
+    if (!integration) return false
+
+    return (
+      integration.connected === true ||
+      integration.status === 'connected' ||
+      integration.status === 'active'
+    )
+  }
+
+  /*
+   * Human readable status
+   */
+  const getIntegrationStatus = (
+    integration?: Integration
+  ) => {
+    if (!integration) {
+      return {
+        label: 'غير متصل',
+        tone: undefined as
+          | 'success'
+          | 'warning'
+          | undefined,
+      }
+    }
+
+    if (isIntegrationConnected(integration)) {
+      return {
+        label: 'متصل',
+        tone: 'success' as const,
+      }
+    }
+
+    if (
+      integration.status === 'pending' ||
+      integration.status === 'connecting'
+    ) {
+      return {
+        label: 'جاري الربط',
+        tone: 'warning' as const,
+      }
+    }
+
+    if (
+      integration.status === 'error' ||
+      integration.error_message
+    ) {
+      return {
+        label: 'يوجد خطأ',
+        tone: 'warning' as const,
+      }
+    }
+
+    return {
+      label: 'غير متصل',
+      tone: undefined as
+        | 'success'
+        | 'warning'
+        | undefined,
+    }
+  }
+
+  /*
+   * Validate organization
+   */
   const validate = () => {
     if (!org.name.trim()) {
       return 'اسم الشركة مطلوب.'
     }
 
     if (org.email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      const emailRegex =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
       if (!emailRegex.test(org.email.trim())) {
         return 'يرجى إدخال بريد إلكتروني صحيح.'
@@ -228,7 +423,8 @@ export default function Settings() {
     }
 
     if (org.phone.trim()) {
-      const phoneDigits = org.phone.replace(/\D/g, '')
+      const phoneDigits =
+        org.phone.replace(/\D/g, '')
 
       if (
         phoneDigits.length < 8 ||
@@ -241,6 +437,9 @@ export default function Settings() {
     return null
   }
 
+  /*
+   * Save organization
+   */
   const handleSave = async () => {
     if (!supabase || !organizationId) return
 
@@ -296,6 +495,9 @@ export default function Settings() {
     }
   }
 
+  /*
+   * Notification preference update
+   */
   const updateNotificationPreference = (
     field: keyof NotificationPreferences,
     value: boolean
@@ -309,6 +511,9 @@ export default function Settings() {
     setNotificationsError('')
   }
 
+  /*
+   * Save notification preferences
+   */
   const handleSaveNotificationPreferences =
     async () => {
       if (!supabase || !organizationId) return
@@ -351,7 +556,8 @@ export default function Settings() {
                 notificationPreferences.overdue_tasks,
               weekly_report_email:
                 notificationPreferences.weekly_report_email,
-              updated_at: new Date().toISOString(),
+              updated_at:
+                new Date().toISOString(),
             },
             {
               onConflict: 'user_id',
@@ -413,6 +619,7 @@ export default function Settings() {
       </nav>
 
       <Card className="p-6">
+        {/* Company */}
         {active === 'بيانات الشركة' && (
           <div className="space-y-6 max-w-2xl">
             <div>
@@ -425,7 +632,7 @@ export default function Settings() {
               </p>
             </div>
 
-            {/* Company Logo */}
+            {/* Logo */}
             <div className="border border-sand-200 rounded-xl p-4">
               <div className="flex items-center gap-4">
                 <div className="w-20 h-20 rounded-xl border border-sand-200 bg-sand-50 flex items-center justify-center overflow-hidden shrink-0">
@@ -474,7 +681,6 @@ export default function Settings() {
               </div>
             </div>
 
-            {/* Company Name */}
             <Field
               label="اسم الشركة"
               required
@@ -484,7 +690,6 @@ export default function Settings() {
               }
             />
 
-            {/* Manager */}
             <Field
               label="اسم المسؤول / المدير"
               value={org.manager_name}
@@ -496,7 +701,6 @@ export default function Settings() {
               }
             />
 
-            {/* Business Type */}
             <div>
               <label className="text-xs text-ink-900/50">
                 نوع النشاط
@@ -515,42 +719,33 @@ export default function Settings() {
                 <option value="">
                   اختر نوع النشاط
                 </option>
-
                 <option value="عقارات">
                   عقارات
                 </option>
-
                 <option value="مطاعم">
                   مطاعم
                 </option>
-
                 <option value="عيادات">
                   عيادات
                 </option>
-
                 <option value="تعليم">
                   مراكز تعليمية
                 </option>
-
                 <option value="سيارات">
                   معارض سيارات
                 </option>
-
                 <option value="تجارة إلكترونية">
                   تجارة إلكترونية
                 </option>
-
                 <option value="سوشيال ميديا">
                   تسويق وسوشيال ميديا
                 </option>
-
                 <option value="أخرى">
                   أخرى
                 </option>
               </select>
             </div>
 
-            {/* Email */}
             <Field
               label="البريد الإلكتروني للتواصل"
               value={org.email}
@@ -561,7 +756,6 @@ export default function Settings() {
               dir="ltr"
             />
 
-            {/* Phone */}
             <Field
               label="رقم الهاتف"
               value={org.phone}
@@ -573,7 +767,6 @@ export default function Settings() {
               placeholder="+201012345678"
             />
 
-            {/* Address */}
             <div>
               <label className="text-xs text-ink-900/50">
                 عنوان مقر الشركة
@@ -593,7 +786,6 @@ export default function Settings() {
               />
             </div>
 
-            {/* Timezone */}
             <div>
               <label className="text-xs text-ink-900/50">
                 المنطقة الزمنية
@@ -612,36 +804,30 @@ export default function Settings() {
                 <option value="Africa/Cairo">
                   القاهرة — Africa/Cairo
                 </option>
-
                 <option value="Asia/Riyadh">
                   الرياض — Asia/Riyadh
                 </option>
-
                 <option value="Asia/Dubai">
                   دبي — Asia/Dubai
                 </option>
-
                 <option value="UTC">
                   UTC
                 </option>
               </select>
             </div>
 
-            {/* Error */}
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {error}
               </div>
             )}
 
-            {/* Success */}
             {saved && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                 تم حفظ بيانات الشركة بنجاح.
               </div>
             )}
 
-            {/* Save */}
             <div className="flex items-center gap-3 pt-2">
               <Button
                 onClick={handleSave}
@@ -777,46 +963,254 @@ export default function Settings() {
 
         {/* Integrations */}
         {active === 'التكاملات' && (
-          <div className="grid sm:grid-cols-2 gap-3">
-            {[
-              'واتساب بيزنس',
-              'فيسبوك ماسنجر',
-              'إنستجرام',
-              'تليجرام',
-              'بوابة الدفع',
-            ].map(i => (
-              <div
-                key={i}
-                className="border border-sand-200 rounded-xl p-4 flex items-center justify-between"
-              >
-                <span className="text-sm font-medium text-ink-900">
-                  {i}
-                </span>
+          <div className="space-y-6">
+            <div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-ink-900">
+                    التكاملات
+                  </h2>
 
-                <Badge>
-                  غير متصل
-                </Badge>
+                  <p className="text-sm text-ink-900/50 mt-1">
+                    حالة التكاملات الخاصة بمؤسستك من قاعدة البيانات مباشرة.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={loadIntegrations}
+                  disabled={integrationsLoading}
+                  className="text-sm px-3 py-2 rounded-lg border border-sand-200 hover:bg-sand-50 transition-colors disabled:opacity-50"
+                >
+                  {integrationsLoading
+                    ? 'جاري التحديث...'
+                    : 'تحديث الحالة'}
+                </button>
               </div>
-            ))}
-
-            <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4 flex items-center justify-between">
-              <span className="text-sm font-medium text-ink-900">
-                Supabase (قاعدة البيانات)
-              </span>
-
-              <Badge tone="success">
-                متصل
-              </Badge>
             </div>
+
+            {integrationsError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {integrationsError}
+              </div>
+            )}
+
+            {integrationsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {integrationProviders.map(item => {
+                  const integration =
+                    getIntegration(
+                      item.provider
+                    )
+
+                  const status =
+                    getIntegrationStatus(
+                      integration
+                    )
+
+                  const connected =
+                    isIntegrationConnected(
+                      integration
+                    )
+
+                  return (
+                    <div
+                      key={item.provider}
+                      className={`border rounded-xl p-5 transition-colors ${
+                        connected
+                          ? 'border-emerald-200 bg-emerald-50/40'
+                          : 'border-sand-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-ink-900">
+                            {item.name}
+                          </div>
+
+                          <p className="text-xs text-ink-900/50 mt-1.5 leading-5">
+                            {item.description}
+                          </p>
+                        </div>
+
+                        <Badge
+                          tone={
+                            status.tone
+                          }
+                        >
+                          {status.label}
+                        </Badge>
+                      </div>
+
+                      {integration?.connected_at && (
+                        <div className="mt-4 pt-3 border-t border-sand-200/70">
+                          <div className="text-xs text-ink-900/45">
+                            تاريخ الاتصال
+                          </div>
+
+                          <div
+                            className="text-xs text-ink-900/70 mt-1"
+                            dir="ltr"
+                          >
+                            {new Date(
+                              integration.connected_at
+                            ).toLocaleString(
+                              'ar-EG'
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {integration?.last_verified_at && (
+                        <div className="mt-3">
+                          <div className="text-xs text-ink-900/45">
+                            آخر تحقق
+                          </div>
+
+                          <div
+                            className="text-xs text-ink-900/70 mt-1"
+                            dir="ltr"
+                          >
+                            {new Date(
+                              integration.last_verified_at
+                            ).toLocaleString(
+                              'ar-EG'
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {integration?.error_message && (
+                        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                          {integration.error_message}
+                        </div>
+                      )}
+
+                      <div className="mt-4 text-xs text-ink-900/40">
+                        {integration
+                          ? `Provider: ${integration.provider}`
+                          : 'لم يتم إنشاء سجل لهذا التكامل بعد.'}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Supabase */}
+                <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-sm font-semibold text-ink-900">
+                        Supabase
+                      </div>
+
+                      <p className="text-xs text-ink-900/50 mt-1.5">
+                        قاعدة البيانات والمصادقة الخاصة بالمنصة.
+                      </p>
+                    </div>
+
+                    <Badge tone="success">
+                      متصل
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* WhatsApp */}
         {active === 'إعدادات واتساب' && (
-          <div className="max-w-md">
-            <p className="text-sm text-ink-900/55">
-              سيتم تفعيل هذا القسم بعد ربط حساب Meta Business الحقيقي.
-            </p>
+          <div className="space-y-6 max-w-2xl">
+            <div>
+              <h2 className="text-lg font-semibold text-ink-900">
+                إعدادات واتساب
+              </h2>
+
+              <p className="text-sm text-ink-900/50 mt-1">
+                سيتم التحكم في إعدادات WhatsApp Business من خلال التكامل الرسمي مع Meta.
+              </p>
+            </div>
+
+            {(() => {
+              const whatsapp =
+                getIntegration('whatsapp')
+
+              const connected =
+                isIntegrationConnected(
+                  whatsapp
+                )
+
+              const status =
+                getIntegrationStatus(
+                  whatsapp
+                )
+
+              return (
+                <div
+                  className={`border rounded-xl p-5 ${
+                    connected
+                      ? 'border-emerald-200 bg-emerald-50/40'
+                      : 'border-sand-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="font-semibold text-sm text-ink-900">
+                        WhatsApp Business
+                      </div>
+
+                      <p className="text-xs text-ink-900/50 mt-1">
+                        الحالة الحالية مأخوذة مباشرة من Supabase.
+                      </p>
+                    </div>
+
+                    <Badge
+                      tone={status.tone}
+                    >
+                      {status.label}
+                    </Badge>
+                  </div>
+
+                  {whatsapp?.metadata &&
+                    Object.keys(
+                      whatsapp.metadata
+                    ).length > 0 && (
+                      <div className="mt-4 border-t border-sand-200 pt-4">
+                        <div className="text-xs font-medium text-ink-900/60 mb-2">
+                          معلومات الاتصال
+                        </div>
+
+                        <pre
+                          dir="ltr"
+                          className="text-xs bg-white border border-sand-200 rounded-lg p-3 overflow-auto"
+                        >
+                          {JSON.stringify(
+                            whatsapp.metadata,
+                            null,
+                            2
+                          )}
+                        </pre>
+                      </div>
+                    )}
+
+                  {whatsapp?.error_message && (
+                    <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {whatsapp.error_message}
+                    </div>
+                  )}
+
+                  {!whatsapp && (
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                      حساب WhatsApp Business غير مربوط حتى الآن.
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )}
 
