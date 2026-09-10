@@ -5,10 +5,31 @@ type Automation = {
   id: string
   organization_id: string
   name?: string | null
-  enabled?: boolean | null
-  hours?: number | null
-  [key: string]: unknown
+  trigger_event: string
+  config?: {
+    hours?: number
+  } | null
+  action_type: string
+  action_config?: {
+    title_template?: string
+    priority?: string
+  } | null
+  active: boolean
 }
+
+type Lead = {
+  id: string
+  organization_id: string | null
+  name: string
+  company: string | null
+  phone: string | null
+  status: string | null
+  assigned_to: string | null
+  created_at: string | null
+  deleted_at: string | null
+}
+
+type SupabaseClient = ReturnType<typeof createClient>
 
 function jsonError(
   res: VercelResponse,
@@ -21,23 +42,257 @@ function jsonError(
   })
 }
 
+function renderTaskTitle(
+  template: string,
+  lead: Lead
+): string {
+  return template
+    .replace(/\{name\}/g, lead.name || 'العميل المحتمل')
+    .replace(/\{company\}/g, lead.company || '')
+    .replace(/\{phone\}/g, lead.phone || '')
+}
+
+async function executeLeadStaleAutomation(
+  supabase: SupabaseClient,
+  automation: Automation
+): Promise<{
+  success: boolean
+  processed: number
+  created: number
+  skipped: number
+  error?: string
+}> {
+  const hours = Number(automation.config?.hours ?? 24)
+
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return {
+      success: false,
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      error: 'Invalid automation hours configuration',
+    }
+  }
+
+  const staleBefore = new Date(
+    Date.now() - hours * 60 * 60 * 1000
+  ).toISOString()
+
+  const {
+    data: leads,
+    error: leadsError,
+  } = await supabase
+    .from('leads')
+    .select(
+      'id, organization_id, name, company, phone, status, assigned_to, created_at, deleted_at'
+    )
+    .eq('organization_id', automation.organization_id)
+    .eq('status', 'جديد')
+    .is('deleted_at', null)
+    .lte('created_at', staleBefore)
+
+  if (leadsError) {
+    console.error(
+      `[automation-run] Failed to load stale leads for ${automation.id}:`,
+      leadsError
+    )
+
+    return {
+      success: false,
+      processed: 0,
+      created: 0,
+      skipped: 0,
+      error: 'Failed to load stale leads',
+    }
+  }
+
+  const leadList = (leads ?? []) as Lead[]
+
+  let created = 0
+  let skipped = 0
+
+  const titleTemplate =
+    automation.action_config?.title_template ||
+    'تابع مع {name} - عميل محتمل بدون رد'
+
+  const priority =
+    automation.action_config?.priority ||
+    'عالية'
+
+  for (const lead of leadList) {
+    /*
+     * Deduplication:
+     *
+     * Before creating a task, check whether this automation
+     * has already processed this Lead.
+     *
+     * automation_runs is the execution history table.
+     */
+    const {
+      data: previousRun,
+      error: previousRunError,
+    } = await supabase
+      .from('automation_runs')
+      .select('id')
+      .eq('automation_id', automation.id)
+      .eq('target_table', 'leads')
+      .eq('target_id', lead.id)
+      .limit(1)
+      .maybeSingle()
+
+    if (previousRunError) {
+      console.error(
+        `[automation-run] Failed to check previous run for lead ${lead.id}:`,
+        previousRunError
+      )
+
+      throw new Error(
+        'Failed to check automation execution history'
+      )
+    }
+
+    if (previousRun) {
+      skipped++
+      continue
+    }
+
+    const taskTitle = renderTaskTitle(
+      titleTemplate,
+      lead
+    )
+
+    /*
+     * Create the actual Task using only columns that exist
+     * in the current production schema.
+     */
+    const {
+      error: taskError,
+    } = await supabase
+      .from('tasks')
+      .insert({
+        organization_id: automation.organization_id,
+        title: taskTitle,
+        assigned_to: lead.assigned_to,
+        due_date: new Date().toISOString().slice(0, 10),
+        priority,
+        status: 'جديدة',
+      })
+
+    if (taskError) {
+      console.error(
+        `[automation-run] Failed to create task for lead ${lead.id}:`,
+        taskError
+      )
+
+      throw new Error(
+        `Failed to create task for lead ${lead.id}`
+      )
+    }
+
+    /*
+     * Only record the automation run AFTER the Task
+     * has actually been created successfully.
+     */
+    const {
+      error: runError,
+    } = await supabase
+      .from('automation_runs')
+      .insert({
+        automation_id: automation.id,
+        target_table: 'leads',
+        target_id: lead.id,
+      })
+
+    if (runError) {
+      console.error(
+        `[automation-run] Task created but failed to log automation run for lead ${lead.id}:`,
+        runError
+      )
+
+      /*
+       * Important:
+       * The task already exists.
+       * Throwing here would cause the outer execution
+       * to report a failed automation even though the task
+       * was successfully created.
+       */
+      continue
+    }
+
+    created++
+  }
+
+  return {
+    success: true,
+    processed: leadList.length,
+    created,
+    skipped,
+  }
+}
+
+async function executeAutomation(
+  supabase: SupabaseClient,
+  automation: Automation
+): Promise<{
+  success: boolean
+  processed: number
+  created: number
+  skipped: number
+  error?: string
+}> {
+  switch (automation.trigger_event) {
+    case 'lead_stale': {
+      if (automation.action_type !== 'create_task') {
+        return {
+          success: false,
+          processed: 0,
+          created: 0,
+          skipped: 0,
+          error:
+            `Unsupported action "${automation.action_type}" for lead_stale`,
+        }
+      }
+
+      return executeLeadStaleAutomation(
+        supabase,
+        automation
+      )
+    }
+
+    default:
+      return {
+        success: false,
+        processed: 0,
+        created: 0,
+        skipped: 0,
+        error:
+          `Unsupported trigger "${automation.trigger_event}"`,
+      }
+  }
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // ---------------------------------------------------------
-  // 1. Method protection
-  // Vercel Cron calls this endpoint with GET.
-  // ---------------------------------------------------------
+  // =========================================================
+  // 1. METHOD PROTECTION
+  // =========================================================
+
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET')
-    return jsonError(res, 405, 'Method not allowed')
+
+    return jsonError(
+      res,
+      405,
+      'Method not allowed'
+    )
   }
 
-  // ---------------------------------------------------------
-  // 2. CRON_SECRET must exist.
-  // Never allow the endpoint to run without authentication.
-  // ---------------------------------------------------------
+  // =========================================================
+  // 2. CRON SECRET
+  // =========================================================
+
   const cronSecret = process.env.CRON_SECRET
 
   if (!cronSecret) {
@@ -52,25 +307,38 @@ export default async function handler(
     )
   }
 
-  // ---------------------------------------------------------
-  // 3. Verify Authorization header.
-  // ---------------------------------------------------------
-  const authorization = req.headers.authorization
+  // =========================================================
+  // 3. AUTHORIZATION
+  // =========================================================
+
+  const authorization =
+    req.headers.authorization
 
   if (
     !authorization ||
     authorization !== `Bearer ${cronSecret}`
   ) {
-    return jsonError(res, 401, 'Unauthorized')
+    return jsonError(
+      res,
+      401,
+      'Unauthorized'
+    )
   }
 
-  // ---------------------------------------------------------
-  // 4. Validate Supabase server credentials.
-  // ---------------------------------------------------------
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
+  // =========================================================
+  // 4. SERVER CONFIGURATION
+  // =========================================================
 
-  if (!supabaseUrl || !supabaseServiceKey) {
+  const supabaseUrl =
+    process.env.VITE_SUPABASE_URL
+
+  const supabaseServiceKey =
+    process.env.SUPABASE_SERVICE_KEY
+
+  if (
+    !supabaseUrl ||
+    !supabaseServiceKey
+  ) {
     console.error(
       '[automation-run] Missing Supabase server configuration'
     )
@@ -82,10 +350,10 @@ export default async function handler(
     )
   }
 
-  // ---------------------------------------------------------
-  // 5. Create a stateless service-role client.
-  // This endpoint is server-side only.
-  // ---------------------------------------------------------
+  // =========================================================
+  // 5. SERVICE ROLE CLIENT
+  // =========================================================
+
   const supabase = createClient(
     supabaseUrl,
     supabaseServiceKey,
@@ -98,16 +366,19 @@ export default async function handler(
   )
 
   try {
-    // -------------------------------------------------------
-    // 6. Fetch enabled automations only.
-    // -------------------------------------------------------
+    // =======================================================
+    // 6. LOAD ACTIVE AUTOMATIONS
+    // =======================================================
+
     const {
       data: automations,
       error: automationsError,
     } = await supabase
       .from('automations')
-      .select('*')
-      .eq('enabled', true)
+      .select(
+        'id, organization_id, name, trigger_event, config, action_type, action_config, active'
+      )
+      .eq('active', true)
 
     if (automationsError) {
       console.error(
@@ -125,110 +396,118 @@ export default async function handler(
     const automationList =
       (automations ?? []) as Automation[]
 
-    // -------------------------------------------------------
-    // 7. Nothing to execute.
-    // -------------------------------------------------------
+    // =======================================================
+    // 7. NOTHING TO EXECUTE
+    // =======================================================
+
     if (automationList.length === 0) {
       return res.status(200).json({
         success: true,
-        message: 'No enabled automations found',
+        message:
+          'No active automations found',
         processed: 0,
         succeeded: 0,
         failed: 0,
+        created_tasks: 0,
+        skipped_tasks: 0,
       })
     }
 
+    // =======================================================
+    // 8. EXECUTE AUTOMATIONS
+    // =======================================================
+
     let succeeded = 0
     let failed = 0
+    let createdTasks = 0
+    let skippedTasks = 0
 
     const results: Array<{
       automation_id: string
+      automation_name?: string | null
       status: 'success' | 'failed'
+      processed: number
+      created: number
+      skipped: number
       error?: string
     }> = []
 
-    // -------------------------------------------------------
-    // 8. Execute each automation.
-    // -------------------------------------------------------
     for (const automation of automationList) {
-      const automationId = automation.id
+      const automationId =
+        automation.id
 
-      if (!automationId || !automation.organization_id) {
+      if (
+        !automationId ||
+        !automation.organization_id
+      ) {
         failed++
 
         results.push({
-          automation_id: automationId || 'unknown',
+          automation_id:
+            automationId || 'unknown',
+          automation_name:
+            automation.name,
           status: 'failed',
-          error: 'Invalid automation configuration',
+          processed: 0,
+          created: 0,
+          skipped: 0,
+          error:
+            'Invalid automation configuration',
         })
 
         continue
       }
 
       try {
-        /*
-         * IMPORTANT:
-         *
-         * Keep the actual automation execution logic that already
-         * exists in your project inside this section.
-         *
-         * This security wrapper intentionally does NOT invent
-         * business logic that may differ from your current schema.
-         *
-         * Example:
-         *
-         * await executeAutomation(automation)
-         *
-         * Replace the placeholder below with your existing
-         * automation execution code if the current file has one.
-         */
-
-        // -----------------------------------------------------
-        // Existing execution logic should run here.
-        // -----------------------------------------------------
-        const executionResult = await executeAutomation(
-          supabase,
-          automation
-        )
+        const executionResult =
+          await executeAutomation(
+            supabase,
+            automation
+          )
 
         if (!executionResult.success) {
-          throw new Error(
-            executionResult.error ||
-              'Automation execution failed'
-          )
-        }
+          failed++
 
-        // -----------------------------------------------------
-        // 9. Record successful run only after execution succeeds.
-        // -----------------------------------------------------
-        const { error: runInsertError } = await supabase
-          .from('automation_runs')
-          .insert({
-            automation_id: automation.id,
-            organization_id: automation.organization_id,
-            status: 'completed',
-            started_at: new Date().toISOString(),
-            completed_at: new Date().toISOString(),
+          results.push({
+            automation_id:
+              automation.id,
+            automation_name:
+              automation.name,
+            status: 'failed',
+            processed:
+              executionResult.processed,
+            created:
+              executionResult.created,
+            skipped:
+              executionResult.skipped,
+            error:
+              executionResult.error ||
+              'Automation execution failed',
           })
 
-        if (runInsertError) {
-          console.error(
-            `[automation-run] Failed to record run for ${automation.id}:`,
-            runInsertError
-          )
-
-          /*
-           * The automation itself succeeded.
-           * Therefore don't mark the automation execution as failed
-           * just because logging the run failed.
-           */
+          continue
         }
 
         succeeded++
 
+        createdTasks +=
+          executionResult.created
+
+        skippedTasks +=
+          executionResult.skipped
+
         results.push({
-          automation_id: automation.id,
+          automation_id:
+            automation.id,
+          automation_name:
+            automation.name,
           status: 'success',
+          processed:
+            executionResult.processed,
+          created:
+            executionResult.created,
+          skipped:
+            executionResult.skipped,
         })
       } catch (error) {
         failed++
@@ -243,43 +522,34 @@ export default async function handler(
           error
         )
 
-        // -----------------------------------------------------
-        // Record failed run.
-        // -----------------------------------------------------
-        try {
-          await supabase
-            .from('automation_runs')
-            .insert({
-              automation_id: automation.id,
-              organization_id: automation.organization_id,
-              status: 'failed',
-              started_at: new Date().toISOString(),
-              completed_at: new Date().toISOString(),
-              error_message: message.slice(0, 1000),
-            })
-        } catch (loggingError) {
-          console.error(
-            `[automation-run] Failed to record failed run for ${automation.id}:`,
-            loggingError
-          )
-        }
-
         results.push({
-          automation_id: automation.id,
+          automation_id:
+            automation.id,
+          automation_name:
+            automation.name,
           status: 'failed',
+          processed: 0,
+          created: 0,
+          skipped: 0,
           error: message,
         })
       }
     }
 
-    // ---------------------------------------------------------
-    // 10. Final response.
-    // ---------------------------------------------------------
+    // =======================================================
+    // 9. FINAL RESPONSE
+    // =======================================================
+
     return res.status(200).json({
       success: failed === 0,
-      processed: automationList.length,
+      processed:
+        automationList.length,
       succeeded,
       failed,
+      created_tasks:
+        createdTasks,
+      skipped_tasks:
+        skippedTasks,
       results,
     })
   } catch (error) {
@@ -293,48 +563,5 @@ export default async function handler(
       500,
       'Automation execution failed'
     )
-  }
-}
-
-/**
- * Executes one automation.
- *
- * IMPORTANT:
- * Replace the body of this function with the existing
- * automation execution logic from your current file.
- *
- * The security-sensitive part of this endpoint is already
- * handled above:
- *
- * - GET only
- * - mandatory CRON_SECRET
- * - exact Bearer authentication
- * - server-side Supabase service role
- * - no client access token
- * - explicit error handling
- */
-async function executeAutomation(
-  _supabase: ReturnType<typeof createClient>,
-  automation: Automation
-): Promise<{
-  success: boolean
-  error?: string
-}> {
-  /*
-   * TEMPORARY SAFE EXECUTION PLACEHOLDER.
-   *
-   * Do not leave this as the final business implementation
-   * if your original file already contains actual automation
-   * execution logic.
-   *
-   * Move that existing logic here.
-   */
-
-  console.log(
-    `[automation-run] Processing automation ${automation.id}`
-  )
-
-  return {
-    success: true,
   }
 }
