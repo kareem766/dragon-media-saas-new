@@ -1,976 +1,469 @@
-import { createClient } from '@supabase/supabase-js'
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-const MODEL = 'gemini-3.6-flash'
+const MODEL = process.env.RYAN_GEMINI_MODEL || 'gemini-3.6-flash'
+const GEMINI_TIMEOUT_MS = 25_000
+const USAGE_TIMEOUT_MS = 2_000
 
-const tools = [
-  {
-    functionDeclarations: [
-      {
-        name: 'create_lead',
-        description:
-          'إنشاء عميل محتمل جديد في نظام CRM فقط عندما يبدي العميل اهتمامًا حقيقيًا بخدمة أو منتج ولا يكون في مسار حجز موعد.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            name: {
-              type: 'STRING',
-              description: 'اسم العميل المحتمل',
-            },
-            phone: {
-              type: 'STRING',
-              description: 'رقم هاتف العميل',
-            },
-            company: {
-              type: 'STRING',
-              description: 'اسم شركة العميل إن وجد',
-            },
-            source: {
-              type: 'STRING',
-              description:
-                'مصدر التواصل، مثل واتساب أو فيسبوك أو الموقع',
-            },
-          },
-          required: ['name'],
-        },
-      },
-      {
-        name: 'create_deal',
-        description:
-          'إنشاء صفقة بيعية عندما يوافق العميل مبدئيًا على شراء خدمة أو منتج، وليس لمجرد الاستفسار أو طلب حجز.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            title: {
-              type: 'STRING',
-              description:
-                'عنوان الصفقة، مثل اسم الخدمة أو المنتج المطلوب',
-            },
-            value: {
-              type: 'NUMBER',
-              description:
-                'القيمة التقديرية للصفقة بالجنيه المصري إن ذُكرت',
-            },
-            customer_name: {
-              type: 'STRING',
-              description:
-                'اسم العميل المرتبط بالصفقة',
-            },
-          },
-          required: ['title'],
-        },
-      },
-      {
-        name: 'book_appointment',
-        description:
-          'حجز موعد فقط عندما يطلب العميل حجز موعد. لا تستخدم هذه الأداة قبل معرفة الخدمة والتاريخ والوقت.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            customer_name: {
-              type: 'STRING',
-              description: 'اسم العميل',
-            },
-            service_name: {
-              type: 'STRING',
-              description:
-                'اسم الخدمة المطلوب حجز موعد لها',
-            },
-            date: {
-              type: 'STRING',
-              description:
-                'تاريخ الموعد بصيغة YYYY-MM-DD',
-            },
-            time: {
-              type: 'STRING',
-              description:
-                'وقت الموعد بصيغة HH:MM بنظام 24 ساعة',
-            },
-          },
-          required: [
-            'service_name',
-            'date',
-            'time',
-          ],
-        },
-      },
-      {
-        name: 'request_human_handoff',
-        description:
-          'تحويل المحادثة لموظف بشري عندما يطلب العميل صراحة التحدث مع شخص حقيقي أو عندما يكون الطلب معقدًا ولا يمكن التعامل معه بثقة.',
-        parameters: {
-          type: 'OBJECT',
-          properties: {
-            customer_name: {
-              type: 'STRING',
-              description:
-                'اسم العميل إن كان معروفًا',
-            },
-            reason: {
-              type: 'STRING',
-              description:
-                'سبب طلب التحويل باختصار',
-            },
-          },
-          required: ['reason'],
-        },
-      },
-    ],
-  },
-]
+const supabaseUrl = process.env.VITE_SUPABASE_URL
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
+const geminiApiKey = process.env.GEMINI_API_KEY
 
-type FunctionResult = {
-  success: boolean
-  error?: string
-  data?: any
+type RyanIntent = 'booking' | 'handoff' | 'deal' | 'general'
+
+type RyanToolName =
+  | 'create_lead'
+  | 'create_deal'
+  | 'book_appointment'
+  | 'request_human_handoff'
+
+type GeminiPart = {
+  text?: string
+  functionCall?: {
+    name: string
+    args?: Record<string, unknown>
+  }
 }
 
-function normalizeArabicText(value: string) {
-  return String(value || '')
+type GeminiResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: GeminiPart[]
+    }
+    finishReason?: string
+  }>
+  usageMetadata?: {
+    promptTokenCount?: number
+    candidatesTokenCount?: number
+    totalTokenCount?: number
+  }
+  error?: {
+    code?: number
+    message?: string
+    status?: string
+  }
+}
+
+const TOOL_DEFINITIONS = {
+  create_lead: {
+    name: 'create_lead',
+    description:
+      'Create a sales lead only when the customer shows genuine interest in buying a service and enough information is available. Never use this for booking intent.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: {
+          type: 'STRING',
+          description: 'Customer name',
+        },
+        phone: {
+          type: 'STRING',
+          description: 'Customer phone number',
+        },
+        service: {
+          type: 'STRING',
+          description: 'Requested service',
+        },
+        activity: {
+          type: 'STRING',
+          description: 'Customer business/activity',
+        },
+        goal: {
+          type: 'STRING',
+          description: 'Customer goal',
+        },
+        notes: {
+          type: 'STRING',
+          description: 'Additional notes',
+        },
+      },
+      required: ['name'],
+    },
+  },
+
+  create_deal: {
+    name: 'create_deal',
+    description:
+      'Create a deal when the customer clearly wants to purchase or contract for a service.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: {
+          type: 'STRING',
+        },
+        phone: {
+          type: 'STRING',
+        },
+        service: {
+          type: 'STRING',
+        },
+        value: {
+          type: 'NUMBER',
+        },
+        notes: {
+          type: 'STRING',
+        },
+      },
+      required: ['name'],
+    },
+  },
+
+  book_appointment: {
+    name: 'book_appointment',
+    description:
+      'Book an appointment only after service_name, date, and time are all known. Never claim a booking succeeded unless the tool returns success.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        service_name: {
+          type: 'STRING',
+          description: 'The service the customer wants to book',
+        },
+        date: {
+          type: 'STRING',
+          description: 'Appointment date',
+        },
+        time: {
+          type: 'STRING',
+          description: 'Appointment time',
+        },
+      },
+      required: ['service_name', 'date', 'time'],
+    },
+  },
+
+  request_human_handoff: {
+    name: 'request_human_handoff',
+    description:
+      'Transfer the conversation to a human team member when the customer asks for a human or needs human assistance.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        reason: {
+          type: 'STRING',
+          description: 'Reason for handoff',
+        },
+      },
+      required: ['reason'],
+    },
+  },
+} as const
+
+const BOOKING_KEYWORDS = [
+  'احجز',
+  'حجز',
+  'حجزت',
+  'موعد',
+  'ميعاد',
+  'احجزلي',
+  'عايز احجز',
+  'حابب احجز',
+  'اريد حجز',
+  'ممكن احجز',
+  'عايز احجز موعد',
+  'حجز موعد',
+]
+
+const HANDOFF_KEYWORDS = [
+  'موظف',
+  'خدمة عملاء',
+  'حد من الفريق',
+  'اتكلم مع شخص',
+  'بني آدم',
+  'شخص حقيقي',
+  'موظف حقيقي',
+]
+
+const DEAL_KEYWORDS = [
+  'شراء',
+  'اشتري',
+  'عايز الخدمة',
+  'اتعاقد',
+  'عرض سعر',
+  'عايز أشتري',
+  'عايز اشتري',
+  'التعاقد',
+]
+
+function normalizeArabic(value: string) {
+  return value
     .toLowerCase()
     .replace(/[إأآ]/g, 'ا')
-    .replace(/ة/g, 'ه')
     .replace(/ى/g, 'ي')
-    .replace(/[ًٌٍَُِّْـ]/g, '')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
-function detectIntent(
-  currentMessage: string,
-  history: any[]
-) {
-  const recentHistory = Array.isArray(history)
-    ? history
-        .slice(-8)
-        .map((item: any) =>
-          typeof item?.parts?.[0]?.text === 'string'
-            ? item.parts[0].text
-            : typeof item?.text === 'string'
-              ? item.text
-              : ''
-        )
-        .join(' ')
-    : ''
+function containsKeyword(text: string, keywords: string[]) {
+  const normalized = normalizeArabic(text)
 
-  const text = normalizeArabicText(
-    `${recentHistory} ${currentMessage}`
+  return keywords.some((keyword) =>
+    normalized.includes(normalizeArabic(keyword)),
   )
-
-  const bookingKeywords = [
-    'احجز',
-    'حجز',
-    'احجزلي',
-    'احجز لي',
-    'موعد',
-    'ميعاد',
-    'حجز موعد',
-    'عايز احجز',
-    'عاوزه احجز',
-    'حابب احجز',
-    'اريد حجز',
-    'عايز موعد',
-    'عاوزه موعد',
-  ]
-
-  const handoffKeywords = [
-    'موظف',
-    'موظفه',
-    'خدمه عملاء',
-    'خدمة عملاء',
-    'شخص حقيقي',
-    'حد حقيقي',
-    'حد من الفريق',
-    'اتكلم مع حد',
-    'اتكلم مع شخص',
-    'كلموني',
-    'كلمني موظف',
-    'بني ادم',
-  ]
-
-  const dealKeywords = [
-    'اشتري',
-    'شراء',
-    'اتعاقد',
-    'تعاقد',
-    'عايز الخدمه',
-    'عايز الخدمة',
-    'عرض سعر',
-    'عرض سعر للخدمه',
-    'عرض سعر للخدمة',
-    'عايز ابدأ',
-    'عايز ابدأ معاكم',
-  ]
-
-  const isBooking = bookingKeywords.some(
-    keyword => text.includes(normalizeArabicText(keyword))
-  )
-
-  const isHandoff = handoffKeywords.some(
-    keyword => text.includes(normalizeArabicText(keyword))
-  )
-
-  const isDeal = dealKeywords.some(
-    keyword => text.includes(normalizeArabicText(keyword))
-  )
-
-  if (isHandoff) {
-    return 'handoff' as const
-  }
-
-  if (isBooking) {
-    return 'booking' as const
-  }
-
-  if (isDeal) {
-    return 'deal' as const
-  }
-
-  return 'general' as const
 }
 
-function getToolsForIntent(intent: ReturnType<typeof detectIntent>) {
-  if (intent === 'handoff') {
-    return [
-      {
-        functionDeclarations: [
-          tools[0].functionDeclarations[3],
-        ],
-      },
-    ]
+function detectIntent(
+  message: string,
+  history: Array<{ role?: string; text?: string; content?: string }> = [],
+): RyanIntent {
+  const recentHistory = history
+    .slice(-6)
+    .map((item) => item.text || item.content || '')
+    .join(' ')
+
+  const combined = `${recentHistory} ${message}`
+
+  // Handoff has highest priority.
+  if (containsKeyword(combined, HANDOFF_KEYWORDS)) {
+    return 'handoff'
   }
 
+  // Booking has priority over lead/deal creation.
+  if (containsKeyword(combined, BOOKING_KEYWORDS)) {
+    return 'booking'
+  }
+
+  if (containsKeyword(combined, DEAL_KEYWORDS)) {
+    return 'deal'
+  }
+
+  return 'general'
+}
+
+function getToolsForIntent(intent: RyanIntent) {
   if (intent === 'booking') {
-    return [
-      {
-        functionDeclarations: [
-          tools[0].functionDeclarations[2],
-        ],
-      },
-    ]
+    return [TOOL_DEFINITIONS.book_appointment]
+  }
+
+  if (intent === 'handoff') {
+    return [TOOL_DEFINITIONS.request_human_handoff]
   }
 
   if (intent === 'deal') {
     return [
-      {
-        functionDeclarations: [
-          tools[0].functionDeclarations[1],
-        ],
-      },
+      TOOL_DEFINITIONS.create_deal,
+      TOOL_DEFINITIONS.create_lead,
     ]
   }
 
-  return tools
+  return [
+    TOOL_DEFINITIONS.create_lead,
+    TOOL_DEFINITIONS.create_deal,
+    TOOL_DEFINITIONS.book_appointment,
+    TOOL_DEFINITIONS.request_human_handoff,
+  ]
 }
 
-async function runFunction(
-  client: any,
-  name: string,
-  args: any
-): Promise<FunctionResult> {
-  try {
-    if (name === 'create_lead') {
-      const { data, error } = await client.rpc(
-        'ai_create_lead',
-        {
-          p_name: args?.name,
-          p_phone: args?.phone || null,
-          p_company: args?.company || null,
-          p_source: args?.source || 'RYAN AI',
-        }
-      )
-
-      if (error) {
-        console.error(
-          'Ryan create_lead RPC error:',
-          error
-        )
-
-        return {
-          success: false,
-          error: error.message,
-        }
-      }
-
-      return {
-        success: true,
-        data,
-      }
-    }
-
-    if (name === 'create_deal') {
-      const { data, error } = await client.rpc(
-        'ai_create_deal',
-        {
-          p_title: args?.title,
-          p_value:
-            typeof args?.value === 'number'
-              ? args.value
-              : Number(args?.value || 0),
-          p_customer_name:
-            args?.customer_name || null,
-        }
-      )
-
-      if (error) {
-        console.error(
-          'Ryan create_deal RPC error:',
-          error
-        )
-
-        return {
-          success: false,
-          error: error.message,
-        }
-      }
-
-      return {
-        success: true,
-        data,
-      }
-    }
-
-    if (name === 'book_appointment') {
-      if (
-        !args?.service_name ||
-        !args?.date ||
-        !args?.time
-      ) {
-        return {
-          success: false,
-          error:
-            'بيانات الحجز غير مكتملة',
-        }
-      }
-
-      const { data, error } = await client.rpc(
-        'ai_book_appointment',
-        {
-          p_customer_name:
-            args?.customer_name || null,
-          p_service_name:
-            args?.service_name,
-          p_date:
-            args?.date,
-          p_time:
-            args?.time,
-        }
-      )
-
-      if (error) {
-        console.error(
-          'Ryan book_appointment RPC error:',
-          error
-        )
-
-        return {
-          success: false,
-          error: error.message,
-        }
-      }
-
-      return {
-        success: true,
-        data,
-      }
-    }
-
-    if (name === 'request_human_handoff') {
-      const { data, error } = await client.rpc(
-        'ai_request_handoff',
-        {
-          p_customer_name:
-            args?.customer_name || null,
-          p_reason:
-            args?.reason,
-        }
-      )
-
-      if (error) {
-        console.error(
-          'Ryan request_human_handoff RPC error:',
-          error
-        )
-
-        return {
-          success: false,
-          error: error.message,
-        }
-      }
-
-      return {
-        success: true,
-        data,
-      }
-    }
-
-    return {
-      success: false,
-      error: 'أداة غير معروفة',
-    }
-  } catch (error: any) {
-    console.error(
-      `Ryan tool "${name}" exception:`,
-      error
-    )
-
-    return {
-      success: false,
-      error:
-        error?.message ||
-        'حدث خطأ أثناء تنفيذ الإجراء',
-    }
+function getSupabaseAdmin() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase environment variables are missing')
   }
+
+  return createClient(
+    supabaseUrl,
+    supabaseAnonKey,
+  ) as SupabaseClient<any, 'public', any>
 }
 
-function getToolSuccessReply(
-  toolNames: string[],
-  argsList: any[]
+async function getRyanEntitlements(
+  supabase: SupabaseClient<any, 'public', any>,
+  organizationId: string,
 ) {
-  const names = new Set(toolNames)
-
-  if (names.has('request_human_handoff')) {
-    return 'تمام، حولت المحادثة للفريق المختص وهيتواصل مع حضرتك في أقرب وقت.'
-  }
-
-  if (names.has('book_appointment')) {
-    const appointmentIndex =
-      toolNames.indexOf('book_appointment')
-
-    const appointmentArgs =
-      argsList[appointmentIndex] || {}
-
-    const service =
-      appointmentArgs?.service_name
-
-    const date =
-      appointmentArgs?.date
-
-    const time =
-      appointmentArgs?.time
-
-    if (service && date && time) {
-      return `تمام، تم تسجيل حجز ${service} يوم ${date} الساعة ${time}.`
-    }
-
-    return 'تمام، تم تسجيل الموعد بنجاح.'
-  }
-
-  if (names.has('create_deal')) {
-    return 'تمام، تم تسجيل الصفقة في نظام المبيعات.'
-  }
-
-  if (names.has('create_lead')) {
-    return 'تمام، سجلت بيانات حضرتك عندنا في الـCRM.'
-  }
-
-  return 'تمام، تم تنفيذ الطلب بنجاح.'
-}
-
-function getToolFailureReply(
-  toolNames: string[],
-  errors: string[]
-) {
-  console.error(
-    'Ryan tool execution failures:',
-    {
-      toolNames,
-      errors,
-    }
-  )
-
-  if (
-    toolNames.includes(
-      'request_human_handoff'
-    )
-  ) {
-    return 'حصلت مشكلة بسيطة أثناء تحويل المحادثة للفريق المختص. حاول مرة تانية من فضلك.'
-  }
-
-  if (
-    toolNames.includes(
-      'book_appointment'
-    )
-  ) {
-    return 'حصلت مشكلة أثناء تسجيل الموعد. ممكن نحاول مرة تانية؟'
-  }
-
-  if (
-    toolNames.includes(
-      'create_deal'
-    )
-  ) {
-    return 'حصلت مشكلة أثناء تسجيل الصفقة. ممكن نحاول مرة تانية؟'
-  }
-
-  if (
-    toolNames.includes(
-      'create_lead'
-    )
-  ) {
-    return 'حصلت مشكلة أثناء تسجيل بيانات العميل. ممكن نحاول مرة تانية؟'
-  }
-
-  return 'حصلت مشكلة أثناء تنفيذ الطلب. ممكن نحاول مرة تانية؟'
-}
-
-async function getOrganization(
-  client: any,
-  userId: string
-) {
-  const { data, error } = await client
-    .from('users')
+  const { data, error } = await supabase
+    .from('subscriptions')
     .select(
-      'organization_id, full_name, email'
+      `
+        id,
+        status,
+        plan_id,
+        plans (
+          id,
+          name,
+          limits,
+          features
+        )
+      `,
     )
-    .eq('id', userId)
+    .eq('organization_id', organizationId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
 
   if (error) {
-    throw new Error(error.message)
+    console.error('Ryan entitlement error:', error)
+    return null
   }
 
-  if (!data?.organization_id) {
-    throw new Error(
-      'الحساب غير مرتبط بشركة'
-    )
+  if (!data) {
+    return null
+  }
+
+  const plan = Array.isArray(data.plans) ? data.plans[0] : data.plans
+  const limits = plan?.limits || {}
+
+  const messageLimit =
+    Number(
+      limits.ai_messages ??
+        limits.ryan_messages ??
+        limits.ai_message_limit ??
+        0,
+    ) || 0
+
+  const tokenLimit =
+    Number(
+      limits.ryan_tokens ??
+        limits.ai_tokens ??
+        limits.token_limit ??
+        0,
+    ) || 0
+
+  return {
+    subscriptionId: data.id,
+    planId: data.plan_id,
+    planName: plan?.name || null,
+    messageLimit,
+    tokenLimit,
+  }
+}
+
+async function getMonthlyUsage(
+  supabase: SupabaseClient<any, 'public', any>,
+  organizationId: string,
+) {
+  const { data, error } = await supabase.rpc('ryan_monthly_usage', {
+    p_organization_id: organizationId,
+  })
+
+  if (error) {
+    console.error('Ryan monthly usage error:', error)
+    return {
+      messages: 0,
+      tokens: 0,
+    }
+  }
+
+  const row = Array.isArray(data) ? data[0] : data
+
+  return {
+    messages: Number(row?.messages ?? row?.message_count ?? 0) || 0,
+    tokens: Number(row?.tokens ?? row?.token_count ?? 0) || 0,
+  }
+}
+
+async function recordUsage(
+  supabase: SupabaseClient<any, 'public', any>,
+  payload: {
+    organizationId: string
+    conversationId?: string | null
+    userId?: string | null
+    model: string
+    eventType: string
+    tokens?: number
+    cost?: number
+    metadata?: Record<string, unknown>
+  },
+) {
+  try {
+    const rpcPromise = supabase.rpc('record_ryan_usage', {
+      p_organization_id: payload.organizationId,
+      p_conversation_id: payload.conversationId || null,
+      p_user_id: payload.userId || null,
+      p_model: payload.model,
+      p_event_type: payload.eventType,
+      p_tokens: payload.tokens || 0,
+      p_cost: payload.cost || 0,
+      p_metadata: payload.metadata || {},
+    })
+
+    await Promise.race([
+      rpcPromise,
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Ryan usage recording timeout')),
+          USAGE_TIMEOUT_MS,
+        ),
+      ),
+    ])
+  } catch (error) {
+    console.error('Ryan usage recording error:', error)
+  }
+}
+
+function recordUsageNonBlocking(
+  supabase: SupabaseClient<any, 'public', any>,
+  payload: Parameters<typeof recordUsage>[1],
+) {
+  void recordUsage(supabase, payload).catch((error) => {
+    console.error('Ryan background usage recording error:', error)
+  })
+}
+
+async function getOrCreateCustomer(
+  supabase: SupabaseClient<any, 'public', any>,
+  organizationId: string,
+  email: string,
+  name?: string | null,
+) {
+  const { data: existing, error: lookupError } = await supabase
+    .from('customers')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('email', email)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (lookupError) {
+    throw lookupError
+  }
+
+  if (existing) {
+    return existing
+  }
+
+  const { data, error } = await supabase
+    .from('customers')
+    .insert({
+      organization_id: organizationId,
+      name: name || email.split('@')[0] || 'Website Visitor',
+      email,
+      source: 'website',
+    })
+    .select('*')
+    .single()
+
+  if (error) {
+    throw error
   }
 
   return data
 }
 
-async function getRyanEntitlements(
-  client: any,
-  organizationId: string
-) {
-  const {
-    data: subscription,
-    error: subscriptionError,
-  } = await client
-    .from('subscriptions')
-    .select(`
-      id,
-      organization_id,
-      plan,
-      status,
-      renewal_date,
-      plan_id,
-      plans (
-        id,
-        name,
-        limits,
-        status
-      )
-    `)
-    .eq(
-      'organization_id',
-      organizationId
-    )
-    .eq('status', 'active')
-    .order('renewal_date', {
-      ascending: false,
-    })
-    .limit(1)
-    .maybeSingle()
-
-  if (subscriptionError) {
-    throw new Error(
-      subscriptionError.message
-    )
-  }
-
-  const plan = subscription?.plans as
-    | {
-        id?: string
-        name?: string
-        limits?:
-          | Record<string, unknown>
-          | null
-        status?: string
-      }
-    | null
-    | undefined
-
-  const limits =
-    plan?.limits &&
-    typeof plan.limits === 'object'
-      ? plan.limits
-      : {}
-
-  const aiMessagesRaw =
-    limits.ai_messages ??
-    limits.ryan_messages ??
-    limits.ai_message_limit
-
-  const ryanTokensRaw =
-    limits.ryan_tokens ??
-    limits.ai_tokens ??
-    limits.token_limit
-
-  const aiMessages =
-    typeof aiMessagesRaw === 'number'
-      ? Math.max(
-          0,
-          Math.floor(aiMessagesRaw)
-        )
-      : null
-
-  const ryanTokens =
-    typeof ryanTokensRaw === 'number'
-      ? Math.max(
-          0,
-          Math.floor(ryanTokensRaw)
-        )
-      : null
-
-  return {
-    subscriptionId:
-      subscription?.id || null,
-
-    planId:
-      plan?.id ||
-      subscription?.plan_id ||
-      null,
-
-    planName:
-      plan?.name ||
-      subscription?.plan ||
-      'الخطة الحالية',
-
-    aiMessages,
-    ryanTokens,
-
-    renewalDate:
-      subscription?.renewal_date ||
-      null,
-  }
-}
-
-async function getMonthlyUsage(
-  client: any,
-  organizationId: string
-) {
-  const {
-    data,
-    error,
-  } = await client.rpc(
-    'ryan_monthly_usage',
-    {
-      p_organization_id:
-        organizationId,
-    }
-  )
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  const row = Array.isArray(data)
-    ? data[0]
-    : data
-
-  return {
-    inputTokens: Number(
-      row?.input_tokens || 0
-    ),
-
-    outputTokens: Number(
-      row?.output_tokens || 0
-    ),
-
-    totalTokens: Number(
-      row?.total_tokens || 0
-    ),
-
-    estimatedCost: Number(
-      row?.estimated_cost || 0
-    ),
-
-    messageCount: Number(
-      row?.message_count || 0
-    ),
-  }
-}
-
-async function recordUsage(
-  client: any,
-  params: {
-    organizationId: string
-    conversationId?: string | null
-    userId?: string | null
-    eventType?:
-      | 'message'
-      | 'tool_call'
-      | 'error'
-    inputTokens?: number
-    outputTokens?: number
-    estimatedCost?: number
-    metadata?: Record<
-      string,
-      unknown
-    >
-  }
-) {
-  const {
-    organizationId,
-    conversationId = null,
-    userId = null,
-    eventType = 'message',
-    inputTokens = 0,
-    outputTokens = 0,
-    estimatedCost = 0,
-    metadata = {},
-  } = params
-
-  const { error } =
-    await client.rpc(
-      'record_ryan_usage',
-      {
-        p_organization_id:
-          organizationId,
-
-        p_conversation_id:
-          conversationId,
-
-        p_user_id:
-          userId,
-
-        p_model:
-          MODEL,
-
-        p_event_type:
-          eventType,
-
-        p_input_tokens:
-          Math.max(
-            0,
-            Math.floor(
-              Number(
-                inputTokens
-              ) || 0
-            )
-          ),
-
-        p_output_tokens:
-          Math.max(
-            0,
-            Math.floor(
-              Number(
-                outputTokens
-              ) || 0
-            )
-          ),
-
-        p_estimated_cost:
-          Math.max(
-            0,
-            Number(
-              estimatedCost
-            ) || 0
-          ),
-
-        p_metadata:
-          metadata,
-      }
-    )
-
-  if (error) {
-    console.error(
-      'Ryan usage recording error:',
-      error
-    )
-  }
-}
-
-function getUsageMetadata(
-  data: any
-) {
-  const usage =
-    data?.usageMetadata || {}
-
-  return {
-    inputTokens: Number(
-      usage.promptTokenCount ||
-        usage.inputTokenCount ||
-        0
-    ),
-
-    outputTokens: Number(
-      usage.candidatesTokenCount ||
-        usage.outputTokenCount ||
-        0
-    ),
-
-    totalTokens: Number(
-      usage.totalTokenCount || 0
-    ),
-  }
-}
-
-function estimateCost(
-  inputTokens: number,
-  outputTokens: number
-) {
-  const inputPrice =
-    Number(
-      process.env
-        .RYAN_GEMINI_INPUT_COST_PER_1M
-    ) || 0
-
-  const outputPrice =
-    Number(
-      process.env
-        .RYAN_GEMINI_OUTPUT_COST_PER_1M
-    ) || 0
-
-  return (
-    (inputTokens /
-      1_000_000) *
-      inputPrice +
-    (outputTokens /
-      1_000_000) *
-      outputPrice
-  )
-}
-
-async function getOrCreateCustomer(
-  client: any,
-  organizationId: string,
-  user: {
-    full_name?: string | null
-    email?: string | null
-  }
-) {
-  const email =
-    user.email?.trim() || null
-
-  const name =
-    user.full_name?.trim() ||
-    user.email?.split('@')[0] ||
-    'عميل RYAN'
-
-  if (email) {
-    const {
-      data: existing,
-      error: lookupError,
-    } = await client
-      .from('customers')
-      .select(
-        'id, name, company, phone, email'
-      )
-      .eq(
-        'organization_id',
-        organizationId
-      )
-      .eq(
-        'email',
-        email
-      )
-      .limit(1)
-      .maybeSingle()
-
-    if (lookupError) {
-      throw new Error(
-        lookupError.message
-      )
-    }
-
-    if (existing) {
-      return existing
-    }
-  }
-
-  const {
-    data: created,
-    error: createError,
-  } = await client
-    .from('customers')
-    .insert({
-      organization_id:
-        organizationId,
-
-      name,
-
-      email,
-
-      source: 'RYAN AI',
-
-      notes:
-        'تم إنشاء العميل تلقائيًا من محادثة RYAN.',
-    })
-    .select(
-      'id, name, company, phone, email'
-    )
-    .single()
-
-  if (createError) {
-    throw new Error(
-      createError.message
-    )
-  }
-
-  return created
-}
-
 async function getOrCreateConversation(
-  client: any,
+  supabase: SupabaseClient<any, 'public', any>,
   organizationId: string,
   customerId: string,
-  conversationId?: string | null
+  conversationId?: string | null,
 ) {
-  /*
-   * مهم جدًا:
-   *
-   * إذا أرسل الـFrontend conversationId
-   * نحاول استرجاع نفس المحادثة.
-   *
-   * إذا لم يرسل conversationId فهذا يعني
-   * أن المستخدم ضغط "محادثة جديدة".
-   *
-   * في هذه الحالة ممنوع البحث عن آخر محادثة
-   * وإعادة استخدامها.
-   */
+  // IMPORTANT:
+  // If a conversationId exists, restore that exact conversation.
+  // If it does not exist, ALWAYS create a new conversation.
+  // Never silently reuse the latest open conversation.
+
   if (conversationId) {
-    const {
-      data,
-      error,
-    } = await client
+    const { data, error } = await supabase
       .from('conversations')
-      .select(`
-        id,
-        organization_id,
-        customer_id,
-        channel,
-        handled_by,
-        assigned_user_id,
-        last_message_at,
-        created_at,
-        status,
-        subject,
-        unread_count,
-        metadata,
-        updated_at
-      `)
-      .eq(
-        'id',
-        conversationId
-      )
-      .eq(
-        'organization_id',
-        organizationId
-      )
-      .eq(
-        'customer_id',
-        customerId
-      )
-      .eq(
-        'channel',
-        'website'
-      )
+      .select('*')
+      .eq('id', conversationId)
+      .eq('organization_id', organizationId)
+      .eq('customer_id', customerId)
+      .eq('channel', 'website')
       .maybeSingle()
 
     if (error) {
-      throw new Error(
-        error.message
-      )
+      throw error
     }
 
     if (data) {
@@ -978,1241 +471,832 @@ async function getOrCreateConversation(
     }
   }
 
-  /*
-   * لا نبحث عن آخر Conversation هنا.
-   *
-   * كل request بدون conversationId
-   * = Conversation جديدة.
-   */
-  const {
-    data: created,
-    error: createError,
-  } = await client
+  const { data, error } = await supabase
     .from('conversations')
     .insert({
-      organization_id:
-        organizationId,
-
-      customer_id:
-        customerId,
-
-      channel:
-        'website',
-
-      handled_by:
-        'ai',
-
-      status:
-        'open',
-
-      subject:
-        'محادثة RYAN AI',
-
-      unread_count:
-        0,
-
-      metadata: {
-        source:
-          'ryan',
-
-        interface:
-          'ryan-dashboard',
-      },
+      organization_id: organizationId,
+      customer_id: customerId,
+      channel: 'website',
+      status: 'open',
+      handled_by: 'ai',
     })
-    .select(`
-      id,
-      organization_id,
-      customer_id,
-      channel,
-      handled_by,
-      assigned_user_id,
-      last_message_at,
-      created_at,
-      status,
-      subject,
-      unread_count,
-      metadata,
-      updated_at
-    `)
-    .single()
-
-  if (createError) {
-    throw new Error(
-      createError.message
-    )
-  }
-
-  return created
-}
-
-async function insertMessage(
-  client: any,
-  conversationId: string,
-  senderType:
-    | 'customer'
-    | 'ai',
-  content: string,
-  metadata: Record<
-    string,
-    unknown
-  > = {}
-) {
-  const {
-    data,
-    error,
-  } = await client
-    .from('messages')
-    .insert({
-      conversation_id:
-        conversationId,
-
-      sender_type:
-        senderType,
-
-      content,
-
-      metadata,
-    })
-    .select(`
-      id,
-      conversation_id,
-      sender_type,
-      content,
-      created_at,
-      metadata,
-      read_at,
-      delivered_at,
-      external_id
-    `)
+    .select('*')
     .single()
 
   if (error) {
-    throw new Error(
-      error.message
-    )
+    throw error
   }
 
   return data
 }
 
-export default async function handler(
-  req: any,
-  res: any
+async function runFunction(
+  supabase: SupabaseClient<any, 'public', any>,
+  functionName: RyanToolName,
+  args: Record<string, unknown>,
+  organizationId: string,
+  conversationId: string,
+  userId: string,
 ) {
-  if (req.method !== 'POST') {
-    res.status(405).json({
-      error:
-        'الطريقة غير مسموحة',
+  if (functionName === 'create_lead') {
+    const { data, error } = await supabase.rpc('ai_create_lead', {
+      p_organization_id: organizationId,
+      p_conversation_id: conversationId,
+      p_name: String(args.name || ''),
+      p_phone: args.phone ? String(args.phone) : null,
+      p_service: args.service ? String(args.service) : null,
+      p_activity: args.activity ? String(args.activity) : null,
+      p_goal: args.goal ? String(args.goal) : null,
+      p_notes: args.notes ? String(args.notes) : null,
+      p_created_by: userId,
     })
 
-    return
+    if (error) {
+      throw error
+    }
+
+    return {
+      success: true,
+      type: 'lead',
+      data,
+    }
   }
 
-  const apiKey =
-    process.env.GEMINI_API_KEY
-
-  const supabaseUrl =
-    process.env.VITE_SUPABASE_URL
-
-  const supabaseAnonKey =
-    process.env.VITE_SUPABASE_ANON_KEY
-
-  if (
-    !apiKey ||
-    !supabaseUrl ||
-    !supabaseAnonKey
-  ) {
-    res.status(500).json({
-      error:
-        'الإعدادات غير مكتملة على السيرفر',
+  if (functionName === 'create_deal') {
+    const { data, error } = await supabase.rpc('ai_create_deal', {
+      p_organization_id: organizationId,
+      p_conversation_id: conversationId,
+      p_name: String(args.name || ''),
+      p_phone: args.phone ? String(args.phone) : null,
+      p_service: args.service ? String(args.service) : null,
+      p_value: Number(args.value || 0),
+      p_notes: args.notes ? String(args.notes) : null,
+      p_created_by: userId,
     })
 
-    return
+    if (error) {
+      throw error
+    }
+
+    return {
+      success: true,
+      type: 'deal',
+      data,
+    }
+  }
+
+  if (functionName === 'book_appointment') {
+    const serviceName = String(args.service_name || '').trim()
+    const date = String(args.date || '').trim()
+    const time = String(args.time || '').trim()
+
+    if (!serviceName || !date || !time) {
+      return {
+        success: false,
+        type: 'booking',
+        error: 'Missing service_name, date, or time',
+      }
+    }
+
+    const { data, error } = await supabase.rpc('ai_book_appointment', {
+      p_organization_id: organizationId,
+      p_conversation_id: conversationId,
+      p_service_name: serviceName,
+      p_date: date,
+      p_time: time,
+      p_created_by: userId,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return {
+      success: true,
+      type: 'booking',
+      data,
+    }
+  }
+
+  if (functionName === 'request_human_handoff') {
+    const { data, error } = await supabase.rpc('ai_request_handoff', {
+      p_organization_id: organizationId,
+      p_conversation_id: conversationId,
+      p_reason: String(args.reason || 'Customer requested human assistance'),
+      p_requested_by: userId,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return {
+      success: true,
+      type: 'handoff',
+      data,
+    }
+  }
+
+  throw new Error(`Unsupported Ryan function: ${functionName}`)
+}
+
+async function fetchGemini(
+  url: string,
+  body: Record<string, unknown>,
+) {
+  const controller = new AbortController()
+
+  const timeout = setTimeout(() => {
+    controller.abort()
+  }, GEMINI_TIMEOUT_MS)
+
+  try {
+    return await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': geminiApiKey || '',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function parseResponseBody(response: Response): Promise<GeminiResponse> {
+  const text = await response.text()
+
+  if (!text) {
+    return {}
+  }
+
+  try {
+    return JSON.parse(text) as GeminiResponse
+  } catch {
+    return {
+      error: {
+        message: text,
+      },
+    }
+  }
+}
+
+function getGeminiErrorMessage(
+  status: number,
+  body: GeminiResponse,
+) {
+  const message =
+    body?.error?.message ||
+    `Gemini request failed with status ${status}`
+
+  if (status === 401 || status === 403) {
+    return 'مفتاح محرك الذكاء الاصطناعي غير صالح أو غير مصرح به.'
+  }
+
+  if (status === 404) {
+    return 'موديل الذكاء الاصطناعي غير متاح حاليًا.'
+  }
+
+  if (status === 429) {
+    return 'تم الوصول إلى حد استخدام محرك الذكاء الاصطناعي. حاول مرة أخرى بعد قليل.'
+  }
+
+  if (status >= 500) {
+    return 'محرك الذكاء الاصطناعي غير متاح مؤقتًا. حاول مرة أخرى.'
+  }
+
+  console.error('Gemini detailed error:', message)
+
+  return 'تعذر معالجة الرسالة حاليًا.'
+}
+
+function buildSystemPrompt(
+  companyName: string,
+  knowledge: Array<Record<string, unknown>>,
+) {
+  const knowledgeText = knowledge
+    .map((item) => {
+      const title = String(item.title || '')
+      const content = String(
+        item.content || item.body || item.text || '',
+      )
+
+      return `${title}: ${content}`
+    })
+    .filter(Boolean)
+    .join('\n')
+
+  return `
+أنت Ryan، موظف مبيعات وخدمة عملاء حقيقي داخل شركة ${companyName || 'الشركة'}.
+
+تحدث باللهجة المصرية بطريقة طبيعية ومهنية ومحترمة.
+
+القواعد الأساسية:
+- رد قصير ومباشر.
+- غالبًا جملة واحدة أو جملتين فقط.
+- لا تستخدم إيموجي.
+- اسأل سؤالًا واحدًا فقط في كل رسالة.
+- لا تكرر مقدمة المحادثة.
+- لا تقل إنك ذكاء اصطناعي إلا إذا سُئلت مباشرة.
+- لا تستخدم "يافندم" أو "أستاذ" بشكل مبالغ فيه.
+- لا تخترع أسعارًا أو خدمات أو مواعيد غير موجودة.
+- لا تدّعي تنفيذ أي عملية إلا إذا نجحت الأداة فعلًا.
+
+أولوية الحجز:
+إذا كان العميل يريد حجز موعد، فالحجز أهم من إنشاء Lead أو Deal.
+لا تستخدم create_lead لمجرد أن العميل ذكر اسمه أو رقم هاتفه.
+في حالة الحجز اجمع البيانات الناقصة بالترتيب، سؤال واحد في كل مرة:
+1. الخدمة
+2. التاريخ
+3. الوقت
+
+لا تستدعي book_appointment إلا عندما تكون service_name و date و time موجودة بالفعل.
+بعد نجاح الحجز فقط أخبر العميل أن الحجز تم.
+
+إذا طلب العميل التحدث مع موظف حقيقي، استخدم request_human_handoff.
+
+إذا أظهر العميل نية شراء أو تعاقد واضحة، يمكن استخدام create_deal.
+إذا كان مجرد استفسار أو اهتمام عادي، لا تنشئ Lead تلقائيًا بدون سبب واضح.
+
+معلومات الشركة/قاعدة المعرفة:
+${knowledgeText || 'لا توجد معلومات إضافية متاحة حاليًا.'}
+`
+}
+
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse,
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      error: 'Method not allowed',
+    })
+  }
+
+  if (!supabaseUrl || !supabaseAnonKey || !geminiApiKey) {
+    return res.status(500).json({
+      error: 'Ryan configuration is incomplete',
+    })
   }
 
   const {
     message,
-    history,
-    companyName,
+    history = [],
+    companyName = '',
     accessToken,
-    conversationId,
+    conversationId = null,
   } = req.body || {}
 
-  if (
-    !message ||
-    typeof message !== 'string'
-  ) {
-    res.status(400).json({
-      error:
-        'الرسالة مطلوبة',
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({
+      error: 'Message is required',
     })
-
-    return
-  }
-
-  const trimmedMessage =
-    message.trim()
-
-  if (!trimmedMessage) {
-    res.status(400).json({
-      error:
-        'الرسالة لا يمكن أن تكون فارغة',
-    })
-
-    return
   }
 
   if (!accessToken) {
-    res.status(401).json({
-      error:
-        'يجب تسجيل الدخول',
+    return res.status(401).json({
+      error: 'Authentication required',
     })
-
-    return
   }
 
-  const client = createClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      global: {
-        headers: {
-          Authorization:
-            `Bearer ${accessToken}`,
-        },
-      },
-    }
-  )
-
-  let organizationId = ''
-
-  let currentConversationId:
-    | string
-    | null = null
+  const supabase = getSupabaseAdmin()
 
   try {
-    const {
-      data: authData,
-      error: authError,
-    } =
-      await client.auth.getUser()
-
-    if (
-      authError ||
-      !authData?.user
-    ) {
-      res.status(401).json({
-        error:
-          'جلسة الدخول غير صالحة',
-      })
-
-      return
-    }
-
-    const dbUser =
-      await getOrganization(
-        client,
-        authData.user.id
-      )
-
-    if (
-      !dbUser?.organization_id
-    ) {
-      res.status(403).json({
-        error:
-          'لا توجد شركة مرتبطة بهذا المستخدم',
-      })
-
-      return
-    }
-
-    organizationId =
-      dbUser.organization_id as string
-
-    const entitlements =
-      await getRyanEntitlements(
-        client,
-        organizationId
-      )
-
-    const usage =
-      await getMonthlyUsage(
-        client,
-        organizationId
-      )
-
-    if (
-      entitlements.aiMessages !== null &&
-      usage.messageCount >=
-        entitlements.aiMessages
-    ) {
-      res.status(429).json({
-        error:
-          'تم الوصول إلى الحد الشهري لاستخدام Ryan في خطتك الحالية.',
-
-        code:
-          'RYAN_MONTHLY_MESSAGE_LIMIT',
-
-        plan:
-          entitlements.planName,
-
-        limit:
-          entitlements.aiMessages,
-
-        used:
-          usage.messageCount,
-
-        conversationId:
-          conversationId || null,
-      })
-
-      return
-    }
-
-    if (
-      entitlements.ryanTokens !== null &&
-      usage.totalTokens >=
-        entitlements.ryanTokens
-    ) {
-      res.status(429).json({
-        error:
-          'تم الوصول إلى الحد الشهري لاستخدام Tokens الخاص بـ Ryan في خطتك الحالية.',
-
-        code:
-          'RYAN_MONTHLY_TOKEN_LIMIT',
-
-        plan:
-          entitlements.planName,
-
-        limit:
-          entitlements.ryanTokens,
-
-        used:
-          usage.totalTokens,
-
-        conversationId:
-          conversationId || null,
-      })
-
-      return
-    }
-
-    const customer =
-      await getOrCreateCustomer(
-        client,
-        organizationId,
-        {
-          full_name:
-            dbUser.full_name ||
-            authData.user
-              .user_metadata
-              ?.full_name ||
-            null,
-
-          email:
-            dbUser.email ||
-            authData.user.email ||
-            null,
-        }
-      )
-
-    const conversation =
-      await getOrCreateConversation(
-        client,
-        organizationId,
-        customer.id,
-        conversationId
-      )
-
-    currentConversationId =
-      conversation.id
-
-    if (
-      conversation.handled_by ===
-      'human'
-    ) {
-      res.status(409).json({
-        error:
-          'تم تحويل هذه المحادثة إلى موظف بشري بالفعل.',
-
-        conversationId:
-          conversation.id,
-
-        handoff:
-          true,
-      })
-
-      return
-    }
-
-    await insertMessage(
-      client,
-      conversation.id,
-      'customer',
-      trimmedMessage,
-      {
-        source:
-          'ryan-dashboard',
-
-        user_id:
-          authData.user.id,
-      }
+    const client = createClient(
+      supabaseUrl,
+      supabaseAnonKey,
     )
 
-    let knowledgeText = ''
-
     const {
-      data: kb,
-    } =
-      await client
-        .from(
-          'knowledge_base'
-        )
-        .select(
-          'title, content'
-        )
-        .limit(15)
+      data: {
+        user,
+      },
+      error: authError,
+    } = await client.auth.getUser(accessToken)
 
-    if (
-      kb &&
-      kb.length > 0
-    ) {
-      knowledgeText =
-        '\n\nمعلومات عن الشركة يجب استخدامها عند الرد. لا تخترع معلومات غير موجودة فيها:\n' +
-        kb
-          .map(
-            (item: any) =>
-              `- ${item.title}: ${item.content}`
-          )
-          .join('\n')
+    if (authError || !user) {
+      return res.status(401).json({
+        error: 'جلسة المستخدم غير صالحة.',
+      })
     }
 
-    const today =
-      new Date()
-        .toISOString()
-        .slice(0, 10)
+    const { data: userRecord, error: userError } = await supabase
+      .from('users')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle()
 
-    const detectedIntent =
-      detectIntent(
-        trimmedMessage,
-        history
+    if (userError || !userRecord?.organization_id) {
+      return res.status(403).json({
+        error: 'لم يتم العثور على الشركة الخاصة بالحساب.',
+      })
+    }
+
+    const organizationId = userRecord.organization_id
+
+    const intent = detectIntent(message, history)
+
+    const [entitlements, usage] = await Promise.all([
+      getRyanEntitlements(supabase, organizationId),
+      getMonthlyUsage(supabase, organizationId),
+    ])
+
+    if (
+      entitlements?.messageLimit &&
+      usage.messages >= entitlements.messageLimit
+    ) {
+      return res.status(429).json({
+        error: 'تم استهلاك حد رسائل Ryan لهذا الشهر.',
+        conversationId,
+      })
+    }
+
+    if (
+      entitlements?.tokenLimit &&
+      usage.tokens >= entitlements.tokenLimit
+    ) {
+      return res.status(429).json({
+        error: 'تم استهلاك حد Ryan الشهري.',
+        conversationId,
+      })
+    }
+
+    const customer = await getOrCreateCustomer(
+      supabase,
+      organizationId,
+      user.email || `user-${user.id}@website.local`,
+      user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        null,
+    )
+
+    const conversation = await getOrCreateConversation(
+      supabase,
+      organizationId,
+      customer.id,
+      conversationId,
+    )
+
+    if (conversation.handled_by === 'human') {
+      return res.status(200).json({
+        reply: 'المحادثة حاليًا مع أحد أفراد الفريق وسيتم الرد عليك قريبًا.',
+        conversationId: conversation.id,
+        handoff: true,
+      })
+    }
+
+    const { error: customerMessageError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversation.id,
+        organization_id: organizationId,
+        sender_type: 'customer',
+        sender_id: customer.id,
+        content: message,
+      })
+
+    if (customerMessageError) {
+      console.error(
+        'Ryan customer message error:',
+        customerMessageError,
       )
+    }
 
-    const allowedTools =
-      getToolsForIntent(
-        detectedIntent
+    const { data: knowledgeRows, error: knowledgeError } = await supabase
+      .from('knowledge_base')
+      .select('*')
+      .limit(15)
+
+    if (knowledgeError) {
+      console.error(
+        'Ryan knowledge base error:',
+        knowledgeError,
       )
+    }
 
-    const intentInstruction =
-      detectedIntent === 'booking'
-        ? `
-مهم جدًا: العميل في مسار حجز.
-لا تستخدم create_lead إطلاقًا في هذا المسار.
-لا تستخدم create_deal لهذا الطلب.
-استخدم book_appointment فقط بعد معرفة:
-1. اسم الخدمة
-2. التاريخ
-3. الوقت
-إذا كانت أي معلومة ناقصة، اسأل عن معلومة واحدة فقط في كل رسالة.
-`
-        : detectedIntent === 'handoff'
-          ? `
-مهم: العميل يريد موظفًا بشريًا.
-استخدم request_human_handoff ولا تحاول تسجيل Lead أو Deal.
-`
-          : detectedIntent === 'deal'
-            ? `
-العميل يبدو في مسار شراء.
-استخدم create_deal فقط إذا كان هناك موافقة مبدئية حقيقية على شراء الخدمة.
-`
-            : `
-لا تنشئ Lead لمجرد أن العميل ذكر اسمه أو رقم هاتفه.
-أنشئ Lead فقط عند وجود اهتمام تجاري واضح.
-`
+    const systemPrompt = buildSystemPrompt(
+      companyName,
+      knowledgeRows || [],
+    )
 
-    const systemPrompt = `
-أنت "ريان"، موظف مبيعات وخدمة عملاء ذكي يعمل داخل نظام إدارة العملاء لصالح شركة ${
-      companyName ||
-      'الشركة'
-    }.
+    const safeHistory = Array.isArray(history)
+      ? history.slice(-12)
+      : []
 
-تتحدث باللهجة المصرية العامية بأسلوب ودود ومحترف.
-
-قواعد أسلوبك:
-- خاطب العميل بـ"حضرتك" أو "أستاذ/أستاذة" عند الحاجة.
-- لا تستخدم "يافندم + اسم".
-- لا تكرر تعريف نفسك في كل رسالة.
-- اجعل الرد قصيرًا وطبيعيًا، غالبًا جملة واحدة أو جملتين.
-- لا تستخدم emojis.
-- اسأل سؤالًا واحدًا فقط في كل مرة.
-- لا ترسل قوائم طويلة إلا إذا طلب العميل ذلك.
-- تعامل كموظف مبيعات حقيقي وليس كروبوت.
-- لا تخترع أسعارًا أو خدمات أو مواعيد أو وعودًا غير موجودة في قاعدة المعرفة.
-- لا تقل إن أي إجراء تم تنفيذه إلا بعد نجاح الأداة فعلًا.
-
-النهاردة تاريخ ${today}.
-
-${intentInstruction}
-
-عند وجود اهتمام تجاري واضح بخدمة أو منتج:
-استخدم create_lead إذا لم يكن العميل في مسار حجز أو تحويل لموظف.
-
-عند الموافقة المبدئية على شراء خدمة أو منتج:
-استخدم create_deal.
-
-عند طلب حجز موعد:
-book_appointment لها الأولوية على create_lead وcreate_deal.
-
-عند طلب التحدث مع موظف بشري:
-استخدم request_human_handoff فورًا.
-بعد تنفيذ التحويل، أخبر العميل باختصار أن فريقًا حقيقيًا سيتواصل معه، ولا تحاول مواصلة البيع.
-
-لا تطلب إذنًا قبل استخدام الأدوات.
-${knowledgeText}
-`
-
-    const safeHistory =
-      Array.isArray(history)
-        ? history.slice(-20)
-        : []
-
-    const contents: any[] = [
+    const contents = [
       {
-        role:
-          'user',
-
+        role: 'user',
         parts: [
           {
-            text:
-              systemPrompt,
+            text: systemPrompt,
           },
         ],
       },
-
       {
-        role:
-          'model',
-
+        role: 'model',
         parts: [
           {
-            text:
-              'تمام، فاهم دوري وقواعد المحادثة.',
+            text: 'تمام، هساعد العميل بشكل مختصر وطبيعي.',
           },
         ],
       },
+      ...safeHistory
+        .map((item: any) => {
+          const text =
+            item?.text ||
+            item?.content ||
+            ''
 
-      ...safeHistory,
+          if (!text) {
+            return null
+          }
 
+          return {
+            role:
+              item?.role === 'assistant' ||
+              item?.sender === 'model'
+                ? 'model'
+                : 'user',
+            parts: [
+              {
+                text: String(text),
+              },
+            ],
+          }
+        })
+        .filter(Boolean),
       {
-        role:
-          'user',
-
+        role: 'user',
         parts: [
           {
-            text:
-              trimmedMessage,
+            text: message,
           },
         ],
       },
     ]
 
+    const allowedTools = getToolsForIntent(intent)
+
     const geminiUrl =
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
-    const response =
-      await fetch(
-        geminiUrl,
-        {
-          method:
-            'POST',
+    let response: Response
 
-          headers: {
-            'Content-Type':
-              'application/json',
+    try {
+      response = await fetchGemini(geminiUrl, {
+        contents,
+        tools: [
+          {
+            functionDeclarations: allowedTools,
           },
+        ],
+        generationConfig: {
+          maxOutputTokens: 256,
+        },
+      })
+    } catch (error: any) {
+      const isAbort =
+        error?.name === 'AbortError' ||
+        String(error?.message || '')
+          .toLowerCase()
+          .includes('abort')
 
-          body:
-            JSON.stringify({
-              contents,
-
-              /*
-               * Intent routing:
-               * booking لا يرى create_lead أصلًا.
-               */
-              tools:
-                allowedTools,
-            }),
-        }
-      )
-
-    const data =
-      await response.json()
-
-    if (!response.ok) {
-      const usageMetadata =
-        getUsageMetadata(
-          data
-        )
-
-      await recordUsage(
-        client,
-        {
-          organizationId,
-
-          conversationId:
-            conversation.id,
-
-          userId:
-            authData.user.id,
-
-          eventType:
-            'error',
-
-          inputTokens:
-            usageMetadata.inputTokens,
-
-          outputTokens:
-            usageMetadata.outputTokens,
-
-          estimatedCost:
-            estimateCost(
-              usageMetadata.inputTokens,
-              usageMetadata.outputTokens
-            ),
-
-          metadata: {
-            stage:
-              'initial_gemini_request',
-
-            status:
-              response.status,
-
-            intent:
-              detectedIntent,
-          },
-        }
-      )
-
-      res.status(502).json({
-        error:
-          'تعذر الاتصال بمحرك الذكاء الاصطناعي',
-
-        conversationId:
-          conversation.id,
+      console.error('Ryan Gemini fetch error:', {
+        error: error?.message,
+        name: error?.name,
+        model: MODEL,
+        organizationId,
+        conversationId: conversation.id,
+        intent,
       })
 
-      return
+      recordUsageNonBlocking(supabase, {
+        organizationId,
+        conversationId: conversation.id,
+        userId: user.id,
+        model: MODEL,
+        eventType: 'error',
+        metadata: {
+          source: 'gemini_fetch',
+          timeout: isAbort,
+        },
+      })
+
+      return res.status(504).json({
+        error: isAbort
+          ? 'محرك الذكاء الاصطناعي استغرق وقتًا أطول من المتوقع. حاول مرة أخرى.'
+          : 'تعذر الاتصال بمحرك الذكاء الاصطناعي.',
+        conversationId: conversation.id,
+      })
     }
 
-    let totalInputTokens = 0
-    let totalOutputTokens = 0
-    let totalEstimatedCost = 0
+    const body = await parseResponseBody(response)
 
-    const firstUsage =
-      getUsageMetadata(
-        data
-      )
+    if (!response.ok) {
+      console.error('Ryan Gemini API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        model: MODEL,
+        organizationId,
+        conversationId: conversation.id,
+        intent,
+        body,
+      })
 
-    totalInputTokens +=
-      firstUsage.inputTokens
+      recordUsageNonBlocking(supabase, {
+        organizationId,
+        conversationId: conversation.id,
+        userId: user.id,
+        model: MODEL,
+        eventType: 'error',
+        metadata: {
+          source: 'gemini_api',
+          status: response.status,
+          statusText: response.statusText,
+          error: body?.error || null,
+        },
+      })
 
-    totalOutputTokens +=
-      firstUsage.outputTokens
+      return res.status(
+        response.status >= 500 ? 502 : response.status,
+      ).json({
+        error: getGeminiErrorMessage(
+          response.status,
+          body,
+        ),
+        conversationId: conversation.id,
+      })
+    }
 
-    totalEstimatedCost +=
-      estimateCost(
-        firstUsage.inputTokens,
-        firstUsage.outputTokens
+    const usageMetadata = body.usageMetadata || {}
+
+    const promptTokens =
+      Number(usageMetadata.promptTokenCount || 0)
+
+    const outputTokens =
+      Number(usageMetadata.candidatesTokenCount || 0)
+
+    const totalTokens =
+      Number(
+        usageMetadata.totalTokenCount ||
+          promptTokens + outputTokens,
       )
 
     const parts =
-      data?.candidates?.[0]
-        ?.content?.parts || []
+      body.candidates?.[0]?.content?.parts || []
 
-    const functionCallParts =
-      parts.filter(
-        (part: any) =>
-          part?.functionCall?.name
-      )
+    const functionCalls = parts
+      .map((part) => part.functionCall)
+      .filter(Boolean) as Array<{
+      name: string
+      args?: Record<string, unknown>
+    }>
 
-    let actionTaken:
-      | string
-      | null = null
+    const allowedToolNames = new Set(
+      allowedTools.map((tool) => tool.name),
+    )
 
-    const successfulTools: string[] = []
-    const failedTools: string[] = []
-    const toolErrors: string[] = []
-    const toolArgs: any[] = []
+    const validFunctionCalls = functionCalls.filter(
+      (call) => allowedToolNames.has(call.name as RyanToolName),
+    )
 
-    if (
-      functionCallParts.length > 0
-    ) {
-      for (
-        const functionCallPart of
-          functionCallParts
-      ) {
-        const functionCall =
-          functionCallPart.functionCall
+    if (validFunctionCalls.length > 0) {
+      const successfulToolResults: Array<{
+        name: RyanToolName
+        result: any
+      }> = []
 
-        const name =
-          functionCall?.name
+      for (const call of validFunctionCalls) {
+        const functionName = call.name as RyanToolName
+        const args = call.args || {}
 
-        const args =
-          functionCall?.args || {}
-
-        if (!name) {
-          continue
-        }
-
-        /*
-         * حماية إضافية:
-         * حتى لو Gemini حاول استدعاء Tool
-         * غير مسموح بها لهذا الـintent، نرفضها.
-         */
-        const allowedFunctionNames =
-          allowedTools.flatMap(
-            (tool: any) =>
-              tool.functionDeclarations.map(
-                (declaration: any) =>
-                  declaration.name
-              )
-          )
-
-        if (
-          !allowedFunctionNames.includes(
-            name
-          )
-        ) {
-          console.warn(
-            'Ryan blocked invalid tool for detected intent:',
-            {
-              intent:
-                detectedIntent,
-              tool:
-                name,
-            }
-          )
-
-          continue
-        }
-
-        toolArgs.push(args)
-
-        await recordUsage(
-          client,
-          {
-            organizationId,
-
-            conversationId:
-              conversation.id,
-
-            userId:
-              authData.user.id,
-
-            eventType:
-              'tool_call',
-
-            metadata: {
-              tool:
-                name,
-
-              intent:
-                detectedIntent,
-
-              args,
-            },
-          }
-        )
-
-        const result =
-          await runFunction(
-            client,
-            name,
-            args
-          )
-
-        if (result.success) {
-          successfulTools.push(
-            name
-          )
-
-          actionTaken =
-            actionTaken
-              ? `${actionTaken},${name}`
-              : name
-
-          if (
-            name ===
-            'request_human_handoff'
-          ) {
-            const {
-              error:
-                handoffUpdateError,
-            } =
-              await client
-                .from(
-                  'conversations'
-                )
-                .update({
-                  handled_by:
-                    'human',
-
-                  status:
-                    'pending',
-
-                  metadata: {
-                    ...(conversation.metadata &&
-                    typeof conversation.metadata ===
-                      'object'
-                      ? conversation.metadata
-                      : {}),
-
-                    handoff:
-                      true,
-
-                    handoff_reason:
-                      args?.reason ||
-                      null,
-
-                    handoff_requested_at:
-                      new Date().toISOString(),
-                  },
-                })
-                .eq(
-                  'id',
-                  conversation.id
-                )
-                .eq(
-                  'organization_id',
-                  organizationId
-                )
-
-            if (
-              handoffUpdateError
-            ) {
-              console.error(
-                'Ryan handoff update error:',
-                handoffUpdateError
-              )
-            }
-          }
-        } else {
-          failedTools.push(
-            name
-          )
-
-          toolErrors.push(
-            result.error ||
-              'فشل تنفيذ الأداة'
-          )
-        }
-      }
-
-      if (
-        successfulTools.length > 0 &&
-        failedTools.length === 0
-      ) {
-        const reply =
-          getToolSuccessReply(
-            successfulTools,
-            toolArgs
-          )
-
-        await recordUsage(
-          client,
-          {
-            organizationId,
-
-            conversationId:
-              conversation.id,
-
-            userId:
-              authData.user.id,
-
-            eventType:
-              'message',
-
-            inputTokens:
-              totalInputTokens,
-
-            outputTokens:
-              totalOutputTokens,
-
-            estimatedCost:
-              totalEstimatedCost,
-
-            metadata: {
-              action:
-                actionTaken,
-
-              intent:
-                detectedIntent,
-
-              tools:
-                successfulTools,
-
-              plan:
-                entitlements.planName,
-
-              subscription_id:
-                entitlements.subscriptionId,
-
-              plan_id:
-                entitlements.planId,
-            },
-          }
-        )
-
-        await insertMessage(
-          client,
-          conversation.id,
-          'ai',
-          reply,
-          {
-            source:
-              'ryan',
-
-            action:
-              actionTaken,
-
-            intent:
-              detectedIntent,
-
-            tool_results: {
-              successful:
-                successfulTools,
-
-              failed:
-                failedTools,
-            },
-
-            usage: {
-              input_tokens:
-                totalInputTokens,
-
-              output_tokens:
-                totalOutputTokens,
-
-              total_tokens:
-                totalInputTokens +
-                totalOutputTokens,
-
-              estimated_cost:
-                totalEstimatedCost,
-            },
-          }
-        )
-
-        res.status(200).json({
-          reply,
-
-          actionTaken,
-
-          conversationId:
-            conversation.id,
-
-          usage: {
-            inputTokens:
-              totalInputTokens,
-
-            outputTokens:
-              totalOutputTokens,
-
-            totalTokens:
-              totalInputTokens +
-              totalOutputTokens,
+        recordUsageNonBlocking(supabase, {
+          organizationId,
+          conversationId: conversation.id,
+          userId: user.id,
+          model: MODEL,
+          eventType: 'tool_call',
+          tokens: totalTokens,
+          metadata: {
+            tool: functionName,
+            intent,
           },
         })
 
-        return
-      }
-
-      if (
-        failedTools.length > 0
-      ) {
-        const reply =
-          getToolFailureReply(
-            failedTools,
-            toolErrors
+        try {
+          const result = await runFunction(
+            supabase,
+            functionName,
+            args,
+            organizationId,
+            conversation.id,
+            user.id,
           )
 
-        await recordUsage(
-          client,
-          {
+          if (result?.success) {
+            successfulToolResults.push({
+              name: functionName,
+              result,
+            })
+          }
+        } catch (error: any) {
+          console.error('Ryan tool error:', {
+            tool: functionName,
+            error: error?.message,
             organizationId,
+            conversationId: conversation.id,
+          })
+        }
+      }
 
-            conversationId:
-              conversation.id,
+      recordUsageNonBlocking(supabase, {
+        organizationId,
+        conversationId: conversation.id,
+        userId: user.id,
+        model: MODEL,
+        eventType: 'message',
+        tokens: totalTokens,
+        metadata: {
+          intent,
+          toolCalls: successfulToolResults.map(
+            (item) => item.name,
+          ),
+        },
+      })
 
-            userId:
-              authData.user.id,
-
-            eventType:
-              'error',
-
-            inputTokens:
-              totalInputTokens,
-
-            outputTokens:
-              totalOutputTokens,
-
-            estimatedCost:
-              totalEstimatedCost,
-
-            metadata: {
-              stage:
-                'tool_execution',
-
-              intent:
-                detectedIntent,
-
-              successfulTools,
-
-              failedTools,
-
-              toolErrors,
-            },
-          }
+      if (successfulToolResults.length > 0) {
+        const booking = successfulToolResults.find(
+          (item) => item.name === 'book_appointment',
         )
 
-        await insertMessage(
-          client,
-          conversation.id,
-          'ai',
-          reply,
-          {
-            source:
-              'ryan',
+        if (booking) {
+          const reply =
+            'تم تسجيل حجزك بنجاح، ونشوفك في الموعد المحدد.'
 
-            action:
-              actionTaken,
+          await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversation.id,
+              organization_id: organizationId,
+              sender_type: 'ai',
+              sender_id: user.id,
+              content: reply,
+              metadata: {
+                action_taken: 'book_appointment',
+              },
+            })
 
-            intent:
-              detectedIntent,
+          return res.status(200).json({
+            reply,
+            conversationId: conversation.id,
+            action: 'book_appointment',
+          })
+        }
 
-            tool_results: {
-              successful:
-                successfulTools,
-
-              failed:
-                failedTools,
-
-              errors:
-                toolErrors,
-            },
-          }
+        const handoff = successfulToolResults.find(
+          (item) =>
+            item.name === 'request_human_handoff',
         )
 
-        res.status(200).json({
-          reply,
+        if (handoff) {
+          const reply =
+            'تمام، هحوّل المحادثة لحد من الفريق ويتواصل معاك قريبًا.'
 
-          actionTaken,
+          await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversation.id,
+              organization_id: organizationId,
+              sender_type: 'ai',
+              sender_id: user.id,
+              content: reply,
+              metadata: {
+                action_taken: 'request_human_handoff',
+                status: 'pending',
+              },
+            })
 
-          conversationId:
-            conversation.id,
+          return res.status(200).json({
+            reply,
+            conversationId: conversation.id,
+            action: 'request_human_handoff',
+            handoff: true,
+          })
+        }
 
-          toolError:
-            true,
-        })
+        const deal = successfulToolResults.find(
+          (item) => item.name === 'create_deal',
+        )
 
-        return
+        if (deal) {
+          const reply =
+            'تمام، سجلت طلبك وهنتابع معاك بخصوص الخدمة والتفاصيل.'
+
+          await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversation.id,
+              organization_id: organizationId,
+              sender_type: 'ai',
+              sender_id: user.id,
+              content: reply,
+              metadata: {
+                action_taken: 'create_deal',
+              },
+            })
+
+          return res.status(200).json({
+            reply,
+            conversationId: conversation.id,
+            action: 'create_deal',
+          })
+        }
+
+        const lead = successfulToolResults.find(
+          (item) => item.name === 'create_lead',
+        )
+
+        if (lead) {
+          const reply =
+            'تمام، سجلت بياناتك وهنتابع معاك قريبًا.'
+
+          await supabase
+            .from('messages')
+            .insert({
+              conversation_id: conversation.id,
+              organization_id: organizationId,
+              sender_type: 'ai',
+              sender_id: user.id,
+              content: reply,
+              metadata: {
+                action_taken: 'create_lead',
+              },
+            })
+
+          return res.status(200).json({
+            reply,
+            conversationId: conversation.id,
+            action: 'create_lead',
+          })
+        }
       }
     }
 
     const reply =
-      parts?.find(
-        (part: any) =>
-          typeof part?.text ===
-            'string' &&
-          part.text.trim()
-      )?.text?.trim()
+      parts
+        .map((part) => part.text || '')
+        .join('')
+        .trim() ||
+      'تمام، قولي تفاصيل أكتر وأنا أساعدك.'
 
-    if (!reply) {
-      await recordUsage(
-        client,
-        {
-          organizationId,
+    recordUsageNonBlocking(supabase, {
+      organizationId,
+      conversationId: conversation.id,
+      userId: user.id,
+      model: MODEL,
+      eventType: 'message',
+      tokens: totalTokens,
+      metadata: {
+        intent,
+      },
+    })
 
-          conversationId:
-            conversation.id,
-
-          userId:
-            authData.user.id,
-
-          eventType:
-            'error',
-
-          inputTokens:
-            totalInputTokens,
-
-          outputTokens:
-            totalOutputTokens,
-
-          estimatedCost:
-            totalEstimatedCost,
-
-          metadata: {
-            stage:
-              'empty_gemini_reply',
-
-            intent:
-              detectedIntent,
-          },
-        }
-      )
-
-      res.status(502).json({
-        error:
-          'لم يتم استلام رد من الذكاء الاصطناعي',
-
-        conversationId:
-          conversation.id,
-
-        actionTaken,
+    const { error: aiMessageError } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversation.id,
+        organization_id: organizationId,
+        sender_type: 'ai',
+        sender_id: user.id,
+        content: reply,
       })
 
-      return
+    if (aiMessageError) {
+      console.error(
+        'Ryan AI message error:',
+        aiMessageError,
+      )
     }
 
-    await recordUsage(
-      client,
-      {
-        organizationId,
-
-        conversationId:
-          conversation.id,
-
-        userId:
-          authData.user.id,
-
-        eventType:
-          'message',
-
-        inputTokens:
-          totalInputTokens,
-
-        outputTokens:
-          totalOutputTokens,
-
-        estimatedCost:
-          totalEstimatedCost,
-
-        metadata: {
-          action:
-            actionTaken,
-
-          intent:
-            detectedIntent,
-
-          plan:
-            entitlements.planName,
-
-          subscription_id:
-            entitlements.subscriptionId,
-
-          plan_id:
-            entitlements.planId,
-        },
-      }
-    )
-
-    await insertMessage(
-      client,
-      conversation.id,
-      'ai',
+    return res.status(200).json({
       reply,
-      {
-        source:
-          'ryan',
-
-        action:
-          actionTaken,
-
-        intent:
-          detectedIntent,
-
-        usage: {
-          input_tokens:
-            totalInputTokens,
-
-          output_tokens:
-            totalOutputTokens,
-
-          total_tokens:
-            totalInputTokens +
-            totalOutputTokens,
-
-          estimated_cost:
-            totalEstimatedCost,
-        },
-      }
-    )
-
-    res.status(200).json({
-      reply,
-
-      actionTaken,
-
-      conversationId:
-        conversation.id,
-
+      conversationId: conversation.id,
       usage: {
-        inputTokens:
-          totalInputTokens,
-
-        outputTokens:
-          totalOutputTokens,
-
-        totalTokens:
-          totalInputTokens +
-          totalOutputTokens,
+        promptTokens,
+        outputTokens,
+        totalTokens,
       },
     })
   } catch (error: any) {
-    console.error(
-      'Ryan API error:',
-      error
-    )
+    console.error('Ryan handler error:', {
+      message: error?.message,
+      stack: error?.stack,
+    })
 
-    if (
-      organizationId
-    ) {
-      try {
-        await recordUsage(
-          client,
-          {
-            organizationId,
-
-            conversationId:
-              currentConversationId,
-
-            eventType:
-              'error',
-
-            metadata: {
-              message:
-                error?.message ||
-                'unknown_error',
-            },
-          }
-        )
-      } catch (
-        usageError
-      ) {
-        console.error(
-          'Ryan error usage recording failed:',
-          usageError
-        )
-      }
-    }
-
-    res.status(500).json({
-      error:
-        error?.message ||
-        'حدث خطأ غير متوقع',
-
-      conversationId:
-        currentConversationId,
+    return res.status(500).json({
+      error: 'حصل خطأ غير متوقع أثناء معالجة الرسالة.',
     })
   }
 }
