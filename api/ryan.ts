@@ -8,7 +8,7 @@ const tools = [
       {
         name: 'create_lead',
         description:
-          'إنشاء عميل محتمل جديد في نظام CRM عند إبداء عميل اهتمامه بخدمات أو منتجات الشركة',
+          'إنشاء عميل محتمل جديد في نظام CRM فقط عندما يبدي العميل اهتمامًا حقيقيًا بخدمة أو منتج ولا يكون في مسار حجز موعد.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -36,7 +36,7 @@ const tools = [
       {
         name: 'create_deal',
         description:
-          'إنشاء صفقة بيعية جديدة في مسار المبيعات عندما يوافق العميل مبدئيًا على شراء خدمة أو منتج معين',
+          'إنشاء صفقة بيعية عندما يوافق العميل مبدئيًا على شراء خدمة أو منتج، وليس لمجرد الاستفسار أو طلب حجز.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -53,7 +53,7 @@ const tools = [
             customer_name: {
               type: 'STRING',
               description:
-                'اسم العميل المرتبط بالصفقة إن كان موجودًا في النظام كعميل',
+                'اسم العميل المرتبط بالصفقة',
             },
           },
           required: ['title'],
@@ -62,7 +62,7 @@ const tools = [
       {
         name: 'book_appointment',
         description:
-          'حجز موعد للعميل عندما يطلب حجز استشارة أو موعد لخدمة معينة',
+          'حجز موعد فقط عندما يطلب العميل حجز موعد. لا تستخدم هذه الأداة قبل معرفة الخدمة والتاريخ والوقت.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -72,7 +72,8 @@ const tools = [
             },
             service_name: {
               type: 'STRING',
-              description: 'اسم الخدمة المطلوب حجز موعد لها',
+              description:
+                'اسم الخدمة المطلوب حجز موعد لها',
             },
             date: {
               type: 'STRING',
@@ -85,13 +86,17 @@ const tools = [
                 'وقت الموعد بصيغة HH:MM بنظام 24 ساعة',
             },
           },
-          required: ['date', 'time'],
+          required: [
+            'service_name',
+            'date',
+            'time',
+          ],
         },
       },
       {
         name: 'request_human_handoff',
         description:
-          'تحويل المحادثة لموظف بشري عندما يطلب العميل صراحة التحدث مع شخص حقيقي، أو عندما يكون الطلب معقدًا جدًا ولا يمكنك التعامل معه بثقة',
+          'تحويل المحادثة لموظف بشري عندما يطلب العميل صراحة التحدث مع شخص حقيقي أو عندما يكون الطلب معقدًا ولا يمكن التعامل معه بثقة.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -117,6 +122,143 @@ type FunctionResult = {
   success: boolean
   error?: string
   data?: any
+}
+
+function normalizeArabicText(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[إأآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[ًٌٍَُِّْـ]/g, '')
+    .trim()
+}
+
+function detectIntent(
+  currentMessage: string,
+  history: any[]
+) {
+  const recentHistory = Array.isArray(history)
+    ? history
+        .slice(-8)
+        .map((item: any) =>
+          typeof item?.parts?.[0]?.text === 'string'
+            ? item.parts[0].text
+            : typeof item?.text === 'string'
+              ? item.text
+              : ''
+        )
+        .join(' ')
+    : ''
+
+  const text = normalizeArabicText(
+    `${recentHistory} ${currentMessage}`
+  )
+
+  const bookingKeywords = [
+    'احجز',
+    'حجز',
+    'احجزلي',
+    'احجز لي',
+    'موعد',
+    'ميعاد',
+    'حجز موعد',
+    'عايز احجز',
+    'عاوزه احجز',
+    'حابب احجز',
+    'اريد حجز',
+    'عايز موعد',
+    'عاوزه موعد',
+  ]
+
+  const handoffKeywords = [
+    'موظف',
+    'موظفه',
+    'خدمه عملاء',
+    'خدمة عملاء',
+    'شخص حقيقي',
+    'حد حقيقي',
+    'حد من الفريق',
+    'اتكلم مع حد',
+    'اتكلم مع شخص',
+    'كلموني',
+    'كلمني موظف',
+    'بني ادم',
+  ]
+
+  const dealKeywords = [
+    'اشتري',
+    'شراء',
+    'اتعاقد',
+    'تعاقد',
+    'عايز الخدمه',
+    'عايز الخدمة',
+    'عرض سعر',
+    'عرض سعر للخدمه',
+    'عرض سعر للخدمة',
+    'عايز ابدأ',
+    'عايز ابدأ معاكم',
+  ]
+
+  const isBooking = bookingKeywords.some(
+    keyword => text.includes(normalizeArabicText(keyword))
+  )
+
+  const isHandoff = handoffKeywords.some(
+    keyword => text.includes(normalizeArabicText(keyword))
+  )
+
+  const isDeal = dealKeywords.some(
+    keyword => text.includes(normalizeArabicText(keyword))
+  )
+
+  if (isHandoff) {
+    return 'handoff' as const
+  }
+
+  if (isBooking) {
+    return 'booking' as const
+  }
+
+  if (isDeal) {
+    return 'deal' as const
+  }
+
+  return 'general' as const
+}
+
+function getToolsForIntent(intent: ReturnType<typeof detectIntent>) {
+  if (intent === 'handoff') {
+    return [
+      {
+        functionDeclarations: [
+          tools[0].functionDeclarations[3],
+        ],
+      },
+    ]
+  }
+
+  if (intent === 'booking') {
+    return [
+      {
+        functionDeclarations: [
+          tools[0].functionDeclarations[2],
+        ],
+      },
+    ]
+  }
+
+  if (intent === 'deal') {
+    return [
+      {
+        functionDeclarations: [
+          tools[0].functionDeclarations[1],
+        ],
+      },
+    ]
+  }
+
+  return tools
 }
 
 async function runFunction(
@@ -163,7 +305,6 @@ async function runFunction(
             typeof args?.value === 'number'
               ? args.value
               : Number(args?.value || 0),
-
           p_customer_name:
             args?.customer_name || null,
         }
@@ -188,18 +329,27 @@ async function runFunction(
     }
 
     if (name === 'book_appointment') {
+      if (
+        !args?.service_name ||
+        !args?.date ||
+        !args?.time
+      ) {
+        return {
+          success: false,
+          error:
+            'بيانات الحجز غير مكتملة',
+        }
+      }
+
       const { data, error } = await client.rpc(
         'ai_book_appointment',
         {
           p_customer_name:
             args?.customer_name || null,
-
           p_service_name:
-            args?.service_name || null,
-
+            args?.service_name,
           p_date:
             args?.date,
-
           p_time:
             args?.time,
         }
@@ -229,7 +379,6 @@ async function runFunction(
         {
           p_customer_name:
             args?.customer_name || null,
-
           p_reason:
             args?.reason,
         }
@@ -278,22 +427,19 @@ function getToolSuccessReply(
 ) {
   const names = new Set(toolNames)
 
-  if (
-    names.has('request_human_handoff')
-  ) {
+  if (names.has('request_human_handoff')) {
     return 'تمام، حولت المحادثة للفريق المختص وهيتواصل مع حضرتك في أقرب وقت.'
   }
 
-  if (
-    names.has('book_appointment')
-  ) {
+  if (names.has('book_appointment')) {
     const appointmentIndex =
-      toolNames.indexOf(
-        'book_appointment'
-      )
+      toolNames.indexOf('book_appointment')
 
     const appointmentArgs =
       argsList[appointmentIndex] || {}
+
+    const service =
+      appointmentArgs?.service_name
 
     const date =
       appointmentArgs?.date
@@ -301,22 +447,18 @@ function getToolSuccessReply(
     const time =
       appointmentArgs?.time
 
-    if (date && time) {
-      return `تمام، تم تسجيل الموعد يوم ${date} الساعة ${time}.`
+    if (service && date && time) {
+      return `تمام، تم تسجيل حجز ${service} يوم ${date} الساعة ${time}.`
     }
 
     return 'تمام، تم تسجيل الموعد بنجاح.'
   }
 
-  if (
-    names.has('create_deal')
-  ) {
+  if (names.has('create_deal')) {
     return 'تمام، تم تسجيل الصفقة في نظام المبيعات.'
   }
 
-  if (
-    names.has('create_lead')
-  ) {
+  if (names.has('create_lead')) {
     return 'تمام، سجلت بيانات حضرتك عندنا في الـCRM.'
   }
 
@@ -591,7 +733,8 @@ async function recordUsage(
         p_user_id:
           userId,
 
-        p_model: MODEL,
+        p_model:
+          MODEL,
 
         p_event_type:
           eventType,
@@ -773,6 +916,18 @@ async function getOrCreateConversation(
   customerId: string,
   conversationId?: string | null
 ) {
+  /*
+   * مهم جدًا:
+   *
+   * إذا أرسل الـFrontend conversationId
+   * نحاول استرجاع نفس المحادثة.
+   *
+   * إذا لم يرسل conversationId فهذا يعني
+   * أن المستخدم ضغط "محادثة جديدة".
+   *
+   * في هذه الحالة ممنوع البحث عن آخر محادثة
+   * وإعادة استخدامها.
+   */
   if (conversationId) {
     const {
       data,
@@ -806,6 +961,10 @@ async function getOrCreateConversation(
         'customer_id',
         customerId
       )
+      .eq(
+        'channel',
+        'website'
+      )
       .maybeSingle()
 
     if (error) {
@@ -819,58 +978,12 @@ async function getOrCreateConversation(
     }
   }
 
-  const {
-    data: existing,
-    error: existingError,
-  } = await client
-    .from('conversations')
-    .select(`
-      id,
-      organization_id,
-      customer_id,
-      channel,
-      handled_by,
-      assigned_user_id,
-      last_message_at,
-      created_at,
-      status,
-      subject,
-      unread_count,
-      metadata,
-      updated_at
-    `)
-    .eq(
-      'organization_id',
-      organizationId
-    )
-    .eq(
-      'customer_id',
-      customerId
-    )
-    .eq(
-      'channel',
-      'website'
-    )
-    .eq(
-      'status',
-      'open'
-    )
-    .order('created_at', {
-      ascending: false,
-    })
-    .limit(1)
-    .maybeSingle()
-
-  if (existingError) {
-    throw new Error(
-      existingError.message
-    )
-  }
-
-  if (existing) {
-    return existing
-  }
-
+  /*
+   * لا نبحث عن آخر Conversation هنا.
+   *
+   * كل request بدون conversationId
+   * = Conversation جديدة.
+   */
   const {
     data: created,
     error: createError,
@@ -1279,6 +1392,44 @@ export default async function handler(
         .toISOString()
         .slice(0, 10)
 
+    const detectedIntent =
+      detectIntent(
+        trimmedMessage,
+        history
+      )
+
+    const allowedTools =
+      getToolsForIntent(
+        detectedIntent
+      )
+
+    const intentInstruction =
+      detectedIntent === 'booking'
+        ? `
+مهم جدًا: العميل في مسار حجز.
+لا تستخدم create_lead إطلاقًا في هذا المسار.
+لا تستخدم create_deal لهذا الطلب.
+استخدم book_appointment فقط بعد معرفة:
+1. اسم الخدمة
+2. التاريخ
+3. الوقت
+إذا كانت أي معلومة ناقصة، اسأل عن معلومة واحدة فقط في كل رسالة.
+`
+        : detectedIntent === 'handoff'
+          ? `
+مهم: العميل يريد موظفًا بشريًا.
+استخدم request_human_handoff ولا تحاول تسجيل Lead أو Deal.
+`
+          : detectedIntent === 'deal'
+            ? `
+العميل يبدو في مسار شراء.
+استخدم create_deal فقط إذا كان هناك موافقة مبدئية حقيقية على شراء الخدمة.
+`
+            : `
+لا تنشئ Lead لمجرد أن العميل ذكر اسمه أو رقم هاتفه.
+أنشئ Lead فقط عند وجود اهتمام تجاري واضح.
+`
+
     const systemPrompt = `
 أنت "ريان"، موظف مبيعات وخدمة عملاء ذكي يعمل داخل نظام إدارة العملاء لصالح شركة ${
       companyName ||
@@ -1296,19 +1447,21 @@ export default async function handler(
 - اسأل سؤالًا واحدًا فقط في كل مرة.
 - لا ترسل قوائم طويلة إلا إذا طلب العميل ذلك.
 - تعامل كموظف مبيعات حقيقي وليس كروبوت.
-- لا تخترع أسعارًا أو خدمات أو وعودًا غير موجودة في قاعدة المعرفة.
+- لا تخترع أسعارًا أو خدمات أو مواعيد أو وعودًا غير موجودة في قاعدة المعرفة.
+- لا تقل إن أي إجراء تم تنفيذه إلا بعد نجاح الأداة فعلًا.
 
 النهاردة تاريخ ${today}.
 
-عند إبداء العميل اهتمامًا حقيقيًا بخدمة أو منتج:
-استخدم create_lead لتسجيل العميل في CRM.
+${intentInstruction}
+
+عند وجود اهتمام تجاري واضح بخدمة أو منتج:
+استخدم create_lead إذا لم يكن العميل في مسار حجز أو تحويل لموظف.
 
 عند الموافقة المبدئية على شراء خدمة أو منتج:
 استخدم create_deal.
 
 عند طلب حجز موعد:
-استخدم book_appointment.
-إذا كان التاريخ أو الوقت غير واضح، اسأل العميل عنه أولًا.
+book_appointment لها الأولوية على create_lead وcreate_deal.
 
 عند طلب التحدث مع موظف بشري:
 استخدم request_human_handoff فورًا.
@@ -1343,7 +1496,7 @@ ${knowledgeText}
         parts: [
           {
             text:
-              'تمام، فاهم دوري.',
+              'تمام، فاهم دوري وقواعد المحادثة.',
           },
         ],
       },
@@ -1366,7 +1519,7 @@ ${knowledgeText}
     const geminiUrl =
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`
 
-    let response =
+    const response =
       await fetch(
         geminiUrl,
         {
@@ -1381,12 +1534,18 @@ ${knowledgeText}
           body:
             JSON.stringify({
               contents,
-              tools,
+
+              /*
+               * Intent routing:
+               * booking لا يرى create_lead أصلًا.
+               */
+              tools:
+                allowedTools,
             }),
         }
       )
 
-    let data =
+    const data =
       await response.json()
 
     if (!response.ok) {
@@ -1427,6 +1586,9 @@ ${knowledgeText}
 
             status:
               response.status,
+
+            intent:
+              detectedIntent,
           },
         }
       )
@@ -1463,16 +1625,10 @@ ${knowledgeText}
         firstUsage.outputTokens
       )
 
-    let parts =
+    const parts =
       data?.candidates?.[0]
         ?.content?.parts || []
 
-    /*
-     * Gemini يمكن أن يرجع أكثر من functionCall
-     * داخل نفس الاستجابة.
-     *
-     * الكود القديم كان ينفذ أول واحدة فقط.
-     */
     const functionCallParts =
       parts.filter(
         (part: any) =>
@@ -1491,10 +1647,6 @@ ${knowledgeText}
     if (
       functionCallParts.length > 0
     ) {
-      /*
-       * تسجيل وتنفيذ كل الأدوات المطلوبة
-       * بالترتيب.
-       */
       for (
         const functionCallPart of
           functionCallParts
@@ -1509,6 +1661,38 @@ ${knowledgeText}
           functionCall?.args || {}
 
         if (!name) {
+          continue
+        }
+
+        /*
+         * حماية إضافية:
+         * حتى لو Gemini حاول استدعاء Tool
+         * غير مسموح بها لهذا الـintent، نرفضها.
+         */
+        const allowedFunctionNames =
+          allowedTools.flatMap(
+            (tool: any) =>
+              tool.functionDeclarations.map(
+                (declaration: any) =>
+                  declaration.name
+              )
+          )
+
+        if (
+          !allowedFunctionNames.includes(
+            name
+          )
+        ) {
+          console.warn(
+            'Ryan blocked invalid tool for detected intent:',
+            {
+              intent:
+                detectedIntent,
+              tool:
+                name,
+            }
+          )
+
           continue
         }
 
@@ -1532,6 +1716,9 @@ ${knowledgeText}
               tool:
                 name,
 
+              intent:
+                detectedIntent,
+
               args,
             },
           }
@@ -1554,10 +1741,6 @@ ${knowledgeText}
               ? `${actionTaken},${name}`
               : name
 
-          /*
-           * Handoff يحتاج بالإضافة إلى RPC
-           * إلى تحديث conversation نفسها.
-           */
           if (
             name ===
             'request_human_handoff'
@@ -1611,11 +1794,6 @@ ${knowledgeText}
                 'Ryan handoff update error:',
                 handoffUpdateError
               )
-
-              /*
-               * لا نفشل الـhandoff بالكامل
-               * إذا كان RPC نفسه نجح.
-               */
             }
           }
         } else {
@@ -1630,15 +1808,6 @@ ${knowledgeText}
         }
       }
 
-      /*
-       * إذا نجحت أداة واحدة على الأقل،
-       * نرجع confirmation مباشر.
-       *
-       * هذا يلغي Gemini request #2،
-       * وبالتالي Ryan أسرع بكثير،
-       * والأهم أن الرد يعتمد على تنفيذ
-       * الـRPC الحقيقي وليس على تخمين Gemini.
-       */
       if (
         successfulTools.length > 0 &&
         failedTools.length === 0
@@ -1676,6 +1845,9 @@ ${knowledgeText}
               action:
                 actionTaken,
 
+              intent:
+                detectedIntent,
+
               tools:
                 successfulTools,
 
@@ -1702,6 +1874,9 @@ ${knowledgeText}
 
             action:
               actionTaken,
+
+            intent:
+              detectedIntent,
 
             tool_results: {
               successful:
@@ -1752,10 +1927,6 @@ ${knowledgeText}
         return
       }
 
-      /*
-       * إذا فشلت بعض الأدوات،
-       * لا نقول للعميل إنها نجحت.
-       */
       if (
         failedTools.length > 0
       ) {
@@ -1792,6 +1963,9 @@ ${knowledgeText}
               stage:
                 'tool_execution',
 
+              intent:
+                detectedIntent,
+
               successfulTools,
 
               failedTools,
@@ -1812,6 +1986,9 @@ ${knowledgeText}
 
             action:
               actionTaken,
+
+            intent:
+              detectedIntent,
 
             tool_results: {
               successful:
@@ -1842,16 +2019,11 @@ ${knowledgeText}
       }
     }
 
-    /*
-     * لا توجد Tools.
-     *
-     * هنا فقط نحتاج رد Gemini الطبيعي.
-     */
     const reply =
       parts?.find(
         (part: any) =>
           typeof part?.text ===
-          'string' &&
+            'string' &&
           part.text.trim()
       )?.text?.trim()
 
@@ -1882,6 +2054,9 @@ ${knowledgeText}
           metadata: {
             stage:
               'empty_gemini_reply',
+
+            intent:
+              detectedIntent,
           },
         }
       )
@@ -1926,6 +2101,9 @@ ${knowledgeText}
           action:
             actionTaken,
 
+          intent:
+            detectedIntent,
+
           plan:
             entitlements.planName,
 
@@ -1949,6 +2127,9 @@ ${knowledgeText}
 
         action:
           actionTaken,
+
+        intent:
+          detectedIntent,
 
         usage: {
           input_tokens:
