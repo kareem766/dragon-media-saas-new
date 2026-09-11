@@ -106,11 +106,6 @@ icon: IconGrid,
 end: true,
 },
 {
-to: ‘/admin/organizations’,
-label: ‘إدارة الشركات’,
-icon: IconUsers,
-},
-{
 to: ‘/admin/payments’,
 label: ‘المدفوعات وطلبات الدفع’,
 icon: IconCard,
@@ -163,9 +158,11 @@ const { isAdmin } = useIsPlatformAdmin()
 const { branding, logoUrl } = useBranding()
 
 const platformName =
-branding?.platform_name || ‘Dragon Media’
+branding?.platform_name ||
+‘Dragon Media’
 
-const [adminOpen, setAdminOpen] = useState(false)
+const [adminOpen, setAdminOpen] =
+useState(false)
 
 return (
 <>
@@ -179,7 +176,6 @@ return (
         : 'translate-x-full lg:translate-x-0'
     }`}
   >
-    {/* BRAND */}
     <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
       <img
         src={logoUrl}
@@ -195,7 +191,6 @@ return (
         </div>
       </div>
     </div>
-    {/* NAVIGATION */}
     <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
       {items.map(
         ({
@@ -218,20 +213,21 @@ return (
             }
           >
             <Icon className="w-5 h-5 shrink-0" />
-            <span>{label}</span>
+            <span>
+              {label}
+            </span>
           </NavLink>
         )
       )}
-      {/* ADMIN */}
       {isAdmin && (
         <div className="mt-2 pt-2 border-t border-white/10">
           <button
             type="button"
             onClick={() =>
-              setAdminOpen(current => !current)
+              setAdminOpen(
+                current => !current
+              )
             }
-            aria-expanded={adminOpen}
-            aria-controls="platform-admin-navigation"
             className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-[15px] transition-colors ${
               adminOpen
                 ? 'bg-gold-500/15 text-gold-400 font-semibold'
@@ -240,7 +236,9 @@ return (
           >
             <span className="flex items-center gap-3">
               <IconShield className="w-5 h-5 shrink-0" />
-              <span>لوحة تحكم المنصة</span>
+              <span>
+                لوحة تحكم المنصة
+              </span>
             </span>
             <svg
               width="16"
@@ -248,7 +246,9 @@ return (
               viewBox="0 0 24 24"
               fill="none"
               className={`transition-transform ${
-                adminOpen ? 'rotate-180' : ''
+                adminOpen
+                  ? 'rotate-180'
+                  : ''
               }`}
             >
               <path
@@ -261,10 +261,7 @@ return (
             </svg>
           </button>
           {adminOpen && (
-            <div
-              id="platform-admin-navigation"
-              className="mt-1 mr-2 pr-2 border-r border-white/10 space-y-0.5"
-            >
+            <div className="mt-1 mr-2 pr-2 border-r border-white/10 space-y-0.5">
               {adminItems.map(
                 ({
                   to,
@@ -286,7 +283,9 @@ return (
                     }
                   >
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span>{label}</span>
+                    <span>
+                      {label}
+                    </span>
                   </NavLink>
                 )
               )}
@@ -295,7 +294,6 @@ return (
         </div>
       )}
     </nav>
-    {/* CURRENT PLAN */}
     <div className="p-4 border-t border-white/10">
       <div className="rounded-xl bg-white/5 p-3.5">
         <div className="text-sm font-semibold text-sand-100">
