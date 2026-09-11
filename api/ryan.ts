@@ -4,13 +4,18 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 const MODEL =
   process.env.RYAN_GEMINI_MODEL || 'gemini-3.6-flash'
 
+const GROQ_MODEL =
+  process.env.RYAN_GROQ_MODEL || 'openai/gpt-oss-120b'
+
 const GEMINI_TIMEOUT_MS = 25_000
+const GROQ_TIMEOUT_MS = 25_000
 const USAGE_TIMEOUT_MS = 2_000
 const HISTORY_LIMIT = 12
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
 const geminiApiKey = process.env.GEMINI_API_KEY
+const groqApiKey = process.env.GROQ_API_KEY
 
 type RyanIntent =
   | 'appointment'
@@ -59,6 +64,34 @@ type GeminiResponse = {
     code?: number
     message?: string
     status?: string
+  }
+}
+
+type GroqToolCall = {
+  id?: string
+  type?: string
+  function?: {
+    name?: string
+    arguments?: string
+  }
+}
+
+type GroqResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string | null
+      tool_calls?: GroqToolCall[]
+    }
+    finish_reason?: string
+  }>
+  usage?: {
+    prompt_tokens?: number
+    completion_tokens?: number
+    total_tokens?: number
+  }
+  error?: {
+    message?: string
+    code?: string | number
   }
 }
 
@@ -1382,6 +1415,333 @@ async function fetchGemini(
   }
 }
 
+function normalizeJsonSchemaForOpenAI(
+  schema: any,
+): any {
+  if (
+    !schema ||
+    typeof schema !== 'object'
+  ) {
+    return schema
+  }
+
+  if (Array.isArray(schema)) {
+    return schema.map(
+      normalizeJsonSchemaForOpenAI,
+    )
+  }
+
+  const result: Record<
+    string,
+    any
+  > = {}
+
+  for (
+    const [
+      key,
+      value,
+    ] of Object.entries(schema)
+  ) {
+    if (
+      key === 'type' &&
+      typeof value === 'string'
+    ) {
+      result[key] =
+        value.toLowerCase()
+    } else {
+      result[key] =
+        normalizeJsonSchemaForOpenAI(
+          value,
+        )
+    }
+  }
+
+  return result
+}
+
+function convertToolsForGroq(
+  tools: any[],
+) {
+  return tools.map(
+    (tool) => ({
+      type: 'function',
+
+      function: {
+        name:
+          tool.name,
+
+        description:
+          tool.description,
+
+        parameters:
+          normalizeJsonSchemaForOpenAI(
+            tool.parameters,
+          ),
+      },
+    }),
+  )
+}
+
+function buildGroqMessages(
+  contents: any[],
+) {
+  const systemText =
+    contents[0]?.parts
+      ?.map(
+        (part: any) =>
+          part?.text || '',
+      )
+      .join('')
+      .trim() || ''
+
+  const messages: Array<{
+    role:
+      | 'system'
+      | 'user'
+      | 'assistant'
+    content: string
+  }> = [
+    {
+      role: 'system',
+      content: systemText,
+    },
+  ]
+
+  /*
+   * contents[1] is the artificial Gemini
+   * acknowledgement message. It is intentionally
+   * skipped for Groq because the system prompt already
+   * contains the required behavior.
+   */
+  for (
+    let index = 2;
+    index < contents.length;
+    index++
+  ) {
+    const item =
+      contents[index]
+
+    const text =
+      item?.parts
+        ?.map(
+          (part: any) =>
+            part?.text || '',
+        )
+        .join('')
+        .trim() || ''
+
+    if (!text) {
+      continue
+    }
+
+    messages.push({
+      role:
+        item?.role ===
+        'model'
+          ? 'assistant'
+          : 'user',
+
+      content: text,
+    })
+  }
+
+  return messages
+}
+
+async function fetchGroq(
+  body: Record<string, unknown>,
+) {
+  if (!groqApiKey) {
+    throw new Error(
+      'GROQ_API_KEY is not configured',
+    )
+  }
+
+  const controller =
+    new AbortController()
+
+  const timeout =
+    setTimeout(() => {
+      controller.abort()
+    }, GROQ_TIMEOUT_MS)
+
+  try {
+    return await fetch(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+
+          Authorization:
+            `Bearer ${groqApiKey}`,
+        },
+
+        body:
+          JSON.stringify(body),
+
+        signal:
+          controller.signal,
+      },
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function parseGroqResponseBody(
+  response: Response,
+): Promise<GroqResponse> {
+  const text =
+    await response.text()
+
+  if (!text) {
+    return {}
+  }
+
+  try {
+    return JSON.parse(
+      text,
+    ) as GroqResponse
+  } catch {
+    return {
+      error: {
+        message: text,
+      },
+    }
+  }
+}
+
+function normalizeGroqResponse(
+  body: GroqResponse,
+): GeminiResponse {
+  const choice =
+    body.choices?.[0]
+
+  const message =
+    choice?.message
+
+  const parts: GeminiPart[] =
+    []
+
+  if (
+    message?.content
+  ) {
+    parts.push({
+      text:
+        message.content,
+    })
+  }
+
+  for (
+    const toolCall of
+      message?.tool_calls ||
+      []
+  ) {
+    const name =
+      toolCall.function
+        ?.name
+
+    if (!name) {
+      continue
+    }
+
+    let args: Record<
+      string,
+      unknown
+    > = {}
+
+    try {
+      const parsed =
+        JSON.parse(
+          toolCall.function
+            ?.arguments ||
+            '{}',
+        )
+
+      if (
+        parsed &&
+        typeof parsed ===
+          'object'
+      ) {
+        args =
+          parsed as Record<
+            string,
+            unknown
+          >
+      }
+    } catch {
+      args = {}
+    }
+
+    parts.push({
+      functionCall: {
+        name,
+
+        args,
+      },
+    })
+  }
+
+  let finishReason =
+    choice?.finish_reason ||
+    null
+
+  if (
+    finishReason ===
+    'length'
+  ) {
+    finishReason =
+      'MAX_TOKENS'
+  }
+
+  if (
+    finishReason ===
+    'tool_calls'
+  ) {
+    finishReason = null
+  }
+
+  return {
+    candidates: [
+      {
+        content: {
+          parts,
+        },
+
+        finishReason:
+          finishReason ||
+          undefined,
+      },
+    ],
+
+    usageMetadata: {
+      promptTokenCount:
+        body.usage
+          ?.prompt_tokens,
+
+      candidatesTokenCount:
+        body.usage
+          ?.completion_tokens,
+
+      totalTokenCount:
+        body.usage
+          ?.total_tokens,
+    },
+
+    error:
+      body.error
+        ? {
+            message:
+              body.error
+                .message,
+          }
+        : undefined,
+  }
+}
+
 async function parseResponseBody(
   response: Response,
 ): Promise<GeminiResponse> {
@@ -1686,10 +2046,17 @@ export default async function handler(
       })
   }
 
+  /*
+   * At least one AI provider must be configured.
+   *
+   * Gemini is the primary provider.
+   * Groq is the fallback provider.
+   */
   if (
     !supabaseUrl ||
     !supabaseAnonKey ||
-    !geminiApiKey
+    (!geminiApiKey &&
+      !groqApiKey)
   ) {
     return res
       .status(500)
@@ -1711,13 +2078,19 @@ export default async function handler(
     req.headers.Authorization
 
   const headerAccessToken =
-    typeof authorizationHeader === 'string' &&
-    authorizationHeader.startsWith('Bearer ')
-      ? authorizationHeader.slice(7).trim()
+    typeof authorizationHeader ===
+      'string' &&
+    authorizationHeader.startsWith(
+      'Bearer ',
+    )
+      ? authorizationHeader
+          .slice(7)
+          .trim()
       : ''
 
   const bodyAccessToken =
-    typeof req.body?.accessToken === 'string'
+    typeof req.body?.accessToken ===
+      'string'
       ? req.body.accessToken.trim()
       : ''
 
@@ -1786,9 +2159,6 @@ export default async function handler(
         })
     }
 
-    /*
-     * Normalize history and remove empty items.
-     */
     let safeHistory: RyanHistoryItem[] =
       Array.isArray(history)
         ? history
@@ -1816,15 +2186,6 @@ export default async function handler(
             )
         : []
 
-    /*
-     * IMPORTANT:
-     * The frontend can already send the current user
-     * message as the last history item.
-     *
-     * The API also appends `message` below.
-     * Remove the duplicate so Gemini sees the current
-     * user message exactly once.
-     */
     const normalizedCurrentMessage =
       message.trim()
 
@@ -1908,10 +2269,6 @@ export default async function handler(
       },
     )
 
-    /*
-     * If human already owns the conversation,
-     * Ryan must not answer.
-     */
     if (
       conversation.handled_by ===
       'human'
@@ -2081,111 +2438,174 @@ export default async function handler(
         intent,
       )
 
+    /*
+     * --------------------------------------------------
+     * AI PROVIDER ROUTING
+     * --------------------------------------------------
+     *
+     * Primary:
+     *   Gemini
+     *
+     * Fallback:
+     *   Groq
+     *
+     * Gemini will fallback to Groq when:
+     *   - request timeout/network failure
+     *   - 408
+     *   - 429
+     *   - 5xx
+     *
+     * We intentionally do NOT fallback for:
+     *   - 401
+     *   - 403
+     *   - 404
+     *   - other permanent 4xx errors
+     *
+     * This prevents hiding configuration/model errors.
+     */
+
+    let body: GeminiResponse = {}
+    let aiProvider:
+      | 'gemini'
+      | 'groq' = 'gemini'
+
+    let activeModel = MODEL
+
+    let response:
+      | Response
+      | null = null
+
     const geminiUrl =
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`
 
-    let response: Response
+    let shouldFallbackToGroq =
+      false
 
-    try {
-      response =
-        await fetchGemini(
-          geminiUrl,
-          {
-            contents,
+    /*
+     * --------------------------------------------------
+     * GEMINI PRIMARY
+     * --------------------------------------------------
+     */
 
-            tools: [
-              {
-                functionDeclarations:
-                  allowedTools,
+    if (geminiApiKey) {
+      try {
+        response =
+          await fetchGemini(
+            geminiUrl,
+            {
+              contents,
+
+              tools: [
+                {
+                  functionDeclarations:
+                    allowedTools,
+                },
+              ],
+
+              generationConfig: {
+                maxOutputTokens:
+                  512,
               },
-            ],
-
-            generationConfig: {
-              maxOutputTokens:
-                512,
             },
-          },
-        )
-    } catch (error: any) {
-      const isAbort =
-        error?.name ===
-          'AbortError' ||
-        String(
-          error?.message ||
-            '',
-        )
-          .toLowerCase()
-          .includes(
-            'abort',
           )
+      } catch (error: any) {
+        const isAbort =
+          error?.name ===
+            'AbortError' ||
+          String(
+            error?.message ||
+              '',
+          )
+            .toLowerCase()
+            .includes(
+              'abort',
+            )
 
-      console.error(
-        'Ryan Gemini fetch error:',
-        {
-          error:
-            error?.message,
+        console.error(
+          'Ryan Gemini fetch error:',
+          {
+            error:
+              error?.message,
 
-          name:
-            error?.name,
+            name:
+              error?.name,
 
-          model:
-            MODEL,
+            model:
+              MODEL,
 
-          organizationId,
+            organizationId,
 
-          conversationId:
-            conversation.id,
+            conversationId:
+              conversation.id,
 
-          intent,
-        },
-      )
-
-      recordUsageNonBlocking(
-        supabase,
-        {
-          organizationId,
-
-          conversationId:
-            conversation.id,
-
-          userId:
-            user.id,
-
-          model:
-            MODEL,
-
-          eventType:
-            'error',
-
-          metadata: {
-            source:
-              'gemini_fetch',
+            intent,
 
             timeout:
               isAbort,
           },
-        },
-      )
+        )
 
-      return res
-        .status(504)
-        .json({
-          error:
-            isAbort
-              ? 'محرك الذكاء الاصطناعي استغرق وقتًا أطول من المتوقع. حاول مرة أخرى.'
-              : 'تعذر الاتصال بمحرك الذكاء الاصطناعي.',
+        recordUsageNonBlocking(
+          supabase,
+          {
+            organizationId,
 
-          conversationId:
-            conversation.id,
-        })
+            conversationId:
+              conversation.id,
+
+            userId:
+              user.id,
+
+            model:
+              MODEL,
+
+            eventType:
+              'error',
+
+            metadata: {
+              source:
+                'gemini_fetch',
+
+              provider:
+                'gemini',
+
+              timeout:
+                isAbort,
+            },
+          },
+        )
+
+        /*
+         * Any network/timeout problem is eligible
+         * for Groq fallback.
+         */
+        shouldFallbackToGroq =
+          true
+      }
+    } else {
+      /*
+       * Gemini key is not configured.
+       * If Groq exists, use it directly.
+       */
+      shouldFallbackToGroq =
+        true
     }
 
-    const body =
-      await parseResponseBody(
-        response,
-      )
+    /*
+     * --------------------------------------------------
+     * GEMINI HTTP RESPONSE
+     * --------------------------------------------------
+     */
 
-    if (!response.ok) {
+    if (
+      response &&
+      !response.ok
+    ) {
+      body =
+        await parseResponseBody(
+          response,
+        )
+
       console.error(
         'Ryan Gemini API error:',
         {
@@ -2209,6 +2629,18 @@ export default async function handler(
         },
       )
 
+      const fallbackEligible =
+        response.status ===
+          408 ||
+        response.status ===
+          429 ||
+        response.status >=
+          500
+
+      /*
+       * Record the Gemini error for audit/usage
+       * visibility.
+       */
       recordUsageNonBlocking(
         supabase,
         {
@@ -2230,6 +2662,9 @@ export default async function handler(
             source:
               'gemini_api',
 
+            provider:
+              'gemini',
+
             status:
               response.status,
 
@@ -2243,20 +2678,326 @@ export default async function handler(
         },
       )
 
-      const frontendStatus =
-        response.status >=
-        500
-          ? 502
-          : response.status
+      shouldFallbackToGroq =
+        fallbackEligible
 
-      return res
-        .status(
-          frontendStatus,
+      /*
+       * Clear the Gemini response so the Groq
+       * fallback can replace it.
+       */
+      if (
+        shouldFallbackToGroq
+      ) {
+        response = null
+        body = {}
+      }
+    } else if (
+      response
+    ) {
+      /*
+       * Gemini succeeded.
+       */
+      body =
+        await parseResponseBody(
+          response,
         )
+
+      if (
+        body.error &&
+        !body.candidates?.length
+      ) {
+        console.error(
+          'Ryan Gemini returned an error body:',
+          body,
+        )
+
+        shouldFallbackToGroq =
+          true
+
+        recordUsageNonBlocking(
+          supabase,
+          {
+            organizationId,
+
+            conversationId:
+              conversation.id,
+
+            userId:
+              user.id,
+
+            model:
+              MODEL,
+
+            eventType:
+              'error',
+
+            metadata: {
+              source:
+                'gemini_response',
+
+              provider:
+                'gemini',
+
+              error:
+                body.error,
+            },
+          },
+        )
+
+        response = null
+        body = {}
+      }
+    }
+
+    /*
+     * --------------------------------------------------
+     * GROQ FALLBACK
+     * --------------------------------------------------
+     */
+
+    if (
+      shouldFallbackToGroq &&
+      groqApiKey
+    ) {
+      try {
+        const groqMessages =
+          buildGroqMessages(
+            contents,
+          )
+
+        const groqTools =
+          convertToolsForGroq(
+            allowedTools as any[],
+          )
+
+        const groqResponse =
+          await fetchGroq({
+            model:
+              GROQ_MODEL,
+
+            messages:
+              groqMessages,
+
+            tools:
+              groqTools,
+
+            tool_choice:
+              'auto',
+
+            temperature:
+              0.4,
+
+            max_tokens:
+              512,
+          })
+
+        const groqBody =
+          await parseGroqResponseBody(
+            groqResponse,
+          )
+
+        if (
+          !groqResponse.ok
+        ) {
+          console.error(
+            'Ryan Groq API error:',
+            {
+              status:
+                groqResponse.status,
+
+              statusText:
+                groqResponse.statusText,
+
+              model:
+                GROQ_MODEL,
+
+              organizationId,
+
+              conversationId:
+                conversation.id,
+
+              intent,
+
+              body:
+                groqBody,
+            },
+          )
+
+          recordUsageNonBlocking(
+            supabase,
+            {
+              organizationId,
+
+              conversationId:
+                conversation.id,
+
+              userId:
+                user.id,
+
+              model:
+                GROQ_MODEL,
+
+              eventType:
+                'error',
+
+              metadata: {
+                source:
+                  'groq_api',
+
+                provider:
+                  'groq',
+
+                status:
+                  groqResponse.status,
+
+                statusText:
+                  groqResponse.statusText,
+
+                error:
+                  groqBody?.error ||
+                  null,
+              },
+            },
+          )
+
+          /*
+           * Both providers failed.
+           */
+          return res
+            .status(503)
+            .json({
+              error:
+                'محرك الذكاء الاصطناعي غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.',
+
+              conversationId:
+                conversation.id,
+            })
+        }
+
+        body =
+          normalizeGroqResponse(
+            groqBody,
+          )
+
+        aiProvider =
+          'groq'
+
+        activeModel =
+          GROQ_MODEL
+
+        response =
+          groqResponse
+
+        console.log(
+          'Ryan switched to Groq fallback:',
+          {
+            provider:
+              aiProvider,
+
+            model:
+              activeModel,
+
+            organizationId,
+
+            conversationId:
+              conversation.id,
+
+            intent,
+          },
+        )
+      } catch (error: any) {
+        const isAbort =
+          error?.name ===
+            'AbortError' ||
+          String(
+            error?.message ||
+              '',
+          )
+            .toLowerCase()
+            .includes(
+              'abort',
+            )
+
+        console.error(
+          'Ryan Groq fallback error:',
+          {
+            error:
+              error?.message,
+
+            name:
+              error?.name,
+
+            model:
+              GROQ_MODEL,
+
+            organizationId,
+
+            conversationId:
+              conversation.id,
+
+            intent,
+
+            timeout:
+              isAbort,
+          },
+        )
+
+        recordUsageNonBlocking(
+          supabase,
+          {
+            organizationId,
+
+            conversationId:
+              conversation.id,
+
+            userId:
+              user.id,
+
+            model:
+              GROQ_MODEL,
+
+            eventType:
+              'error',
+
+            metadata: {
+              source:
+                'groq_fetch',
+
+              provider:
+                'groq',
+
+              timeout:
+                isAbort,
+            },
+          },
+        )
+
+        return res
+          .status(503)
+          .json({
+            error:
+              'محرك الذكاء الاصطناعي غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.',
+
+            conversationId:
+              conversation.id,
+          })
+      }
+    }
+
+    /*
+     * If Gemini failed permanently and there is no Groq
+     * fallback, preserve the original Gemini error.
+     */
+    if (
+      !response &&
+      !shouldFallbackToGroq
+    ) {
+      return res
+        .status(502)
         .json({
           error:
             getGeminiErrorMessage(
-              response.status,
+              502,
               body,
             ),
 
@@ -2264,6 +3005,33 @@ export default async function handler(
             conversation.id,
         })
     }
+
+    /*
+     * If Gemini failed with a fallback-eligible error
+     * but Groq is not configured, return the original
+     * Gemini-facing error.
+     */
+    if (
+      !response &&
+      shouldFallbackToGroq &&
+      !groqApiKey
+    ) {
+      return res
+        .status(503)
+        .json({
+          error:
+            'محرك الذكاء الاصطناعي غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.',
+
+          conversationId:
+            conversation.id,
+        })
+    }
+
+    /*
+     * --------------------------------------------------
+     * AI RESPONSE PROCESSING
+     * --------------------------------------------------
+     */
 
     const usageMetadata =
       body.usageMetadata ||
@@ -2331,14 +3099,6 @@ export default async function handler(
           ),
       )
 
-    /*
-     * Track tools locally.
-     *
-     * IMPORTANT:
-     * We do NOT record a separate `tool_call` usage
-     * event anymore. The Gemini response is one request
-     * and is counted once below.
-     */
     const successfulToolResults:
       Array<{
         name: RyanToolName
@@ -2358,11 +3118,6 @@ export default async function handler(
         const args =
           call.args || {}
 
-        /*
-         * Appointment intent can only:
-         * - book appointment
-         * - handoff
-         */
         if (
           intent ===
             'appointment' &&
@@ -2379,9 +3134,6 @@ export default async function handler(
           continue
         }
 
-        /*
-         * Handoff intent can ONLY call handoff.
-         */
         if (
           intent ===
             'handoff' &&
@@ -2442,16 +3194,8 @@ export default async function handler(
     }
 
     /*
-     * Record ONE usage event for the Gemini response.
-     *
-     * This prevents the old double counting where the same
-     * response was recorded as:
-     * - tool_call
-     * - message
-     *
-     * The current DB compatibility RPC stores p_tokens as
-     * total usage, which is exactly what the entitlement
-     * check reads from ryan_monthly_usage.
+     * Record ONE usage event for the actual provider
+     * that generated the response.
      */
     if (
       totalTokens > 0 ||
@@ -2469,7 +3213,7 @@ export default async function handler(
             user.id,
 
           model:
-            MODEL,
+            activeModel,
 
           eventType:
             'message',
@@ -2478,6 +3222,9 @@ export default async function handler(
             totalTokens,
 
           metadata: {
+            provider:
+              aiProvider,
+
             intent,
 
             promptTokens,
@@ -2554,6 +3301,9 @@ export default async function handler(
           metadata: {
             action_taken:
               'book_appointment',
+
+            provider:
+              aiProvider,
           },
         },
       )
@@ -2575,6 +3325,12 @@ export default async function handler(
             outputTokens,
 
             totalTokens,
+
+            provider:
+              aiProvider,
+
+            model:
+              activeModel,
           },
         })
     }
@@ -2611,6 +3367,9 @@ export default async function handler(
 
             status:
               'open',
+
+            provider:
+              aiProvider,
           },
         },
       )
@@ -2635,6 +3394,12 @@ export default async function handler(
             outputTokens,
 
             totalTokens,
+
+            provider:
+              aiProvider,
+
+            model:
+              activeModel,
           },
         })
     }
@@ -2668,6 +3433,9 @@ export default async function handler(
           metadata: {
             action_taken:
               'create_deal',
+
+            provider:
+              aiProvider,
           },
         },
       )
@@ -2689,6 +3457,12 @@ export default async function handler(
             outputTokens,
 
             totalTokens,
+
+            provider:
+              aiProvider,
+
+            model:
+              activeModel,
           },
         })
     }
@@ -2722,6 +3496,9 @@ export default async function handler(
           metadata: {
             action_taken:
               'create_lead',
+
+            provider:
+              aiProvider,
           },
         },
       )
@@ -2743,6 +3520,12 @@ export default async function handler(
             outputTokens,
 
             totalTokens,
+
+            provider:
+              aiProvider,
+
+            model:
+              activeModel,
           },
         })
     }
@@ -2788,6 +3571,12 @@ export default async function handler(
             finish_reason:
               finishReason ||
               'EMPTY_RESPONSE',
+
+            provider:
+              aiProvider,
+
+            model:
+              activeModel,
           },
         },
       )
@@ -2807,6 +3596,12 @@ export default async function handler(
             outputTokens,
 
             totalTokens,
+
+            provider:
+              aiProvider,
+
+            model:
+              activeModel,
           },
         })
     }
@@ -2826,6 +3621,14 @@ export default async function handler(
 
         content:
           reply,
+
+        metadata: {
+          provider:
+            aiProvider,
+
+          model:
+            activeModel,
+        },
       },
     )
 
@@ -2843,6 +3646,12 @@ export default async function handler(
           outputTokens,
 
           totalTokens,
+
+          provider:
+            aiProvider,
+
+          model:
+            activeModel,
         },
       })
   } catch (error: any) {
