@@ -49,7 +49,7 @@ type ExecutionSummary = {
   error?: string
 }
 
-type SupabaseClient = ReturnType<typeof createClient>
+type SupabaseClient = import('@supabase/supabase-js').SupabaseClient<any>
 
 function jsonError(
   res: VercelResponse,
