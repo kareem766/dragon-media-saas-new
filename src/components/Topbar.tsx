@@ -19,6 +19,13 @@ interface NotificationItem {
   created_at: string
 }
 
+interface UserProfile {
+  full_name: string | null
+  email: string | null
+  role: string | null
+  is_platform_admin: boolean | null
+}
+
 export default function Topbar({ title, onMenuClick }: TopbarProps) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
@@ -28,25 +35,39 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
-  const [notificationsError, setNotificationsError] = useState<string | null>(null)
+  const [notificationsError, setNotificationsError] = useState<string | null>(
+    null
+  )
+
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
 
   const [loggingOut, setLoggingOut] = useState(false)
 
   const accountRef = useRef<HTMLDivElement | null>(null)
   const notificationsRef = useRef<HTMLDivElement | null>(null)
 
-  const displayName =
+  const authDisplayName =
     user?.user_metadata?.full_name ||
     user?.user_metadata?.name ||
     user?.email?.split('@')[0] ||
     'المستخدم'
 
-  const email = user?.email || ''
+  const displayName = profile?.full_name?.trim() || authDisplayName
 
-  const role =
-    user?.user_metadata?.role ||
-    user?.app_metadata?.role ||
-    'مستخدم'
+  const email = profile?.email?.trim() || user?.email || ''
+
+  const rawRole = profile?.role || ''
+
+  const role = profile?.is_platform_admin
+    ? 'مدير المنصة'
+    : rawRole === 'super_admin'
+      ? 'مدير النظام'
+      : rawRole === 'admin'
+        ? 'مدير'
+        : rawRole
+          ? rawRole
+          : 'مستخدم'
 
   const avatarUrl =
     user?.user_metadata?.avatar_url ||
@@ -56,6 +77,31 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
   const unreadCount = notifications.filter(
     (notification) => !notification.is_read
   ).length
+
+  const loadProfile = async () => {
+    if (!supabase || !user?.id) {
+      setProfile(null)
+      setProfileLoading(false)
+      return
+    }
+
+    setProfileLoading(true)
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('full_name, email, role, is_platform_admin')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Failed to load user profile:', error)
+      setProfile(null)
+    } else {
+      setProfile((data || null) as UserProfile | null)
+    }
+
+    setProfileLoading(false)
+  }
 
   const loadNotifications = async () => {
     if (!supabase || !user?.id) {
@@ -89,10 +135,12 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
 
   useEffect(() => {
     if (!supabase || !user?.id) {
+      setProfile(null)
       setNotifications([])
       return
     }
 
+    loadProfile()
     loadNotifications()
 
     const channel = supabase
@@ -147,9 +195,7 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
       .subscribe()
 
     return () => {
-      if (supabase) {
-        supabase.removeChannel(channel)
-      }
+      supabase.removeChannel(channel)
     }
   }, [user?.id])
 
@@ -254,7 +300,6 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
 
     if (error) {
       console.error('Failed to mark all notifications as read:', error)
-
       await loadNotifications()
     }
   }
@@ -280,7 +325,7 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
 
     try {
       await signOut()
-      navigate('/login')
+      navigate('/login', { replace: true })
     } finally {
       setLoggingOut(false)
       setAccountOpen(false)
@@ -299,6 +344,10 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
   const toggleAccount = () => {
     setAccountOpen((current) => !current)
     setNotificationsOpen(false)
+
+    if (!accountOpen) {
+      loadProfile()
+    }
   }
 
   const formatNotificationDate = (date: string) => {
@@ -314,10 +363,11 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
     }
   }
 
+  const initial = displayName.trim().charAt(0) || 'م'
+
   return (
     <header className="sticky top-0 z-40 border-b border-ink-100 bg-white/95 backdrop-blur">
       <div className="flex min-h-[72px] items-center justify-between gap-3 px-4 sm:px-8">
-        {/* Page title + mobile menu */}
         <div className="flex min-w-0 items-center gap-3">
           {onMenuClick && (
             <button
@@ -346,15 +396,14 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
             <h1 className="truncate text-lg font-bold text-ink-950 sm:text-xl">
               {title}
             </h1>
+
             <p className="hidden text-xs text-ink-500 sm:block">
               إدارة أعمالك من مكان واحد
             </p>
           </div>
         </div>
 
-        {/* Right side */}
         <div className="flex items-center gap-2">
-          {/* Notifications */}
           <div ref={notificationsRef} className="relative">
             <button
               type="button"
@@ -519,13 +568,13 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
             )}
           </div>
 
-          {/* Account */}
           <div ref={accountRef} className="relative">
             <button
               type="button"
               onClick={toggleAccount}
               className="flex items-center gap-2 rounded-xl border border-ink-100 bg-white px-2 py-1.5 transition hover:bg-ink-50 sm:px-3"
               aria-expanded={accountOpen}
+              aria-haspopup="menu"
             >
               {avatarUrl ? (
                 <img
@@ -535,7 +584,7 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                 />
               ) : (
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-100 text-sm font-bold text-gold-700">
-                  {displayName.charAt(0)}
+                  {initial}
                 </div>
               )}
 
@@ -565,7 +614,10 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
             </button>
 
             {accountOpen && (
-              <div className="absolute left-0 mt-3 w-72 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-xl">
+              <div
+                className="absolute left-0 mt-3 w-72 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-xl"
+                role="menu"
+              >
                 <div className="border-b border-ink-100 px-4 py-4">
                   <div className="flex items-center gap-3">
                     {avatarUrl ? (
@@ -576,20 +628,20 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                       />
                     ) : (
                       <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gold-100 font-bold text-gold-700">
-                        {displayName.charAt(0)}
+                        {initial}
                       </div>
                     )}
 
                     <div className="min-w-0">
                       <p className="truncate font-bold text-ink-950">
-                        {displayName}
+                        {profileLoading ? 'جاري تحميل الحساب...' : displayName}
                       </p>
 
                       <p className="truncate text-xs text-ink-500">
                         {email}
                       </p>
 
-                      <p className="mt-1 text-xs text-gold-600">
+                      <p className="mt-1 text-xs font-semibold text-gold-600">
                         {role}
                       </p>
                     </div>
@@ -601,6 +653,7 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                     to="/account"
                     onClick={() => setAccountOpen(false)}
                     className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink-700 transition hover:bg-ink-50"
+                    role="menuitem"
                   >
                     <svg
                       width="18"
@@ -623,6 +676,7 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                     to="/settings"
                     onClick={() => setAccountOpen(false)}
                     className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink-700 transition hover:bg-ink-50"
+                    role="menuitem"
                   >
                     <svg
                       width="18"
@@ -635,7 +689,7 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                       strokeLinejoin="round"
                     >
                       <circle cx="12" cy="12" r="3" />
-                      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.6v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H4v-2.6h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V4h2.6v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1v2.6h-.1a1.7 1.7 0 0 0-1.6 1Z" />
+                      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.6v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H4v-2.6h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1v2.6h-.1a1.7 1.7 0 0 0-1.6 1Z" />
                     </svg>
 
                     <span>الإعدادات</span>
@@ -648,6 +702,7 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                     onClick={handleLogout}
                     disabled={loggingOut}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    role="menuitem"
                   >
                     <svg
                       width="18"
@@ -665,7 +720,9 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                     </svg>
 
                     <span>
-                      {loggingOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
+                      {loggingOut
+                        ? 'جاري تسجيل الخروج...'
+                        : 'تسجيل الخروج'}
                     </span>
                   </button>
                 </div>
