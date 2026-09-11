@@ -180,11 +180,6 @@ Before calling the tool:
 - date must be known.
 - time must be known.
 
-The service_name should describe the subject of the meeting, for example:
-- استشارة تسويقية
-- مقابلة لمناقشة إدارة الصفحات
-- اجتماع بخصوص الإعلانات
-
 If only one of date or time is missing, ask only for the missing information.
 
 Never claim the appointment was created unless the tool succeeds.
@@ -329,6 +324,8 @@ const APPOINTMENT_KEYWORDS = [
   'حدد لي موعد',
   'عايز احدد معاد',
   'عايز أحدد ميعاد',
+  'عايز احدد موعد',
+  'عايز أحدد موعد',
 ]
 
 const DEAL_KEYWORDS = [
@@ -344,19 +341,19 @@ const DEAL_KEYWORDS = [
   'شراء الخدمة',
   'اشتري الخدمة',
   'أشتري الخدمة',
-  'عايز الخدمة',
   'موافق ونبدأ',
   'موافق نبدأ',
   'موافق ابدأ',
   'موافق أبدأ',
-  'نبدأ',
   'ابدأ الخدمة',
   'أبدأ الخدمة',
-  'عايز ابدأ',
-  'عايز أبدأ',
-  'عايز نبدأ',
+  'عايز ابدأ الخدمة',
+  'عايز أبدأ الخدمة',
+  'عايز نبدأ الخدمة',
   'أبدأ معاكم',
   'ابدأ معاكم',
+  'عايز أشتغل معاكم',
+  'عايز اشتغل معاكم',
 ]
 
 const LEAD_INTEREST_KEYWORDS = [
@@ -456,13 +453,6 @@ function detectIntent(
   message: string,
   history: RyanHistoryItem[] = [],
 ): RyanIntent {
-  /*
-   * Explicit human request always wins.
-   *
-   * This is important because phrases such as:
-   * "اتكلم مع الفريق"
-   * must never become an appointment.
-   */
   if (
     containsKeyword(
       message,
@@ -472,11 +462,6 @@ function detectIntent(
     return 'handoff'
   }
 
-  /*
-   * Explicit real meeting / appointment request.
-   *
-   * "عايز احجز خدمة" is NOT an appointment.
-   */
   if (
     containsKeyword(
       message,
@@ -486,9 +471,6 @@ function detectIntent(
     return 'appointment'
   }
 
-  /*
-   * Explicit purchase / contract intent.
-   */
   if (
     containsKeyword(
       message,
@@ -498,9 +480,6 @@ function detectIntent(
     return 'deal'
   }
 
-  /*
-   * Genuine service / sales interest.
-   */
   if (
     containsKeyword(
       message,
@@ -510,10 +489,6 @@ function detectIntent(
     return 'lead'
   }
 
-  /*
-   * Continue an appointment context when the customer
-   * is providing date/time after already requesting a meeting.
-   */
   const recentHistory =
     getHistoryText(
       history,
@@ -790,6 +765,7 @@ async function getMonthlyUsage(
       Number(
         row?.tokens ??
           row?.token_count ??
+          row?.total_tokens ??
           0,
       ) || 0,
   }
@@ -1335,13 +1311,19 @@ async function runFunction(
         p_conversation_id:
           conversationId,
 
+        p_customer_name:
+          String(
+            args.customer_name ||
+              '',
+          ),
+
         p_reason:
           String(
             args.reason ||
               'Customer requested human assistance',
           ),
 
-        p_requested_by:
+        p_created_by:
           userId,
       },
     )
@@ -1804,7 +1786,10 @@ export default async function handler(
         })
     }
 
-    const safeHistory: RyanHistoryItem[] =
+    /*
+     * Normalize history and remove empty items.
+     */
+    let safeHistory: RyanHistoryItem[] =
       Array.isArray(history)
         ? history
             .filter(
@@ -1831,9 +1816,60 @@ export default async function handler(
             )
         : []
 
+    /*
+     * IMPORTANT:
+     * The frontend can already send the current user
+     * message as the last history item.
+     *
+     * The API also appends `message` below.
+     * Remove the duplicate so Gemini sees the current
+     * user message exactly once.
+     */
+    const normalizedCurrentMessage =
+      message.trim()
+
+    if (
+      safeHistory.length > 0
+    ) {
+      const lastItem =
+        safeHistory[
+          safeHistory.length - 1
+        ]
+
+      const lastText =
+        String(
+          lastItem?.text ||
+            '',
+        ).trim()
+
+      const isLastUserMessage =
+        lastItem?.role ===
+          'user' ||
+        lastItem?.sender ===
+          'user' ||
+        lastItem?.sender ===
+          'customer'
+
+      if (
+        isLastUserMessage &&
+        normalizeArabic(
+          lastText,
+        ) ===
+          normalizeArabic(
+            normalizedCurrentMessage,
+          )
+      ) {
+        safeHistory =
+          safeHistory.slice(
+            0,
+            -1,
+          )
+      }
+    }
+
     const intent =
       detectIntent(
-        message,
+        normalizedCurrentMessage,
         safeHistory,
       )
 
@@ -1868,7 +1904,7 @@ export default async function handler(
           'customer',
 
         content:
-          message,
+          normalizedCurrentMessage,
       },
     )
 
@@ -2034,7 +2070,7 @@ export default async function handler(
         parts: [
           {
             text:
-              message,
+              normalizedCurrentMessage,
           },
         ],
       },
@@ -2235,22 +2271,22 @@ export default async function handler(
 
     const promptTokens =
       Number(
-        usageMetadata.promptTokenCount ||
+        usageMetadata.promptTokenCount ??
           0,
-      )
+      ) || 0
 
     const outputTokens =
       Number(
-        usageMetadata.candidatesTokenCount ||
+        usageMetadata.candidatesTokenCount ??
           0,
-      )
+      ) || 0
 
     const totalTokens =
       Number(
-        usageMetadata.totalTokenCount ||
+        usageMetadata.totalTokenCount ??
           promptTokens +
             outputTokens,
-      )
+      ) || 0
 
     const candidate =
       body.candidates?.[0]
@@ -2295,16 +2331,24 @@ export default async function handler(
           ),
       )
 
+    /*
+     * Track tools locally.
+     *
+     * IMPORTANT:
+     * We do NOT record a separate `tool_call` usage
+     * event anymore. The Gemini response is one request
+     * and is counted once below.
+     */
+    const successfulToolResults:
+      Array<{
+        name: RyanToolName
+        result: any
+      }> = []
+
     if (
       validFunctionCalls.length >
       0
     ) {
-      const successfulToolResults:
-        Array<{
-          name: RyanToolName
-          result: any
-        }> = []
-
       for (
         const call of validFunctionCalls
       ) {
@@ -2352,35 +2396,6 @@ export default async function handler(
           continue
         }
 
-        recordUsageNonBlocking(
-          supabase,
-          {
-            organizationId,
-
-            conversationId:
-              conversation.id,
-
-            userId:
-              user.id,
-
-            model:
-              MODEL,
-
-            eventType:
-              'tool_call',
-
-            tokens:
-              totalTokens,
-
-            metadata: {
-              tool:
-                functionName,
-
-              intent,
-            },
-          },
-        )
-
         try {
           const result =
             await runFunction(
@@ -2424,7 +2439,24 @@ export default async function handler(
           )
         }
       }
+    }
 
+    /*
+     * Record ONE usage event for the Gemini response.
+     *
+     * This prevents the old double counting where the same
+     * response was recorded as:
+     * - tool_call
+     * - message
+     *
+     * The current DB compatibility RPC stores p_tokens as
+     * total usage, which is exactly what the entitlement
+     * check reads from ryan_monthly_usage.
+     */
+    if (
+      totalTokens > 0 ||
+      validFunctionCalls.length === 0
+    ) {
       recordUsageNonBlocking(
         supabase,
         {
@@ -2448,231 +2480,271 @@ export default async function handler(
           metadata: {
             intent,
 
+            promptTokens,
+
+            outputTokens,
+
+            totalTokens,
+
             toolCalls:
               successfulToolResults.map(
                 (item) =>
                   item.name,
               ),
+
+            finishReason,
+          },
+        },
+      )
+    }
+
+    /*
+     * Appointment success.
+     */
+    const appointment =
+      successfulToolResults.find(
+        (item) =>
+          item.name ===
+          'book_appointment',
+      )
+
+    if (appointment) {
+      const args =
+        validFunctionCalls.find(
+          (call) =>
+            call.name ===
+            'book_appointment',
+        )?.args || {}
+
+      const serviceName =
+        String(
+          args.service_name ||
+            'المقابلة',
+        )
+
+      const date =
+        String(
+          args.date ||
+            '',
+        )
+
+      const time =
+        String(
+          args.time ||
+            '',
+        )
+
+      const reply =
+        date && time
+          ? `تمام، سجلت لك ${serviceName} يوم ${date} الساعة ${time}.`
+          : `تمام، سجلت لك الموعد.`
+
+      await saveMessage(
+        supabase,
+        {
+          conversationId:
+            conversation.id,
+
+          senderType:
+            'ai',
+
+          content:
+            reply,
+
+          metadata: {
+            action_taken:
+              'book_appointment',
           },
         },
       )
 
-      /*
-       * Appointment success.
-       */
-      const appointment =
-        successfulToolResults.find(
-          (item) =>
-            item.name ===
+      return res
+        .status(200)
+        .json({
+          reply,
+
+          conversationId:
+            conversation.id,
+
+          actionTaken:
             'book_appointment',
-        )
 
-      if (appointment) {
-        const args =
-          validFunctionCalls.find(
-            (call) =>
-              call.name ===
-              'book_appointment',
-          )?.args || {}
+          usage: {
+            promptTokens,
 
-        const serviceName =
-          String(
-            args.service_name ||
-              'المقابلة',
-          )
+            outputTokens,
 
-        const date =
-          String(
-            args.date ||
-              '',
-          )
-
-        const time =
-          String(
-            args.time ||
-              '',
-          )
-
-        const reply =
-          date && time
-            ? `تمام، سجلت لك ${serviceName} يوم ${date} الساعة ${time}.`
-            : `تمام، سجلت لك الموعد.`
-
-        await saveMessage(
-          supabase,
-          {
-            conversationId:
-              conversation.id,
-
-            senderType:
-              'ai',
-
-            content:
-              reply,
-
-            metadata: {
-              action_taken:
-                'book_appointment',
-            },
+            totalTokens,
           },
-        )
+        })
+    }
 
-        return res
-          .status(200)
-          .json({
+    /*
+     * Human handoff success.
+     */
+    const handoff =
+      successfulToolResults.find(
+        (item) =>
+          item.name ===
+          'request_human_handoff',
+      )
+
+    if (handoff) {
+      const reply =
+        'أكيد، هحوّل المحادثة لحد من الفريق ويتابع معاك.'
+
+      await saveMessage(
+        supabase,
+        {
+          conversationId:
+            conversation.id,
+
+          senderType:
+            'ai',
+
+          content:
             reply,
 
-            conversationId:
-              conversation.id,
-
-            actionTaken:
-              'book_appointment',
-          })
-      }
-
-      /*
-       * Human handoff success.
-       */
-      const handoff =
-        successfulToolResults.find(
-          (item) =>
-            item.name ===
-            'request_human_handoff',
-        )
-
-      if (handoff) {
-        const reply =
-          'أكيد، هحوّل المحادثة لحد من الفريق ويتابع معاك.'
-
-        await saveMessage(
-          supabase,
-          {
-            conversationId:
-              conversation.id,
-
-            senderType:
-              'ai',
-
-            content:
-              reply,
-
-            metadata: {
-              action_taken:
-                'request_human_handoff',
-
-              status:
-                'pending',
-            },
-          },
-        )
-
-        return res
-          .status(200)
-          .json({
-            reply,
-
-            conversationId:
-              conversation.id,
-
-            actionTaken:
+          metadata: {
+            action_taken:
               'request_human_handoff',
 
-            handoff:
-              true,
-          })
-      }
-
-      /*
-       * Deal success.
-       */
-      const deal =
-        successfulToolResults.find(
-          (item) =>
-            item.name ===
-            'create_deal',
-        )
-
-      if (deal) {
-        const reply =
-          'تمام، سجلت طلبك وهنتابع معاك بخصوص الخدمة والتفاصيل.'
-
-        await saveMessage(
-          supabase,
-          {
-            conversationId:
-              conversation.id,
-
-            senderType:
-              'ai',
-
-            content:
-              reply,
-
-            metadata: {
-              action_taken:
-                'create_deal',
-            },
+            status:
+              'open',
           },
-        )
+        },
+      )
 
-        return res
-          .status(200)
-          .json({
+      return res
+        .status(200)
+        .json({
+          reply,
+
+          conversationId:
+            conversation.id,
+
+          actionTaken:
+            'request_human_handoff',
+
+          handoff:
+            true,
+
+          usage: {
+            promptTokens,
+
+            outputTokens,
+
+            totalTokens,
+          },
+        })
+    }
+
+    /*
+     * Deal success.
+     */
+    const deal =
+      successfulToolResults.find(
+        (item) =>
+          item.name ===
+          'create_deal',
+      )
+
+    if (deal) {
+      const reply =
+        'تمام، سجلت طلبك وهنتابع معاك بخصوص الخدمة والتفاصيل.'
+
+      await saveMessage(
+        supabase,
+        {
+          conversationId:
+            conversation.id,
+
+          senderType:
+            'ai',
+
+          content:
             reply,
 
-            conversationId:
-              conversation.id,
-
-            actionTaken:
+          metadata: {
+            action_taken:
               'create_deal',
-          })
-      }
-
-      /*
-       * Lead success.
-       */
-      const lead =
-        successfulToolResults.find(
-          (item) =>
-            item.name ===
-            'create_lead',
-        )
-
-      if (lead) {
-        const reply =
-          'تمام، سجلت بياناتك وهنتابع معاك بخصوص طلبك.'
-
-        await saveMessage(
-          supabase,
-          {
-            conversationId:
-              conversation.id,
-
-            senderType:
-              'ai',
-
-            content:
-              reply,
-
-            metadata: {
-              action_taken:
-                'create_lead',
-            },
           },
-        )
+        },
+      )
 
-        return res
-          .status(200)
-          .json({
+      return res
+        .status(200)
+        .json({
+          reply,
+
+          conversationId:
+            conversation.id,
+
+          actionTaken:
+            'create_deal',
+
+          usage: {
+            promptTokens,
+
+            outputTokens,
+
+            totalTokens,
+          },
+        })
+    }
+
+    /*
+     * Lead success.
+     */
+    const lead =
+      successfulToolResults.find(
+        (item) =>
+          item.name ===
+          'create_lead',
+      )
+
+    if (lead) {
+      const reply =
+        'تمام، سجلت بياناتك وهنتابع معاك بخصوص طلبك.'
+
+      await saveMessage(
+        supabase,
+        {
+          conversationId:
+            conversation.id,
+
+          senderType:
+            'ai',
+
+          content:
             reply,
 
-            conversationId:
-              conversation.id,
-
-            actionTaken:
+          metadata: {
+            action_taken:
               'create_lead',
-          })
-      }
+          },
+        },
+      )
+
+      return res
+        .status(200)
+        .json({
+          reply,
+
+          conversationId:
+            conversation.id,
+
+          actionTaken:
+            'create_lead',
+
+          usage: {
+            promptTokens,
+
+            outputTokens,
+
+            totalTokens,
+          },
+        })
     }
 
     const rawText =
@@ -2696,39 +2768,6 @@ export default async function handler(
           : intent === 'handoff'
             ? 'أكيد، هحوّل المحادثة لحد من الفريق ويتابع معاك.'
             : 'تمام، احكيلي تفاصيل طلبك وأنا أساعدك.'
-
-      recordUsageNonBlocking(
-        supabase,
-        {
-          organizationId,
-
-          conversationId:
-            conversation.id,
-
-          userId:
-            user.id,
-
-          model:
-            MODEL,
-
-          eventType:
-            'message',
-
-          tokens:
-            totalTokens,
-
-          metadata: {
-            intent,
-
-            finishReason:
-              finishReason ||
-              'EMPTY_RESPONSE',
-
-            fallback:
-              true,
-          },
-        },
-      )
 
       await saveMessage(
         supabase,
@@ -2775,34 +2814,6 @@ export default async function handler(
     const reply =
       rawText ||
       'تمام، قولي تفاصيل أكتر وأنا أساعدك.'
-
-    recordUsageNonBlocking(
-      supabase,
-      {
-        organizationId,
-
-        conversationId:
-          conversation.id,
-
-        userId:
-          user.id,
-
-        model:
-          MODEL,
-
-        eventType:
-          'message',
-
-        tokens:
-          totalTokens,
-
-        metadata: {
-          intent,
-
-          finishReason,
-        },
-      },
-    )
 
     await saveMessage(
       supabase,
