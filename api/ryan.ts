@@ -1464,12 +1464,30 @@ export default async function handler(
   }
 
   const {
-    message,
-    history = [],
-    companyName = '',
-    accessToken,
-    conversationId = null,
-  } = req.body || {}
+  message,
+  history = [],
+  companyName = '',
+  conversationId = null,
+} = req.body || {}
+
+const authorizationHeader =
+  req.headers.authorization ||
+  req.headers.Authorization
+
+const headerAccessToken =
+  typeof authorizationHeader === 'string' &&
+  authorizationHeader.startsWith('Bearer ')
+    ? authorizationHeader.slice(7).trim()
+    : ''
+
+const bodyAccessToken =
+  typeof req.body?.accessToken === 'string'
+    ? req.body.accessToken.trim()
+    : ''
+
+const accessToken =
+  headerAccessToken ||
+  bodyAccessToken
 
   if (
     !message ||
