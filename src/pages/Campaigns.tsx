@@ -22,7 +22,8 @@ interface DBCampaign {
   message_body: string | null
   audience_filter: {
     status?: string
-    tag?: string
+    tag?: string | null
+    optedInOnly?: boolean
   } | null
   total_recipients: number
   queued_count: number
@@ -37,11 +38,43 @@ interface CampaignMessage {
   status: string
 }
 
+interface QueueStats {
+  total: number
+  queued: number
+  sent: number
+  delivered: number
+  failed: number
+  skipped: number
+}
+
 const channelLabels: Record<string, string> = {
   whatsapp: 'واتساب',
   messenger: 'ماسنجر',
   instagram: 'إنستجرام',
   email: 'بريد إلكتروني',
+}
+
+function percentage(
+  value: number,
+  total: number
+) {
+  if (!total) return 0
+  return Math.min(
+    100,
+    Math.round((value / total) * 100)
+  )
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '—'
+
+  return new Intl.DateTimeFormat(
+    'ar-EG',
+    {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }
+  ).format(new Date(value))
 }
 
 export default function Campaigns() {
@@ -71,6 +104,12 @@ export default function Campaigns() {
   const [preparingId, setPreparingId] =
     useState<string | null>(null)
 
+  const [actionId, setActionId] =
+    useState<string | null>(null)
+
+  const [actionType, setActionType] =
+    useState<string | null>(null)
+
   const [showForm, setShowForm] =
     useState(false)
 
@@ -98,13 +137,13 @@ export default function Campaigns() {
     setLoading(true)
     setError(null)
 
-    const sb = supabase
+    const client = supabase
 
     const [
       campaignsRes,
       messagesRes,
     ] = await Promise.all([
-      sb
+      client
         .from('campaigns')
         .select(`
           id,
@@ -133,7 +172,7 @@ export default function Campaigns() {
           }
         ),
 
-      sb
+      client
         .from('campaign_messages')
         .select(
           'campaign_id, status'
@@ -171,23 +210,18 @@ export default function Campaigns() {
     useMemo(() => {
       const map: Record<
         string,
-        {
-          total: number
-          ready: number
-          sent: number
-          delivered: number
-          failed: number
-        }
+        QueueStats
       > = {}
 
       for (const message of messages) {
         if (!map[message.campaign_id]) {
           map[message.campaign_id] = {
             total: 0,
-            ready: 0,
+            queued: 0,
             sent: 0,
             delivered: 0,
             failed: 0,
+            skipped: 0,
           }
         }
 
@@ -197,38 +231,82 @@ export default function Campaigns() {
         item.total++
 
         if (
-          message.status ===
-            'جاهزة' ||
-          message.status ===
-            'قيد الإرسال'
+          message.status === 'جاهزة' ||
+          message.status === 'قيد الإرسال'
         ) {
-          item.ready++
+          item.queued++
         }
 
         if (
-          message.status ===
-          'تم الإرسال'
+          message.status === 'تم الإرسال'
         ) {
           item.sent++
         }
 
         if (
-          message.status ===
-          'تم التسليم'
+          message.status === 'تم التسليم'
         ) {
           item.delivered++
         }
 
         if (
-          message.status ===
-          'فشلت'
+          message.status === 'فشلت'
         ) {
           item.failed++
+        }
+
+        if (
+          message.status === 'تم التخطي'
+        ) {
+          item.skipped++
         }
       }
 
       return map
     }, [messages])
+
+  const totals = useMemo(() => {
+    return campaigns.reduce(
+      (acc, campaign) => {
+        const stats =
+          messageStats[campaign.id]
+
+        acc.total +=
+          stats?.total ??
+          campaign.total_recipients ??
+          0
+
+        acc.queued +=
+          stats?.queued ??
+          campaign.queued_count ??
+          0
+
+        acc.sent +=
+          stats?.sent ??
+          campaign.sent_count ??
+          0
+
+        acc.delivered +=
+          stats?.delivered ??
+          campaign.delivered_count ??
+          0
+
+        acc.failed +=
+          stats?.failed ??
+          campaign.failed_count ??
+          0
+
+        return acc
+      },
+      {
+        total: 0,
+        queued: 0,
+        sent: 0,
+        delivered: 0,
+        failed: 0,
+      }
+    )
+  }, [campaigns, messageStats])
 
   const handleAdd = async (
     e: React.FormEvent
@@ -246,17 +324,19 @@ export default function Campaigns() {
     setError(null)
     setSuccess(null)
 
+    const client = supabase
+
     const {
       data: authData,
     } =
-      await supabase.auth.getUser()
+      await client.auth.getUser()
 
     const userId =
       authData.user?.id
 
     const {
       error: insertError,
-    } = await supabase
+    } = await client
       .from('campaigns')
       .insert({
         organization_id:
@@ -326,10 +406,68 @@ export default function Campaigns() {
     setShowForm(false)
 
     setSuccess(
-      'تم إنشاء الحملة كحملة حقيقية في قاعدة البيانات.'
+      'تم إنشاء الحملة بنجاح.'
     )
 
     await loadData()
+  }
+
+  const callQueueApi = async (
+    campaignId: string,
+    action: string
+  ) => {
+    if (!supabase) {
+      throw new Error(
+        'خدمة قاعدة البيانات غير متاحة.'
+      )
+    }
+
+    const {
+      data: sessionData,
+    } =
+      await supabase.auth.getSession()
+
+    const accessToken =
+      sessionData.session?.access_token
+
+    if (!accessToken) {
+      throw new Error(
+        'انتهت جلسة الدخول، برجاء تسجيل الدخول مرة أخرى.'
+      )
+    }
+
+    const response =
+      await fetch(
+        '/api/campaign-queue',
+        {
+          method: 'POST',
+
+          headers: {
+            'Content-Type':
+              'application/json',
+
+            Authorization:
+              `Bearer ${accessToken}`,
+          },
+
+          body: JSON.stringify({
+            campaignId,
+            action,
+          }),
+        }
+      )
+
+    const result =
+      await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        result.error ??
+          'تعذر تنفيذ العملية.'
+      )
+    }
+
+    return result
   }
 
   const prepareCampaign = async (
@@ -414,6 +552,112 @@ export default function Campaigns() {
     }
   }
 
+  const refreshStats = async (
+    campaignId: string
+  ) => {
+    setActionId(campaignId)
+    setActionType('refresh')
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await callQueueApi(
+        campaignId,
+        'refresh'
+      )
+
+      setSuccess(
+        'تم تحديث إحصائيات الحملة.'
+      )
+
+      await loadData()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر تحديث الإحصائيات.'
+      )
+    } finally {
+      setActionId(null)
+      setActionType(null)
+    }
+  }
+
+  const retryFailed = async (
+    campaignId: string
+  ) => {
+    setActionId(campaignId)
+    setActionType('retry')
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const result =
+        await callQueueApi(
+          campaignId,
+          'retry_failed'
+        )
+
+      setSuccess(
+        result.message ??
+          'تمت إعادة تجهيز الرسائل الفاشلة.'
+      )
+
+      await loadData()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر إعادة محاولة الرسائل.'
+      )
+    } finally {
+      setActionId(null)
+      setActionType(null)
+    }
+  }
+
+  const cancelCampaign = async (
+    campaignId: string
+  ) => {
+    const confirmed =
+      window.confirm(
+        'هل أنت متأكد من إلغاء هذه الحملة؟ سيتم تخطي الرسائل التي لم يتم إرسالها.'
+      )
+
+    if (!confirmed) {
+      return
+    }
+
+    setActionId(campaignId)
+    setActionType('cancel')
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const result =
+        await callQueueApi(
+          campaignId,
+          'cancel'
+        )
+
+      setSuccess(
+        result.message ??
+          'تم إلغاء الحملة.'
+      )
+
+      await loadData()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر إلغاء الحملة.'
+      )
+    } finally {
+      setActionId(null)
+      setActionType(null)
+    }
+  }
+
   if (
     !subLoading &&
     !hasFeature('campaigns')
@@ -456,14 +700,17 @@ export default function Campaigns() {
   return (
     <div className="space-y-5">
 
+      {/* Header */}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
         <div>
           <h1 className="text-xl font-bold text-ink-950">
             الحملات التسويقية
           </h1>
 
           <p className="text-sm text-ink-900/50 mt-1">
-            أنشئ جمهورًا حقيقيًا من العملاء المشتركين وجهّز رسائل الحملات للإرسال.
+            أنشئ واستهدف جمهورك وتابع Queue الحملة وإحصائياتها من مكان واحد.
           </p>
         </div>
 
@@ -479,6 +726,8 @@ export default function Campaigns() {
         </Button>
       </div>
 
+      {/* Alerts */}
+
       {success && (
         <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl px-4 py-3 text-sm">
           {success}
@@ -491,6 +740,64 @@ export default function Campaigns() {
         </div>
       )}
 
+      {/* Summary */}
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            إجمالي المستهدفين
+          </div>
+
+          <div className="text-2xl font-bold text-ink-950 mt-1">
+            {totals.total}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            في Queue
+          </div>
+
+          <div className="text-2xl font-bold text-ink-950 mt-1">
+            {totals.queued}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            تم الإرسال
+          </div>
+
+          <div className="text-2xl font-bold text-ink-950 mt-1">
+            {totals.sent}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            تم التسليم
+          </div>
+
+          <div className="text-2xl font-bold text-emerald-600 mt-1">
+            {totals.delivered}
+          </div>
+        </Card>
+
+        <Card className="p-4 col-span-2 lg:col-span-1">
+          <div className="text-xs text-ink-900/45">
+            فشل
+          </div>
+
+          <div className="text-2xl font-bold text-red-600 mt-1">
+            {totals.failed}
+          </div>
+        </Card>
+
+      </div>
+
+      {/* Create */}
+
       {showForm && (
         <Card className="p-5">
 
@@ -500,7 +807,7 @@ export default function Campaigns() {
             </h2>
 
             <p className="text-xs text-ink-900/45 mt-1">
-              لن يتم إرسال أي رسالة خارجية من هذه المرحلة قبل تفعيل موصل القناة.
+              سيتم استهداف العملاء الذين لديهم Marketing Opt-in فقط.
             </p>
           </div>
 
@@ -611,7 +918,7 @@ export default function Campaigns() {
 
             <div>
               <label className="text-xs font-medium text-ink-900/60">
-                موعد الحملة اختياري
+                الموعد اختياري
               </label>
 
               <input
@@ -654,6 +961,7 @@ export default function Campaigns() {
             </div>
 
             <div className="sm:col-span-2 flex gap-2">
+
               <Button
                 type="submit"
                 disabled={saving}
@@ -672,15 +980,20 @@ export default function Campaigns() {
               >
                 إلغاء
               </Button>
+
             </div>
+
           </form>
         </Card>
       )}
+
+      {/* Campaigns */}
 
       <Card className="p-2 sm:p-4">
 
         {campaigns.length === 0 ? (
           <div className="text-center py-16">
+
             <div className="text-sm font-semibold text-ink-900/60">
               لا توجد حملات بعد
             </div>
@@ -688,6 +1001,7 @@ export default function Campaigns() {
             <div className="text-xs text-ink-900/40 mt-1">
               ابدأ بإنشاء أول حملة حقيقية.
             </div>
+
           </div>
         ) : (
           <Table
@@ -696,12 +1010,14 @@ export default function Campaigns() {
               'القناة',
               'الجمهور',
               'الحالة',
-              'الرسائل',
-              'الإجراء',
+              'التقدم',
+              'الإجراءات',
             ]}
           >
+
             {campaigns.map(
               campaign => {
+
                 const stats =
                   messageStats[
                     campaign.id
@@ -712,8 +1028,8 @@ export default function Campaigns() {
                   campaign.total_recipients ??
                   0
 
-                const ready =
-                  stats?.ready ??
+                const queued =
+                  stats?.queued ??
                   campaign.queued_count ??
                   0
 
@@ -727,24 +1043,58 @@ export default function Campaigns() {
                   campaign.delivered_count ??
                   0
 
+                const failed =
+                  stats?.failed ??
+                  campaign.failed_count ??
+                  0
+
+                const completed =
+                  delivered +
+                  failed
+
+                const progress =
+                  percentage(
+                    completed,
+                    total
+                  )
+
+                const isBusy =
+                  actionId ===
+                  campaign.id
+
                 return (
                   <tr
                     key={
                       campaign.id
                     }
-                    className="hover:bg-sand-50"
+                    className="hover:bg-sand-50 align-top"
                   >
-                    <td className="py-4 px-3 min-w-[180px]">
+
+                    {/* Campaign */}
+
+                    <td className="py-4 px-3 min-w-[220px]">
+
                       <div className="font-semibold text-ink-950">
                         {campaign.name}
                       </div>
 
                       {campaign.message_body && (
-                        <div className="text-xs text-ink-900/40 mt-1 line-clamp-1">
+                        <div className="text-xs text-ink-900/40 mt-1 line-clamp-2">
                           {campaign.message_body}
                         </div>
                       )}
+
+                      {campaign.last_run_at && (
+                        <div className="text-[11px] text-ink-900/35 mt-2">
+                          آخر تحديث: {formatDate(
+                            campaign.last_run_at
+                          )}
+                        </div>
+                      )}
+
                     </td>
+
+                    {/* Channel */}
 
                     <td className="py-4 px-3 whitespace-nowrap">
                       {channelLabels[
@@ -753,10 +1103,30 @@ export default function Campaigns() {
                         campaign.channel}
                     </td>
 
-                    <td className="py-4 px-3 whitespace-nowrap">
-                      {campaign.audience ??
-                        '—'}
+                    {/* Audience */}
+
+                    <td className="py-4 px-3 min-w-[170px]">
+
+                      <div className="text-sm">
+                        {campaign.audience ??
+                          '—'}
+                      </div>
+
+                      {campaign.audience_filter?.tag && (
+                        <div className="mt-1">
+                          <Badge tone="gold">
+                            #{campaign.audience_filter.tag}
+                          </Badge>
+                        </div>
+                      )}
+
+                      <div className="text-xs text-ink-900/40 mt-1">
+                        Opt-in فقط
+                      </div>
+
                     </td>
+
+                    {/* Status */}
 
                     <td className="py-4 px-3">
                       <Badge
@@ -768,72 +1138,189 @@ export default function Campaigns() {
                       </Badge>
                     </td>
 
-                    <td className="py-4 px-3 min-w-[150px]">
-                      <div className="text-xs text-ink-900/55 space-y-1">
-                        <div>
-                          الإجمالي: {total}
-                        </div>
+                    {/* Progress */}
 
-                        <div>
-                          جاهزة: {ready}
-                        </div>
+                    <td className="py-4 px-3 min-w-[230px]">
 
-                        <div>
-                          أُرسلت: {sent}
-                        </div>
+                      <div className="flex items-center justify-between text-xs mb-1.5">
 
-                        <div>
-                          تم التسليم: {delivered}
-                        </div>
+                        <span className="text-ink-900/50">
+                          {progress}% مكتمل
+                        </span>
+
+                        <span className="font-semibold text-ink-900">
+                          {completed}/{total}
+                        </span>
+
                       </div>
+
+                      <div className="h-2 bg-sand-200 rounded-full overflow-hidden">
+
+                        <div
+                          className="h-full bg-ink-900 rounded-full transition-all duration-500"
+                          style={{
+                            width:
+                              `${progress}%`,
+                          }}
+                        />
+
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1 mt-2 text-[11px] text-ink-900/45">
+
+                        <span>
+                          Queue {queued}
+                        </span>
+
+                        <span>
+                          إرسال {sent}
+                        </span>
+
+                        <span>
+                          تسليم {delivered}
+                        </span>
+
+                        <span>
+                          فشل {failed}
+                        </span>
+
+                      </div>
+
                     </td>
 
-                    <td className="py-4 px-3">
-                      <Button
-                        variant="secondary"
-                        disabled={
-                          preparingId ===
-                          campaign.id
-                        }
-                        onClick={() =>
-                          prepareCampaign(
-                            campaign
-                          )
-                        }
-                      >
-                        {preparingId ===
-                        campaign.id
-                          ? 'جاري التجهيز...'
-                          : 'تجهيز الجمهور'}
-                      </Button>
+                    {/* Actions */}
+
+                    <td className="py-4 px-3 min-w-[260px]">
+
+                      <div className="flex flex-wrap gap-2">
+
+                        {[
+                          'مسودة',
+                          'مجدولة',
+                          'قيد التجهيز',
+                        ].includes(
+                          campaign.status
+                        ) && (
+                          <Button
+                            variant="secondary"
+                            disabled={
+                              preparingId ===
+                              campaign.id
+                            }
+                            onClick={() =>
+                              prepareCampaign(
+                                campaign
+                              )
+                            }
+                          >
+                            {preparingId ===
+                            campaign.id
+                              ? 'جاري التجهيز...'
+                              : 'تجهيز الجمهور'}
+                          </Button>
+                        )}
+
+                        <Button
+                          variant="secondary"
+                          disabled={isBusy}
+                          onClick={() =>
+                            refreshStats(
+                              campaign.id
+                            )
+                          }
+                        >
+                          {isBusy &&
+                          actionType ===
+                            'refresh'
+                            ? 'جاري التحديث...'
+                            : 'تحديث'}
+                        </Button>
+
+                        {failed > 0 && (
+                          <Button
+                            variant="secondary"
+                            disabled={isBusy}
+                            onClick={() =>
+                              retryFailed(
+                                campaign.id
+                              )
+                            }
+                          >
+                            {isBusy &&
+                            actionType ===
+                              'retry'
+                              ? 'جاري التجهيز...'
+                              : `إعادة الفاشل (${failed})`}
+                          </Button>
+                        )}
+
+                        {![
+                          'مكتملة',
+                          'ملغاة',
+                        ].includes(
+                          campaign.status
+                        ) && (
+                          <Button
+                            variant="ghost"
+                            disabled={isBusy}
+                            onClick={() =>
+                              cancelCampaign(
+                                campaign.id
+                              )
+                            }
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            {isBusy &&
+                            actionType ===
+                              'cancel'
+                              ? 'جاري الإلغاء...'
+                              : 'إلغاء الحملة'}
+                          </Button>
+                        )}
+
+                      </div>
+
                     </td>
+
                   </tr>
                 )
               }
             )}
+
           </Table>
         )}
+
       </Card>
 
+      {/* Information */}
+
       <Card className="p-5 bg-sand-50/50">
+
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-xl bg-ink-900 text-sand-50 flex items-center justify-center text-sm font-bold">
+
+          <div className="w-9 h-9 shrink-0 rounded-xl bg-ink-900 text-sand-50 flex items-center justify-center text-sm font-bold">
             4
           </div>
 
           <div>
+
             <h3 className="font-bold text-ink-950">
-              Campaign Engine
+              Campaign Queue
             </h3>
 
             <p className="text-sm text-ink-900/55 mt-1 leading-6">
-              الحملات أصبحت مرتبطة بجمهور حقيقي يعتمد على
-              Marketing Opt-in، ويتم إنشاء Queue حقيقي للرسائل.
-              مرحلة الإرسال الخارجي نفسها مؤجلة عمدًا لمرحلة Meta والتكاملات.
+              الحملة الآن لديها Queue حقيقي للرسائل وإحصائيات
+              قابلة للتحديث وإعادة المحاولة والإلغاء.
+              الإرسال الخارجي نفسه لن يتم ادعاؤه قبل تفعيل
+              التكاملات الفعلية في المرحلة الأخيرة.
             </p>
+
           </div>
+
         </div>
+
       </Card>
+
     </div>
   )
 }
