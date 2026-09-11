@@ -402,6 +402,42 @@ export default function Ryan() {
       )
     )
 
+  /*
+   * Approved Ryan credit purchases.
+   * These are real purchases returned by the backend.
+   */
+  const approvedPurchases =
+    useMemo(
+      () =>
+        purchases.filter(
+          purchase =>
+            purchase.status ===
+            'approved'
+        ),
+      [purchases]
+    )
+
+  /*
+   * Purchases currently waiting for admin review.
+   */
+  const pendingPurchases =
+    useMemo(
+      () =>
+        purchases.filter(
+          purchase =>
+            purchase.status ===
+            'pending_review'
+        ),
+      [purchases]
+    )
+
+  /*
+   * Latest approved purchase.
+   * Kept available for UI messaging and future enhancements.
+   */
+  const latestApprovedPurchase =
+    approvedPurchases[0] || null
+
   const selectedPaymentMethod =
     paymentMethods.find(
       method =>
@@ -730,14 +766,20 @@ export default function Ryan() {
   return (
     <div className="space-y-6">
 
-      {/* HERO */}
+      {/* =====================================================
+          HERO
+      ====================================================== */}
 
       <Card className="overflow-hidden border-0 bg-ink-950 text-sand-50 shadow-sm">
+
         <div className="relative p-6 md:p-8">
 
           <div className="absolute inset-0 opacity-10 pointer-events-none">
+
             <div className="absolute -top-20 -end-20 w-64 h-64 rounded-full bg-gold-500 blur-3xl" />
+
             <div className="absolute -bottom-24 -start-24 w-72 h-72 rounded-full bg-white blur-3xl" />
+
           </div>
 
           <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
@@ -745,7 +787,9 @@ export default function Ryan() {
             <div className="flex items-center gap-4">
 
               <div className="w-16 h-16 rounded-2xl bg-gold-500 text-ink-950 flex items-center justify-center shadow-lg">
+
                 <IconSpark className="w-8 h-8" />
+
               </div>
 
               <div>
@@ -784,6 +828,7 @@ export default function Ryan() {
           <div className="relative grid grid-cols-2 md:grid-cols-4 gap-3 mt-7">
 
             <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+
               <div className="text-xs text-sand-100/45">
                 رسائل المحادثة
               </div>
@@ -793,9 +838,11 @@ export default function Ryan() {
                   messageCount
                 )}
               </div>
+
             </div>
 
             <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+
               <div className="text-xs text-sand-100/45">
                 حد الخطة الشهري
               </div>
@@ -808,9 +855,11 @@ export default function Ryan() {
                         0
                     )}
               </div>
+
             </div>
 
             <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+
               <div className="text-xs text-sand-100/45">
                 المستخدم هذا الشهر
               </div>
@@ -823,9 +872,11 @@ export default function Ryan() {
                         0
                     )}
               </div>
+
             </div>
 
             <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+
               <div className="text-xs text-sand-100/45">
                 المتاح الإجمالي
               </div>
@@ -838,14 +889,18 @@ export default function Ryan() {
                         0
                     )}
               </div>
+
             </div>
 
           </div>
 
         </div>
+
       </Card>
 
-      {/* USAGE */}
+      {/* =====================================================
+          USAGE
+      ====================================================== */}
 
       <Card className="p-5 md:p-6">
 
@@ -892,7 +947,9 @@ export default function Ryan() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 
               <div className="h-20 rounded-xl bg-sand-50 animate-pulse" />
+
               <div className="h-20 rounded-xl bg-sand-50 animate-pulse" />
+
               <div className="h-20 rounded-xl bg-sand-50 animate-pulse" />
 
             </div>
@@ -910,15 +967,21 @@ export default function Ryan() {
               </span>
 
               <span className="font-semibold text-ink-950">
+
                 {formatNumber(
                   summary?.monthly_used ||
                     0
-                )}{' '}
+                )}
+
+                {' '}
+
                 /{' '}
+
                 {formatNumber(
                   summary?.base_limit ||
                     0
                 )}
+
               </span>
 
             </div>
@@ -942,7 +1005,8 @@ export default function Ryan() {
                   {
                     maximumFractionDigits: 1,
                   }
-                )}%
+                )}
+                %
               </span>
 
               <span>
@@ -1009,7 +1073,230 @@ export default function Ryan() {
 
       </Card>
 
-      {/* CREDIT PACKAGES */}
+      {/* =====================================================
+          ACTIVE PURCHASED CREDITS
+      ====================================================== */}
+
+      {approvedPurchases.length > 0 && (
+
+        <Card className="overflow-hidden border border-emerald-200 bg-emerald-50/60">
+
+          <div className="p-5 md:p-6">
+
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+              <div className="flex items-start gap-3">
+
+                <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+
+                  <span className="text-lg font-bold">
+                    ✓
+                  </span>
+
+                </div>
+
+                <div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+
+                    <h2 className="font-bold text-ink-950">
+                      الباقات الإضافية المفعّلة
+                    </h2>
+
+                    <Badge tone="success">
+                      مفعّلة
+                    </Badge>
+
+                  </div>
+
+                  <p className="text-sm text-ink-900/55 mt-1">
+                    تم تأكيد الدفع وإضافة الرصيد الإضافي إلى حسابك.
+                  </p>
+
+                </div>
+
+              </div>
+
+              <div className="text-sm text-ink-900/50">
+
+                {formatNumber(
+                  approvedPurchases.length
+                )}
+
+                {' '}
+
+                باقة مفعّلة
+
+              </div>
+
+            </div>
+
+            <div className="mt-5 space-y-3">
+
+              {approvedPurchases.map(
+                purchase => (
+
+                  <div
+                    key={purchase.id}
+                    className="rounded-2xl bg-white border border-emerald-100 p-4 md:p-5 shadow-sm"
+                  >
+
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+
+                      <div className="min-w-0">
+
+                        <div className="flex items-center gap-2 flex-wrap">
+
+                          <h3 className="font-bold text-ink-950">
+                            {purchase.package_name}
+                          </h3>
+
+                          <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-1 text-[11px] font-semibold">
+                            ✓ تم تفعيلها
+                          </span>
+
+                        </div>
+
+                        <div className="text-sm text-ink-900/50 mt-2">
+
+                          تم تأكيد دفع{' '}
+
+                          <strong className="text-ink-950">
+                            {Number(
+                              purchase.amount
+                            ).toLocaleString(
+                              'ar-EG'
+                            )}{' '}
+                            {purchase.currency}
+                          </strong>
+
+                        </div>
+
+                        {purchase.approved_at && (
+
+                          <div className="text-xs text-ink-900/40 mt-1">
+
+                            تاريخ التفعيل:{' '}
+
+                            {new Date(
+                              purchase.approved_at
+                            ).toLocaleDateString(
+                              'ar-EG'
+                            )}
+
+                          </div>
+
+                        )}
+
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 lg:min-w-[280px]">
+
+                        <div className="rounded-xl bg-sand-50 border border-sand-200 p-3">
+
+                          <div className="text-[11px] text-ink-900/40">
+                            تم شراء
+                          </div>
+
+                          <div className="font-bold text-lg text-ink-950 mt-1">
+                            {formatNumber(
+                              purchase.credits_purchased
+                            )}
+                          </div>
+
+                          <div className="text-[11px] text-ink-900/40">
+                            رسالة
+                          </div>
+
+                        </div>
+
+                        <div className="rounded-xl bg-sand-50 border border-sand-200 p-3">
+
+                          <div className="text-[11px] text-ink-900/40">
+                            المتبقي
+                          </div>
+
+                          <div className="font-bold text-lg text-ink-950 mt-1">
+                            {formatNumber(
+                              purchase.credits_remaining
+                            )}
+                          </div>
+
+                          <div className="text-[11px] text-ink-900/40">
+                            رسالة
+                          </div>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+
+          </div>
+
+        </Card>
+
+      )}
+
+      {/* =====================================================
+          PENDING PURCHASE NOTICE
+      ====================================================== */}
+
+      {pendingPurchases.length > 0 && (
+
+        <Card className="border border-amber-200 bg-amber-50/60 p-5 md:p-6">
+
+          <div className="flex items-start gap-3">
+
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+
+              <span className="font-bold">
+                !
+              </span>
+
+            </div>
+
+            <div className="flex-1">
+
+              <div className="flex items-center gap-2 flex-wrap">
+
+                <h2 className="font-bold text-ink-950">
+                  لديك طلب شراء قيد المراجعة
+                </h2>
+
+                <Badge>
+                  {formatNumber(
+                    pendingPurchases.length
+                  )}{' '}
+                  طلب
+                </Badge>
+
+              </div>
+
+              <p className="text-sm text-ink-900/55 mt-1 leading-6">
+
+                تم استلام طلب الدفع الخاص بك، وسيتم تفعيل الرسائل الإضافية بعد اعتماد الدفع من إدارة Dragon Media.
+
+              </p>
+
+            </div>
+
+          </div>
+
+        </Card>
+
+      )}
+
+      {/* =====================================================
+          CREDIT PACKAGES
+      ====================================================== */}
 
       <Card className="p-5 md:p-6">
 
@@ -1031,10 +1318,12 @@ export default function Ryan() {
 
             {[1, 2, 3].map(
               item => (
+
                 <div
                   key={item}
                   className="h-36 rounded-2xl bg-sand-50 animate-pulse"
                 />
+
               )
             )}
 
@@ -1052,6 +1341,7 @@ export default function Ryan() {
 
             {packages.map(
               pkg => (
+
                 <div
                   key={pkg.id}
                   className="rounded-2xl border border-sand-200 p-5 hover:border-ink-300 transition"
@@ -1090,9 +1380,11 @@ export default function Ryan() {
                   </div>
 
                   {pkg.description && (
+
                     <p className="text-xs text-ink-900/45 leading-5 mt-3">
                       {pkg.description}
                     </p>
+
                   )}
 
                   <Button
@@ -1107,6 +1399,7 @@ export default function Ryan() {
                   </Button>
 
                 </div>
+
               )
             )}
 
@@ -1116,9 +1409,12 @@ export default function Ryan() {
 
       </Card>
 
-      {/* PURCHASE HISTORY */}
+      {/* =====================================================
+          PURCHASE HISTORY
+      ====================================================== */}
 
       {purchases.length > 0 && (
+
         <Card className="p-5 md:p-6">
 
           <div className="mb-5">
@@ -1137,6 +1433,7 @@ export default function Ryan() {
 
             {purchases.map(
               purchase => (
+
                 <div
                   key={purchase.id}
                   className="rounded-xl border border-sand-200 p-4"
@@ -1151,48 +1448,110 @@ export default function Ryan() {
                       </div>
 
                       <div className="text-xs text-ink-900/45 mt-1">
+
                         {formatNumber(
                           purchase.credits_purchased
-                        )}{' '}
+                        )}
+
+                        {' '}
+
                         رسالة ·{' '}
+
                         {Number(
                           purchase.amount
                         ).toLocaleString(
                           'ar-EG'
-                        )}{' '}
+                        )}
+
+                        {' '}
+
                         {purchase.currency}
+
                       </div>
 
                       <div className="text-[11px] text-ink-900/35 mt-1">
+
                         {new Date(
                           purchase.created_at
                         ).toLocaleDateString(
                           'ar-EG'
                         )}
+
                       </div>
 
                     </div>
 
-                    <div className="flex flex-col md:items-end gap-1">
+                    <div className="flex flex-col md:items-end gap-2">
 
-                      <span className="text-sm font-semibold">
-                        {purchase.status ===
-                        'approved'
-                          ? `متبقي ${formatNumber(
-                              purchase.credits_remaining
-                            )} رسالة`
-                          : statusLabels[
-                              purchase.status
-                            ] ||
+                      {purchase.status ===
+                      'approved' ? (
+
+                        <div className="flex items-center gap-2 flex-wrap">
+
+                          <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1.5 text-xs font-semibold">
+                            ✓ تم تأكيد الدفع
+                          </span>
+
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-semibold">
+                            مفعّلة
+                          </span>
+
+                        </div>
+
+                      ) : (
+
+                        <span
+                          className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ${
+                            purchase.status ===
+                            'pending_review'
+                              ? 'bg-amber-100 text-amber-700'
+                              : purchase.status ===
+                                'rejected'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-sand-100 text-ink-900/60'
+                          }`}
+                        >
+                          {statusLabels[
+                            purchase.status
+                          ] ||
                             purchase.status}
-                      </span>
+                        </span>
+
+                      )}
+
+                      {purchase.status ===
+                        'approved' && (
+
+                        <span className="text-xs text-ink-900/50">
+
+                          الرصيد المتبقي:{' '}
+
+                          <strong className="text-ink-950">
+                            {formatNumber(
+                              purchase.credits_remaining
+                            )}
+                          </strong>
+
+                          {' '}
+
+                          رسالة
+
+                        </span>
+
+                      )}
 
                       {purchase.status ===
                         'rejected' &&
                         purchase.rejection_reason && (
+
                           <span className="text-xs text-red-600">
-                            السبب: {purchase.rejection_reason}
+
+                            السبب:{' '}
+
+                            {purchase.rejection_reason}
+
                           </span>
+
                         )}
 
                     </div>
@@ -1200,15 +1559,19 @@ export default function Ryan() {
                   </div>
 
                 </div>
+
               )
             )}
 
           </div>
 
         </Card>
+
       )}
 
-      {/* CHAT */}
+      {/* =====================================================
+          CHAT
+      ====================================================== */}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
 
@@ -1229,9 +1592,11 @@ export default function Ryan() {
             </div>
 
             {conversationId && (
+
               <Badge>
                 متصلة بالـInbox
               </Badge>
+
             )}
 
           </div>
@@ -1245,7 +1610,9 @@ export default function Ryan() {
                 <div className="text-center max-w-md">
 
                   <div className="w-14 h-14 mx-auto rounded-2xl bg-ink-900 text-sand-50 flex items-center justify-center mb-4">
+
                     <IconSpark className="w-6 h-6" />
+
                   </div>
 
                   <h3 className="font-bold text-ink-950">
@@ -1264,6 +1631,7 @@ export default function Ryan() {
 
               messages.map(
                 message => (
+
                   <div
                     key={message.id}
                     className={
@@ -1295,6 +1663,7 @@ export default function Ryan() {
                             : 'text-sand-50/45'
                         }`}
                       >
+
                         {new Date(
                           message.createdAt
                         ).toLocaleTimeString(
@@ -1304,30 +1673,37 @@ export default function Ryan() {
                             minute: '2-digit',
                           }
                         )}
+
                       </div>
 
                       {message.actionTaken &&
                         actionLabels[
                           message.actionTaken
                         ] && (
+
                           <div className="mt-2 pt-2 border-t border-current/10 text-[11px] opacity-70">
+
                             {
                               actionLabels[
                                 message.actionTaken
                               ]
                             }
+
                           </div>
+
                         )}
 
                     </div>
 
                   </div>
+
                 )
               )
 
             )}
 
             {sending && (
+
               <div className="flex justify-end">
 
                 <div className="bg-ink-900/90 text-sand-50 rounded-2xl rounded-tl-sm px-4 py-3">
@@ -1349,11 +1725,13 @@ export default function Ryan() {
                 </div>
 
               </div>
+
             )}
 
           </div>
 
           {paused && (
+
             <div className="mx-4 mt-4 rounded-xl border border-gold-500/30 bg-gold-500/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 
               <div>
@@ -1378,12 +1756,15 @@ export default function Ryan() {
               </Button>
 
             </div>
+
           )}
 
           {error && (
+
             <div className="mx-4 mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
+
           )}
 
           <form
@@ -1414,7 +1795,9 @@ export default function Ryan() {
                       !sending &&
                       input.trim()
                     ) {
+
                       event.currentTarget.form?.requestSubmit()
+
                     }
 
                   }
@@ -1456,7 +1839,9 @@ export default function Ryan() {
 
         </Card>
 
-        {/* SIDEBAR */}
+        {/* ===================================================
+            SIDEBAR
+        ==================================================== */}
 
         <div className="space-y-6">
 
@@ -1515,6 +1900,23 @@ export default function Ryan() {
 
               </div>
 
+              <div className="flex items-center justify-between gap-3">
+
+                <span className="text-ink-900/50">
+                  الرصيد الإضافي
+                </span>
+
+                <span className="font-semibold text-ink-950">
+                  {loadingCredits
+                    ? '—'
+                    : formatNumber(
+                        summary?.purchased_remaining ||
+                          0
+                      )}
+                </span>
+
+              </div>
+
             </div>
 
           </Card>
@@ -1535,15 +1937,18 @@ export default function Ryan() {
                 'تحويل المحادثة لموظف بشري',
               ].map(
                 item => (
+
                   <div
                     key={item}
                     className="flex gap-2.5 items-start"
                   >
 
                     <div className="w-5 h-5 rounded-full bg-ink-900 text-sand-50 flex items-center justify-center shrink-0 mt-0.5">
+
                       <span className="text-[10px]">
                         ✓
                       </span>
+
                     </div>
 
                     <span className="text-sm leading-5 text-ink-900/65">
@@ -1551,6 +1956,7 @@ export default function Ryan() {
                     </span>
 
                   </div>
+
                 )
               )}
 
@@ -1599,9 +2005,12 @@ export default function Ryan() {
 
       </div>
 
-      {/* PURCHASE MODAL */}
+      {/* =====================================================
+          PURCHASE MODAL
+      ====================================================== */}
 
       {showPurchase && (
+
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-950/50">
 
           <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
@@ -1625,11 +2034,15 @@ export default function Ryan() {
                 <button
                   type="button"
                   onClick={() => {
+
                     if (!purchasing) {
+
                       setShowPurchase(
                         false
                       )
+
                     }
+
                   }}
                   className="w-8 h-8 rounded-lg hover:bg-sand-100 text-ink-900/50"
                   aria-label="إغلاق"
@@ -1649,6 +2062,7 @@ export default function Ryan() {
 
                   {packages.map(
                     pkg => (
+
                       <button
                         key={pkg.id}
                         type="button"
@@ -1689,6 +2103,7 @@ export default function Ryan() {
                         </div>
 
                       </button>
+
                     )
                   )}
 
@@ -1758,6 +2173,7 @@ export default function Ryan() {
 
                       {paymentMethods.map(
                         method => (
+
                           <option
                             key={
                               method.method_key
@@ -1768,6 +2184,7 @@ export default function Ryan() {
                           >
                             {method.name}
                           </option>
+
                         )
                       )}
 
@@ -1776,6 +2193,7 @@ export default function Ryan() {
                   </div>
 
                   {selectedPaymentMethod && (
+
                     <div className="rounded-xl border border-sand-200 bg-sand-50 p-4">
 
                       <div className="text-xs font-semibold text-ink-900/60 mb-3">
@@ -1795,6 +2213,7 @@ export default function Ryan() {
 
                           {paymentDetails.map(
                             ([key, value]) => (
+
                               <div
                                 key={key}
                                 className="flex flex-col gap-0.5"
@@ -1805,6 +2224,7 @@ export default function Ryan() {
                                 </span>
 
                                 <span className="text-sm font-medium text-ink-950 break-words">
+
                                   {typeof value ===
                                   'object'
                                     ? JSON.stringify(
@@ -1813,9 +2233,11 @@ export default function Ryan() {
                                     : String(
                                         value
                                       )}
+
                                 </span>
 
                               </div>
+
                             )
                           )}
 
@@ -1824,6 +2246,7 @@ export default function Ryan() {
                       )}
 
                     </div>
+
                   )}
 
                   <div>
@@ -1891,9 +2314,11 @@ export default function Ryan() {
                   </div>
 
                   {purchaseError && (
+
                     <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
                       {purchaseError}
                     </div>
+
                   )}
 
                   <div className="flex gap-2 pt-2">
@@ -1901,14 +2326,19 @@ export default function Ryan() {
                     <Button
                       variant="secondary"
                       onClick={() => {
+
                         if (!purchasing) {
+
                           setSelectedPackage(
                             null
                           )
+
                           setPurchaseError(
                             null
                           )
+
                         }
+
                       }}
                       disabled={
                         purchasing
@@ -1945,6 +2375,7 @@ export default function Ryan() {
           </div>
 
         </div>
+
       )}
 
     </div>
