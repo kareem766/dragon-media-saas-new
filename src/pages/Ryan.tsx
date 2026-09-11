@@ -62,17 +62,10 @@ interface RyanPurchase {
 }
 
 const actionLabels: Record<string, string> = {
-  create_lead:
-    'تم تسجيل العميل المحتمل في CRM',
-
-  create_deal:
-    'تم إنشاء الصفقة في مسار المبيعات',
-
-  book_appointment:
-    'تم تسجيل الموعد بنجاح',
-
-  request_human_handoff:
-    'تم تحويل المحادثة إلى فريق الدعم',
+  create_lead: 'تم تسجيل العميل المحتمل في CRM',
+  create_deal: 'تم إنشاء الصفقة في مسار المبيعات',
+  book_appointment: 'تم تسجيل الموعد بنجاح',
+  request_human_handoff: 'تم تحويل المحادثة إلى فريق الدعم',
 }
 
 const statusLabels: Record<string, string> = {
@@ -86,16 +79,12 @@ function formatNumber(value: number) {
   return Number(value || 0).toLocaleString('ar-EG')
 }
 
-function getPaymentDetails(
-  method: PaymentMethod | null
-) {
+function getPaymentDetails(method: PaymentMethod | null) {
   if (!method?.details) {
     return []
   }
 
-  return Object.entries(
-    method.details
-  ).filter(
+  return Object.entries(method.details).filter(
     ([, value]) =>
       value !== null &&
       value !== undefined &&
@@ -103,138 +92,115 @@ function getPaymentDetails(
   )
 }
 
+function formatMessageTime(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return date.toLocaleTimeString('ar-EG', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatDate(value: string) {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return date.toLocaleDateString('ar-EG')
+}
+
 export default function Ryan() {
-  const {
-    organizationId,
-  } = useOrganization()
+  const { organizationId } = useOrganization()
 
   const {
     hasFeature,
     loading: subLoading,
   } = useSubscription()
 
-  const [
-    messages,
-    setMessages,
-  ] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [paused, setPaused] = useState(false)
 
-  const [
-    input,
-    setInput,
-  ] = useState('')
-
-  const [
-    sending,
-    setSending,
-  ] = useState(false)
-
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(null)
-
-  const [
-    paused,
-    setPaused,
-  ] = useState(false)
-
-  const [
-    conversationId,
-    setConversationId,
-  ] = useState<string | null>(null)
+  const [conversationId, setConversationId] =
+    useState<string | null>(null)
 
   /*
-   * Persist the currently active Ryan conversation
-   * per organization.
-   *
-   * This survives:
-   * - page refresh
-   * - leaving Ryan and coming back
-   * - reopening the application
+   * Prevent sending before the existing conversation
+   * has finished restoring from Supabase/localStorage.
    */
-  const conversationStorageKey =
-    organizationId
-      ? `dragon-media-ryan-conversation:${organizationId}`
-      : null
+  const [conversationReady, setConversationReady] =
+    useState(false)
 
-  const [
-    companyName,
-    setCompanyName,
-  ] = useState('الشركة')
+  const [companyName, setCompanyName] =
+    useState('الشركة')
 
-  const [
-    summary,
-    setSummary,
-  ] = useState<RyanSummary | null>(null)
+  const [summary, setSummary] =
+    useState<RyanSummary | null>(null)
 
-  const [
-    packages,
-    setPackages,
-  ] = useState<RyanPackage[]>([])
+  const [packages, setPackages] =
+    useState<RyanPackage[]>([])
 
-  const [
-    paymentMethods,
-    setPaymentMethods,
-  ] = useState<PaymentMethod[]>([])
+  const [paymentMethods, setPaymentMethods] =
+    useState<PaymentMethod[]>([])
 
-  const [
-    purchases,
-    setPurchases,
-  ] = useState<RyanPurchase[]>([])
+  const [purchases, setPurchases] =
+    useState<RyanPurchase[]>([])
 
-  const [
-    loadingCredits,
-    setLoadingCredits,
-  ] = useState(true)
+  const [loadingCredits, setLoadingCredits] =
+    useState(true)
 
-  const [
-    creditsError,
-    setCreditsError,
-  ] = useState<string | null>(null)
+  const [creditsError, setCreditsError] =
+    useState<string | null>(null)
 
-  const [
-    showPurchase,
-    setShowPurchase,
-  ] = useState(false)
+  const [showPurchase, setShowPurchase] =
+    useState(false)
 
-  const [
-    selectedPackage,
-    setSelectedPackage,
-  ] = useState<RyanPackage | null>(null)
+  const [selectedPackage, setSelectedPackage] =
+    useState<RyanPackage | null>(null)
 
-  const [
-    selectedMethod,
-    setSelectedMethod,
-  ] = useState('')
+  const [selectedMethod, setSelectedMethod] =
+    useState('')
 
-  const [
-    reference,
-    setReference,
-  ] = useState('')
+  const [reference, setReference] =
+    useState('')
 
-  const [
-    paymentDate,
-    setPaymentDate,
-  ] = useState(
-    new Date()
-      .toISOString()
-      .slice(0, 10)
+  const [paymentDate, setPaymentDate] =
+    useState(
+      new Date()
+        .toISOString()
+        .slice(0, 10)
+    )
+
+  const [paymentNote, setPaymentNote] =
+    useState('')
+
+  const [purchasing, setPurchasing] =
+    useState(false)
+
+  const [purchaseError, setPurchaseError] =
+    useState<string | null>(null)
+
+  /*
+   * Every organization gets its own Ryan conversation key.
+   *
+   * This is only a pointer to the Supabase conversation ID.
+   * The actual conversation/messages remain stored in Supabase.
+   */
+  const conversationStorageKey = useMemo(
+    () =>
+      organizationId
+        ? `dragon-media-ryan-conversation:${organizationId}`
+        : null,
+    [organizationId]
   )
-
-  const [
-    paymentNote,
-    setPaymentNote,
-  ] = useState('')
-
-  const [
-    purchasing,
-    setPurchasing,
-  ] = useState(false)
-
-  const [
-    purchaseError,
-    setPurchaseError,
-  ] = useState<string | null>(null)
 
   /*
    * Load company name.
@@ -247,18 +213,13 @@ export default function Ryan() {
         return
       }
 
-      const {
-        data,
-      } = await supabase
+      const { data } = await supabase
         .from('organizations')
         .select('name')
         .eq('id', organizationId)
         .maybeSingle()
 
-      if (
-        !cancelled &&
-        data?.name
-      ) {
+      if (!cancelled && data?.name) {
         setCompanyName(data.name)
       }
     }
@@ -271,23 +232,27 @@ export default function Ryan() {
   }, [organizationId])
 
   /*
-   * Restore Ryan conversation after refresh / reopening.
+   * Restore Ryan conversation.
    *
    * Priority:
-   * 1. Explicitly saved conversationId from localStorage.
-   * 2. Latest website conversation for the current customer.
    *
-   * The selected conversation is persisted locally so refresh/reopen
-   * never starts a blank conversation accidentally.
+   * 1. Previously selected conversation from localStorage.
+   * 2. Latest existing website conversation.
+   * 3. Empty state if there is no conversation yet.
+   *
+   * This fixes:
+   * - Refresh opening the wrong conversation.
+   * - Returning to Ryan opening an unrelated conversation.
+   * - New Conversation being overwritten after refresh.
    */
   useEffect(() => {
     let cancelled = false
 
     async function loadConversation() {
-      if (
-        !supabase ||
-        !organizationId
-      ) {
+      setConversationReady(false)
+
+      if (!supabase || !organizationId) {
+        setConversationReady(true)
         return
       }
 
@@ -295,26 +260,29 @@ export default function Ryan() {
         const {
           data: authData,
           error: authError,
-        } =
-          await supabase.auth.getUser()
+        } = await supabase.auth.getUser()
 
         if (
           authError ||
           !authData.user?.id
         ) {
+          if (!cancelled) {
+            setConversationReady(true)
+          }
+
           return
         }
 
-        const userEmail =
-          authData.user.email
+        const userEmail = authData.user.email
 
         if (!userEmail) {
+          if (!cancelled) {
+            setConversationReady(true)
+          }
+
           return
         }
 
-        /*
-         * Find the current user's customer record.
-         */
         const {
           data: customer,
           error: customerError,
@@ -337,39 +305,29 @@ export default function Ryan() {
           !customer?.id ||
           cancelled
         ) {
+          if (!cancelled) {
+            setMessages([])
+            setConversationId(null)
+            setPaused(false)
+            setConversationReady(true)
+          }
+
           return
         }
 
-        /*
-         * First try the conversation explicitly saved
-         * by this Ryan page.
-         */
-        let targetConversationId: string | null =
-          null
-
-        if (conversationStorageKey) {
-          try {
-            const storedId =
-              window.localStorage.getItem(
+        const storedConversationId =
+          conversationStorageKey
+            ? window.localStorage.getItem(
                 conversationStorageKey
               )
-
-            if (storedId) {
-              targetConversationId =
-                storedId
-            }
-          } catch {
-            // localStorage may be unavailable.
-          }
-        }
+            : null
 
         let conversation: any = null
 
         /*
-         * Validate the stored conversation against
-         * organization + customer + website channel.
+         * First try the exact conversation saved locally.
          */
-        if (targetConversationId) {
+        if (storedConversationId) {
           const {
             data: storedConversation,
             error: storedConversationError,
@@ -380,7 +338,7 @@ export default function Ryan() {
             )
             .eq(
               'id',
-              targetConversationId
+              storedConversationId
             )
             .eq(
               'organization_id',
@@ -406,8 +364,8 @@ export default function Ryan() {
         }
 
         /*
-         * If no valid saved conversation exists,
-         * restore the latest website conversation.
+         * If the stored conversation was removed or no pointer exists,
+         * recover the latest existing Ryan conversation.
          */
         if (!conversation) {
           const {
@@ -438,9 +396,23 @@ export default function Ryan() {
 
           if (
             latestConversationError ||
-            !latestConversation?.id ||
-            cancelled
+            !latestConversation?.id
           ) {
+            if (
+              conversationStorageKey
+            ) {
+              window.localStorage.removeItem(
+                conversationStorageKey
+              )
+            }
+
+            if (!cancelled) {
+              setMessages([])
+              setConversationId(null)
+              setPaused(false)
+              setConversationReady(true)
+            }
+
             return
           }
 
@@ -456,26 +428,19 @@ export default function Ryan() {
         }
 
         /*
-         * Persist the conversation we actually restored.
+         * Persist the exact conversation we restored.
          */
         if (conversationStorageKey) {
-          try {
-            window.localStorage.setItem(
-              conversationStorageKey,
-              conversation.id
-            )
-          } catch {
-            // Ignore storage errors.
-          }
+          window.localStorage.setItem(
+            conversationStorageKey,
+            conversation.id
+          )
         }
 
         setConversationId(
           conversation.id
         )
 
-        /*
-         * Load all persisted messages.
-         */
         const {
           data: storedMessages,
           error: messagesError,
@@ -494,6 +459,10 @@ export default function Ryan() {
           messagesError ||
           cancelled
         ) {
+          if (!cancelled) {
+            setConversationReady(true)
+          }
+
           return
         }
 
@@ -544,11 +513,10 @@ export default function Ryan() {
                 }
 
                 return {
-                  id:
-                    String(
-                      row?.id ||
-                        `restored-${createdAt}-${Math.random()}`
-                    ),
+                  id: String(
+                    row?.id ||
+                      `restored-${createdAt}-${Math.random()}`
+                  ),
                   role: isUser
                     ? 'user'
                     : 'model',
@@ -578,9 +546,6 @@ export default function Ryan() {
           )
         }
 
-        /*
-         * Restore handoff state.
-         */
         const metadata =
           conversation?.metadata &&
           typeof conversation.metadata ===
@@ -611,18 +576,19 @@ export default function Ryan() {
           setPaused(
             hasHumanHandoff
           )
+          setConversationReady(true)
         }
       } catch (
         conversationLoadError
       ) {
-        /*
-         * Conversation restoration should never prevent
-         * Ryan from opening normally.
-         */
         console.error(
           'Ryan conversation restore error:',
           conversationLoadError
         )
+
+        if (!cancelled) {
+          setConversationReady(true)
+        }
       }
     }
 
@@ -698,7 +664,9 @@ export default function Ryan() {
         )
 
         setPackages(
-          Array.isArray(data.packages)
+          Array.isArray(
+            data.packages
+          )
             ? data.packages
             : []
         )
@@ -712,7 +680,9 @@ export default function Ryan() {
         )
 
         setPurchases(
-          Array.isArray(data.purchases)
+          Array.isArray(
+            data.purchases
+          )
             ? data.purchases
             : []
         )
@@ -755,25 +725,8 @@ export default function Ryan() {
         return null
       }
 
-      const date =
-        new Date(
-          last.createdAt
-        )
-
-      if (
-        Number.isNaN(
-          date.getTime()
-        )
-      ) {
-        return null
-      }
-
-      return date.toLocaleTimeString(
-        'ar-EG',
-        {
-          hour: '2-digit',
-          minute: '2-digit',
-        }
+      return formatMessageTime(
+        last.createdAt
       )
     }, [messages])
 
@@ -833,11 +786,13 @@ export default function Ryan() {
     )
 
     setReference('')
+
     setPaymentDate(
       new Date()
         .toISOString()
         .slice(0, 10)
     )
+
     setPaymentNote('')
     setPurchaseError(null)
     setShowPurchase(true)
@@ -966,7 +921,8 @@ export default function Ryan() {
       !userMessage ||
       !supabase ||
       paused ||
-      sending
+      sending ||
+      !conversationReady
     ) {
       return
     }
@@ -1011,19 +967,21 @@ export default function Ryan() {
         )
       }
 
-      const history =
-        messages.map(
-          message => ({
-            role:
-              message.role,
-            parts: [
-              {
-                text:
-                  message.text,
-              },
-            ],
-          })
-        )
+      /*
+       * Include the current message in history as well.
+       * The API still receives `message` separately.
+       */
+      const history = [
+        ...messages,
+        optimisticMessage,
+      ].map(message => ({
+        role: message.role,
+        parts: [
+          {
+            text: message.text,
+          },
+        ],
+      }))
 
       const response =
         await fetch(
@@ -1048,37 +1006,6 @@ export default function Ryan() {
       const data =
         await response.json()
 
-      if (!response.ok) {
-        if (
-          data?.conversationId
-        ) {
-          setConversationId(
-            data.conversationId
-          )
-
-          if (
-            conversationStorageKey
-          ) {
-            try {
-              window.localStorage.setItem(
-                conversationStorageKey,
-                data.conversationId
-              )
-            } catch {
-              // Ignore storage errors.
-            }
-          }
-        }
-
-        throw new Error(
-          data?.error ||
-            'حدث خطأ أثناء التواصل مع Ryan'
-        )
-      }
-
-      /*
-       * Persist every conversation ID returned by the backend.
-       */
       if (
         data?.conversationId
       ) {
@@ -1086,16 +1013,21 @@ export default function Ryan() {
           data.conversationId
         )
 
-        if (conversationStorageKey) {
-          try {
-            window.localStorage.setItem(
-              conversationStorageKey,
-              data.conversationId
-            )
-          } catch {
-            // Ignore storage errors.
-          }
+        if (
+          conversationStorageKey
+        ) {
+          window.localStorage.setItem(
+            conversationStorageKey,
+            data.conversationId
+          )
         }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            'حدث خطأ أثناء التواصل مع Ryan'
+        )
       }
 
       const assistantMessage: ChatMessage = {
@@ -1129,8 +1061,7 @@ export default function Ryan() {
       }
 
       /*
-       * Do NOT block the chat response while the credits
-       * endpoint is loading.
+       * Credits refresh remains background-only.
        */
       void loadRyanCredits()
     } catch (
@@ -1147,30 +1078,29 @@ export default function Ryan() {
     }
   }
 
-  /*
-   * Start a genuinely new conversation.
-   *
-   * Removing the persisted conversation ID is important:
-   * the next message will reach the backend with conversationId=null,
-   * allowing the backend to create a fresh conversation.
-   */
   const handleNewConversation =
     () => {
+      if (!conversationReady || sending) {
+        return
+      }
+
+      /*
+       * Removing the pointer is important.
+       * Otherwise refresh would restore the previous chat.
+       */
+      if (
+        conversationStorageKey
+      ) {
+        window.localStorage.removeItem(
+          conversationStorageKey
+        )
+      }
+
       setMessages([])
       setConversationId(null)
       setPaused(false)
       setError(null)
       setInput('')
-
-      if (conversationStorageKey) {
-        try {
-          window.localStorage.removeItem(
-            conversationStorageKey
-          )
-        } catch {
-          // Ignore storage errors.
-        }
-      }
     }
 
   if (
@@ -1185,312 +1115,303 @@ export default function Ryan() {
   }
 
   return (
-    <div className="space-y-6">
-
+    <div
+      dir="rtl"
+      className="space-y-6 pb-8"
+    >
       {/* =====================================================
-          HERO
+          PREMIUM HERO
       ====================================================== */}
 
-      <Card className="overflow-hidden border-0 bg-ink-950 text-sand-50 shadow-sm">
+      <section className="relative overflow-hidden rounded-3xl bg-ink-950 text-sand-50 shadow-xl">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute -top-32 -end-20 h-80 w-80 rounded-full bg-gold-500/20 blur-3xl" />
+          <div className="absolute -bottom-40 -start-20 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl" />
+          <div className="absolute top-1/2 start-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/5 blur-3xl" />
+        </div>
 
-        <div className="relative p-6 md:p-8">
+        <div className="relative p-6 md:p-8 lg:p-9">
+          <div className="flex flex-col gap-7">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <div className="flex items-start gap-4">
+                <div className="relative shrink-0">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gold-500 text-ink-950 shadow-lg shadow-black/20">
+                    <IconSpark className="h-8 w-8" />
+                  </div>
 
-          <div className="absolute inset-0 opacity-10 pointer-events-none">
-
-            <div className="absolute -top-20 -end-20 w-64 h-64 rounded-full bg-gold-500 blur-3xl" />
-
-            <div className="absolute -bottom-24 -start-24 w-72 h-72 rounded-full bg-white blur-3xl" />
-
-          </div>
-
-          <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-
-            <div className="flex items-center gap-4">
-
-              <div className="w-16 h-16 rounded-2xl bg-gold-500 text-ink-950 flex items-center justify-center shadow-lg">
-
-                <IconSpark className="w-8 h-8" />
-
-              </div>
-
-              <div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-
-                  <h1 className="text-2xl font-bold tracking-tight text-sand-50">
-                    RYAN AI
-                  </h1>
-
-                  <Badge tone="success">
-                    يعمل الآن
-                  </Badge>
-
+                  <span className="absolute -bottom-1 -start-1 h-4 w-4 rounded-full border-2 border-ink-950 bg-emerald-400" />
                 </div>
 
-                <p className="text-sand-100/60 text-sm mt-1.5 max-w-2xl">
-                  مساعد المبيعات وخدمة العملاء الذكي داخل Dragon Media.
-                </p>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                      RYAN AI
+                    </h1>
 
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-3 py-1 text-[11px] font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-400/20">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      يعمل الآن
+                    </span>
+                  </div>
+
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-sand-100/60">
+                    مساعد المبيعات وخدمة العملاء الذكي داخل Dragon Media.
+                    يتعامل مع العملاء، يسجل البيانات، يحجز المواعيد
+                    ويتحول للموظف عند الحاجة.
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="rounded-lg bg-white/5 px-3 py-1.5 text-sand-100/60 ring-1 ring-inset ring-white/10">
+                      {companyName}
+                    </span>
+
+                    <span className="rounded-lg bg-white/5 px-3 py-1.5 text-sand-100/60 ring-1 ring-inset ring-white/10">
+                      {conversationId
+                        ? 'المحادثة محفوظة'
+                        : 'محادثة جديدة'}
+                    </span>
+                  </div>
+                </div>
               </div>
 
+              <Button
+                variant="secondary"
+                onClick={
+                  handleNewConversation
+                }
+                disabled={
+                  !conversationReady ||
+                  sending
+                }
+                className="shrink-0"
+              >
+                + محادثة جديدة
+              </Button>
             </div>
 
-            <Button
-              variant="secondary"
-              onClick={
-                handleNewConversation
-              }
-            >
-              محادثة جديدة
-            </Button>
+            {/* HERO METRICS */}
 
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm">
+                <div className="text-[11px] text-sand-100/45">
+                  رسائل المحادثة
+                </div>
+
+                <div className="mt-2 text-xl font-bold">
+                  {formatNumber(
+                    messageCount
+                  )}
+                </div>
+
+                <div className="mt-1 text-[10px] text-sand-100/35">
+                  رسالة محفوظة
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm">
+                <div className="text-[11px] text-sand-100/45">
+                  حد الخطة الشهري
+                </div>
+
+                <div className="mt-2 text-xl font-bold">
+                  {loadingCredits
+                    ? '—'
+                    : formatNumber(
+                        summary?.base_limit ||
+                          0
+                      )}
+                </div>
+
+                <div className="mt-1 text-[10px] text-sand-100/35">
+                  رسالة
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm">
+                <div className="text-[11px] text-sand-100/45">
+                  المستخدم هذا الشهر
+                </div>
+
+                <div className="mt-2 text-xl font-bold">
+                  {loadingCredits
+                    ? '—'
+                    : formatNumber(
+                        summary?.monthly_used ||
+                          0
+                      )}
+                </div>
+
+                <div className="mt-1 text-[10px] text-sand-100/35">
+                  من حد الخطة
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-gold-400/20 bg-gold-400/10 p-4">
+                <div className="text-[11px] text-gold-100/60">
+                  المتاح الإجمالي
+                </div>
+
+                <div className="mt-2 text-xl font-bold text-gold-300">
+                  {loadingCredits
+                    ? '—'
+                    : formatNumber(
+                        summary?.total_remaining ||
+                          0
+                      )}
+                </div>
+
+                <div className="mt-1 text-[10px] text-gold-100/45">
+                  رسالة متاحة
+                </div>
+              </div>
+            </div>
           </div>
-
-          <div className="relative grid grid-cols-2 md:grid-cols-4 gap-3 mt-7">
-
-            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-
-              <div className="text-xs text-sand-100/45">
-                رسائل المحادثة
-              </div>
-
-              <div className="text-lg font-bold mt-1 text-sand-50">
-                {formatNumber(
-                  messageCount
-                )}
-              </div>
-
-            </div>
-
-            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-
-              <div className="text-xs text-sand-100/45">
-                حد الخطة الشهري
-              </div>
-
-              <div className="text-lg font-bold mt-1 text-sand-50">
-                {loadingCredits
-                  ? '—'
-                  : formatNumber(
-                      summary?.base_limit ||
-                        0
-                    )}
-              </div>
-
-            </div>
-
-            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-
-              <div className="text-xs text-sand-100/45">
-                المستخدم هذا الشهر
-              </div>
-
-              <div className="text-lg font-bold mt-1 text-sand-50">
-                {loadingCredits
-                  ? '—'
-                  : formatNumber(
-                      summary?.monthly_used ||
-                        0
-                    )}
-              </div>
-
-            </div>
-
-            <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-
-              <div className="text-xs text-sand-100/45">
-                المتاح الإجمالي
-              </div>
-
-              <div className="text-lg font-bold mt-1 text-sand-50">
-                {loadingCredits
-                  ? '—'
-                  : formatNumber(
-                      summary?.total_remaining ||
-                        0
-                    )}
-              </div>
-
-            </div>
-
-          </div>
-
         </div>
-      </Card>
+      </section>
 
       {/* =====================================================
           USAGE
       ====================================================== */}
 
-      <Card className="p-5 md:p-6">
+      <Card className="overflow-hidden border-sand-200/80 shadow-sm">
+        <div className="p-5 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-gold-500" />
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <h2 className="font-bold text-ink-950">
+                  استهلاك RYAN
+                </h2>
+              </div>
 
-          <div>
+              <p className="text-sm text-ink-900/45 mt-1.5">
+                متابعة استخدام حد الخطة والرصيد الإضافي.
+              </p>
+            </div>
 
-            <h2 className="font-bold text-ink-950">
-              استهلاك RYAN
-            </h2>
-
-            <p className="text-sm text-ink-900/45 mt-1">
-              متابعة استخدام حد الخطة والرصيد الإضافي.
-            </p>
-
+            {packages.length > 0 && (
+              <Button
+                onClick={() =>
+                  openPurchase(
+                    packages[0]
+                  )
+                }
+              >
+                شراء رصيد إضافي
+              </Button>
+            )}
           </div>
 
-          {packages.length > 0 && (
-            <Button
-              onClick={() =>
-                openPurchase(
-                  packages[0]
-                )
-              }
-            >
-              شراء رصيد إضافي
-            </Button>
-          )}
-
-        </div>
-
-        {creditsError ? (
-
-          <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
-            {creditsError}
-          </div>
-
-        ) : loadingCredits ? (
-
-          <div className="mt-6 space-y-3">
-
-            <div className="h-3 rounded-full bg-sand-100 animate-pulse" />
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-
-              <div className="h-20 rounded-xl bg-sand-50 animate-pulse" />
-
-              <div className="h-20 rounded-xl bg-sand-50 animate-pulse" />
-
-              <div className="h-20 rounded-xl bg-sand-50 animate-pulse" />
-
+          {creditsError ? (
+            <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+              {creditsError}
             </div>
+          ) : loadingCredits ? (
+            <div className="mt-6 space-y-4">
+              <div className="h-3 rounded-full bg-sand-100 animate-pulse" />
 
-          </div>
-
-        ) : (
-
-          <>
-
-            <div className="mt-6 flex items-center justify-between text-sm">
-
-              <span className="text-ink-900/55">
-                الاستخدام الشهري من حد الخطة
-              </span>
-
-              <span className="font-semibold text-ink-950">
-
-                {formatNumber(
-                  summary?.monthly_used ||
-                    0
-                )}
-
-                {' '}
-
-                /{' '}
-
-                {formatNumber(
-                  summary?.base_limit ||
-                    0
-                )}
-
-              </span>
-
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {[1, 2, 3].map(item => (
+                  <div
+                    key={item}
+                    className="h-24 rounded-2xl bg-sand-50 animate-pulse"
+                  />
+                ))}
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="mt-6 flex items-center justify-between text-sm">
+                <span className="text-ink-900/55">
+                  الاستخدام الشهري من حد الخطة
+                </span>
 
-            <div className="mt-2 h-3 rounded-full bg-sand-100 overflow-hidden">
+                <span className="font-semibold text-ink-950">
+                  {formatNumber(
+                    summary?.monthly_used ||
+                      0
+                  )}
+                  {' / '}
+                  {formatNumber(
+                    summary?.base_limit ||
+                      0
+                  )}
+                </span>
+              </div>
 
-              <div
-                className="h-full bg-ink-900 rounded-full transition-all duration-500"
-                style={{
-                  width: `${usagePercent}%`,
-                }}
-              />
+              <div className="mt-2 h-3 overflow-hidden rounded-full bg-sand-100">
+                <div
+                  className="h-full rounded-full bg-gradient-to-l from-gold-500 to-ink-900 transition-all duration-700"
+                  style={{
+                    width: `${usagePercent}%`,
+                  }}
+                />
+              </div>
 
-            </div>
+              <div className="mt-2 flex justify-between text-xs text-ink-900/45">
+                <span>
+                  {usagePercent.toLocaleString(
+                    'ar-EG',
+                    {
+                      maximumFractionDigits: 1,
+                    }
+                  )}
+                  %
+                </span>
 
-            <div className="mt-2 flex justify-between text-xs text-ink-900/45">
-
-              <span>
-                {usagePercent.toLocaleString(
-                  'ar-EG',
-                  {
-                    maximumFractionDigits: 1,
-                  }
-                )}
-                %
-              </span>
-
-              <span>
-                متبقي الخطة:{' '}
-                {formatNumber(
-                  summary?.base_remaining ||
-                    0
-                )}
-              </span>
-
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
-
-              <div className="rounded-xl border border-sand-200 p-4">
-
-                <div className="text-xs text-ink-900/45">
-                  المتبقي من الخطة
-                </div>
-
-                <div className="text-xl font-bold text-ink-950 mt-1">
+                <span>
+                  متبقي الخطة:{' '}
                   {formatNumber(
                     summary?.base_remaining ||
                       0
                   )}
-                </div>
-
+                </span>
               </div>
 
-              <div className="rounded-xl border border-sand-200 p-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-5">
+                <div className="rounded-2xl border border-sand-200 bg-sand-50/40 p-4">
+                  <div className="text-xs text-ink-900/45">
+                    المتبقي من الخطة
+                  </div>
 
-                <div className="text-xs text-ink-900/45">
-                  الرصيد الإضافي
+                  <div className="mt-1.5 text-xl font-bold text-ink-950">
+                    {formatNumber(
+                      summary?.base_remaining ||
+                        0
+                    )}
+                  </div>
                 </div>
 
-                <div className="text-xl font-bold text-ink-950 mt-1">
-                  {formatNumber(
-                    summary?.purchased_remaining ||
-                      0
-                  )}
+                <div className="rounded-2xl border border-sand-200 bg-sand-50/40 p-4">
+                  <div className="text-xs text-ink-900/45">
+                    الرصيد الإضافي
+                  </div>
+
+                  <div className="mt-1.5 text-xl font-bold text-ink-950">
+                    {formatNumber(
+                      summary?.purchased_remaining ||
+                        0
+                    )}
+                  </div>
                 </div>
 
+                <div className="rounded-2xl border border-gold-200 bg-gold-50/40 p-4">
+                  <div className="text-xs text-ink-900/45">
+                    المتاح الإجمالي
+                  </div>
+
+                  <div className="mt-1.5 text-xl font-bold text-ink-950">
+                    {formatNumber(
+                      summary?.total_remaining ||
+                        0
+                    )}
+                  </div>
+                </div>
               </div>
-
-              <div className="rounded-xl border border-sand-200 p-4">
-
-                <div className="text-xs text-ink-900/45">
-                  المتاح الإجمالي
-                </div>
-
-                <div className="text-xl font-bold text-ink-950 mt-1">
-                  {formatNumber(
-                    summary?.total_remaining ||
-                      0
-                  )}
-                </div>
-
-              </div>
-
-            </div>
-
-          </>
-        )}
-
+            </>
+          )}
+        </div>
       </Card>
 
       {/* =====================================================
@@ -1498,27 +1419,16 @@ export default function Ryan() {
       ====================================================== */}
 
       {approvedPurchases.length > 0 && (
-
-        <Card className="overflow-hidden border border-emerald-200 bg-emerald-50/60">
-
+        <Card className="overflow-hidden border-emerald-200 bg-emerald-50/50">
           <div className="p-5 md:p-6">
-
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-
               <div className="flex items-start gap-3">
-
-                <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-
-                  <span className="text-lg font-bold">
-                    ✓
-                  </span>
-
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+                  ✓
                 </div>
 
                 <div>
-
                   <div className="flex items-center gap-2 flex-wrap">
-
                     <h2 className="font-bold text-ink-950">
                       الباقات الإضافية المفعّلة
                     </h2>
@@ -1526,61 +1436,43 @@ export default function Ryan() {
                     <Badge tone="success">
                       مفعّلة
                     </Badge>
-
                   </div>
 
-                  <p className="text-sm text-ink-900/55 mt-1">
+                  <p className="mt-1 text-sm text-ink-900/55">
                     تم تأكيد الدفع وإضافة الرصيد الإضافي إلى حسابك.
                   </p>
-
                 </div>
-
               </div>
 
               <div className="text-sm text-ink-900/50">
-
                 {formatNumber(
                   approvedPurchases.length
-                )}
-
-                {' '}
-
+                )}{' '}
                 باقة مفعّلة
-
               </div>
-
             </div>
 
             <div className="mt-5 space-y-3">
-
               {approvedPurchases.map(
                 purchase => (
-
                   <div
                     key={purchase.id}
-                    className="rounded-2xl bg-white border border-emerald-100 p-4 md:p-5 shadow-sm"
+                    className="rounded-2xl border border-emerald-100 bg-white p-4 md:p-5 shadow-sm"
                   >
-
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-
                       <div className="min-w-0">
-
                         <div className="flex items-center gap-2 flex-wrap">
-
                           <h3 className="font-bold text-ink-950">
                             {purchase.package_name}
                           </h3>
 
-                          <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-1 text-[11px] font-semibold">
+                          <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                             ✓ تم تفعيلها
                           </span>
-
                         </div>
 
-                        <div className="text-sm text-ink-900/50 mt-2">
-
+                        <div className="mt-2 text-sm text-ink-900/50">
                           تم تأكيد دفع{' '}
-
                           <strong className="text-ink-950">
                             {Number(
                               purchase.amount
@@ -1589,36 +1481,25 @@ export default function Ryan() {
                             )}{' '}
                             {purchase.currency}
                           </strong>
-
                         </div>
 
                         {purchase.approved_at && (
-
-                          <div className="text-xs text-ink-900/40 mt-1">
-
+                          <div className="mt-1 text-xs text-ink-900/40">
                             تاريخ التفعيل:{' '}
-
-                            {new Date(
+                            {formatDate(
                               purchase.approved_at
-                            ).toLocaleDateString(
-                              'ar-EG'
                             )}
-
                           </div>
-
                         )}
-
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 lg:min-w-[280px]">
-
-                        <div className="rounded-xl bg-sand-50 border border-sand-200 p-3">
-
+                        <div className="rounded-xl border border-sand-200 bg-sand-50 p-3">
                           <div className="text-[11px] text-ink-900/40">
                             تم شراء
                           </div>
 
-                          <div className="font-bold text-lg text-ink-950 mt-1">
+                          <div className="mt-1 text-lg font-bold text-ink-950">
                             {formatNumber(
                               purchase.credits_purchased
                             )}
@@ -1627,16 +1508,14 @@ export default function Ryan() {
                           <div className="text-[11px] text-ink-900/40">
                             رسالة
                           </div>
-
                         </div>
 
-                        <div className="rounded-xl bg-sand-50 border border-sand-200 p-3">
-
+                        <div className="rounded-xl border border-sand-200 bg-sand-50 p-3">
                           <div className="text-[11px] text-ink-900/40">
                             المتبقي
                           </div>
 
-                          <div className="font-bold text-lg text-ink-950 mt-1">
+                          <div className="mt-1 text-lg font-bold text-ink-950">
                             {formatNumber(
                               purchase.credits_remaining
                             )}
@@ -1645,48 +1524,30 @@ export default function Ryan() {
                           <div className="text-[11px] text-ink-900/40">
                             رسالة
                           </div>
-
                         </div>
-
                       </div>
-
                     </div>
-
                   </div>
-
                 )
               )}
-
             </div>
-
           </div>
-
         </Card>
-
       )}
 
       {/* =====================================================
-          PENDING PURCHASE NOTICE
+          PENDING PURCHASE
       ====================================================== */}
 
       {pendingPurchases.length > 0 && (
-
-        <Card className="border border-amber-200 bg-amber-50/60 p-5 md:p-6">
-
+        <Card className="border-amber-200 bg-amber-50/60 p-5 md:p-6">
           <div className="flex items-start gap-3">
-
-            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-
-              <span className="font-bold">
-                !
-              </span>
-
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 font-bold text-amber-700">
+              !
             </div>
 
             <div className="flex-1">
-
               <div className="flex items-center gap-2 flex-wrap">
-
                 <h2 className="font-bold text-ink-950">
                   لديك طلب شراء قيد المراجعة
                 </h2>
@@ -1697,132 +1558,120 @@ export default function Ryan() {
                   )}{' '}
                   طلب
                 </Badge>
-
               </div>
 
-              <p className="text-sm text-ink-900/55 mt-1 leading-6">
+              <p className="mt-1 text-sm leading-6 text-ink-900/55">
                 تم استلام طلب الدفع الخاص بك، وسيتم تفعيل الرسائل الإضافية بعد اعتماد الدفع من إدارة Dragon Media.
               </p>
-
             </div>
-
           </div>
-
         </Card>
-
       )}
 
       {/* =====================================================
           CREDIT PACKAGES
       ====================================================== */}
 
-      <Card className="p-5 md:p-6">
+      <Card className="border-sand-200/80 shadow-sm">
+        <div className="p-5 md:p-6">
+          <div className="mb-5">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-gold-500" />
 
-        <div className="mb-5">
+              <h2 className="font-bold text-ink-950">
+                باقات رصيد Ryan
+              </h2>
+            </div>
 
-          <h2 className="font-bold text-ink-950">
-            باقات رصيد Ryan
-          </h2>
+            <p className="mt-1.5 text-sm text-ink-900/45">
+              اشترِ رسائل إضافية بدون تغيير حد الرسائل الأساسي في خطتك.
+            </p>
+          </div>
 
-          <p className="text-sm text-ink-900/45 mt-1">
-            اشترِ رسائل إضافية بدون تغيير حد الرسائل الأساسي في خطتك.
-          </p>
-
-        </div>
-
-        {loadingCredits ? (
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-            {[1, 2, 3].map(
-              item => (
-
+          {loadingCredits ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map(item => (
                 <div
                   key={item}
-                  className="h-36 rounded-2xl bg-sand-50 animate-pulse"
+                  className="h-44 rounded-2xl bg-sand-50 animate-pulse"
                 />
-
-              )
-            )}
-
-          </div>
-
-        ) : packages.length === 0 ? (
-
-          <div className="rounded-xl border border-sand-200 p-5 text-sm text-ink-900/50">
-            لا توجد باقات رصيد متاحة حاليًا.
-          </div>
-
-        ) : (
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-
-            {packages.map(
-              pkg => (
-
-                <div
-                  key={pkg.id}
-                  className="rounded-2xl border border-sand-200 p-5 hover:border-ink-300 transition"
-                >
-
-                  <div className="flex items-start justify-between gap-3">
-
-                    <div>
-
-                      <h3 className="font-bold text-ink-950">
-                        {pkg.name}
-                      </h3>
-
-                      <div className="text-sm text-ink-900/50 mt-1">
-                        {formatNumber(
-                          pkg.message_count
-                        )}{' '}
-                        رسالة
-                      </div>
-
-                    </div>
-
-                    <div className="text-left shrink-0">
-
-                      <div className="font-bold text-lg text-ink-950">
-                        {Number(
-                          pkg.price
-                        ).toLocaleString(
-                          'ar-EG'
-                        )}{' '}
-                        {pkg.currency}
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                  {pkg.description && (
-
-                    <p className="text-xs text-ink-900/45 leading-5 mt-3">
-                      {pkg.description}
-                    </p>
-
-                  )}
-
-                  <Button
-                    className="w-full mt-5"
-                    onClick={() =>
-                      openPurchase(
-                        pkg
-                      )
-                    }
+              ))}
+            </div>
+          ) : packages.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-sand-200 p-6 text-center text-sm text-ink-900/50">
+              لا توجد باقات رصيد متاحة حاليًا.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {packages.map(
+                (
+                  pkg,
+                  index
+                ) => (
+                  <div
+                    key={pkg.id}
+                    className={`group relative overflow-hidden rounded-2xl border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+                      index === 1
+                        ? 'border-gold-300 bg-gold-50/30'
+                        : 'border-sand-200 bg-white hover:border-ink-300'
+                    }`}
                   >
-                    شراء الباقة
-                  </Button>
+                    {index === 1 && (
+                      <span className="absolute top-0 start-0 rounded-ee-xl bg-gold-500 px-3 py-1.5 text-[10px] font-bold text-ink-950">
+                        الأكثر طلبًا
+                      </span>
+                    )}
 
-                </div>
-              )
-            )}
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-ink-950">
+                          {pkg.name}
+                        </h3>
 
-          </div>
-        )}
+                        <div className="mt-1 text-sm text-ink-900/50">
+                          {formatNumber(
+                            pkg.message_count
+                          )}{' '}
+                          رسالة
+                        </div>
+                      </div>
 
+                      <div className="text-start shrink-0">
+                        <div className="text-lg font-bold text-ink-950">
+                          {Number(
+                            pkg.price
+                          ).toLocaleString(
+                            'ar-EG'
+                          )}{' '}
+                          {pkg.currency}
+                        </div>
+                      </div>
+                    </div>
+
+                    {pkg.description && (
+                      <p className="mt-4 min-h-[40px] text-xs leading-5 text-ink-900/45">
+                        {pkg.description}
+                      </p>
+                    )}
+
+                    <div className="mt-5 border-t border-sand-100 pt-4">
+                      <Button
+                        className="w-full"
+                        onClick={() =>
+                          openPurchase(
+                            pkg
+                          )
+                        }
+                      >
+                        شراء الباقة
+                      </Button>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
       </Card>
 
       {/* =====================================================
@@ -1830,460 +1679,490 @@ export default function Ryan() {
       ====================================================== */}
 
       {purchases.length > 0 && (
+        <Card className="border-sand-200/80 shadow-sm">
+          <div className="p-5 md:p-6">
+            <div className="mb-5">
+              <h2 className="font-bold text-ink-950">
+                سجل طلبات رصيد Ryan
+              </h2>
 
-        <Card className="p-5 md:p-6">
+              <p className="mt-1 text-sm text-ink-900/45">
+                جميع الطلبات السابقة وحالتها الحالية.
+              </p>
+            </div>
 
-          <div className="mb-5">
-
-            <h2 className="font-bold text-ink-950">
-              سجل طلبات رصيد Ryan
-            </h2>
-
-            <p className="text-sm text-ink-900/45 mt-1">
-              جميع الطلبات السابقة وحالتها الحالية.
-            </p>
-
-          </div>
-
-          <div className="space-y-3">
-
-            {purchases.map(
-              purchase => (
-
-                <div
-                  key={purchase.id}
-                  className="rounded-xl border border-sand-200 p-4"
-                >
-
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-
-                    <div>
-
-                      <div className="font-semibold text-ink-950">
-                        {purchase.package_name}
-                      </div>
-
-                      <div className="text-xs text-ink-900/45 mt-1">
-
-                        {formatNumber(
-                          purchase.credits_purchased
-                        )}
-
-                        {' '}
-
-                        رسالة ·{' '}
-
-                        {Number(
-                          purchase.amount
-                        ).toLocaleString(
-                          'ar-EG'
-                        )}
-
-                        {' '}
-
-                        {purchase.currency}
-
-                      </div>
-
-                      <div className="text-[11px] text-ink-900/35 mt-1">
-
-                        {new Date(
-                          purchase.created_at
-                        ).toLocaleDateString(
-                          'ar-EG'
-                        )}
-
-                      </div>
-
-                    </div>
-
-                    <div className="flex flex-col md:items-end gap-2">
-
-                      {purchase.status ===
-                      'approved' ? (
-
-                        <div className="flex items-center gap-2 flex-wrap">
-
-                          <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1.5 text-xs font-semibold">
-                            ✓ تم تأكيد الدفع
-                          </span>
-
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-semibold">
-                            مفعّلة
-                          </span>
-
+            <div className="space-y-3">
+              {purchases.map(
+                purchase => (
+                  <div
+                    key={purchase.id}
+                    className="rounded-2xl border border-sand-200 bg-white p-4 transition hover:border-sand-300"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div>
+                        <div className="font-semibold text-ink-950">
+                          {purchase.package_name}
                         </div>
 
-                      ) : (
+                        <div className="mt-1 text-xs text-ink-900/45">
+                          {formatNumber(
+                            purchase.credits_purchased
+                          )}{' '}
+                          رسالة ·{' '}
+                          {Number(
+                            purchase.amount
+                          ).toLocaleString(
+                            'ar-EG'
+                          )}{' '}
+                          {purchase.currency}
+                        </div>
 
-                        <span
-                          className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ${
-                            purchase.status ===
-                            'pending_review'
-                              ? 'bg-amber-100 text-amber-700'
-                              : purchase.status ===
-                                'rejected'
-                                ? 'bg-red-100 text-red-700'
-                                : 'bg-sand-100 text-ink-900/60'
-                          }`}
-                        >
-                          {statusLabels[
-                            purchase.status
-                          ] ||
-                            purchase.status}
-                        </span>
+                        <div className="mt-1 text-[11px] text-ink-900/35">
+                          {formatDate(
+                            purchase.created_at
+                          )}
+                        </div>
+                      </div>
 
-                      )}
+                      <div className="flex flex-col md:items-end gap-2">
+                        {purchase.status ===
+                        'approved' ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                              ✓ تم تأكيد الدفع
+                            </span>
 
-                      {purchase.status ===
-                        'approved' && (
-
-                        <span className="text-xs text-ink-900/50">
-
-                          الرصيد المتبقي:{' '}
-
-                          <strong className="text-ink-950">
-                            {formatNumber(
-                              purchase.credits_remaining
-                            )}
-                          </strong>
-
-                          {' '}
-
-                          رسالة
-
-                        </span>
-
-                      )}
-
-                      {purchase.status ===
-                        'rejected' &&
-                        purchase.rejection_reason && (
-
-                          <span className="text-xs text-red-600">
-
-                            السبب:{' '}
-
-                            {purchase.rejection_reason}
-
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                              مفعّلة
+                            </span>
+                          </div>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ${
+                              purchase.status ===
+                              'pending_review'
+                                ? 'bg-amber-100 text-amber-700'
+                                : purchase.status ===
+                                  'rejected'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-sand-100 text-ink-900/60'
+                            }`}
+                          >
+                            {statusLabels[
+                              purchase.status
+                            ] ||
+                              purchase.status}
                           </span>
-
                         )}
 
+                        {purchase.status ===
+                          'approved' && (
+                          <span className="text-xs text-ink-900/50">
+                            الرصيد المتبقي:{' '}
+                            <strong className="text-ink-950">
+                              {formatNumber(
+                                purchase.credits_remaining
+                              )}
+                            </strong>{' '}
+                            رسالة
+                          </span>
+                        )}
+
+                        {purchase.status ===
+                          'rejected' &&
+                          purchase.rejection_reason && (
+                            <span className="text-xs text-red-600">
+                              السبب:{' '}
+                              {
+                                purchase.rejection_reason
+                              }
+                            </span>
+                          )}
+                      </div>
                     </div>
-
                   </div>
-
-                </div>
-              )
-            )}
-
+                )
+              )}
+            </div>
           </div>
-
         </Card>
       )}
 
       {/* =====================================================
-          CHAT
+          CHAT + SIDEBAR
       ====================================================== */}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6">
+        <Card className="overflow-hidden border-sand-200/80 shadow-lg">
+          {/* CHAT HEADER */}
 
-        <Card className="overflow-hidden">
+          <div className="border-b border-sand-100 bg-white p-5 md:p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-gold-400 shadow-sm">
+                  <IconSpark className="h-5 w-5" />
 
-          <div className="p-5 border-b border-sand-100 flex items-center justify-between gap-3">
+                  <span className="absolute -bottom-0.5 -start-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+                </div>
 
-            <div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-bold text-ink-950">
+                      محادثة RYAN
+                    </h2>
 
-              <h2 className="font-bold text-ink-950">
-                محادثة RYAN
-              </h2>
+                    {conversationId && (
+                      <span className="hidden sm:inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
+                        محفوظة
+                      </span>
+                    )}
+                  </div>
 
-              <p className="text-xs text-ink-900/45 mt-1">
-                المحادثة التي تجريها هنا يتم حفظها تلقائيًا في Inbox.
-              </p>
+                  <p className="mt-1 truncate text-xs text-ink-900/45">
+                    يتم حفظ المحادثة تلقائيًا في Inbox.
+                  </p>
+                </div>
+              </div>
 
+              <div className="shrink-0">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-semibold ${
+                    paused
+                      ? 'bg-amber-50 text-amber-700'
+                      : 'bg-emerald-50 text-emerald-700'
+                  }`}
+                >
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      paused
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                    }`}
+                  />
+
+                  {paused
+                    ? 'محولة للبشر'
+                    : 'متصل'}
+                </span>
+              </div>
             </div>
-
-            {conversationId && (
-
-              <Badge>
-                متصلة بالـInbox
-              </Badge>
-
-            )}
-
           </div>
 
-          <div className="h-[520px] overflow-y-auto p-4 md:p-6 space-y-4 bg-sand-50/40">
+          {/* CHAT BODY */}
 
-            {messages.length === 0 ? (
+          <div className="relative h-[520px] overflow-y-auto bg-gradient-to-b from-sand-50/70 to-white p-4 md:p-6">
+            {!conversationReady ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="w-full max-w-xs text-center">
+                  <div className="mx-auto h-12 w-12 animate-pulse rounded-2xl bg-ink-900/10" />
 
-              <div className="h-full flex items-center justify-center">
+                  <div className="mx-auto mt-4 h-3 w-40 animate-pulse rounded-full bg-ink-900/10" />
 
-                <div className="text-center max-w-md">
+                  <div className="mx-auto mt-2 h-2 w-56 animate-pulse rounded-full bg-ink-900/5" />
 
-                  <div className="w-14 h-14 mx-auto rounded-2xl bg-ink-900 text-sand-50 flex items-center justify-center mb-4">
+                  <p className="mt-4 text-xs text-ink-900/40">
+                    جاري استعادة المحادثة...
+                  </p>
+                </div>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="max-w-md text-center">
+                  <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-ink-950 text-gold-400 shadow-lg">
+                    <IconSpark className="h-7 w-7" />
 
-                    <IconSpark className="w-6 h-6" />
-
+                    <span className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
                   </div>
 
                   <h3 className="font-bold text-ink-950">
-                    ابدأ محادثة جديدة
+                    ابدأ محادثة مع Ryan
                   </h3>
 
-                  <p className="text-sm text-ink-900/45 mt-2 leading-6">
-                    جرّب سؤالًا حقيقيًا عن خدمات الشركة أو اطلب التحدث مع موظف.
+                  <p className="mt-2 text-sm leading-6 text-ink-900/45">
+                    اختبر المبيعات وخدمة العملاء والحجز وتحويل المحادثة للموظف من هنا.
                   </p>
 
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">
+                    {[
+                      'عايز أعرف الخدمات',
+                      'عايز أحجز خدمة',
+                      'عايز أتكلم مع موظف',
+                    ].map(suggestion => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() =>
+                          setInput(
+                            suggestion
+                          )
+                        }
+                        className="rounded-full border border-sand-200 bg-white px-3 py-2 text-xs text-ink-900/65 transition hover:border-ink-300 hover:bg-sand-50"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-
               </div>
-
             ) : (
-
-              messages.map(
-                message => (
-
-                  <div
-                    key={message.id}
-                    className={
+              <div className="space-y-5">
+                {messages.map(
+                  message => {
+                    const isUser =
                       message.role ===
                       'user'
-                        ? 'flex justify-start'
-                        : 'flex justify-end'
-                    }
-                  >
 
-                    <div
-                      className={`max-w-[85%] md:max-w-[70%] ${
-                        message.role ===
-                        'user'
-                          ? 'bg-white border border-sand-200 text-ink-900 rounded-2xl rounded-tr-sm'
-                          : 'bg-ink-900 text-sand-50 rounded-2xl rounded-tl-sm'
-                      } px-4 py-3`}
-                    >
-
-                      <div className="text-sm leading-6 whitespace-pre-wrap">
-                        {message.text}
-                      </div>
-
+                    return (
                       <div
-                        className={`text-[10px] mt-2 ${
-                          message.role ===
-                          'user'
-                            ? 'text-ink-900/35'
-                            : 'text-sand-50/45'
+                        key={
+                          message.id
+                        }
+                        className={`flex ${
+                          isUser
+                            ? 'justify-start'
+                            : 'justify-end'
                         }`}
                       >
+                        <div
+                          className={`flex max-w-[88%] md:max-w-[72%] items-end gap-2 ${
+                            isUser
+                              ? 'flex-row'
+                              : 'flex-row-reverse'
+                          }`}
+                        >
+                          {!isUser && (
+                            <div className="hidden sm:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-950 text-gold-400 shadow-sm">
+                              <IconSpark className="h-4 w-4" />
+                            </div>
+                          )}
 
-                        {new Date(
-                          message.createdAt
-                        ).toLocaleTimeString(
-                          'ar-EG',
-                          {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          }
-                        )}
+                          <div
+                            className={`relative px-4 py-3 shadow-sm ${
+                              isUser
+                                ? 'rounded-2xl rounded-tr-md border border-sand-200 bg-white text-ink-900'
+                                : 'rounded-2xl rounded-tl-md bg-ink-950 text-sand-50'
+                            }`}
+                          >
+                            <div className="whitespace-pre-wrap text-sm leading-6">
+                              {
+                                message.text
+                              }
+                            </div>
 
+                            <div
+                              className={`mt-2 flex items-center justify-end gap-2 text-[10px] ${
+                                isUser
+                                  ? 'text-ink-900/30'
+                                  : 'text-sand-50/40'
+                              }`}
+                            >
+                              <span>
+                                {formatMessageTime(
+                                  message.createdAt
+                                )}
+                              </span>
+
+                              {isUser && (
+                                <span>
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+
+                            {message.actionTaken &&
+                              actionLabels[
+                                message
+                                  .actionTaken
+                              ] && (
+                                <div
+                                  className={`mt-3 border-t pt-2 text-[11px] ${
+                                    isUser
+                                      ? 'border-ink-900/10 text-ink-900/55'
+                                      : 'border-white/10 text-sand-50/55'
+                                  }`}
+                                >
+                                  {
+                                    actionLabels[
+                                      message.actionTaken
+                                    ]
+                                  }
+                                </div>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                )}
+
+                {sending && (
+                  <div className="flex justify-end">
+                    <div className="flex items-end gap-2">
+                      <div className="hidden sm:flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-950 text-gold-400">
+                        <IconSpark className="h-4 w-4" />
                       </div>
 
-                      {message.actionTaken &&
-                        actionLabels[
-                          message.actionTaken
-                        ] && (
+                      <div className="rounded-2xl rounded-tl-md bg-ink-950 px-4 py-3 text-sand-50 shadow-sm">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold-400" />
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold-400 [animation-delay:150ms]" />
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gold-400 [animation-delay:300ms]" />
 
-                          <div className="mt-2 pt-2 border-t border-current/10 text-[11px] opacity-70">
-
-                            {
-                              actionLabels[
-                                message.actionTaken
-                              ]
-                            }
-
-                          </div>
-
-                        )}
-
+                          <span className="mr-1 text-[11px] text-sand-50/50">
+                            ريان بيكتب...
+                          </span>
+                        </div>
+                      </div>
                     </div>
-
                   </div>
-                )
-              )
-            )}
-
-            {sending && (
-
-              <div className="flex justify-end">
-
-                <div className="bg-ink-900/90 text-sand-50 rounded-2xl rounded-tl-sm px-4 py-3">
-
-                  <div className="flex items-center gap-2">
-
-                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-
-                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse [animation-delay:150ms]" />
-
-                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse [animation-delay:300ms]" />
-
-                    <span className="text-xs text-sand-50/60 mr-1">
-                      ريان بيكتب...
-                    </span>
-
-                  </div>
-
-                </div>
-
+                )}
               </div>
-
             )}
-
           </div>
 
+          {/* HANDOFF */}
+
           {paused && (
+            <div className="mx-4 mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-sm text-ink-950">
+                    تم تحويل المحادثة لفريق بشري
+                  </div>
 
-            <div className="mx-4 mt-4 rounded-xl border border-gold-500/30 bg-gold-500/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-
-              <div>
-
-                <div className="font-semibold text-sm text-ink-950">
-                  تم تحويل المحادثة لفريق بشري
+                  <div className="mt-1 text-xs leading-5 text-ink-900/50">
+                    المحادثة محفوظة في Inbox ويمكن للموظف متابعتها.
+                  </div>
                 </div>
 
-                <div className="text-xs text-ink-900/50 mt-1">
-                  المحادثة محفوظة في Inbox ويمكن للموظف متابعتها.
-                </div>
-
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    setPaused(false)
+                  }
+                >
+                  استئناف الاختبار
+                </Button>
               </div>
-
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setPaused(false)
-                }
-              >
-                استئناف الاختبار
-              </Button>
-
             </div>
-
           )}
+
+          {/* ERROR */}
 
           {error && (
-
-            <div className="mx-4 mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="mx-4 mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </div>
-
           )}
 
+          {/* INPUT */}
+
           <form
-            onSubmit={handleSend}
-            className="p-4 border-t border-sand-100 bg-white mt-4"
+            onSubmit={
+              handleSend
+            }
+            className="border-t border-sand-100 bg-white p-4 md:p-5"
           >
-
-            <div className="flex items-end gap-2">
-
-              <textarea
-                value={input}
-                onChange={event =>
-                  setInput(
-                    event.target.value
-                  )
-                }
-                onKeyDown={event => {
-
-                  if (
-                    event.key ===
-                      'Enter' &&
-                    !event.shiftKey
-                  ) {
-
-                    event.preventDefault()
-
-                    if (
-                      !sending &&
-                      input.trim()
-                    ) {
-                      event.currentTarget.form?.requestSubmit()
-                    }
+            <div className="rounded-2xl border border-sand-200 bg-sand-50/50 p-2 transition focus-within:border-ink-300 focus-within:bg-white focus-within:shadow-sm">
+              <div className="flex items-end gap-2">
+                <textarea
+                  value={input}
+                  onChange={event =>
+                    setInput(
+                      event.target
+                        .value
+                    )
                   }
-                }}
-                disabled={
-                  paused ||
-                  sending
-                }
-                rows={1}
-                placeholder={
-                  paused
-                    ? 'المحادثة محولة لفريق بشري...'
-                    : 'اكتب رسالتك إلى RYAN...'
-                }
-                className="flex-1 resize-none min-h-[48px] max-h-32 border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white placeholder:text-ink-900/35 outline-none focus:border-ink-700 disabled:bg-sand-100 disabled:text-ink-900/50"
-              />
+                  onKeyDown={event => {
+                    if (
+                      event.key ===
+                        'Enter' &&
+                      !event.shiftKey
+                    ) {
+                      event.preventDefault()
 
-              <Button
-                type="submit"
-                disabled={
-                  paused ||
-                  sending ||
-                  !input.trim()
-                }
-              >
-                {sending
-                  ? 'جاري الإرسال...'
-                  : 'إرسال'}
-              </Button>
+                      if (
+                        !sending &&
+                        conversationReady &&
+                        input.trim()
+                      ) {
+                        event.currentTarget.form?.requestSubmit()
+                      }
+                    }
+                  }}
+                  disabled={
+                    paused ||
+                    sending ||
+                    !conversationReady
+                  }
+                  rows={1}
+                  placeholder={
+                    !conversationReady
+                      ? 'جاري استعادة المحادثة...'
+                      : paused
+                        ? 'المحادثة محولة لفريق بشري...'
+                        : 'اكتب رسالتك إلى RYAN...'
+                  }
+                  className="min-h-[48px] max-h-32 flex-1 resize-none border-0 bg-transparent px-3 py-3 text-sm text-ink-950 outline-none placeholder:text-ink-900/30 disabled:cursor-not-allowed disabled:opacity-60"
+                />
 
+                <Button
+                  type="submit"
+                  disabled={
+                    paused ||
+                    sending ||
+                    !conversationReady ||
+                    !input.trim()
+                  }
+                  className="shrink-0"
+                >
+                  {sending
+                    ? 'جاري الإرسال...'
+                    : 'إرسال'}
+                </Button>
+              </div>
+
+              <div className="px-3 pb-1 pt-1 text-[10px] text-ink-900/30">
+                Enter للإرسال · Shift + Enter لسطر جديد
+              </div>
             </div>
-
-            <div className="text-[10px] text-ink-900/35 mt-2">
-              Enter للإرسال · Shift + Enter لسطر جديد
-            </div>
-
           </form>
-
         </Card>
 
         {/* ===================================================
             SIDEBAR
         ==================================================== */}
 
-        <div className="space-y-6">
+        <div className="space-y-5">
+          {/* STATUS */}
 
-          <Card className="p-5">
+          <Card className="overflow-hidden border-sand-200/80 shadow-sm">
+            <div className="border-b border-sand-100 bg-sand-50/50 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-bold text-ink-950">
+                  حالة RYAN
+                </h3>
 
-            <div className="flex items-center justify-between gap-3 mb-4">
-
-              <h3 className="font-bold text-ink-950">
-                حالة RYAN
-              </h3>
-
-              <Badge tone="success">
-                متصل
-              </Badge>
-
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  متصل
+                </span>
+              </div>
             </div>
 
-            <div className="space-y-3 text-sm">
-
-              <div className="flex items-center justify-between gap-3">
-
-                <span className="text-ink-900/50">
+            <div className="space-y-0 p-5 text-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-sand-100 py-3 first:pt-0">
+                <span className="text-ink-900/45">
                   الشركة
                 </span>
 
-                <span className="font-medium text-ink-950 truncate max-w-[170px]">
+                <span className="max-w-[170px] truncate font-medium text-ink-950">
                   {companyName}
                 </span>
-
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-
-                <span className="text-ink-900/50">
+              <div className="flex items-center justify-between gap-3 border-b border-sand-100 py-3">
+                <span className="text-ink-900/45">
                   Inbox
                 </span>
 
@@ -2292,12 +2171,10 @@ export default function Ryan() {
                     ? 'متصل'
                     : 'لم تبدأ'}
                 </span>
-
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-
-                <span className="text-ink-900/50">
+              <div className="flex items-center justify-between gap-3 border-b border-sand-100 py-3">
+                <span className="text-ink-900/45">
                   آخر نشاط
                 </span>
 
@@ -2305,12 +2182,10 @@ export default function Ryan() {
                   {lastMessageTime ||
                     'لم تبدأ بعد'}
                 </span>
-
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-
-                <span className="text-ink-900/50">
+              <div className="flex items-center justify-between gap-3 pt-3">
+                <span className="text-ink-900/45">
                   الرصيد الإضافي
                 </span>
 
@@ -2322,95 +2197,96 @@ export default function Ryan() {
                           0
                       )}
                 </span>
-
               </div>
-
             </div>
-
           </Card>
 
-          <Card className="p-5">
+          {/* CAPABILITIES */}
 
-            <h3 className="font-bold text-ink-950 mb-4">
-              قدرات RYAN
-            </h3>
+          <Card className="border-sand-200/80 p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gold-100 text-gold-700">
+                <IconSpark className="h-4 w-4" />
+              </span>
+
+              <h3 className="font-bold text-ink-950">
+                قدرات RYAN
+              </h3>
+            </div>
 
             <div className="space-y-3">
-
               {[
                 'الرد على استفسارات العملاء باستخدام قاعدة المعرفة',
                 'تسجيل العملاء المحتملين في CRM',
                 'إنشاء الصفقات داخل Pipeline',
                 'حجز المواعيد',
                 'تحويل المحادثة لموظف بشري',
-              ].map(
-                item => (
-
-                  <div
-                    key={item}
-                    className="flex gap-2.5 items-start"
-                  >
-
-                    <div className="w-5 h-5 rounded-full bg-ink-900 text-sand-50 flex items-center justify-center shrink-0 mt-0.5">
-
-                      <span className="text-[10px]">
-                        ✓
-                      </span>
-
-                    </div>
-
-                    <span className="text-sm leading-5 text-ink-900/65">
-                      {item}
+              ].map(item => (
+                <div
+                  key={item}
+                  className="flex items-start gap-2.5"
+                >
+                  <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 text-gold-400">
+                    <span className="text-[9px]">
+                      ✓
                     </span>
-
                   </div>
 
-                )
-              )}
-
+                  <span className="text-sm leading-5 text-ink-900/65">
+                    {item}
+                  </span>
+                </div>
+              ))}
             </div>
-
           </Card>
 
-          <Card className="p-5">
+          {/* MANAGEMENT */}
 
-            <h3 className="font-bold text-ink-950 mb-2">
+          <Card className="border-sand-200/80 p-5 shadow-sm">
+            <h3 className="font-bold text-ink-950">
               إدارة RYAN
             </h3>
 
-            <p className="text-xs leading-5 text-ink-900/45 mb-4">
+            <p className="mt-2 mb-4 text-xs leading-5 text-ink-900/45">
               إدارة المعرفة ومتابعة طلبات التحويل تتم من الأقسام المخصصة.
             </p>
 
             <div className="space-y-2">
-
               <a
                 href="#/ryan/knowledge"
-                className="block rounded-xl border border-sand-200 px-4 py-3 text-sm font-medium text-ink-950 hover:bg-sand-50 transition"
+                className="group flex items-center justify-between rounded-xl border border-sand-200 px-4 py-3 text-sm font-medium text-ink-950 transition hover:border-ink-300 hover:bg-sand-50"
               >
-                قاعدة المعرفة
+                <span>
+                  قاعدة المعرفة
+                </span>
+
+                <span className="text-ink-900/30 transition group-hover:text-ink-900/60">
+                  ←
+                </span>
               </a>
 
               <a
                 href="#/ryan/handoff"
-                className="block rounded-xl border border-sand-200 px-4 py-3 text-sm font-medium text-ink-950 hover:bg-sand-50 transition"
+                className="group flex items-center justify-between rounded-xl border border-sand-200 px-4 py-3 text-sm font-medium text-ink-950 transition hover:border-ink-300 hover:bg-sand-50"
               >
-                طلبات التحويل
+                <span>
+                  طلبات التحويل
+                </span>
+
+                <span className="text-ink-900/30 transition group-hover:text-ink-900/60">
+                  ←
+                </span>
               </a>
 
               <a
                 href="#/inbox"
-                className="block rounded-xl bg-ink-900 text-sand-50 px-4 py-3 text-sm font-medium text-center hover:bg-ink-800 transition"
+                className="flex items-center justify-center rounded-xl bg-ink-950 px-4 py-3 text-sm font-semibold text-sand-50 shadow-sm transition hover:bg-ink-800"
               >
                 فتح Inbox
               </a>
-
             </div>
-
           </Card>
-
         </div>
-
       </div>
 
       {/* =====================================================
@@ -2418,145 +2294,148 @@ export default function Ryan() {
       ====================================================== */}
 
       {showPurchase && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/60 p-4 backdrop-blur-sm"
+          onMouseDown={event => {
+            if (
+              event.target ===
+                event.currentTarget &&
+              !purchasing
+            ) {
+              setShowPurchase(
+                false
+              )
+            }
+          }}
+        >
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-white/10 bg-white shadow-2xl">
+            {/* MODAL HEADER */}
 
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-950/50">
-
-          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
-
-            <div className="p-5 border-b border-sand-100">
-
+            <div className="sticky top-0 z-10 border-b border-sand-100 bg-white/95 p-5 backdrop-blur">
               <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-950 text-gold-400">
+                    <IconSpark className="h-5 w-5" />
+                  </div>
 
-                <div>
+                  <div>
+                    <h2 className="font-bold text-lg text-ink-950">
+                      شراء رصيد Ryan
+                    </h2>
 
-                  <h2 className="font-bold text-lg text-ink-950">
-                    شراء رصيد Ryan
-                  </h2>
-
-                  <p className="text-xs text-ink-900/45 mt-1">
-                    سيتم إضافة الرصيد بعد مراجعة الدفع واعتماده من الإدارة.
-                  </p>
-
+                    <p className="mt-0.5 text-xs text-ink-900/45">
+                      التفعيل بعد مراجعة واعتماد الدفع.
+                    </p>
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => {
-
                     if (!purchasing) {
                       setShowPurchase(
                         false
                       )
                     }
-
                   }}
-                  className="w-8 h-8 rounded-lg hover:bg-sand-100 text-ink-900/50"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-lg text-ink-900/40 transition hover:bg-sand-100 hover:text-ink-950"
                   aria-label="إغلاق"
                 >
                   ×
                 </button>
-
               </div>
-
             </div>
 
-            <div className="p-5 space-y-5">
-
+            <div className="space-y-5 p-5">
               {!selectedPackage ? (
-
                 <div className="space-y-3">
-
                   {packages.map(
                     pkg => (
-
                       <button
-                        key={pkg.id}
+                        key={
+                          pkg.id
+                        }
                         type="button"
                         onClick={() =>
                           setSelectedPackage(
                             pkg
                           )
                         }
-                        className="w-full text-right rounded-xl border border-sand-200 p-4 hover:bg-sand-50 transition"
+                        className="w-full rounded-2xl border border-sand-200 bg-white p-4 text-start transition hover:border-ink-300 hover:bg-sand-50"
                       >
-
                         <div className="flex items-center justify-between gap-3">
-
                           <div>
-
                             <div className="font-bold text-ink-950">
-                              {pkg.name}
+                              {
+                                pkg.name
+                              }
                             </div>
 
-                            <div className="text-sm text-ink-900/50 mt-1">
+                            <div className="mt-1 text-sm text-ink-900/50">
                               {formatNumber(
                                 pkg.message_count
                               )}{' '}
                               رسالة
                             </div>
-
                           </div>
 
-                          <div className="font-bold text-ink-950 shrink-0">
+                          <div className="shrink-0 font-bold text-ink-950">
                             {Number(
                               pkg.price
                             ).toLocaleString(
                               'ar-EG'
                             )}{' '}
-                            {pkg.currency}
+                            {
+                              pkg.currency
+                            }
                           </div>
-
                         </div>
-
                       </button>
                     )
                   )}
-
                 </div>
-
               ) : (
-
                 <>
+                  {/* SELECTED PACKAGE */}
 
-                  <div className="rounded-xl bg-sand-50 border border-sand-200 p-4">
-
+                  <div className="rounded-2xl border border-gold-200 bg-gold-50/50 p-4">
                     <div className="flex items-center justify-between gap-3">
-
                       <div>
-
                         <div className="text-xs text-ink-900/45">
                           الباقة المختارة
                         </div>
 
-                        <div className="font-bold text-ink-950 mt-1">
-                          {selectedPackage.name}
+                        <div className="mt-1 font-bold text-ink-950">
+                          {
+                            selectedPackage.name
+                          }
                         </div>
 
-                        <div className="text-sm text-ink-900/55 mt-1">
+                        <div className="mt-1 text-sm text-ink-900/55">
                           {formatNumber(
                             selectedPackage.message_count
                           )}{' '}
                           رسالة
                         </div>
-
                       </div>
 
-                      <div className="text-left font-bold text-ink-950">
+                      <div className="text-start font-bold text-ink-950">
                         {Number(
                           selectedPackage.price
                         ).toLocaleString(
                           'ar-EG'
                         )}{' '}
-                        {selectedPackage.currency}
+                        {
+                          selectedPackage.currency
+                        }
                       </div>
-
                     </div>
-
                   </div>
 
-                  <div>
+                  {/* PAYMENT METHOD */}
 
-                    <label className="block text-sm font-medium text-ink-950 mb-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-ink-950">
                       طريقة الدفع
                     </label>
 
@@ -2566,19 +2445,18 @@ export default function Ryan() {
                       }
                       onChange={event =>
                         setSelectedMethod(
-                          event.target.value
+                          event.target
+                            .value
                         )
                       }
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white outline-none focus:border-ink-700"
+                      className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5"
                     >
-
                       <option value="">
                         اختر طريقة الدفع
                       </option>
 
                       {paymentMethods.map(
                         method => (
-
                           <option
                             key={
                               method.method_key
@@ -2587,48 +2465,47 @@ export default function Ryan() {
                               method.method_key
                             }
                           >
-                            {method.name}
+                            {
+                              method.name
+                            }
                           </option>
                         )
                       )}
-
                     </select>
-
                   </div>
 
+                  {/* PAYMENT DETAILS */}
+
                   {selectedPaymentMethod && (
-
-                    <div className="rounded-xl border border-sand-200 bg-sand-50 p-4">
-
-                      <div className="text-xs font-semibold text-ink-900/60 mb-3">
+                    <div className="rounded-2xl border border-sand-200 bg-sand-50 p-4">
+                      <div className="mb-3 text-xs font-semibold text-ink-900/60">
                         بيانات الدفع
                       </div>
 
                       {paymentDetails.length ===
                       0 ? (
-
-                        <div className="text-sm text-ink-900/50">
+                        <div className="text-sm leading-6 text-ink-900/50">
                           اتبع تعليمات الدفع الخاصة بالطريقة المختارة.
                         </div>
-
                       ) : (
-
-                        <div className="space-y-2">
-
+                        <div className="space-y-3">
                           {paymentDetails.map(
-                            ([key, value]) => (
-
+                            ([
+                              key,
+                              value,
+                            ]) => (
                               <div
-                                key={key}
-                                className="flex flex-col gap-0.5"
+                                key={
+                                  key
+                                }
                               >
-
-                                <span className="text-[11px] text-ink-900/40">
-                                  {key}
+                                <span className="block text-[11px] text-ink-900/40">
+                                  {
+                                    key
+                                  }
                                 </span>
 
-                                <span className="text-sm font-medium text-ink-950 break-words">
-
+                                <span className="mt-0.5 block break-words text-sm font-medium text-ink-950">
                                   {typeof value ===
                                   'object'
                                     ? JSON.stringify(
@@ -2637,22 +2514,19 @@ export default function Ryan() {
                                     : String(
                                         value
                                       )}
-
                                 </span>
-
                               </div>
                             )
                           )}
-
                         </div>
                       )}
-
                     </div>
                   )}
 
-                  <div>
+                  {/* REFERENCE */}
 
-                    <label className="block text-sm font-medium text-ink-950 mb-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-ink-950">
                       رقم العملية
                     </label>
 
@@ -2662,18 +2536,19 @@ export default function Ryan() {
                       }
                       onChange={event =>
                         setReference(
-                          event.target.value
+                          event.target
+                            .value
                         )
                       }
                       placeholder="أدخل رقم العملية"
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white placeholder:text-ink-900/35 outline-none focus:border-ink-700"
+                      className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/30 focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5"
                     />
-
                   </div>
 
-                  <div>
+                  {/* DATE */}
 
-                    <label className="block text-sm font-medium text-ink-950 mb-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-ink-950">
                       تاريخ الدفع
                     </label>
 
@@ -2684,17 +2559,18 @@ export default function Ryan() {
                       }
                       onChange={event =>
                         setPaymentDate(
-                          event.target.value
+                          event.target
+                            .value
                         )
                       }
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white outline-none focus:border-ink-700"
+                      className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5"
                     />
-
                   </div>
 
-                  <div>
+                  {/* NOTE */}
 
-                    <label className="block text-sm font-medium text-ink-950 mb-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-ink-950">
                       ملاحظة إضافية
                     </label>
 
@@ -2704,32 +2580,31 @@ export default function Ryan() {
                       }
                       onChange={event =>
                         setPaymentNote(
-                          event.target.value
+                          event.target
+                            .value
                         )
                       }
                       rows={3}
                       placeholder="اختياري"
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white placeholder:text-ink-900/35 outline-none focus:border-ink-700 resize-none"
+                      className="w-full resize-none rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/30 focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5"
                     />
-
                   </div>
 
                   {purchaseError && (
-
-                    <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
+                    <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm leading-5 text-red-700">
                       {purchaseError}
                     </div>
-
                   )}
 
-                  <div className="flex gap-2 pt-2">
+                  {/* ACTIONS */}
 
+                  <div className="flex gap-2 pt-1">
                     <Button
                       variant="secondary"
                       onClick={() => {
-
-                        if (!purchasing) {
-
+                        if (
+                          !purchasing
+                        ) {
                           setSelectedPackage(
                             null
                           )
@@ -2737,9 +2612,7 @@ export default function Ryan() {
                           setPurchaseError(
                             null
                           )
-
                         }
-
                       }}
                       disabled={
                         purchasing
@@ -2764,21 +2637,13 @@ export default function Ryan() {
                         ? 'جاري إرسال الطلب...'
                         : 'إرسال طلب الشراء'}
                     </Button>
-
                   </div>
-
                 </>
-
               )}
-
             </div>
-
           </div>
-
         </div>
-
       )}
-
     </div>
   )
 }
