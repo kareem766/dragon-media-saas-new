@@ -114,6 +114,18 @@ function getPaymentMethodLabel(method: string) {
   return labels[method] ?? method
 }
 
+function getBillingCycleLabel(cycle: string | null | undefined) {
+  if (cycle === 'yearly') {
+    return 'سنويًا'
+  }
+
+  if (cycle === 'monthly') {
+    return 'شهريًا'
+  }
+
+  return '—'
+}
+
 export default function Billing() {
   const navigate = useNavigate()
 
@@ -122,6 +134,10 @@ export default function Billing() {
     loading: subscriptionLoading,
     isActive: subscriptionIsActive,
     isExpired,
+    daysRemaining,
+    billingCycle,
+    startedAt,
+    expiresAt,
   } = useSubscription()
 
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([])
@@ -230,8 +246,8 @@ export default function Billing() {
   const rawStatus = subscription?.status ?? 'no_subscription'
 
   /*
-   * لو الاشتراك status = active لكن تاريخ التجديد انتهى،
-   * نتعامل معه كـ expired في الواجهة.
+   * حالة الاشتراك المعروضة تعتمد على الحالة الحقيقية
+   * بالإضافة إلى تاريخ الانتهاء الفعلي.
    */
   const status =
     isExpired &&
@@ -243,6 +259,41 @@ export default function Billing() {
     statusLabels[status] ?? statusLabels.no_subscription
 
   const isActive = subscriptionIsActive
+
+  /*
+   * expires_at هو المصدر الأساسي.
+   * renewal_date يبقى fallback للبيانات القديمة.
+   */
+  const effectiveExpiryDate =
+    expiresAt ??
+    subscription?.renewal_date ??
+    null
+
+  const effectiveBillingCycle =
+    billingCycle ??
+    subscription?.plan?.billing_cycle ??
+    null
+
+  /*
+   * السعر المعروض يعتمد على دورة الاشتراك الفعلية.
+   */
+  const currentPlanPrice = useMemo(() => {
+    if (!subscription?.plan) {
+      return null
+    }
+
+    if (
+      effectiveBillingCycle === 'yearly' &&
+      Number(subscription.plan.yearly_price ?? 0) > 0
+    ) {
+      return Number(subscription.plan.yearly_price)
+    }
+
+    return Number(subscription.plan.price ?? 0)
+  }, [
+    subscription?.plan,
+    effectiveBillingCycle,
+  ])
 
   const pendingRequest = useMemo(
     () =>
@@ -262,32 +313,11 @@ export default function Billing() {
     [payments]
   )
 
-  const daysRemaining = useMemo(() => {
-    if (!subscription?.renewal_date) return null
-
-    const renewal = new Date(
-      `${subscription.renewal_date}T00:00:00Z`
-    )
-
-    const today = new Date()
-
-    const todayUtc = new Date(
-      Date.UTC(
-        today.getUTCFullYear(),
-        today.getUTCMonth(),
-        today.getUTCDate()
-      )
-    )
-
-    const diff = Math.ceil(
-      (renewal.getTime() - todayUtc.getTime()) / 86400000
-    )
-
-    return Math.max(diff, 0)
-  }, [subscription?.renewal_date])
-
   const accessMessage = useMemo(() => {
-    if (!subscription) {
+    if (
+      status === 'no_subscription' ||
+      !subscription?.plan_id
+    ) {
       return 'لا يوجد اشتراك حالي. اختر إحدى الباقات للبدء.'
     }
 
@@ -388,11 +418,9 @@ export default function Billing() {
 
             {subscription?.plan && (
               <div className="text-sm text-ink-900/60 mt-2">
-                {formatMoney(subscription.plan.price)}
+                {formatMoney(currentPlanPrice)}
                 {' / '}
-                {subscription.plan.billing_cycle === 'yearly'
-                  ? 'سنويًا'
-                  : 'شهريًا'}
+                {getBillingCycleLabel(effectiveBillingCycle)}
               </div>
             )}
           </div>
@@ -402,15 +430,35 @@ export default function Billing() {
           </Badge>
         </div>
 
-        {subscription?.renewal_date && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
+        {subscription && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
             <div className="rounded-xl border border-ink-900/10 p-4">
               <div className="text-xs text-ink-900/45">
-                التجديد القادم
+                دورة الاشتراك
               </div>
 
               <div className="font-semibold text-ink-950 mt-1">
-                {formatDate(subscription.renewal_date)}
+                {getBillingCycleLabel(effectiveBillingCycle)}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-ink-900/10 p-4">
+              <div className="text-xs text-ink-900/45">
+                تاريخ البداية
+              </div>
+
+              <div className="font-semibold text-ink-950 mt-1">
+                {formatDate(startedAt)}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-ink-900/10 p-4">
+              <div className="text-xs text-ink-900/45">
+                تاريخ الانتهاء
+              </div>
+
+              <div className="font-semibold text-ink-950 mt-1">
+                {formatDate(effectiveExpiryDate)}
               </div>
             </div>
 
@@ -422,23 +470,13 @@ export default function Billing() {
               <div className="font-semibold text-ink-950 mt-1">
                 {!isActive && status === 'expired'
                   ? 'منتهي'
-                  : daysRemaining === 0
-                    ? 'اليوم'
-                    : daysRemaining === 1
-                      ? 'يوم واحد'
-                      : `${daysRemaining} أيام`}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-ink-900/10 p-4">
-              <div className="text-xs text-ink-900/45">
-                حالة الوصول
-              </div>
-
-              <div className="font-semibold text-ink-950 mt-1">
-                {isActive
-                  ? 'الوصول متاح'
-                  : 'الوصول محدود'}
+                  : daysRemaining === null
+                    ? '—'
+                    : daysRemaining === 0
+                      ? 'اليوم'
+                      : daysRemaining === 1
+                        ? 'يوم واحد'
+                        : `${daysRemaining} أيام`}
               </div>
             </div>
           </div>
