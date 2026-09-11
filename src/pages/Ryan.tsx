@@ -985,11 +985,7 @@ export default function Ryan() {
         optimisticMessage,
       ].map(message => ({
         role: message.role,
-        parts: [
-          {
-            text: message.text,
-          },
-        ],
+        text: message.text,
       }))
 
       const response =
