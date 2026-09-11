@@ -222,6 +222,9 @@ export default function Ryan() {
     setPurchaseError,
   ] = useState<string | null>(null)
 
+  /*
+   * Load company name.
+   */
   useEffect(() => {
     let cancelled = false
 
@@ -253,6 +256,278 @@ export default function Ryan() {
     }
   }, [organizationId])
 
+  /*
+   * Restore the latest Ryan website conversation after refresh.
+   *
+   * The backend already persists conversations/messages.
+   * This effect restores them into the local React state.
+   */
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadConversation() {
+      if (
+        !supabase ||
+        !organizationId
+      ) {
+        return
+      }
+
+      try {
+        const {
+          data: authData,
+          error: authError,
+        } =
+          await supabase.auth.getUser()
+
+        if (
+          authError ||
+          !authData.user?.id
+        ) {
+          return
+        }
+
+        const userEmail =
+          authData.user.email
+
+        if (!userEmail) {
+          return
+        }
+
+        /*
+         * Ryan's backend associates the website conversation
+         * with the customer record belonging to the organization.
+         */
+        const {
+          data: customer,
+          error: customerError,
+        } = await supabase
+          .from('customers')
+          .select('id')
+          .eq(
+            'organization_id',
+            organizationId
+          )
+          .eq('email', userEmail)
+          .order('created_at', {
+            ascending: false,
+          })
+          .limit(1)
+          .maybeSingle()
+
+        if (
+          customerError ||
+          !customer?.id ||
+          cancelled
+        ) {
+          return
+        }
+
+        /*
+         * Get the latest website conversation.
+         */
+        const {
+          data: conversation,
+          error: conversationError,
+        } = await supabase
+          .from('conversations')
+          .select(
+            'id, handled_by, metadata, created_at'
+          )
+          .eq(
+            'organization_id',
+            organizationId
+          )
+          .eq(
+            'customer_id',
+            customer.id
+          )
+          .eq(
+            'channel',
+            'website'
+          )
+          .order('created_at', {
+            ascending: false,
+          })
+          .limit(1)
+          .maybeSingle()
+
+        if (
+          conversationError ||
+          !conversation?.id ||
+          cancelled
+        ) {
+          return
+        }
+
+        /*
+         * Restore the conversation ID first.
+         */
+        setConversationId(
+          conversation.id
+        )
+
+        /*
+         * Load all messages from the saved conversation.
+         *
+         * select('*') is intentional here so this page remains
+         * compatible with the current messages table structure.
+         */
+        const {
+          data: storedMessages,
+          error: messagesError,
+        } = await supabase
+          .from('messages')
+          .select('*')
+          .eq(
+            'conversation_id',
+            conversation.id
+          )
+          .order('created_at', {
+            ascending: true,
+          })
+
+        if (
+          messagesError ||
+          cancelled
+        ) {
+          return
+        }
+
+        const restoredMessages: ChatMessage[] =
+          (storedMessages || [])
+            .map((row: any) => {
+              const metadata =
+                row?.metadata &&
+                typeof row.metadata ===
+                  'object'
+                  ? row.metadata
+                  : {}
+
+              const senderType =
+                String(
+                  row?.sender_type ||
+                    row?.sender ||
+                    row?.role ||
+                    ''
+                ).toLowerCase()
+
+              const isUser =
+                senderType ===
+                  'customer' ||
+                senderType ===
+                  'user' ||
+                senderType ===
+                  'human'
+
+              const text =
+                row?.content ??
+                row?.body ??
+                row?.text ??
+                row?.message ??
+                ''
+
+              const createdAt =
+                row?.created_at ||
+                new Date().toISOString()
+
+              if (
+                !String(text).trim()
+              ) {
+                return null
+              }
+
+              return {
+                id:
+                  String(
+                    row?.id ||
+                      `restored-${createdAt}-${Math.random()}`
+                  ),
+                role: isUser
+                  ? 'user'
+                  : 'model',
+                text: String(text),
+                createdAt,
+                actionTaken:
+                  metadata?.action_taken ||
+                  metadata?.actionTaken ||
+                  row?.action_taken ||
+                  null,
+              }
+            })
+            .filter(
+              (
+                message
+              ): message is ChatMessage =>
+                Boolean(message)
+            )
+
+        if (!cancelled) {
+          setMessages(
+            restoredMessages
+          )
+        }
+
+        /*
+         * Restore handoff state.
+         */
+        const metadata =
+          conversation?.metadata &&
+          typeof conversation.metadata ===
+            'object'
+            ? conversation.metadata
+            : {}
+
+        const handledBy =
+          String(
+            conversation?.handled_by ||
+              ''
+          ).toLowerCase()
+
+        const handoffStatus =
+          String(
+            metadata?.status ||
+              metadata?.handoff_status ||
+              ''
+          ).toLowerCase()
+
+        const hasHumanHandoff =
+          handledBy === 'human' ||
+          handledBy === 'agent' ||
+          handoffStatus ===
+            'human' ||
+          handoffStatus ===
+            'pending'
+
+        if (!cancelled) {
+          setPaused(
+            hasHumanHandoff
+          )
+        }
+      } catch (
+        conversationLoadError
+      ) {
+        /*
+         * Conversation restoration should never prevent
+         * Ryan from opening normally.
+         */
+        console.error(
+          'Ryan conversation restore error:',
+          conversationLoadError
+        )
+      }
+    }
+
+    loadConversation()
+
+    return () => {
+      cancelled = true
+    }
+  }, [organizationId])
+
+  /*
+   * Load Ryan credits / packages / payment methods.
+   */
   const loadRyanCredits =
     async () => {
       if (!supabase) {
@@ -348,7 +623,7 @@ export default function Ryan() {
       !subLoading &&
       hasFeature('ryan')
     ) {
-      loadRyanCredits()
+      void loadRyanCredits()
     }
   }, [
     organizationId,
@@ -402,10 +677,6 @@ export default function Ryan() {
       )
     )
 
-  /*
-   * Approved Ryan credit purchases.
-   * These are real purchases returned by the backend.
-   */
   const approvedPurchases =
     useMemo(
       () =>
@@ -417,9 +688,6 @@ export default function Ryan() {
       [purchases]
     )
 
-  /*
-   * Purchases currently waiting for admin review.
-   */
   const pendingPurchases =
     useMemo(
       () =>
@@ -430,13 +698,6 @@ export default function Ryan() {
         ),
       [purchases]
     )
-
-  /*
-   * Latest approved purchase.
-   * Kept available for UI messaging and future enhancements.
-   */
-  const latestApprovedPurchase =
-    approvedPurchases[0] || null
 
   const selectedPaymentMethod =
     paymentMethods.find(
@@ -569,7 +830,7 @@ export default function Ryan() {
         setReference('')
         setPaymentNote('')
 
-        await loadRyanCredits()
+        void loadRyanCredits()
       } catch (
         purchaseRequestError: any
       ) {
@@ -703,7 +964,8 @@ export default function Ryan() {
         id: `ryan-${Date.now()}`,
         role: 'model',
         text:
-          data.reply,
+          data.reply ||
+          'تم استلام رسالتك.',
         createdAt:
           new Date().toISOString(),
         actionTaken:
@@ -728,7 +990,11 @@ export default function Ryan() {
         setPaused(true)
       }
 
-      await loadRyanCredits()
+      /*
+       * Do NOT block the chat response while the credits
+       * endpoint is loading. This was causing Ryan to feel slow.
+       */
+      void loadRyanCredits()
     } catch (
       requestError: any
     ) {
@@ -737,7 +1003,10 @@ export default function Ryan() {
           'تعذر الاتصال بـ RYAN'
       )
 
-      await loadRyanCredits()
+      /*
+       * Refresh credits in the background only.
+       */
+      void loadRyanCredits()
     } finally {
       setSending(false)
     }
@@ -796,7 +1065,7 @@ export default function Ryan() {
 
                 <div className="flex items-center gap-2 flex-wrap">
 
-                  <h1 className="text-2xl font-bold tracking-tight">
+                  <h1 className="text-2xl font-bold tracking-tight text-sand-50">
                     RYAN AI
                   </h1>
 
@@ -833,7 +1102,7 @@ export default function Ryan() {
                 رسائل المحادثة
               </div>
 
-              <div className="text-lg font-bold mt-1">
+              <div className="text-lg font-bold mt-1 text-sand-50">
                 {formatNumber(
                   messageCount
                 )}
@@ -847,7 +1116,7 @@ export default function Ryan() {
                 حد الخطة الشهري
               </div>
 
-              <div className="text-lg font-bold mt-1">
+              <div className="text-lg font-bold mt-1 text-sand-50">
                 {loadingCredits
                   ? '—'
                   : formatNumber(
@@ -864,7 +1133,7 @@ export default function Ryan() {
                 المستخدم هذا الشهر
               </div>
 
-              <div className="text-lg font-bold mt-1">
+              <div className="text-lg font-bold mt-1 text-sand-50">
                 {loadingCredits
                   ? '—'
                   : formatNumber(
@@ -881,7 +1150,7 @@ export default function Ryan() {
                 المتاح الإجمالي
               </div>
 
-              <div className="text-lg font-bold mt-1">
+              <div className="text-lg font-bold mt-1 text-sand-50">
                 {loadingCredits
                   ? '—'
                   : formatNumber(
@@ -1281,9 +1550,7 @@ export default function Ryan() {
               </div>
 
               <p className="text-sm text-ink-900/55 mt-1 leading-6">
-
                 تم استلام طلب الدفع الخاص بك، وسيتم تفعيل الرسائل الإضافية بعد اعتماد الدفع من إدارة Dragon Media.
-
               </p>
 
             </div>
@@ -1399,12 +1666,10 @@ export default function Ryan() {
                   </Button>
 
                 </div>
-
               )
             )}
 
           </div>
-
         )}
 
       </Card>
@@ -1559,14 +1824,12 @@ export default function Ryan() {
                   </div>
 
                 </div>
-
               )
             )}
 
           </div>
 
         </Card>
-
       )}
 
       {/* =====================================================
@@ -1696,10 +1959,8 @@ export default function Ryan() {
                     </div>
 
                   </div>
-
                 )
               )
-
             )}
 
             {sending && (
@@ -1795,13 +2056,9 @@ export default function Ryan() {
                       !sending &&
                       input.trim()
                     ) {
-
                       event.currentTarget.form?.requestSubmit()
-
                     }
-
                   }
-
                 }}
                 disabled={
                   paused ||
@@ -1813,7 +2070,7 @@ export default function Ryan() {
                     ? 'المحادثة محولة لفريق بشري...'
                     : 'اكتب رسالتك إلى RYAN...'
                 }
-                className="flex-1 resize-none min-h-[48px] max-h-32 border border-sand-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-ink-700 disabled:bg-sand-100"
+                className="flex-1 resize-none min-h-[48px] max-h-32 border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white placeholder:text-ink-900/35 outline-none focus:border-ink-700 disabled:bg-sand-100 disabled:text-ink-900/50"
               />
 
               <Button
@@ -1956,7 +2213,6 @@ export default function Ryan() {
                     </span>
 
                   </div>
-
                 )
               )}
 
@@ -2036,11 +2292,9 @@ export default function Ryan() {
                   onClick={() => {
 
                     if (!purchasing) {
-
                       setShowPurchase(
                         false
                       )
-
                     }
 
                   }}
@@ -2103,7 +2357,6 @@ export default function Ryan() {
                         </div>
 
                       </button>
-
                     )
                   )}
 
@@ -2164,7 +2417,7 @@ export default function Ryan() {
                           event.target.value
                         )
                       }
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-ink-700"
+                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white outline-none focus:border-ink-700"
                     >
 
                       <option value="">
@@ -2184,7 +2437,6 @@ export default function Ryan() {
                           >
                             {method.name}
                           </option>
-
                         )
                       )}
 
@@ -2237,16 +2489,13 @@ export default function Ryan() {
                                 </span>
 
                               </div>
-
                             )
                           )}
 
                         </div>
-
                       )}
 
                     </div>
-
                   )}
 
                   <div>
@@ -2265,7 +2514,7 @@ export default function Ryan() {
                         )
                       }
                       placeholder="أدخل رقم العملية"
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-ink-700"
+                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white placeholder:text-ink-900/35 outline-none focus:border-ink-700"
                     />
 
                   </div>
@@ -2286,7 +2535,7 @@ export default function Ryan() {
                           event.target.value
                         )
                       }
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-ink-700"
+                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white outline-none focus:border-ink-700"
                     />
 
                   </div>
@@ -2308,7 +2557,7 @@ export default function Ryan() {
                       }
                       rows={3}
                       placeholder="اختياري"
-                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-ink-700 resize-none"
+                      className="w-full border border-sand-200 rounded-xl px-4 py-3 text-sm text-ink-950 bg-white placeholder:text-ink-900/35 outline-none focus:border-ink-700 resize-none"
                     />
 
                   </div>
