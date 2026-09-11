@@ -37,10 +37,7 @@ export default async function handler(req: any, res: any) {
     .eq('id', authData.user.id)
     .single()
 
-  if (
-    callerError ||
-    !callerRow?.is_platform_admin
-  ) {
+  if (callerError || !callerRow?.is_platform_admin) {
     res.status(403).json({
       error: 'هذه الصفحة مخصصة لمدير المنصة فقط',
     })
@@ -54,9 +51,37 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'GET') {
     const { data, error } = await admin
       .from('payment_requests')
-      .select(
-        '*, organizations(name), plans(name, price)'
-      )
+      .select(`
+        id,
+        organization_id,
+        plan_id,
+        amount,
+        method,
+        reference,
+        payment_date,
+        note,
+        status,
+        rejection_reason,
+        reviewed_by,
+        reviewed_at,
+        created_at,
+        request_type,
+        ryan_credit_purchase_id,
+        item_snapshot,
+        billing_cycle,
+        receipt_url,
+        payment_method_snapshot,
+        organizations (
+          name
+        ),
+        plans (
+          id,
+          name,
+          price,
+          yearly_price,
+          currency
+        )
+      `)
       .order('created_at', {
         ascending: false,
       })
@@ -68,8 +93,28 @@ export default async function handler(req: any, res: any) {
       return
     }
 
+    const requests = await Promise.all(
+      (data ?? []).map(async (request: any) => {
+        let receiptSignedUrl: string | null = null
+
+        if (request.receipt_url) {
+          const { data: signedData } = await admin.storage
+            .from('payment-receipts')
+            .createSignedUrl(request.receipt_url, 900)
+
+          receiptSignedUrl =
+            signedData?.signedUrl ?? null
+        }
+
+        return {
+          ...request,
+          receipt_signed_url: receiptSignedUrl,
+        }
+      })
+    )
+
     res.status(200).json({
-      requests: data ?? [],
+      requests,
     })
 
     return
@@ -94,9 +139,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // -----------------------------------------------------
-    // IMPORTANT:
-    // Determine payment request type before calling the
-    // subscription approval/rejection RPC.
+    // Determine payment request type before calling RPC.
     // -----------------------------------------------------
 
     const {
@@ -123,11 +166,6 @@ export default async function handler(req: any, res: any) {
 
     if (action === 'approve') {
       // Ryan Credits
-      //
-      // IMPORTANT:
-      // Do NOT call approve_payment_request()
-      // because that RPC is subscription-specific and
-      // expects plan_id.
       //
       // Ryan Credits are independent from subscriptions.
       if (
@@ -170,9 +208,6 @@ export default async function handler(req: any, res: any) {
 
       // ---------------------------------------------------
       // Subscription
-      //
-      // Keep the existing subscription approval flow
-      // completely unchanged.
       // ---------------------------------------------------
 
       const {
@@ -227,7 +262,8 @@ export default async function handler(req: any, res: any) {
           'reject_ryan_credit_purchase',
           {
             p_payment_request_id: requestId,
-            p_reason: reason || 'تم رفض طلب الدفع',
+            p_reason:
+              reason || 'تم رفض طلب الدفع',
             p_reviewer_id: authData.user.id,
           }
         )
@@ -250,9 +286,6 @@ export default async function handler(req: any, res: any) {
 
       // ---------------------------------------------------
       // Subscription
-      //
-      // Keep the existing subscription rejection flow
-      // completely unchanged.
       // ---------------------------------------------------
 
       const {
