@@ -39,6 +39,7 @@ const titles: Record<
   '/tickets': 'الدعم الفني',
   '/search': 'البحث',
   '/admin': 'لوحة الإدارة',
+  '/admin/organizations': 'إدارة الشركات',
   '/admin/payments': 'المدفوعات',
   '/admin/audit-logs': 'سجل النشاط',
   '/admin/settings': 'إعدادات المنصة',
@@ -73,6 +74,7 @@ const subscriptionExemptPaths = [
  */
 const adminPaths = [
   '/admin',
+  '/admin/organizations',
   '/admin/payments',
   '/admin/audit-logs',
   '/admin/settings',
