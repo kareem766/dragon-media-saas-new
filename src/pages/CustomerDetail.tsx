@@ -220,8 +220,58 @@ export default function CustomerDetail() {
     setError(null)
 
     try {
+      /*
+       * IMPORTANT:
+       * The customer query is the critical query.
+       * Related data must never prevent the customer
+       * itself from being displayed.
+       */
+
+      const { data: customerData, error: customerError } =
+        await sb
+          .from('customers')
+          .select('*')
+          .eq('id', id)
+          .eq('organization_id', organizationId)
+          .single()
+
+      if (customerError) throw customerError
+      if (!customerData) {
+        throw new Error('العميل غير موجود')
+      }
+
+      const typedCustomer = customerData as Customer
+
+      /*
+       * Set the customer immediately after the critical
+       * query succeeds. This prevents secondary query
+       * failures from causing a false "customer not found".
+       */
+      setCustomer(typedCustomer)
+
+      setForm({
+        name: typedCustomer.name || '',
+        company: typedCustomer.company || '',
+        phone: typedCustomer.phone || '',
+        email: typedCustomer.email || '',
+        status: typedCustomer.status || '',
+        source: typedCustomer.source || '',
+        notes: typedCustomer.notes || '',
+        follow_up_at: typedCustomer.follow_up_at
+          ? new Date(typedCustomer.follow_up_at)
+              .toISOString()
+              .slice(0, 16)
+          : '',
+        assigned_to: typedCustomer.assigned_to || '',
+        tags: typedCustomer.tags?.join(', ') || '',
+      })
+
+      /*
+       * All related queries are best-effort.
+       * A failure in any one of them should only affect
+       * that specific section, not the whole customer page.
+       */
       const [
-        customerRes,
         dealsRes,
         appointmentsRes,
         activitiesRes,
@@ -229,13 +279,6 @@ export default function CustomerDetail() {
         conversationsRes,
         usersRes,
       ] = await Promise.all([
-        sb
-          .from('customers')
-          .select('*')
-          .eq('id', id)
-          .eq('organization_id', organizationId)
-          .single(),
-
         sb
           .from('deals')
           .select('id,title,value,stage_id,pipeline_stages(name)')
@@ -245,14 +288,18 @@ export default function CustomerDetail() {
 
         sb
           .from('appointments')
-          .select('id,appointment_date,appointment_time,status,services(name)')
+          .select(
+            'id,appointment_date,appointment_time,status,services(name)'
+          )
           .eq('customer_id', id)
           .eq('organization_id', organizationId)
           .order('appointment_date', { ascending: false }),
 
         sb
           .from('crm_activities')
-          .select('id,activity_type,title,description,created_at')
+          .select(
+            'id,activity_type,title,description,created_at'
+          )
           .eq('entity_type', 'customer')
           .eq('entity_id', id)
           .eq('organization_id', organizationId)
@@ -271,7 +318,9 @@ export default function CustomerDetail() {
 
         sb
           .from('conversations')
-          .select('id,channel,handled_by,last_message_at')
+          .select(
+            'id,channel,handled_by,last_message_at'
+          )
           .eq('customer_id', id)
           .eq('organization_id', organizationId)
           .order('last_message_at', { ascending: false })
@@ -279,51 +328,98 @@ export default function CustomerDetail() {
 
         sb
           .from('users')
-          .select('id,full_name,email,active')
+          .select(
+            'id,full_name,email,active'
+          )
           .eq('organization_id', organizationId)
           .eq('active', true)
           .order('full_name'),
       ])
 
-      if (customerRes.error) throw customerRes.error
-      if (dealsRes.error) throw dealsRes.error
-      if (appointmentsRes.error) throw appointmentsRes.error
-      if (activitiesRes.error) throw activitiesRes.error
-      if (tasksRes.error) throw tasksRes.error
-      if (conversationsRes.error) throw conversationsRes.error
-      if (usersRes.error) throw usersRes.error
+      /*
+       * Log secondary query errors for debugging,
+       * but do not throw them.
+       */
+      if (dealsRes.error) {
+        console.error(
+          'CustomerDetail: deals query failed',
+          dealsRes.error
+        )
+      }
 
-      const customerData = customerRes.data as Customer
+      if (appointmentsRes.error) {
+        console.error(
+          'CustomerDetail: appointments query failed',
+          appointmentsRes.error
+        )
+      }
 
-      setCustomer(customerData)
-      setDeals((dealsRes.data || []) as unknown as Deal[])
+      if (activitiesRes.error) {
+        console.error(
+          'CustomerDetail: activities query failed',
+          activitiesRes.error
+        )
+      }
+
+      if (tasksRes.error) {
+        console.error(
+          'CustomerDetail: tasks query failed',
+          tasksRes.error
+        )
+      }
+
+      if (conversationsRes.error) {
+        console.error(
+          'CustomerDetail: conversations query failed',
+          conversationsRes.error
+        )
+      }
+
+      if (usersRes.error) {
+        console.error(
+          'CustomerDetail: users query failed',
+          usersRes.error
+        )
+      }
+
+      setDeals(
+        dealsRes.error
+          ? []
+          : ((dealsRes.data || []) as unknown as Deal[])
+      )
+
       setAppointments(
-        (appointmentsRes.data || []) as unknown as Appointment[]
+        appointmentsRes.error
+          ? []
+          : ((appointmentsRes.data || []) as unknown as Appointment[])
       )
-      setActivities((activitiesRes.data || []) as Activity[])
-      setTasks((tasksRes.data || []) as Task[])
-      setConversations(
-        (conversationsRes.data || []) as Conversation[]
-      )
-      setUsers((usersRes.data || []) as User[])
 
-      setForm({
-        name: customerData.name || '',
-        company: customerData.company || '',
-        phone: customerData.phone || '',
-        email: customerData.email || '',
-        status: customerData.status || '',
-        source: customerData.source || '',
-        notes: customerData.notes || '',
-        follow_up_at: customerData.follow_up_at
-          ? new Date(customerData.follow_up_at)
-              .toISOString()
-              .slice(0, 16)
-          : '',
-        assigned_to: customerData.assigned_to || '',
-        tags: customerData.tags?.join(', ') || '',
-      })
+      setActivities(
+        activitiesRes.error
+          ? []
+          : ((activitiesRes.data || []) as Activity[])
+      )
+
+      setTasks(
+        tasksRes.error
+          ? []
+          : ((tasksRes.data || []) as Task[])
+      )
+
+      setConversations(
+        conversationsRes.error
+          ? []
+          : ((conversationsRes.data || []) as Conversation[])
+      )
+
+      setUsers(
+        usersRes.error
+          ? []
+          : ((usersRes.data || []) as User[])
+      )
     } catch (err) {
+      setCustomer(null)
+
       setError(
         err instanceof Error
           ? err.message
@@ -875,6 +971,12 @@ export default function CustomerDetail() {
         <p className="text-sm text-ink-900/50 mt-2">
           قد يكون العميل محذوفًا أو غير متاح لحسابك.
         </p>
+
+        {error && (
+          <p className="max-w-xl mx-auto text-xs text-red-600 mt-3 break-words">
+            {error}
+          </p>
+        )}
 
         <Link
           to="/crm"
