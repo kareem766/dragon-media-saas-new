@@ -1,595 +1,451 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 
-type AudienceFilter = {
-  status?: 'all' | 'نشط' | 'غير نشط'
-  tag?: string
+type CampaignFilter = {
+  status?: string
+  tag?: string | null
+  optedInOnly?: boolean
 }
 
-function errorResponse(
-  res: VercelResponse,
-  status: number,
-  error: string
-) {
-  return res.status(status).json({
-    success: false,
-    error,
-  })
-}
+type Action =
+  | 'prepare'
+  | 'cancel'
+  | 'retry_failed'
+  | 'refresh'
 
-async function getCaller(req: VercelRequest) {
-  const authorization = req.headers.authorization
-  const accessToken = authorization?.replace(/^Bearer\s+/i, '')
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY
+function getSupabase() {
+  const url = process.env.VITE_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_KEY
 
-  if (
-    !accessToken ||
-    !supabaseUrl ||
-    !anonKey ||
-    !serviceKey
-  ) {
+  if (!url || !serviceKey) {
+    throw new Error('إعدادات Supabase غير مكتملة.')
+  }
+
+  return createClient(url, serviceKey)
+}
+
+async function getAuthenticatedUser(req: any) {
+  const authHeader = req.headers.authorization || ''
+
+  if (!authHeader.startsWith('Bearer ')) {
     return null
   }
 
-  const userClient = createClient(
-    supabaseUrl,
-    anonKey,
-    {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-    }
-  )
+  const token = authHeader.slice('Bearer '.length)
 
-  const {
-    data: authData,
-  } = await userClient.auth.getUser()
+  const url = process.env.VITE_SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY
 
-  if (!authData.user) {
+  if (!url || !anonKey) {
     return null
   }
 
-  const admin = createClient(
-    supabaseUrl,
-    serviceKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  )
+  const client = createClient(url, anonKey)
 
   const {
-    data: userRow,
-  } = await admin
+    data: { user },
+  } = await client.auth.getUser(token)
+
+  return user
+}
+
+async function getOrganizationId(
+  supabase: ReturnType<typeof getSupabase>,
+  userId: string
+) {
+  const { data, error } = await supabase
     .from('users')
-    .select(
-      'id, organization_id, role, active'
-    )
-    .eq('id', authData.user.id)
+    .select('organization_id, role, active')
+    .eq('id', userId)
     .maybeSingle()
 
-  if (
-    !userRow?.organization_id ||
-    userRow.active === false
-  ) {
+  if (error || !data || !data.organization_id || data.active === false) {
     return null
   }
 
   return {
-    admin,
-    user: userRow,
-    authUser: authData.user,
+    organizationId: data.organization_id,
+    role: data.role,
   }
 }
 
-function renderContent(
-  template: string,
-  customer: {
-    name: string
-    company: string | null
-  }
+async function refreshCampaignStats(
+  supabase: ReturnType<typeof getSupabase>,
+  campaignId: string,
+  organizationId: string
 ) {
-  return template
-    .replace(
-      /\{name\}/g,
-      customer.name || 'العميل'
-    )
-    .replace(
-      /\{company\}/g,
-      customer.company || ''
-    )
-}
+  const { data: messages, error } = await supabase
+    .from('campaign_messages')
+    .select('status')
+    .eq('campaign_id', campaignId)
+    .eq('organization_id', organizationId)
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  if (
-    !['GET', 'POST'].includes(
-      req.method ?? ''
-    )
-  ) {
-    res.setHeader(
-      'Allow',
-      'GET, POST'
-    )
-
-    return errorResponse(
-      res,
-      405,
-      'Method not allowed'
-    )
+  if (error) {
+    throw error
   }
 
-  const caller = await getCaller(req)
-
-  if (!caller) {
-    return errorResponse(
-      res,
-      401,
-      'غير مصرح'
-    )
+  const stats = {
+    total: messages?.length || 0,
+    queued: 0,
+    sent: 0,
+    delivered: 0,
+    failed: 0,
+    skipped: 0,
   }
 
-  const {
-    admin,
-    user,
-  } = caller
+  for (const message of messages || []) {
+    switch (message.status) {
+      case 'جاهزة':
+      case 'قيد الإرسال':
+        stats.queued++
+        break
 
-  const organizationId =
-    user.organization_id as string
+      case 'تم الإرسال':
+        stats.sent++
+        break
 
-  const campaignId = String(
-    req.query.campaignId ??
-    req.body?.campaignId ??
-    ''
-  )
+      case 'تم التسليم':
+        stats.delivered++
+        break
 
-  if (!campaignId) {
-    return errorResponse(
-      res,
-      400,
-      'معرّف الحملة مطلوب'
-    )
-  }
+      case 'فشلت':
+        stats.failed++
+        break
 
-  const {
-    data: campaign,
-    error: campaignError,
-  } = await admin
-    .from('campaigns')
-    .select(`
-      id,
-      organization_id,
-      name,
-      channel,
-      message_body,
-      audience_filter,
-      status,
-      scheduled_at
-    `)
-    .eq(
-      'id',
-      campaignId
-    )
-    .eq(
-      'organization_id',
-      organizationId
-    )
-    .maybeSingle()
-
-  if (campaignError) {
-    return errorResponse(
-      res,
-      500,
-      'تعذر تحميل الحملة'
-    )
-  }
-
-  if (!campaign) {
-    return errorResponse(
-      res,
-      404,
-      'الحملة غير موجودة'
-    )
-  }
-
-  const {
-    data: subscriptionActive,
-    error: subscriptionError,
-  } = await admin.rpc(
-    'subscription_is_active',
-    {
-      p_organization_id:
-        organizationId,
+      case 'تم التخطي':
+        stats.skipped++
+        break
     }
-  )
-
-  if (
-    subscriptionError ||
-    subscriptionActive !== true
-  ) {
-    return errorResponse(
-      res,
-      403,
-      'الاشتراك غير نشط'
-    )
   }
 
-  // ============================================
-  // GET — campaign statistics
-  // ============================================
-
-  if (req.method === 'GET') {
-    const {
-      data: messages,
-      error: messagesError,
-    } = await admin
-      .from('campaign_messages')
-      .select(`
-        id,
-        customer_id,
-        status,
-        sent_at,
-        opened_at,
-        error_message,
-        content
-      `)
-      .eq(
-        'campaign_id',
-        campaignId
-      )
-
-    if (messagesError) {
-      return errorResponse(
-        res,
-        500,
-        'تعذر تحميل إحصائيات الحملة'
-      )
-    }
-
-    const list = messages ?? []
-
-    return res.status(200).json({
-      success: true,
-      campaign,
-      stats: {
-        total: list.length,
-
-        queued: list.filter(
-          m =>
-            m.status === 'جاهزة' ||
-            m.status === 'قيد الإرسال'
-        ).length,
-
-        sent: list.filter(
-          m =>
-            m.status === 'تم الإرسال'
-        ).length,
-
-        delivered: list.filter(
-          m =>
-            m.status === 'تم التسليم'
-        ).length,
-
-        failed: list.filter(
-          m =>
-            m.status === 'فشلت'
-        ).length,
-
-        skipped: list.filter(
-          m =>
-            m.status === 'تم التخطي'
-        ).length,
-      },
-    })
-  }
-
-  // ============================================
-  // POST — prepare audience
-  // ============================================
-
-  if (
-    !campaign.message_body?.trim()
-  ) {
-    return errorResponse(
-      res,
-      400,
-      'أضف نص الرسالة قبل تجهيز الحملة'
-    )
-  }
-
-  if (
-    ![
-      'مسودة',
-      'مجدولة',
-      'قيد التجهيز',
-      'جاهزة للإرسال',
-    ].includes(
-      campaign.status
-    )
-  ) {
-    return errorResponse(
-      res,
-      409,
-      'لا يمكن تجهيز الحملة بالحالة الحالية'
-    )
-  }
-
-  const filter =
-    (req.body?.audienceFilter ??
-      campaign.audience_filter ??
-      {}) as AudienceFilter
-
-  const status =
-    filter.status ?? 'نشط'
-
-  const tag =
-    filter.tag?.trim()
-
-  let customerQuery = admin
-    .from('customers')
-    .select(`
-      id,
-      name,
-      company,
-      phone,
-      email,
-      status,
-      tags
-    `)
-    .eq(
-      'organization_id',
-      organizationId
-    )
-    .eq(
-      'marketing_opt_in',
-      true
-    )
-
-  if (status !== 'all') {
-    customerQuery =
-      customerQuery.eq(
-        'status',
-        status
-      )
-  }
-
-  if (tag) {
-    customerQuery =
-      customerQuery.contains(
-        'tags',
-        [tag]
-      )
-  }
-
-  const {
-    data: customers,
-    error: customersError,
-  } = await customerQuery
-
-  if (customersError) {
-    return errorResponse(
-      res,
-      500,
-      'تعذر تحميل جمهور الحملة'
-    )
-  }
-
-  const recipients =
-    (customers ?? []).filter(
-      customer => {
-        if (
-          campaign.channel ===
-          'email'
-        ) {
-          return Boolean(
-            customer.email
-          )
-        }
-
-        if (
-          campaign.channel ===
-          'whatsapp'
-        ) {
-          return Boolean(
-            customer.phone
-          )
-        }
-
-        return Boolean(
-          customer.phone ||
-          customer.email
-        )
-      }
-    )
-
-  await admin
+  await supabase
     .from('campaigns')
     .update({
-      status: 'قيد التجهيز',
-
-      audience_filter: {
-        ...filter,
-        optedInOnly: true,
-      },
-
-      total_recipients:
-        recipients.length,
-
-      queued_count: 0,
-      sent_count: 0,
-      delivered_count: 0,
-      failed_count: 0,
-
-      last_run_at:
-        new Date().toISOString(),
+      total_recipients: stats.total,
+      queued_count: stats.queued,
+      sent_count: stats.sent,
+      delivered_count: stats.delivered,
+      failed_count: stats.failed,
+      skipped_count: stats.skipped,
+      last_run_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
-    .eq(
-      'id',
-      campaignId
-    )
-    .eq(
-      'organization_id',
-      organizationId
-    )
+    .eq('id', campaignId)
+    .eq('organization_id', organizationId)
 
-  const rows =
-    recipients.map(
-      customer => ({
-        campaign_id:
-          campaignId,
+  return stats
+}
 
-        customer_id:
-          customer.id,
+async function prepareCampaign(
+  supabase: ReturnType<typeof getSupabase>,
+  campaign: any
+) {
+  const filter: CampaignFilter = campaign.audience_filter || {}
 
-        content:
-          renderContent(
-            campaign.message_body as string,
-            customer
-          ),
+  let query = supabase
+    .from('customers')
+    .select('id, name, phone, email, status, tags, marketing_opt_in')
+    .eq('organization_id', campaign.organization_id)
 
-        status:
-          'جاهزة',
+  if (filter.status && filter.status !== 'all') {
+    query = query.eq('status', filter.status)
+  }
 
-        opt_in:
-          true,
+  if (filter.optedInOnly !== false) {
+    query = query.eq('marketing_opt_in', true)
+  }
+
+  const { data: customers, error } = await query
+
+  if (error) {
+    throw error
+  }
+
+  const filteredCustomers = (customers || []).filter((customer: any) => {
+    if (!filter.tag) return true
+
+    return Array.isArray(customer.tags)
+      ? customer.tags.includes(filter.tag)
+      : false
+  })
+
+  if (!filteredCustomers.length) {
+    await supabase
+      .from('campaigns')
+      .update({
+        status: 'جاهزة',
+        total_recipients: 0,
+        queued_count: 0,
+        sent_count: 0,
+        delivered_count: 0,
+        failed_count: 0,
+        skipped_count: 0,
+        last_run_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
+      .eq('id', campaign.id)
+      .eq('organization_id', campaign.organization_id)
+
+    return {
+      total: 0,
+      queued: 0,
+      skipped: 0,
+    }
+  }
+
+  const rows = filteredCustomers.map((customer: any) => ({
+    organization_id: campaign.organization_id,
+    campaign_id: campaign.id,
+    customer_id: customer.id,
+    channel: campaign.channel,
+    message_body: campaign.message_body || '',
+    status: 'جاهزة',
+    opt_in: customer.marketing_opt_in !== false,
+    queued_at: new Date().toISOString(),
+    attempts: 0,
+  }))
+
+  const { error: insertError } = await supabase
+    .from('campaign_messages')
+    .upsert(rows, {
+      onConflict: 'campaign_id,customer_id',
+      ignoreDuplicates: true,
+    })
+
+  if (insertError) {
+    throw insertError
+  }
+
+  await supabase
+    .from('campaigns')
+    .update({
+      status: 'جاهزة',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', campaign.id)
+    .eq('organization_id', campaign.organization_id)
+
+  return refreshCampaignStats(
+    supabase,
+    campaign.id,
+    campaign.organization_id
+  )
+}
+
+async function cancelCampaign(
+  supabase: ReturnType<typeof getSupabase>,
+  campaign: any
+) {
+  const { error } = await supabase
+    .from('campaign_messages')
+    .update({
+      status: 'تم التخطي',
+      skipped_at: new Date().toISOString(),
+    })
+    .eq('campaign_id', campaign.id)
+    .eq('organization_id', campaign.organization_id)
+    .in('status', ['جاهزة', 'قيد الإرسال'])
+
+  if (error) {
+    throw error
+  }
+
+  await supabase
+    .from('campaigns')
+    .update({
+      status: 'ملغاة',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', campaign.id)
+    .eq('organization_id', campaign.organization_id)
+
+  return refreshCampaignStats(
+    supabase,
+    campaign.id,
+    campaign.organization_id
+  )
+}
+
+async function retryFailed(
+  supabase: ReturnType<typeof getSupabase>,
+  campaign: any
+) {
+  const { error } = await supabase
+    .from('campaign_messages')
+    .update({
+      status: 'جاهزة',
+      error_message: null,
+      failed_at: null,
+      skipped_at: null,
+      queued_at: new Date().toISOString(),
+    })
+    .eq('campaign_id', campaign.id)
+    .eq('organization_id', campaign.organization_id)
+    .eq('status', 'فشلت')
+
+  if (error) {
+    throw error
+  }
+
+  await supabase
+    .from('campaigns')
+    .update({
+      status: 'جاهزة',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', campaign.id)
+    .eq('organization_id', campaign.organization_id)
+
+  return refreshCampaignStats(
+    supabase,
+    campaign.id,
+    campaign.organization_id
+  )
+}
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    res.status(405).json({
+      error: 'Method not allowed',
+    })
+    return
+  }
+
+  try {
+    const user = await getAuthenticatedUser(req)
+
+    if (!user) {
+      res.status(401).json({
+        error: 'غير مصرح.',
+      })
+      return
+    }
+
+    const supabase = getSupabase()
+
+    const organization = await getOrganizationId(
+      supabase,
+      user.id
     )
 
-  if (rows.length > 0) {
-    const {
-      error: insertError,
-    } = await admin
-      .from('campaign_messages')
-      .upsert(
-        rows,
-        {
-          onConflict:
-            'campaign_id,customer_id',
-        }
-      )
+    if (!organization) {
+      res.status(403).json({
+        error: 'لا يمكن تحديد المؤسسة.',
+      })
+      return
+    }
 
-    if (insertError) {
-      await admin
+    const {
+      campaignId,
+      action = 'prepare',
+      audienceFilter,
+    } = req.body || {}
+
+    if (!campaignId) {
+      res.status(400).json({
+        error: 'campaignId مطلوب.',
+      })
+      return
+    }
+
+    const { data: campaign, error: campaignError } =
+      await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campaignId)
+        .eq(
+          'organization_id',
+          organization.organizationId
+        )
+        .maybeSingle()
+
+    if (campaignError) {
+      throw campaignError
+    }
+
+    if (!campaign) {
+      res.status(404).json({
+        error: 'الحملة غير موجودة.',
+      })
+      return
+    }
+
+    if (
+      audienceFilter &&
+      action === 'prepare'
+    ) {
+      await supabase
         .from('campaigns')
         .update({
-          status: 'فشلت',
+          audience_filter: audienceFilter,
+          updated_at: new Date().toISOString(),
         })
+        .eq('id', campaign.id)
         .eq(
-          'id',
-          campaignId
+          'organization_id',
+          organization.organizationId
         )
 
-      return errorResponse(
-        res,
-        500,
-        'تعذر تجهيز رسائل الحملة'
-      )
+      campaign.audience_filter = audienceFilter
     }
-  }
 
-  const finalStatus =
-    recipients.length > 0
-      ? 'جاهزة للإرسال'
-      : 'مسودة'
+    let result
 
-  const {
-    error: updateError,
-  } = await admin
-    .from('campaigns')
-    .update({
-      status:
-        finalStatus,
+    switch (action as Action) {
+      case 'prepare':
+        result = await prepareCampaign(
+          supabase,
+          campaign
+        )
+        break
 
-      queued_count:
-        recipients.length,
+      case 'cancel':
+        result = await cancelCampaign(
+          supabase,
+          campaign
+        )
+        break
 
-      total_recipients:
-        recipients.length,
+      case 'retry_failed':
+        result = await retryFailed(
+          supabase,
+          campaign
+        )
+        break
 
-      last_run_at:
-        new Date().toISOString(),
+      case 'refresh':
+        result = await refreshCampaignStats(
+          supabase,
+          campaign.id,
+          organization.organizationId
+        )
+        break
+
+      default:
+        res.status(400).json({
+          error: 'عملية غير مدعومة.',
+        })
+        return
+    }
+
+    res.status(200).json({
+      success: true,
+      message:
+        action === 'prepare'
+          ? 'تم تجهيز جمهور الحملة والرسائل بنجاح.'
+          : action === 'cancel'
+            ? 'تم إلغاء الحملة وتخطي الرسائل غير المرسلة.'
+            : action === 'retry_failed'
+              ? 'تمت إعادة تجهيز الرسائل الفاشلة.'
+              : 'تم تحديث إحصائيات الحملة.',
+      stats: result,
     })
-    .eq(
-      'id',
-      campaignId
-    )
-    .eq(
-      'organization_id',
-      organizationId
-    )
+  } catch (error: any) {
+    console.error('campaign-run error', error)
 
-  if (updateError) {
-    return errorResponse(
-      res,
-      500,
-      'تعذر تحديث حالة الحملة'
-    )
-  }
-
-  await admin
-    .from('audit_logs')
-    .insert({
-      actor_id:
-        user.id,
-
-      organization_id:
-        organizationId,
-
-      action:
-        'campaign_audience_prepared',
-
-      entity:
-        'campaign',
-
-      entity_id:
-        campaignId,
-
-      new_value: {
-        recipients:
-          recipients.length,
-
-        channel:
-          campaign.channel,
-
-        audience_filter: {
-          ...filter,
-          optedInOnly:
-            true,
-        },
-      },
-
-      details: {
-        phase:
-          'phase4_campaign_engine',
-
-        delivery_deferred_to_integrations:
-          true,
-      },
+    res.status(500).json({
+      error:
+        error?.message ||
+        'حدث خطأ أثناء تنفيذ الحملة.',
     })
-
-  return res.status(200).json({
-    success: true,
-
-    campaignId,
-
-    status:
-      finalStatus,
-
-    recipients:
-      recipients.length,
-
-    message:
-      recipients.length > 0
-        ? 'تم تجهيز جمهور الحملة ورسائلها بنجاح. الإرسال الخارجي سيتم بعد تفعيل موصل القناة.'
-        : 'لم يتم العثور على عملاء مؤهلين وفق شروط الجمهور الحالية.',
-  })
+  }
 }
