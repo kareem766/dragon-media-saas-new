@@ -1,475 +1,461 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  AlertCircle,
-  BarChart3,
-  CheckCircle2,
-  Clock3,
-  Eye,
-  Loader2,
-  Megaphone,
-  Plus,
-  RefreshCw,
-  Send,
-  Users,
-  XCircle,
-} from 'lucide-react';
-
-import { supabase } from '@/integrations/supabase/client';
-import { useOrganization } from '@/hooks/useOrganization';
-
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+  Badge,
+  Button,
+  Table,
+  statusTone,
+} from '../components/ui'
+import { IconPlus } from '../components/Icon'
+import { supabase } from '../lib/supabaseClient'
+import { useOrganization } from '../lib/useOrganization'
+import { useSubscription } from '../lib/useSubscription'
+import FeatureLocked from '../components/FeatureLocked'
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-
-type Campaign = {
-  id: string;
-  name: string;
-  channel: string;
-  audience: string | null;
-  audience_filter: {
-    status?: string | null;
-    tag?: string | null;
-    marketing_opt_in?: boolean;
-  } | null;
-  message_body: string | null;
-  status: string | null;
-  scheduled_at: string | null;
-  created_at: string;
-
-  total_recipients: number;
-  queued_count: number;
-  sent_count: number;
-  delivered_count: number;
-  failed_count: number;
-  skipped_count: number;
-
-  audience_preview_count?: number;
-  error_message?: string | null;
-};
-
-type AudiencePreview = {
-  id: string;
-  name: string;
-  company: string | null;
-  phone: string | null;
-  email: string | null;
-  status: string | null;
-  tags: string[] | null;
-  marketing_opt_in: boolean;
-};
-
-const STATUS_OPTIONS = [
-  'نشط',
-  'جديد',
-  'مهتم',
-  'عميل',
-  'غير نشط',
-];
-
-const CHANNELS = [
-  {
-    value: 'whatsapp',
-    label: 'WhatsApp',
-  },
-  {
-    value: 'messenger',
-    label: 'Messenger',
-  },
-  {
-    value: 'instagram',
-    label: 'Instagram',
-  },
-  {
-    value: 'email',
-    label: 'Email',
-  },
-];
-
-function statusLabel(
-  status?: string | null,
-) {
-  if (!status) {
-    return 'غير محدد';
-  }
-
-  const labels: Record<string, string> = {
-    مسودة: 'مسودة',
-    مجدولة: 'مجدولة',
-    'جارٍ التحضير': 'جارٍ التحضير',
-    جاهزة: 'جاهزة',
-    إرسال: 'جاري الإرسال',
-    'جاري الإرسال': 'جاري الإرسال',
-    مكتملة: 'مكتملة',
-    ملغاة: 'ملغاة',
-    فشل: 'فشل',
-  };
-
-  return labels[status] || status;
+interface AudienceFilter {
+  status?: string
+  tag?: string | null
+  optedInOnly?: boolean
 }
 
-function statusClass(
-  status?: string | null,
-) {
-  switch (status) {
-    case 'مكتملة':
-      return 'bg-emerald-100 text-emerald-700';
+interface DBCampaign {
+  id: string
+  name: string
+  channel: string
+  audience: string | null
+  status: string
+  scheduled_at: string | null
+  message_body: string | null
+  audience_filter: AudienceFilter | null
+  total_recipients: number
+  queued_count: number
+  sent_count: number
+  delivered_count: number
+  failed_count: number
+  skipped_count?: number
+  last_run_at: string | null
+}
 
-    case 'جاهزة':
-      return 'bg-blue-100 text-blue-700';
+interface CampaignMessage {
+  campaign_id: string
+  status: string
+}
 
-    case 'جارٍ التحضير':
-      return 'bg-amber-100 text-amber-700';
+interface QueueStats {
+  total: number
+  queued: number
+  sent: number
+  delivered: number
+  failed: number
+  skipped: number
+}
 
-    case 'ملغاة':
-      return 'bg-slate-100 text-slate-600';
-
-    case 'فشل':
-      return 'bg-red-100 text-red-700';
-
-    default:
-      return 'bg-slate-100 text-slate-700';
+interface CampaignApiResult {
+  success?: boolean
+  message?: string
+  error?: string
+  campaign?: DBCampaign
+  stats?: {
+    total?: number
+    queued?: number
+    sent?: number
+    delivered?: number
+    failed?: number
+    skipped?: number
   }
+}
+
+const channelLabels: Record<string, string> = {
+  whatsapp: 'واتساب',
+  messenger: 'ماسنجر',
+  instagram: 'إنستجرام',
+  email: 'بريد إلكتروني',
+}
+
+function percentage(value: number, total: number) {
+  if (!total) return 0
+
+  return Math.min(
+    100,
+    Math.round((value / total) * 100)
+  )
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '—'
+
+  return new Intl.DateTimeFormat('ar-EG', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
 }
 
 export default function Campaigns() {
-  const { organization } = useOrganization();
+  const {
+    organizationId,
+    loading: orgLoading,
+    error: orgError,
+  } = useOrganization()
 
-  const [campaigns, setCampaigns] =
-    useState<Campaign[]>([]);
+  const {
+    hasFeature,
+    loading: subLoading,
+  } = useSubscription()
 
-  const [loading, setLoading] =
-    useState(true);
+  const [campaigns, setCampaigns] = useState<DBCampaign[]>([])
+  const [messages, setMessages] = useState<CampaignMessage[]>([])
 
-  const [dialogOpen, setDialogOpen] =
-    useState(false);
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
-  const [previewOpen, setPreviewOpen] =
-    useState(false);
+  const [preparingId, setPreparingId] =
+    useState<string | null>(null)
 
-  const [previewLoading, setPreviewLoading] =
-    useState(false);
+  const [actionId, setActionId] =
+    useState<string | null>(null)
 
-  const [audiencePreview, setAudiencePreview] =
-    useState<AudiencePreview[]>([]);
+  const [actionType, setActionType] =
+    useState<string | null>(null)
 
-  const [audienceCount, setAudienceCount] =
-    useState(0);
+  const [showForm, setShowForm] = useState(false)
 
-  const [runningId, setRunningId] =
-    useState<string | null>(null);
+  const [error, setError] =
+    useState<string | null>(null)
+
+  const [success, setSuccess] =
+    useState<string | null>(null)
 
   const [form, setForm] = useState({
     name: '',
     channel: 'whatsapp',
-    message_body: '',
-    status: '',
+    messageBody: '',
+    audienceStatus: 'نشط',
     tag: '',
-    scheduled_at: '',
-  });
+    scheduledAt: '',
+  })
 
-  const [error, setError] =
-    useState<string | null>(null);
-
-  const loadCampaigns = async () => {
-    if (!organization?.id) {
-      return;
+  const loadData = async () => {
+    if (!supabase || !organizationId) {
+      return
     }
 
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
 
-    const { data, error } =
-      await supabase
-        .from('campaigns')
-        .select('*')
-        .eq(
-          'organization_id',
-          organization.id,
-        )
-        .order('created_at', {
-          ascending: false,
-        });
+    const client = supabase
 
-    if (error) {
-      setError(error.message);
+    const [campaignsRes, messagesRes] =
+      await Promise.all([
+        client
+          .from('campaigns')
+          .select(`
+            id,
+            name,
+            channel,
+            audience,
+            status,
+            scheduled_at,
+            message_body,
+            audience_filter,
+            total_recipients,
+            queued_count,
+            sent_count,
+            delivered_count,
+            failed_count,
+            skipped_count,
+            last_run_at
+          `)
+          .eq(
+            'organization_id',
+            organizationId
+          )
+          .order('created_at', {
+            ascending: false,
+          }),
+
+        client
+          .from('campaign_messages')
+          .select(
+            'campaign_id, status'
+          )
+          .eq(
+            'organization_id',
+            organizationId
+          ),
+      ])
+
+    if (campaignsRes.error) {
+      setError(
+        campaignsRes.error.message
+      )
     } else {
       setCampaigns(
-        (data ?? []) as Campaign[],
-      );
+        (campaignsRes.data ?? []) as DBCampaign[]
+      )
     }
 
-    setLoading(false);
-  };
+    if (messagesRes.error) {
+      // الرسائل ليست شرطًا لعرض الحملات.
+      // نعتمد على counters الموجودة في campaigns
+      // إذا تعذر تحميلها.
+      setMessages([])
+    } else {
+      setMessages(
+        (messagesRes.data ??
+          []) as CampaignMessage[]
+      )
+    }
+
+    setLoading(false)
+  }
 
   useEffect(() => {
-    loadCampaigns();
-  }, [organization?.id]);
+    if (organizationId) {
+      loadData()
+    }
+  }, [organizationId])
 
-  const stats = useMemo(() => {
-    return {
-      total: campaigns.length,
+  const messageStats = useMemo(() => {
+    const map: Record<string, QueueStats> = {}
 
-      scheduled:
-        campaigns.filter(
-          (campaign) =>
-            campaign.status ===
-              'مجدولة' ||
-            campaign.status ===
-              'جاهزة',
-        ).length,
+    for (const message of messages) {
+      if (!map[message.campaign_id]) {
+        map[message.campaign_id] = {
+          total: 0,
+          queued: 0,
+          sent: 0,
+          delivered: 0,
+          failed: 0,
+          skipped: 0,
+        }
+      }
 
-      completed:
-        campaigns.filter(
-          (campaign) =>
-            campaign.status ===
-            'مكتملة',
-        ).length,
+      const item = map[message.campaign_id]
 
-      failed:
-        campaigns.filter(
-          (campaign) =>
-            campaign.status ===
-            'فشل',
-        ).length,
-    };
-  }, [campaigns]);
+      item.total++
 
-  const createCampaign = async () => {
-    setError(null);
+      if (
+        message.status === 'جاهزة' ||
+        message.status === 'قيد الإرسال'
+      ) {
+        item.queued++
+      }
 
-    if (!organization?.id) {
-      setError(
-        'لم يتم العثور على الشركة',
-      );
-      return;
+      if (message.status === 'تم الإرسال') {
+        item.sent++
+      }
+
+      if (message.status === 'تم التسليم') {
+        item.delivered++
+      }
+
+      if (message.status === 'فشلت') {
+        item.failed++
+      }
+
+      if (message.status === 'تم التخطي') {
+        item.skipped++
+      }
     }
 
-    if (!form.name.trim()) {
-      setError('اكتب اسم الحملة');
-      return;
+    return map
+  }, [messages])
+
+  const totals = useMemo(() => {
+    return campaigns.reduce(
+      (acc, campaign) => {
+        const stats =
+          messageStats[campaign.id]
+
+        acc.total +=
+          stats?.total ??
+          campaign.total_recipients ??
+          0
+
+        acc.queued +=
+          stats?.queued ??
+          campaign.queued_count ??
+          0
+
+        acc.sent +=
+          stats?.sent ??
+          campaign.sent_count ??
+          0
+
+        acc.delivered +=
+          stats?.delivered ??
+          campaign.delivered_count ??
+          0
+
+        acc.failed +=
+          stats?.failed ??
+          campaign.failed_count ??
+          0
+
+        return acc
+      },
+      {
+        total: 0,
+        queued: 0,
+        sent: 0,
+        delivered: 0,
+        failed: 0,
+      }
+    )
+  }, [campaigns, messageStats])
+
+  const handleAdd = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault()
+
+    if (!supabase || !organizationId) {
+      return
     }
 
-    if (!form.message_body.trim()) {
-      setError(
-        'اكتب محتوى الرسالة',
-      );
-      return;
+    const trimmedName =
+      form.name.trim()
+
+    const trimmedMessage =
+      form.messageBody.trim()
+
+    if (!trimmedName) {
+      setError('برجاء إدخال اسم الحملة.')
+      return
     }
 
-    const audienceFilter = {
-      status:
-        form.status || null,
+    if (!trimmedMessage) {
+      setError('برجاء إدخال نص الرسالة.')
+      return
+    }
 
-      tag:
-        form.tag.trim() || null,
+    setSaving(true)
+    setError(null)
+    setSuccess(null)
 
-      marketing_opt_in: true,
-    };
+    const client = supabase
+
+    const { data: authData } =
+      await client.auth.getUser()
+
+    const userId =
+      authData.user?.id
 
     const {
-      data: userData,
-    } = await supabase.auth.getUser();
+      error: insertError,
+    } = await client
+      .from('campaigns')
+      .insert({
+        organization_id:
+          organizationId,
 
-    const { error: insertError } =
-      await supabase
-        .from('campaigns')
-        .insert({
-          organization_id:
-            organization.id,
+        name:
+          trimmedName,
 
-          name: form.name.trim(),
+        channel:
+          form.channel,
 
-          channel:
-            form.channel,
+        audience:
+          form.audienceStatus === 'all'
+            ? 'كل العملاء المشتركين'
+            : form.audienceStatus,
 
-          message_body:
-            form.message_body.trim(),
-
-          audience_filter:
-            audienceFilter,
-
-          audience: form.tag
-            ? `Tag: ${form.tag}`
-            : form.status
-              ? `Status: ${form.status}`
-              : 'كل العملاء المؤهلين',
-
-          status: form.scheduled_at
+        status:
+          form.scheduledAt
             ? 'مجدولة'
             : 'مسودة',
 
-          scheduled_at:
-            form.scheduled_at
-              ? new Date(
-                  form.scheduled_at,
-                ).toISOString()
-              : null,
+        scheduled_at:
+          form.scheduledAt
+            ? new Date(
+                form.scheduledAt
+              ).toISOString()
+            : null,
 
-          created_by:
-            userData.user?.id ??
+        message_body:
+          trimmedMessage,
+
+        audience_filter: {
+          status:
+            form.audienceStatus,
+
+          tag:
+            form.tag.trim() ||
             null,
-        });
+
+          optedInOnly:
+            true,
+        },
+
+        created_by:
+          userId ?? null,
+      })
+
+    setSaving(false)
 
     if (insertError) {
       setError(
-        insertError.message,
-      );
-      return;
+        insertError.message
+      )
+      return
     }
 
     setForm({
       name: '',
       channel: 'whatsapp',
-      message_body: '',
-      status: '',
+      messageBody: '',
+      audienceStatus: 'نشط',
       tag: '',
-      scheduled_at: '',
-    });
+      scheduledAt: '',
+    })
 
-    setDialogOpen(false);
+    setShowForm(false)
 
-    await loadCampaigns();
-  };
+    setSuccess(
+      'تم إنشاء الحملة بنجاح.'
+    )
 
-  const previewAudience = async () => {
-    setError(null);
-
-    if (!organization?.id) {
-      return;
-    }
-
-    setPreviewLoading(true);
-    setPreviewOpen(true);
-
-    try {
-      let query = supabase
-        .from('customers')
-        .select(
-          `
-            id,
-            name,
-            company,
-            phone,
-            email,
-            status,
-            tags,
-            marketing_opt_in
-          `,
-        )
-        .eq(
-          'organization_id',
-          organization.id,
-        )
-        .eq(
-          'marketing_opt_in',
-          true,
-        )
-        .limit(100);
-
-      if (form.status) {
-        query = query.eq(
-          'status',
-          form.status,
-        );
-      }
-
-      const {
-        data,
-        error: previewError,
-      } = await query;
-
-      if (previewError) {
-        throw previewError;
-      }
-
-      let customers =
-        (data ?? []) as AudiencePreview[];
-
-      if (form.tag.trim()) {
-        const targetTag =
-          form.tag
-            .trim()
-            .toLowerCase();
-
-        customers =
-          customers.filter(
-            (customer) =>
-              Array.isArray(
-                customer.tags,
-              )
-                ? customer.tags.some(
-                    (tag) =>
-                      typeof tag ===
-                        'string' &&
-                      tag.toLowerCase() ===
-                        targetTag,
-                  )
-                : false,
-          );
-      }
-
-      setAudiencePreview(
-        customers,
-      );
-
-      setAudienceCount(
-        customers.length,
-      );
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          'تعذر معاينة الجمهور',
-      );
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const getAccessToken = async () => {
-    const {
-      data: { session },
-    } =
-      await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error(
-        'انتهت جلسة تسجيل الدخول',
-      );
-    }
-
-    return session.access_token;
-  };
+    await loadData()
+  }
 
   const callCampaignApi = async (
-    action: string,
     campaignId: string,
-  ) => {
-    const token =
-      await getAccessToken();
+    action: string,
+    audienceFilter?: AudienceFilter | null
+  ): Promise<CampaignApiResult> => {
+    if (!supabase) {
+      throw new Error(
+        'خدمة قاعدة البيانات غير متاحة.'
+      )
+    }
+
+    const {
+      data: sessionData,
+    } =
+      await supabase.auth.getSession()
+
+    const accessToken =
+      sessionData.session?.access_token
+
+    if (!accessToken) {
+      throw new Error(
+        'انتهت جلسة الدخول، برجاء تسجيل الدخول مرة أخرى.'
+      )
+    }
+
+    const body: {
+      campaignId: string
+      action: string
+      audienceFilter?: AudienceFilter
+    } = {
+      campaignId,
+      action,
+    }
+
+    if (audienceFilter) {
+      body.audienceFilter =
+        audienceFilter
+    }
 
     const response =
       await fetch(
@@ -482,864 +468,879 @@ export default function Campaigns() {
               'application/json',
 
             Authorization:
-              `Bearer ${token}`,
+              `Bearer ${accessToken}`,
           },
 
-          body: JSON.stringify({
-            action,
-            campaignId,
-          }),
-        },
-      );
+          body: JSON.stringify(body),
+        }
+      )
 
-    const result =
-      await response.json();
+    let result: CampaignApiResult = {}
+
+    try {
+      result =
+        await response.json()
+    } catch {
+      result = {}
+    }
 
     if (!response.ok) {
       throw new Error(
-        result?.error ||
-          'حدث خطأ أثناء تنفيذ العملية',
-      );
+        result.error ??
+          'تعذر تنفيذ العملية.'
+      )
     }
 
-    return result;
-  };
+    return result
+  }
 
   const prepareCampaign = async (
-    campaign: Campaign,
+    campaign: DBCampaign
   ) => {
+    setPreparingId(campaign.id)
+    setError(null)
+    setSuccess(null)
+
     try {
-      setError(null);
-      setRunningId(campaign.id);
+      const result =
+        await callCampaignApi(
+          campaign.id,
+          'prepare',
+          campaign.audience_filter ?? {
+            status: 'نشط',
+            optedInOnly: true,
+          }
+        )
 
-      await callCampaignApi(
-        'prepare',
-        campaign.id,
-      );
+      setSuccess(
+        result.message ??
+          'تم تجهيز جمهور الحملة بنجاح.'
+      )
 
-      await loadCampaigns();
-    } catch (err: any) {
+      await loadData()
+    } catch (err) {
       setError(
-        err?.message ||
-          'تعذر تجهيز الحملة',
-      );
+        err instanceof Error
+          ? err.message
+          : 'تعذر تجهيز الحملة.'
+      )
     } finally {
-      setRunningId(null);
+      setPreparingId(null)
     }
-  };
+  }
+
+  const refreshStats = async (
+    campaignId: string
+  ) => {
+    setActionId(campaignId)
+    setActionType('refresh')
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const result =
+        await callCampaignApi(
+          campaignId,
+          'refresh'
+        )
+
+      setSuccess(
+        result.message ??
+          'تم تحديث إحصائيات الحملة.'
+      )
+
+      await loadData()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر تحديث الإحصائيات.'
+      )
+    } finally {
+      setActionId(null)
+      setActionType(null)
+    }
+  }
+
+  const retryFailed = async (
+    campaignId: string
+  ) => {
+    setActionId(campaignId)
+    setActionType('retry')
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const result =
+        await callCampaignApi(
+          campaignId,
+          'retry_failed'
+        )
+
+      setSuccess(
+        result.message ??
+          'تمت إعادة تجهيز الرسائل الفاشلة.'
+      )
+
+      await loadData()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر إعادة محاولة الرسائل.'
+      )
+    } finally {
+      setActionId(null)
+      setActionType(null)
+    }
+  }
 
   const cancelCampaign = async (
-    campaign: Campaign,
+    campaignId: string
   ) => {
-    try {
-      setError(null);
-      setRunningId(campaign.id);
+    const confirmed =
+      window.confirm(
+        'هل أنت متأكد من إلغاء هذه الحملة؟ سيتم تخطي الرسائل التي لم يتم إرسالها.'
+      )
 
-      await callCampaignApi(
-        'cancel',
-        campaign.id,
-      );
-
-      await loadCampaigns();
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          'تعذر إلغاء الحملة',
-      );
-    } finally {
-      setRunningId(null);
+    if (!confirmed) {
+      return
     }
-  };
 
-  const retryCampaign = async (
-    campaign: Campaign,
-  ) => {
+    setActionId(campaignId)
+    setActionType('cancel')
+    setError(null)
+    setSuccess(null)
+
     try {
-      setError(null);
-      setRunningId(campaign.id);
+      const result =
+        await callCampaignApi(
+          campaignId,
+          'cancel'
+        )
 
-      await callCampaignApi(
-        'retry_failed',
-        campaign.id,
-      );
+      setSuccess(
+        result.message ??
+          'تم إلغاء الحملة.'
+      )
 
-      await loadCampaigns();
-    } catch (err: any) {
+      await loadData()
+    } catch (err) {
       setError(
-        err?.message ||
-          'تعذر إعادة المحاولة',
-      );
+        err instanceof Error
+          ? err.message
+          : 'تعذر إلغاء الحملة.'
+      )
     } finally {
-      setRunningId(null);
+      setActionId(null)
+      setActionType(null)
     }
-  };
+  }
 
-  const refreshCampaign = async (
-    campaign: Campaign,
-  ) => {
-    try {
-      setError(null);
-      setRunningId(campaign.id);
-
-      await callCampaignApi(
-        'refresh',
-        campaign.id,
-      );
-
-      await loadCampaigns();
-    } catch (err: any) {
-      setError(
-        err?.message ||
-          'تعذر تحديث الإحصائيات',
-      );
-    } finally {
-      setRunningId(null);
-    }
-  };
-
-  if (!organization?.id) {
+  if (
+    !subLoading &&
+    !hasFeature('campaigns')
+  ) {
     return (
-      <div
-        className="p-6"
-        dir="rtl"
-      >
-        <Card>
-          <CardContent className="py-10 text-center">
-            لم يتم العثور على
-            بيانات الشركة.
-          </CardContent>
-        </Card>
+      <FeatureLocked
+        featureName="الحملات التسويقية"
+      />
+    )
+  }
+
+  if (orgLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
       </div>
-    );
+    )
+  }
+
+  if (
+    orgError ||
+    !organizationId
+  ) {
+    return (
+      <div className="text-center py-20 text-sm text-red-600">
+        {orgError ??
+          'تعذر تحديد المؤسسة الخاصة بحسابك'}
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (
-    <div
-      className="space-y-6 p-4 md:p-6"
-      dir="rtl"
-    >
+    <div className="space-y-5">
+
       {/* Header */}
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+
         <div>
-          <div className="flex items-center gap-2">
-            <Megaphone className="h-7 w-7" />
+          <h1 className="text-xl font-bold text-ink-950">
+            الحملات التسويقية
+          </h1>
 
-            <h1 className="text-2xl font-bold">
-              الحملات التسويقية
-            </h1>
-          </div>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            أنشئ الحملات وحدد
-            الجمهور وتابع حالة
-            التنفيذ من مكان واحد.
+          <p className="text-sm text-ink-900/50 mt-1">
+            أنشئ واستهدف جمهورك وتابع Queue الحملة وإحصائياتها من مكان واحد.
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={loadCampaigns}
-            disabled={loading}
-          >
-            <RefreshCw
-              className={`ml-2 h-4 w-4 ${
-                loading
-                  ? 'animate-spin'
-                  : ''
-              }`}
-            />
+        <Button
+          onClick={() =>
+            setShowForm(v => !v)
+          }
+        >
+          <span className="inline-flex items-center gap-2">
+            <IconPlus className="w-4 h-4" />
+            حملة جديدة
+          </span>
+        </Button>
 
-            تحديث
-          </Button>
+      </div>
 
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={
-              setDialogOpen
-            }
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="ml-2 h-4 w-4" />
-                حملة جديدة
-              </Button>
-            </DialogTrigger>
+      {/* Alerts */}
 
-            <DialogContent
-              className="max-w-2xl"
-              dir="rtl"
-            >
-              <DialogHeader>
-                <DialogTitle>
-                  إنشاء حملة جديدة
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-5">
-                <div className="space-y-2">
-                  <Label>
-                    اسم الحملة
-                  </Label>
-
-                  <Input
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        name:
-                          e.target.value,
-                      })
-                    }
-                    placeholder="مثال: حملة عروض سبتمبر"
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>
-                      القناة
-                    </Label>
-
-                    <Select
-                      value={
-                        form.channel
-                      }
-                      onValueChange={(
-                        value,
-                      ) =>
-                        setForm({
-                          ...form,
-                          channel:
-                            value,
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-
-                      <SelectContent>
-                        {CHANNELS.map(
-                          (
-                            channel,
-                          ) => (
-                            <SelectItem
-                              key={
-                                channel.value
-                              }
-                              value={
-                                channel.value
-                              }
-                            >
-                              {
-                                channel.label
-                              }
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>
-                      حالة العملاء
-                    </Label>
-
-                    <Select
-                      value={
-                        form.status ||
-                        'all'
-                      }
-                      onValueChange={(
-                        value,
-                      ) =>
-                        setForm({
-                          ...form,
-                          status:
-                            value ===
-                            'all'
-                              ? ''
-                              : value,
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="كل الحالات" />
-                      </SelectTrigger>
-
-                      <SelectContent>
-                        <SelectItem value="all">
-                          كل الحالات
-                        </SelectItem>
-
-                        {STATUS_OPTIONS.map(
-                          (
-                            status,
-                          ) => (
-                            <SelectItem
-                              key={
-                                status
-                              }
-                              value={
-                                status
-                              }
-                            >
-                              {status}
-                            </SelectItem>
-                          ),
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    Tag اختياري
-                  </Label>
-
-                  <Input
-                    value={form.tag}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        tag:
-                          e.target.value,
-                      })
-                    }
-                    placeholder="مثال: vip"
-                  />
-                </div>
-
-                <div className="rounded-lg border bg-muted/30 p-4">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-
-                    Marketing Opt-in
-                    إلزامي
-                  </div>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    لن يتم إدراج أي
-                    عميل لم يمنح
-                    موافقة تسويقية
-                    صريحة.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    موعد التنفيذ
-                    اختياري
-                  </Label>
-
-                  <Input
-                    type="datetime-local"
-                    value={
-                      form.scheduled_at
-                    }
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        scheduled_at:
-                          e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    محتوى الرسالة
-                  </Label>
-
-                  <Textarea
-                    value={
-                      form.message_body
-                    }
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        message_body:
-                          e.target.value,
-                      })
-                    }
-                    rows={6}
-                    placeholder="اكتب الرسالة التي سيتم تجهيزها للإرسال..."
-                  />
-                </div>
-
-                {error && (
-                  <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-
-                    {error}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap justify-between gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={
-                      previewAudience
-                    }
-                    disabled={
-                      previewLoading
-                    }
-                  >
-                    {previewLoading ? (
-                      <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Eye className="ml-2 h-4 w-4" />
-                    )}
-
-                    معاينة الجمهور
-                  </Button>
-
-                  <Button
-                    type="button"
-                    onClick={
-                      createCampaign
-                    }
-                  >
-                    <Plus className="ml-2 h-4 w-4" />
-
-                    إنشاء الحملة
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+      {success && (
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl px-4 py-3 text-sm">
+          {success}
         </div>
-      </div>
+      )}
 
-      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-100 text-red-700 rounded-xl px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
 
-      {error &&
-        !dialogOpen && (
-          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      {/* Summary */}
 
-            <span>{error}</span>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            إجمالي المستهدفين
           </div>
-        )}
 
-      {/* Stats */}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                إجمالي الحملات
-              </p>
-
-              <p className="mt-1 text-2xl font-bold">
-                {stats.total}
-              </p>
-            </div>
-
-            <Megaphone className="h-8 w-8 text-muted-foreground" />
-          </CardContent>
+          <div className="text-2xl font-bold text-ink-950 mt-1">
+            {totals.total}
+          </div>
         </Card>
 
-        <Card>
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                جاهزة / مجدولة
-              </p>
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            في Queue
+          </div>
 
-              <p className="mt-1 text-2xl font-bold">
-                {stats.scheduled}
-              </p>
-            </div>
-
-            <Clock3 className="h-8 w-8 text-muted-foreground" />
-          </CardContent>
+          <div className="text-2xl font-bold text-ink-950 mt-1">
+            {totals.queued}
+          </div>
         </Card>
 
-        <Card>
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                مكتملة
-              </p>
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            تم الإرسال
+          </div>
 
-              <p className="mt-1 text-2xl font-bold">
-                {stats.completed}
-              </p>
-            </div>
-
-            <CheckCircle2 className="h-8 w-8 text-muted-foreground" />
-          </CardContent>
+          <div className="text-2xl font-bold text-ink-950 mt-1">
+            {totals.sent}
+          </div>
         </Card>
 
-        <Card>
-          <CardContent className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                بها أخطاء
-              </p>
+        <Card className="p-4">
+          <div className="text-xs text-ink-900/45">
+            تم التسليم
+          </div>
 
-              <p className="mt-1 text-2xl font-bold">
-                {stats.failed}
-              </p>
-            </div>
-
-            <XCircle className="h-8 w-8 text-muted-foreground" />
-          </CardContent>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">
+            {totals.delivered}
+          </div>
         </Card>
+
+        <Card className="p-4 col-span-2 lg:col-span-1">
+          <div className="text-xs text-ink-900/45">
+            فشل
+          </div>
+
+          <div className="text-2xl font-bold text-red-600 mt-1">
+            {totals.failed}
+          </div>
+        </Card>
+
       </div>
 
-      {/* Campaign List */}
+      {/* Create Campaign */}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
+      {showForm && (
+        <Card className="p-5">
 
-            الحملات
-          </CardTitle>
-        </CardHeader>
+          <div className="mb-5">
 
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-7 w-7 animate-spin" />
+            <h2 className="font-bold text-ink-950">
+              إنشاء حملة
+            </h2>
+
+            <p className="text-xs text-ink-900/45 mt-1">
+              سيتم استهداف العملاء الذين لديهم Marketing Opt-in فقط.
+            </p>
+
+          </div>
+
+          <form
+            onSubmit={handleAdd}
+            className="grid sm:grid-cols-2 gap-4"
+          >
+
+            <div className="sm:col-span-2">
+
+              <label className="text-xs font-medium text-ink-900/60">
+                اسم الحملة
+              </label>
+
+              <input
+                required
+                value={form.name}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    name: e.target.value,
+                  })
+                }
+                placeholder="مثال: عرض سبتمبر للعملاء الحاليين"
+                className="w-full mt-1 border border-sand-200 rounded-xl px-3.5 py-3 text-sm outline-none focus:border-ink-700"
+              />
+
             </div>
-          ) : campaigns.length ===
-            0 ? (
-            <div className="py-16 text-center">
-              <Megaphone className="mx-auto h-10 w-10 text-muted-foreground" />
 
-              <h3 className="mt-4 font-semibold">
-                لا توجد حملات حتى
-                الآن
-              </h3>
+            <div>
 
-              <p className="mt-1 text-sm text-muted-foreground">
-                أنشئ أول حملة
-                تسويقية للشركة.
-              </p>
+              <label className="text-xs font-medium text-ink-900/60">
+                القناة
+              </label>
+
+              <select
+                value={form.channel}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    channel: e.target.value,
+                  })
+                }
+                className="w-full mt-1 border border-sand-200 rounded-xl px-3.5 py-3 text-sm outline-none focus:border-ink-700 bg-white"
+              >
+                <option value="whatsapp">
+                  واتساب
+                </option>
+
+                <option value="messenger">
+                  ماسنجر
+                </option>
+
+                <option value="instagram">
+                  إنستجرام
+                </option>
+
+                <option value="email">
+                  بريد إلكتروني
+                </option>
+              </select>
+
             </div>
-          ) : (
-            <div className="space-y-4">
-              {campaigns.map(
-                (campaign) => (
-                  <div
+
+            <div>
+
+              <label className="text-xs font-medium text-ink-900/60">
+                الجمهور
+              </label>
+
+              <select
+                value={form.audienceStatus}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    audienceStatus:
+                      e.target.value,
+                  })
+                }
+                className="w-full mt-1 border border-sand-200 rounded-xl px-3.5 py-3 text-sm outline-none focus:border-ink-700 bg-white"
+              >
+                <option value="نشط">
+                  العملاء النشطون المشتركين
+                </option>
+
+                <option value="غير نشط">
+                  العملاء غير النشطين المشتركين
+                </option>
+
+                <option value="all">
+                  كل العملاء المشتركين
+                </option>
+              </select>
+
+            </div>
+
+            <div>
+
+              <label className="text-xs font-medium text-ink-900/60">
+                Tag اختياري
+              </label>
+
+              <input
+                value={form.tag}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    tag: e.target.value,
+                  })
+                }
+                placeholder="مثال: VIP"
+                className="w-full mt-1 border border-sand-200 rounded-xl px-3.5 py-3 text-sm outline-none focus:border-ink-700"
+              />
+
+            </div>
+
+            <div>
+
+              <label className="text-xs font-medium text-ink-900/60">
+                الموعد اختياري
+              </label>
+
+              <input
+                type="datetime-local"
+                value={form.scheduledAt}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    scheduledAt:
+                      e.target.value,
+                  })
+                }
+                className="w-full mt-1 border border-sand-200 rounded-xl px-3.5 py-3 text-sm outline-none focus:border-ink-700"
+              />
+
+            </div>
+
+            <div className="sm:col-span-2">
+
+              <label className="text-xs font-medium text-ink-900/60">
+                نص الرسالة
+              </label>
+
+              <textarea
+                required
+                rows={5}
+                value={form.messageBody}
+                onChange={e =>
+                  setForm({
+                    ...form,
+                    messageBody:
+                      e.target.value,
+                  })
+                }
+                placeholder="اكتب الرسالة هنا... يمكنك استخدام {name} و {company}"
+                className="w-full mt-1 border border-sand-200 rounded-xl px-3.5 py-3 text-sm outline-none focus:border-ink-700 resize-y"
+              />
+
+              <div className="text-xs text-ink-900/40 mt-1.5">
+                المتغيرات المتاحة: {'{name}'} و {'{company}'}
+              </div>
+
+            </div>
+
+            <div className="sm:col-span-2 flex gap-2">
+
+              <Button
+                type="submit"
+                disabled={saving}
+              >
+                {saving
+                  ? 'جاري الحفظ...'
+                  : 'إنشاء الحملة'}
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() =>
+                  setShowForm(false)
+                }
+              >
+                إلغاء
+              </Button>
+
+            </div>
+
+          </form>
+
+        </Card>
+      )}
+
+      {/* Campaigns */}
+
+      <Card className="p-2 sm:p-4">
+
+        {campaigns.length === 0 ? (
+          <div className="text-center py-16">
+
+            <div className="text-sm font-semibold text-ink-900/60">
+              لا توجد حملات بعد
+            </div>
+
+            <div className="text-xs text-ink-900/40 mt-1">
+              ابدأ بإنشاء أول حملة حقيقية.
+            </div>
+
+          </div>
+        ) : (
+          <Table
+            head={[
+              'الحملة',
+              'القناة',
+              'الجمهور',
+              'الحالة',
+              'التقدم',
+              'الإجراءات',
+            ]}
+          >
+
+            {campaigns.map(
+              campaign => {
+
+                const stats =
+                  messageStats[
+                    campaign.id
+                  ]
+
+                const total =
+                  stats?.total ??
+                  campaign.total_recipients ??
+                  0
+
+                const queued =
+                  stats?.queued ??
+                  campaign.queued_count ??
+                  0
+
+                const sent =
+                  stats?.sent ??
+                  campaign.sent_count ??
+                  0
+
+                const delivered =
+                  stats?.delivered ??
+                  campaign.delivered_count ??
+                  0
+
+                const failed =
+                  stats?.failed ??
+                  campaign.failed_count ??
+                  0
+
+                const skipped =
+                  stats?.skipped ??
+                  campaign.skipped_count ??
+                  0
+
+                const completed =
+                  delivered +
+                  failed +
+                  skipped
+
+                const progress =
+                  percentage(
+                    completed,
+                    total
+                  )
+
+                const isBusy =
+                  actionId ===
+                  campaign.id
+
+                const canPrepare =
+                  [
+                    'مسودة',
+                    'مجدولة',
+                    'قيد التجهيز',
+                    'جارٍ التحضير',
+                    'جاهزة',
+                  ].includes(
+                    campaign.status
+                  )
+
+                const isTerminal =
+                  [
+                    'مكتملة',
+                    'ملغاة',
+                  ].includes(
+                    campaign.status
+                  )
+
+                return (
+                  <tr
                     key={
                       campaign.id
                     }
-                    className="rounded-xl border p-4"
+                    className="hover:bg-sand-50 align-top"
                   >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold">
-                            {
-                              campaign.name
-                            }
-                          </h3>
 
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClass(
-                              campaign.status,
-                            )}`}
-                          >
-                            {statusLabel(
-                              campaign.status,
-                            )}
-                          </span>
+                    {/* Campaign */}
 
-                          <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
-                            {
-                              campaign.channel
-                            }
-                          </span>
-                        </div>
+                    <td className="py-4 px-3 min-w-[220px]">
 
-                        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-                          {campaign.message_body ||
-                            'لا توجد رسالة'}
-                        </p>
-
-                        <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />
-
-                            الجمهور:{' '}
-                            {
-                              campaign.total_recipients
-                            }
-                          </span>
-
-                          <span className="flex items-center gap-1">
-                            <Send className="h-3.5 w-3.5" />
-
-                            في الانتظار:{' '}
-                            {
-                              campaign.queued_count
-                            }
-                          </span>
-
-                          <span className="flex items-center gap-1">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-
-                            تم الإرسال:{' '}
-                            {
-                              campaign.sent_count
-                            }
-                          </span>
-
-                          <span>
-                            تم التسليم:{' '}
-                            {
-                              campaign.delivered_count
-                            }
-                          </span>
-
-                          <span>
-                            فشل:{' '}
-                            {
-                              campaign.failed_count
-                            }
-                          </span>
-
-                          <span>
-                            تخطي:{' '}
-                            {
-                              campaign.skipped_count
-                            }
-                          </span>
-                        </div>
-
-                        {campaign.scheduled_at && (
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            موعد التنفيذ:{' '}
-                            {new Date(
-                              campaign.scheduled_at,
-                            ).toLocaleString(
-                              'ar-EG',
-                            )}
-                          </p>
-                        )}
-
-                        {campaign.error_message && (
-                          <div className="mt-3 rounded-lg bg-red-50 p-2 text-xs text-red-700">
-                            {
-                              campaign.error_message
-                            }
-                          </div>
-                        )}
+                      <div className="font-semibold text-ink-950">
+                        {campaign.name}
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
-                        {campaign.status !==
-                          'ملغاة' &&
-                          campaign.status !==
-                            'مكتملة' && (
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                prepareCampaign(
-                                  campaign,
-                                )
-                              }
-                              disabled={
-                                runningId ===
-                                campaign.id
-                              }
-                            >
-                              {runningId ===
-                              campaign.id ? (
-                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <Send className="ml-2 h-4 w-4" />
-                              )}
+                      {campaign.message_body && (
+                        <div className="text-xs text-ink-900/40 mt-1 line-clamp-2">
+                          {campaign.message_body}
+                        </div>
+                      )}
 
-                              تجهيز الجمهور
-                            </Button>
+                      {campaign.last_run_at && (
+                        <div className="text-[11px] text-ink-900/35 mt-2">
+                          آخر تحديث:{' '}
+                          {formatDate(
+                            campaign.last_run_at
                           )}
+                        </div>
+                      )}
 
-                        {(
-                          campaign.failed_count ??
-                          0
-                        ) > 0 && (
+                    </td>
+
+                    {/* Channel */}
+
+                    <td className="py-4 px-3 whitespace-nowrap">
+                      {channelLabels[
+                        campaign.channel
+                      ] ??
+                        campaign.channel}
+                    </td>
+
+                    {/* Audience */}
+
+                    <td className="py-4 px-3 min-w-[170px]">
+
+                      <div className="text-sm">
+                        {campaign.audience ??
+                          '—'}
+                      </div>
+
+                      {campaign.audience_filter?.tag && (
+                        <div className="mt-1">
+                          <Badge tone="gold">
+                            #{campaign.audience_filter.tag}
+                          </Badge>
+                        </div>
+                      )}
+
+                      <div className="text-xs text-ink-900/40 mt-1">
+                        Opt-in فقط
+                      </div>
+
+                    </td>
+
+                    {/* Status */}
+
+                    <td className="py-4 px-3">
+
+                      <Badge
+                        tone={statusTone(
+                          campaign.status
+                        )}
+                      >
+                        {campaign.status}
+                      </Badge>
+
+                    </td>
+
+                    {/* Progress */}
+
+                    <td className="py-4 px-3 min-w-[230px]">
+
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+
+                        <span className="text-ink-900/50">
+                          {progress}% مكتمل
+                        </span>
+
+                        <span className="font-semibold text-ink-900">
+                          {completed}/{total}
+                        </span>
+
+                      </div>
+
+                      <div className="h-2 bg-sand-200 rounded-full overflow-hidden">
+
+                        <div
+                          className="h-full bg-ink-900 rounded-full transition-all duration-500"
+                          style={{
+                            width:
+                              `${progress}%`,
+                          }}
+                        />
+
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1 mt-2 text-[11px] text-ink-900/45">
+
+                        <span>
+                          Queue {queued}
+                        </span>
+
+                        <span>
+                          إرسال {sent}
+                        </span>
+
+                        <span>
+                          تسليم {delivered}
+                        </span>
+
+                        <span>
+                          فشل {failed}
+                        </span>
+
+                      </div>
+
+                    </td>
+
+                    {/* Actions */}
+
+                    <td className="py-4 px-3 min-w-[260px]">
+
+                      <div className="flex flex-wrap gap-2">
+
+                        {canPrepare && (
                           <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              retryCampaign(
-                                campaign,
-                              )
-                            }
+                            variant="secondary"
                             disabled={
-                              runningId ===
+                              preparingId ===
                               campaign.id
                             }
+                            onClick={() =>
+                              prepareCampaign(
+                                campaign
+                              )
+                            }
                           >
-                            إعادة المحاولة
+                            {preparingId ===
+                            campaign.id
+                              ? 'جاري التجهيز...'
+                              : 'تجهيز الجمهور'}
                           </Button>
                         )}
 
                         <Button
-                          size="sm"
-                          variant="outline"
+                          variant="secondary"
+                          disabled={
+                            isBusy ||
+                            preparingId ===
+                              campaign.id
+                          }
                           onClick={() =>
-                            refreshCampaign(
-                              campaign,
+                            refreshStats(
+                              campaign.id
                             )
                           }
-                          disabled={
-                            runningId ===
-                            campaign.id
-                          }
                         >
-                          <RefreshCw className="ml-2 h-4 w-4" />
-
-                          تحديث
+                          {isBusy &&
+                          actionType ===
+                            'refresh'
+                            ? 'جاري التحديث...'
+                            : 'تحديث'}
                         </Button>
 
-                        {campaign.status !==
-                          'مكتملة' &&
-                          campaign.status !==
-                            'ملغاة' && (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() =>
-                                cancelCampaign(
-                                  campaign,
-                                )
-                              }
-                              disabled={
-                                runningId ===
+                        {failed > 0 && (
+                          <Button
+                            variant="secondary"
+                            disabled={
+                              isBusy
+                            }
+                            onClick={() =>
+                              retryFailed(
                                 campaign.id
-                              }
-                            >
-                              إلغاء
-                            </Button>
-                          )}
-                      </div>
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                              )
+                            }
+                          >
+                            {isBusy &&
+                            actionType ===
+                              'retry'
+                              ? 'جاري التجهيز...'
+                              : `إعادة الفاشل (${failed})`}
+                          </Button>
+                        )}
 
-      {/* Audience Preview */}
+                        {!isTerminal && (
+                          <Button
+                            variant="ghost"
+                            disabled={
+                              isBusy
+                            }
+                            onClick={() =>
+                              cancelCampaign(
+                                campaign.id
+                              )
+                            }
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            {isBusy &&
+                            actionType ===
+                              'cancel'
+                              ? 'جاري الإلغاء...'
+                              : 'إلغاء الحملة'}
+                          </Button>
+                        )}
 
-      <Dialog
-        open={previewOpen}
-        onOpenChange={
-          setPreviewOpen
-        }
-      >
-        <DialogContent
-          className="max-h-[85vh] max-w-4xl overflow-y-auto"
-          dir="rtl"
-        >
-          <DialogHeader>
-            <DialogTitle>
-              معاينة الجمهور
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="rounded-xl border bg-muted/30 p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  عدد العملاء
-                  المؤهلين
-                </span>
-
-                <span className="text-2xl font-bold">
-                  {audienceCount}
-                </span>
-              </div>
-            </div>
-
-            {previewLoading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="h-7 w-7 animate-spin" />
-              </div>
-            ) : audiencePreview.length ===
-              0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                لا يوجد عملاء
-                مؤهلون وفقًا
-                للفلاتر الحالية.
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-lg border">
-                <div className="grid grid-cols-12 gap-2 border-b bg-muted/50 p-3 text-xs font-semibold">
-                  <div className="col-span-4">
-                    العميل
-                  </div>
-
-                  <div className="col-span-3">
-                    الشركة
-                  </div>
-
-                  <div className="col-span-3">
-                    الهاتف
-                  </div>
-
-                  <div className="col-span-2">
-                    الحالة
-                  </div>
-                </div>
-
-                {audiencePreview.map(
-                  (customer) => (
-                    <div
-                      key={
-                        customer.id
-                      }
-                      className="grid grid-cols-12 gap-2 border-b p-3 text-sm last:border-b-0"
-                    >
-                      <div className="col-span-4 truncate">
-                        {
-                          customer.name
-                        }
                       </div>
 
-                      <div className="col-span-3 truncate text-muted-foreground">
-                        {customer.company ||
-                          '—'}
-                      </div>
+                    </td>
 
-                      <div className="col-span-3 truncate text-muted-foreground">
-                        {customer.phone ||
-                          customer.email ||
-                          '—'}
-                      </div>
-
-                      <div className="col-span-2">
-                        {customer.status ||
-                          '—'}
-                      </div>
-                    </div>
-                  ),
-                )}
-              </div>
+                  </tr>
+                )
+              }
             )}
 
-            <p className="text-xs text-muted-foreground">
-              المعاينة تعرض حتى
-              100 عميل فقط.
-            </p>
+          </Table>
+        )}
+
+      </Card>
+
+      {/* Information */}
+
+      <Card className="p-5 bg-sand-50/50">
+
+        <div className="flex items-start gap-3">
+
+          <div className="w-9 h-9 shrink-0 rounded-xl bg-ink-900 text-sand-50 flex items-center justify-center text-sm font-bold">
+            4
           </div>
-        </DialogContent>
-      </Dialog>
+
+          <div>
+
+            <h3 className="font-bold text-ink-950">
+              Campaign Queue
+            </h3>
+
+            <p className="text-sm text-ink-900/55 mt-1 leading-6">
+              الحملة لديها Queue حقيقي للرسائل
+              وإحصائيات قابلة للتحديث وإعادة المحاولة
+              والإلغاء. الإرسال الخارجي نفسه لن يتم
+              ادعاؤه قبل تفعيل التكاملات الفعلية.
+            </p>
+
+          </div>
+
+        </div>
+
+      </Card>
+
     </div>
-  );
+  )
 }
