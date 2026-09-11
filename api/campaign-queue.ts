@@ -1,11 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createClient } from '@supabase/supabase-js'
+import {
+  createClient,
+  type SupabaseClient,
+} from '@supabase/supabase-js'
 
 type QueueAction =
   | 'stats'
   | 'retry_failed'
   | 'cancel'
   | 'refresh'
+
+type AdminClient = SupabaseClient<any, 'public', any>
 
 function errorResponse(
   res: VercelResponse,
@@ -20,11 +25,19 @@ function errorResponse(
 
 async function getCaller(req: VercelRequest) {
   const authorization = req.headers.authorization
-  const accessToken = authorization?.replace(/^Bearer\s+/i, '')
+  const accessToken = authorization?.replace(
+    /^Bearer\s+/i,
+    ''
+  )
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY
+  const supabaseUrl =
+    process.env.VITE_SUPABASE_URL
+
+  const anonKey =
+    process.env.VITE_SUPABASE_ANON_KEY
+
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_KEY
 
   if (
     !accessToken ||
@@ -50,7 +63,8 @@ async function getCaller(req: VercelRequest) {
   const {
     data: authData,
     error: authError,
-  } = await userClient.auth.getUser()
+  } =
+    await userClient.auth.getUser()
 
   if (
     authError ||
@@ -59,30 +73,32 @@ async function getCaller(req: VercelRequest) {
     return null
   }
 
-  const admin = createClient(
-    supabaseUrl,
-    serviceKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  )
+  const admin =
+    createClient(
+      supabaseUrl,
+      serviceKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    ) as AdminClient
 
   const {
     data: userRow,
     error: userError,
-  } = await admin
-    .from('users')
-    .select(
-      'id, organization_id, role, active'
-    )
-    .eq(
-      'id',
-      authData.user.id
-    )
-    .maybeSingle()
+  } =
+    await admin
+      .from('users')
+      .select(
+        'id, organization_id, role, active'
+      )
+      .eq(
+        'id',
+        authData.user.id
+      )
+      .maybeSingle()
 
   if (
     userError ||
@@ -99,38 +115,39 @@ async function getCaller(req: VercelRequest) {
 }
 
 async function getCampaign(
-  admin: ReturnType<typeof createClient>,
+  admin: AdminClient,
   campaignId: string,
   organizationId: string
 ) {
   const {
     data,
     error,
-  } = await admin
-    .from('campaigns')
-    .select(`
-      id,
-      organization_id,
-      name,
-      channel,
-      status,
-      message_body,
-      total_recipients,
-      queued_count,
-      sent_count,
-      delivered_count,
-      failed_count,
-      last_run_at
-    `)
-    .eq(
-      'id',
-      campaignId
-    )
-    .eq(
-      'organization_id',
-      organizationId
-    )
-    .maybeSingle()
+  } =
+    await admin
+      .from('campaigns')
+      .select(`
+        id,
+        organization_id,
+        name,
+        channel,
+        status,
+        message_body,
+        total_recipients,
+        queued_count,
+        sent_count,
+        delivered_count,
+        failed_count,
+        last_run_at
+      `)
+      .eq(
+        'id',
+        campaignId
+      )
+      .eq(
+        'organization_id',
+        organizationId
+      )
+      .maybeSingle()
 
   if (error) {
     throw new Error(
@@ -148,21 +165,22 @@ async function getCampaign(
 }
 
 async function getStats(
-  admin: ReturnType<typeof createClient>,
+  admin: AdminClient,
   campaignId: string
 ) {
   const {
     data,
     error,
-  } = await admin
-    .from('campaign_messages')
-    .select(
-      'id, status, error_message, sent_at, opened_at'
-    )
-    .eq(
-      'campaign_id',
-      campaignId
-    )
+  } =
+    await admin
+      .from('campaign_messages')
+      .select(
+        'id, status, error_message, sent_at, opened_at'
+      )
+      .eq(
+        'campaign_id',
+        campaignId
+      )
 
   if (error) {
     throw new Error(
@@ -174,32 +192,32 @@ async function getStats(
 
   const queued =
     rows.filter(
-      row =>
+      (row: any) =>
         row.status === 'جاهزة' ||
         row.status === 'قيد الإرسال'
     ).length
 
   const sent =
     rows.filter(
-      row =>
+      (row: any) =>
         row.status === 'تم الإرسال'
     ).length
 
   const delivered =
     rows.filter(
-      row =>
+      (row: any) =>
         row.status === 'تم التسليم'
     ).length
 
   const failed =
     rows.filter(
-      row =>
+      (row: any) =>
         row.status === 'فشلت'
     ).length
 
   const skipped =
     rows.filter(
-      row =>
+      (row: any) =>
         row.status === 'تم التخطي'
     ).length
 
@@ -214,7 +232,7 @@ async function getStats(
 }
 
 async function syncCampaignStats(
-  admin: ReturnType<typeof createClient>,
+  admin: AdminClient,
   campaignId: string,
   organizationId: string
 ) {
@@ -226,35 +244,36 @@ async function syncCampaignStats(
 
   const {
     error,
-  } = await admin
-    .from('campaigns')
-    .update({
-      total_recipients:
-        stats.total,
+  } =
+    await admin
+      .from('campaigns')
+      .update({
+        total_recipients:
+          stats.total,
 
-      queued_count:
-        stats.queued,
+        queued_count:
+          stats.queued,
 
-      sent_count:
-        stats.sent,
+        sent_count:
+          stats.sent,
 
-      delivered_count:
-        stats.delivered,
+        delivered_count:
+          stats.delivered,
 
-      failed_count:
-        stats.failed,
+        failed_count:
+          stats.failed,
 
-      last_run_at:
-        new Date().toISOString(),
-    })
-    .eq(
-      'id',
-      campaignId
-    )
-    .eq(
-      'organization_id',
-      organizationId
-    )
+        last_run_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        'id',
+        campaignId
+      )
+      .eq(
+        'organization_id',
+        organizationId
+      )
 
   if (error) {
     throw new Error(
@@ -266,7 +285,7 @@ async function syncCampaignStats(
 }
 
 async function writeAuditLog(
-  admin: ReturnType<typeof createClient>,
+  admin: AdminClient,
   organizationId: string,
   actorId: string,
   action: string,
@@ -324,13 +343,16 @@ export default async function handler(
   } = caller
 
   const organizationId =
-    user.organization_id as string
+    String(
+      user.organization_id
+    )
 
-  const campaignId = String(
-    req.query.campaignId ??
-    req.body?.campaignId ??
-    ''
-  )
+  const campaignId =
+    String(
+      req.query.campaignId ??
+      req.body?.campaignId ??
+      ''
+    )
 
   if (!campaignId) {
     return errorResponse(
@@ -362,13 +384,14 @@ export default async function handler(
   const {
     data: subscriptionActive,
     error: subscriptionError,
-  } = await admin.rpc(
-    'subscription_is_active',
-    {
-      p_organization_id:
-        organizationId,
-    }
-  )
+  } =
+    await admin.rpc(
+      'subscription_is_active',
+      {
+        p_organization_id:
+          organizationId,
+      }
+    )
 
   if (
     subscriptionError ||
@@ -396,12 +419,16 @@ export default async function handler(
 
       return res.status(200).json({
         success: true,
+
         campaign: {
           id: campaign.id,
           name: campaign.name,
-          channel: campaign.channel,
-          status: campaign.status,
+          channel:
+            campaign.channel,
+          status:
+            campaign.status,
         },
+
         stats,
       })
     } catch (error) {
@@ -480,19 +507,20 @@ export default async function handler(
     const {
       data: failedMessages,
       error: failedError,
-    } = await admin
-      .from('campaign_messages')
-      .select(
-        'id, customer_id, status'
-      )
-      .eq(
-        'campaign_id',
-        campaignId
-      )
-      .eq(
-        'status',
-        'فشلت'
-      )
+    } =
+      await admin
+        .from('campaign_messages')
+        .select(
+          'id, customer_id, status'
+        )
+        .eq(
+          'campaign_id',
+          campaignId
+        )
+        .eq(
+          'status',
+          'فشلت'
+        )
 
     if (failedError) {
       return errorResponse(
@@ -516,22 +544,23 @@ export default async function handler(
 
     const {
       error: retryError,
-    } = await admin
-      .from('campaign_messages')
-      .update({
-        status: 'جاهزة',
-        error_message: null,
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        'campaign_id',
-        campaignId
-      )
-      .eq(
-        'status',
-        'فشلت'
-      )
+    } =
+      await admin
+        .from('campaign_messages')
+        .update({
+          status: 'جاهزة',
+          error_message: null,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          'campaign_id',
+          campaignId
+        )
+        .eq(
+          'status',
+          'فشلت'
+        )
 
     if (retryError) {
       return errorResponse(
@@ -541,22 +570,36 @@ export default async function handler(
       )
     }
 
-    await admin
-      .from('campaigns')
-      .update({
-        status:
-          'جاهزة للإرسال',
-        last_run_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        'id',
-        campaignId
+    const {
+      error:
+        campaignUpdateError,
+    } =
+      await admin
+        .from('campaigns')
+        .update({
+          status:
+            'جاهزة للإرسال',
+          last_run_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          'id',
+          campaignId
+        )
+        .eq(
+          'organization_id',
+          organizationId
+        )
+
+    if (
+      campaignUpdateError
+    ) {
+      return errorResponse(
+        res,
+        500,
+        'تعذر تحديث حالة الحملة'
       )
-      .eq(
-        'organization_id',
-        organizationId
-      )
+    }
 
     const stats =
       await syncCampaignStats(
@@ -613,23 +656,25 @@ export default async function handler(
 
     const {
       data: cancellable,
-      error: cancellableError,
-    } = await admin
-      .from('campaign_messages')
-      .select(
-        'id, status'
-      )
-      .eq(
-        'campaign_id',
-        campaignId
-      )
-      .in(
-        'status',
-        [
-          'جاهزة',
-          'قيد الإرسال',
-        ]
-      )
+      error:
+        cancellableError,
+    } =
+      await admin
+        .from('campaign_messages')
+        .select(
+          'id, status'
+        )
+        .eq(
+          'campaign_id',
+          campaignId
+        )
+        .in(
+          'status',
+          [
+            'جاهزة',
+            'قيد الإرسال',
+          ]
+        )
 
     if (cancellableError) {
       return errorResponse(
@@ -644,26 +689,29 @@ export default async function handler(
 
     if (rows.length > 0) {
       const {
-        error: cancelMessagesError,
-      } = await admin
-        .from('campaign_messages')
-        .update({
-          status:
-            'تم التخطي',
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'campaign_id',
-          campaignId
-        )
-        .in(
-          'status',
-          [
-            'جاهزة',
-            'قيد الإرسال',
-          ]
-        )
+        error:
+          cancelMessagesError,
+      } =
+        await admin
+          .from('campaign_messages')
+          .update({
+            status:
+              'تم التخطي',
+
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            'campaign_id',
+            campaignId
+          )
+          .in(
+            'status',
+            [
+              'جاهزة',
+              'قيد الإرسال',
+            ]
+          )
 
       if (
         cancelMessagesError
@@ -677,24 +725,28 @@ export default async function handler(
     }
 
     const {
-      error: cancelCampaignError,
-    } = await admin
-      .from('campaigns')
-      .update({
-        status:
-          'ملغاة',
-        queued_count: 0,
-        last_run_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        'id',
-        campaignId
-      )
-      .eq(
-        'organization_id',
-        organizationId
-      )
+      error:
+        cancelCampaignError,
+    } =
+      await admin
+        .from('campaigns')
+        .update({
+          status:
+            'ملغاة',
+
+          queued_count: 0,
+
+          last_run_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          'id',
+          campaignId
+        )
+        .eq(
+          'organization_id',
+          organizationId
+        )
 
     if (
       cancelCampaignError
@@ -727,11 +779,15 @@ export default async function handler(
 
     return res.status(200).json({
       success: true,
+
       cancelled:
         rows.length,
+
       status:
         'ملغاة',
+
       stats,
+
       message:
         rows.length > 0
           ? `تم إلغاء الحملة وتخطي ${rows.length} رسالة لم يتم إرسالها.`
