@@ -19,6 +19,8 @@ interface Customer {
   follow_up_at: string | null
   assigned_to: string | null
   updated_at: string | null
+  marketing_opt_in: boolean
+  marketing_opt_out_at: string | null
 }
 
 interface Deal {
@@ -107,6 +109,8 @@ const activityIcon = (type: string) => {
     appointment: '◷',
     call: '☎',
     message: '◌',
+    marketing_consent: '✓',
+    marketing_opt_out: '×',
   }
 
   return icons[type] || '•'
@@ -142,8 +146,7 @@ const formatDateTime = (value: string | null | undefined) => {
   return new Date(value).toLocaleString('ar-EG', {
     day: 'numeric',
     month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
+    year: 'numeric',
   })
 }
 
@@ -175,6 +178,7 @@ export default function CustomerDetail() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [taskSaving, setTaskSaving] = useState(false)
+  const [marketingSaving, setMarketingSaving] = useState(false)
 
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
@@ -182,6 +186,7 @@ export default function CustomerDetail() {
 
   const [error, setError] = useState<string | null>(null)
   const [taskError, setTaskError] = useState<string | null>(null)
+  const [marketingError, setMarketingError] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     name: '',
@@ -371,6 +376,126 @@ export default function CustomerDetail() {
       ).length,
     [tasks]
   )
+
+  /*
+   * Marketing Consent
+   *
+   * This is intentionally handled separately from the general
+   * customer edit form so changing the customer's basic data
+   * cannot accidentally change marketing consent.
+   */
+  const updateMarketingConsent = async (
+    nextOptIn: boolean
+  ) => {
+    if (
+      !supabase ||
+      !organizationId ||
+      !id ||
+      !customer ||
+      marketingSaving
+    ) {
+      return
+    }
+
+    if (customer.marketing_opt_in === nextOptIn) {
+      return
+    }
+
+    setMarketingSaving(true)
+    setMarketingError(null)
+
+    try {
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser()
+
+      if (authError) throw authError
+
+      const userId = authData.user?.id || null
+      const now = new Date().toISOString()
+
+      const updatePayload: {
+        marketing_opt_in: boolean
+        marketing_opt_out_at?: string
+        updated_at: string
+      } = {
+        marketing_opt_in: nextOptIn,
+        updated_at: now,
+      }
+
+      /*
+       * Keep the latest opt-out timestamp permanently.
+       * If the customer opts back in, we intentionally do NOT
+       * clear marketing_opt_out_at because it represents the
+       * last time the customer opted out.
+       */
+      if (!nextOptIn) {
+        updatePayload.marketing_opt_out_at = now
+      }
+
+      const { data, error: updateError } =
+        await supabase
+          .from('customers')
+          .update(updatePayload)
+          .eq('id', id)
+          .eq('organization_id', organizationId)
+          .select('*')
+          .single()
+
+      if (updateError) throw updateError
+
+      const activityType = nextOptIn
+        ? 'marketing_consent'
+        : 'marketing_opt_out'
+
+      const activityTitle = nextOptIn
+        ? 'تم تفعيل الموافقة على الرسائل التسويقية'
+        : 'تم إلغاء الموافقة على الرسائل التسويقية'
+
+      const activityDescription = nextOptIn
+        ? 'وافق العميل على استلام الرسائل والحملات التسويقية.'
+        : 'ألغى العميل موافقته على استلام الرسائل والحملات التسويقية. لن يتم إدراجه في الحملات التسويقية المستقبلية.'
+
+      const { error: activityError } =
+        await supabase.from('crm_activities').insert({
+          organization_id: organizationId,
+          entity_type: 'customer',
+          entity_id: id,
+          activity_type: activityType,
+          title: activityTitle,
+          description: activityDescription,
+          actor_id: userId,
+          metadata: {
+            marketing_opt_in: nextOptIn,
+            changed_at: now,
+            source: 'customer_detail',
+          },
+        })
+
+      if (activityError) {
+        console.error(
+          'Failed to record marketing consent activity:',
+          activityError
+        )
+      }
+
+      setCustomer(data as Customer)
+
+      /*
+       * Reload the activity timeline so the consent change
+       * appears immediately without changing the existing
+       * timeline implementation.
+       */
+      await loadCustomer()
+    } catch (err) {
+      setMarketingError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر تحديث حالة الموافقة التسويقية'
+      )
+    } finally {
+      setMarketingSaving(false)
+    }
+  }
 
   const resetTaskForm = () => {
     setTaskForm({
@@ -828,6 +953,16 @@ export default function CustomerDetail() {
                   >
                     {customer.status}
                   </Badge>
+
+                  {customer.marketing_opt_in ? (
+                    <Badge tone="success">
+                      تسويق: موافق
+                    </Badge>
+                  ) : (
+                    <Badge tone="danger">
+                      تسويق: غير موافق
+                    </Badge>
+                  )}
                 </div>
 
                 {customer.company && (
@@ -1154,6 +1289,113 @@ export default function CustomerDetail() {
               <div className="text-sm font-semibold text-ink-950 mt-1">
                 {assignedUser?.full_name ||
                   'غير مُعيّن'}
+              </div>
+            </div>
+
+            {/* Marketing Consent */}
+            <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm ${
+                        customer.marketing_opt_in
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-red-100 text-red-600'
+                      }`}
+                    >
+                      {customer.marketing_opt_in
+                        ? '✓'
+                        : '×'}
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-bold text-ink-950">
+                        الموافقة على الرسائل التسويقية
+                      </div>
+
+                      <div className="text-xs text-ink-900/45 mt-0.5">
+                        {customer.marketing_opt_in
+                          ? 'العميل يسمح بإدراجه في الحملات التسويقية.'
+                          : 'العميل غير مسموح بإدراجه في الحملات التسويقية.'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-ink-900/45">
+                        الحالة:
+                      </span>
+
+                      <span
+                        className={`font-semibold ${
+                          customer.marketing_opt_in
+                            ? 'text-emerald-700'
+                            : 'text-red-600'
+                        }`}
+                      >
+                        {customer.marketing_opt_in
+                          ? 'موافق على التسويق'
+                          : 'ملغى'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-ink-900/45">
+                        آخر Opt-out:
+                      </span>
+
+                      <span className="font-semibold text-ink-950">
+                        {customer.marketing_opt_out_at
+                          ? formatDateTime(
+                              customer.marketing_opt_out_at
+                            )
+                          : 'لم يحدث'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 shrink-0">
+                  {customer.marketing_opt_in ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateMarketingConsent(false)
+                      }
+                      disabled={marketingSaving}
+                      className="px-3 py-2 rounded-xl border border-red-200 bg-white text-red-600 text-xs font-semibold hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {marketingSaving
+                        ? 'جاري الحفظ...'
+                        : 'إلغاء الموافقة'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateMarketingConsent(true)
+                      }
+                      disabled={marketingSaving}
+                      className="px-3 py-2 rounded-xl bg-ink-900 text-white text-xs font-semibold hover:bg-ink-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {marketingSaving
+                        ? 'جاري الحفظ...'
+                        : 'تفعيل الموافقة'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {marketingError && (
+                <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-xs text-red-700">
+                  {marketingError}
+                </div>
+              )}
+
+              <div className="mt-3 pt-3 border-t border-sand-200 text-[11px] leading-5 text-ink-900/40">
+                العملاء الذين ألغوا الموافقة يتم استبعادهم تلقائيًا من الحملات التسويقية.
               </div>
             </div>
 
@@ -1955,6 +2197,32 @@ export default function CustomerDetail() {
                   placeholder="أضف ملاحظات عن العميل..."
                   className="w-full resize-none rounded-xl border border-sand-200 bg-white px-3 py-3 text-sm outline-none focus:border-ink-900"
                 />
+              </div>
+
+              <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-bold text-ink-950">
+                      حالة الرسائل التسويقية
+                    </div>
+
+                    <div className="text-xs text-ink-900/45 mt-1">
+                      يتم التحكم فيها من بطاقة الموافقة التسويقية داخل صفحة العميل.
+                    </div>
+                  </div>
+
+                  <Badge
+                    tone={
+                      customer.marketing_opt_in
+                        ? 'success'
+                        : 'danger'
+                    }
+                  >
+                    {customer.marketing_opt_in
+                      ? 'موافق'
+                      : 'غير موافق'}
+                  </Badge>
+                </div>
               </div>
             </div>
 
