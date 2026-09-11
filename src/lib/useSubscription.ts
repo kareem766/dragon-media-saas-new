@@ -22,6 +22,9 @@ interface SubscriptionData {
   id: string
   status: string
   renewal_date: string | null
+  billing_cycle: string | null
+  started_at: string | null
+  expires_at: string | null
   plan_id: string | null
   plan: PlanData | null
 }
@@ -68,18 +71,15 @@ export function useSubscription() {
       setError(null)
 
       try {
-        /*
-         * الاشتراك الخاص بالـ Organization الحالية فقط.
-         *
-         * RLS في Supabase يمنع المستخدم من قراءة اشتراك
-         * Organization أخرى.
-         */
         const { data, error: subscriptionError } = await supabase
           .from('subscriptions')
           .select(`
             id,
             status,
             renewal_date,
+            billing_cycle,
+            started_at,
+            expires_at,
             plan_id,
             plans (
               id,
@@ -118,6 +118,9 @@ export function useSubscription() {
             id: '',
             status: 'no_subscription',
             renewal_date: null,
+            billing_cycle: null,
+            started_at: null,
+            expires_at: null,
             plan_id: null,
             plan: null,
           })
@@ -132,7 +135,10 @@ export function useSubscription() {
         setSubscription({
           id: data.id,
           status: data.status ?? 'pending_payment',
-          renewal_date: data.renewal_date,
+          renewal_date: data.renewal_date ?? null,
+          billing_cycle: data.billing_cycle ?? null,
+          started_at: data.started_at ?? null,
+          expires_at: data.expires_at ?? null,
           plan_id: data.plan_id,
           plan: plan as PlanData | null,
         })
@@ -165,17 +171,21 @@ export function useSubscription() {
     subscription?.status ?? 'no_subscription'
 
   /*
-   * نحسب عدد الأيام المتبقية اعتمادًا على renewal_date.
+   * تاريخ انتهاء الاشتراك الحقيقي.
    *
-   * مثال:
-   * renewal_date = اليوم
-   * daysRemaining = 0
+   * نستخدم expires_at أولاً لأنه تاريخ الانتهاء
+   * الموجود فعليًا على subscription.
    *
-   * وهذا لا يعني أن الاشتراك منتهي،
-   * بل يعني أنه ينتهي اليوم.
+   * renewal_date موجود كـ fallback للتوافق
+   * مع البيانات القديمة.
    */
+  const effectiveExpiryDate =
+    subscription?.expires_at ??
+    subscription?.renewal_date ??
+    null
+
   const daysRemaining = (() => {
-    if (!subscription?.renewal_date) {
+    if (!effectiveExpiryDate) {
       return null
     }
 
@@ -188,7 +198,7 @@ export function useSubscription() {
     )
 
     const [year, month, day] =
-      subscription.renewal_date
+      effectiveExpiryDate
         .split('-')
         .map(Number)
 
@@ -196,7 +206,7 @@ export function useSubscription() {
       return null
     }
 
-    const renewalUTC = Date.UTC(
+    const expiryUTC = Date.UTC(
       year,
       month - 1,
       day
@@ -205,24 +215,20 @@ export function useSubscription() {
     return Math.max(
       0,
       Math.ceil(
-        (renewalUTC - todayUTC) /
+        (expiryUTC - todayUTC) /
           (1000 * 60 * 60 * 24)
       )
     )
   })()
 
   /*
-   * نحدد هل تاريخ التجديد مر بالفعل.
+   * انتهاء الاشتراك يحدث فقط بعد تاريخ الانتهاء.
    *
-   * مهم جدًا:
-   * renewal_date = اليوم
-   * => الاشتراك ليس منتهيًا.
-   *
-   * الانتهاء يحدث فقط عندما يكون renewal_date
-   * قبل تاريخ اليوم.
+   * إذا كان expires_at = اليوم:
+   * الاشتراك ما زال فعالاً حتى نهاية اليوم.
    */
   const isDateExpired = (() => {
-    if (!subscription?.renewal_date) {
+    if (!effectiveExpiryDate) {
       return false
     }
 
@@ -235,7 +241,7 @@ export function useSubscription() {
     )
 
     const [year, month, day] =
-      subscription.renewal_date
+      effectiveExpiryDate
         .split('-')
         .map(Number)
 
@@ -243,13 +249,13 @@ export function useSubscription() {
       return false
     }
 
-    const renewalUTC = Date.UTC(
+    const expiryUTC = Date.UTC(
       year,
       month - 1,
       day
     )
 
-    return renewalUTC < todayUTC
+    return expiryUTC < todayUTC
   })()
 
   const isSubscriptionStatusActive =
@@ -264,16 +270,6 @@ export function useSubscription() {
     rawStatus === 'cancelled' ||
     rawStatus === 'canceled'
 
-  /*
-   * الاشتراك فعال إذا:
-   *
-   * 1. الحالة active أو trialing
-   * 2. تاريخ التجديد لم يمر بعد.
-   *
-   * بالتالي:
-   * renewal_date = اليوم
-   * => isActive = true
-   */
   const isActive =
     isSubscriptionStatusActive &&
     !isDateExpired
@@ -285,9 +281,6 @@ export function useSubscription() {
     (isSubscriptionStatusActive &&
       isDateExpired)
 
-  /*
-   * الحالة التي تستخدمها الواجهة.
-   */
   let accessState: SubscriptionAccessState = 'unknown'
 
   if (isExpired) {
@@ -310,10 +303,10 @@ export function useSubscription() {
   }
 
   /*
-   * تاريخ انتهاء الاشتراك بصيغة عربية.
+   * تاريخ انتهاء الاشتراك الحقيقي بصيغة عربية.
    */
   const formattedRenewalDate =
-    subscription?.renewal_date
+    effectiveExpiryDate
       ? new Intl.DateTimeFormat(
           'ar-EG',
           {
@@ -323,14 +316,13 @@ export function useSubscription() {
           }
         ).format(
           new Date(
-            `${subscription.renewal_date}T00:00:00`
+            `${effectiveExpiryDate}T00:00:00`
           )
         )
       : null
 
   /*
-   * التأكد من صلاحية Feature معينة
-   * حسب الباقة الحالية.
+   * صلاحية Feature حسب الباقة الحالية.
    */
   const hasFeature = (
     key: string
@@ -375,6 +367,20 @@ export function useSubscription() {
     isPendingPayment,
 
     daysRemaining,
+
+    /*
+     * البيانات الحقيقية للاشتراك.
+     */
+    billingCycle:
+      subscription?.billing_cycle ?? null,
+
+    startedAt:
+      subscription?.started_at ?? null,
+
+    expiresAt:
+      subscription?.expires_at ??
+      subscription?.renewal_date ??
+      null,
 
     formattedRenewalDate,
 
