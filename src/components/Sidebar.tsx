@@ -27,6 +27,11 @@ const items = [
     end: true,
   },
   {
+    to: '/admin/organizations',
+    label: 'إدارة الشركات',
+    icon: IconUsers,
+  },
+  {
     to: '/crm',
     label: 'إدارة العملاء (CRM)',
     icon: IconUsers,
