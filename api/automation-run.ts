@@ -1,21 +1,30 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type {
+  VercelRequest,
+  VercelResponse,
+} from '@vercel/node'
+
 import { createClient } from '@supabase/supabase-js'
 
 type Automation = {
   id: string
   organization_id: string
   name?: string | null
+
   trigger_event: string
+
   config?: {
     hours?: number
     days?: number
   } | null
+
   action_type: string
+
   action_config?: {
     title_template?: string
     body_template?: string
     priority?: string
   } | null
+
   active: boolean
 }
 
@@ -49,7 +58,10 @@ type ExecutionSummary = {
   error?: string
 }
 
-type SupabaseClient = import('@supabase/supabase-js').SupabaseClient<any>
+type SupabaseClient =
+  import('@supabase/supabase-js').SupabaseClient<any>
+
+const PAGE_SIZE = 500
 
 function jsonError(
   res: VercelResponse,
@@ -62,14 +74,29 @@ function jsonError(
   })
 }
 
+/**
+ * =========================================================
+ * HELPERS
+ * =========================================================
+ */
+
 function renderLeadTaskTitle(
   template: string,
   lead: Lead
 ): string {
   return template
-    .replace(/\{name\}/g, lead.name || 'العميل المحتمل')
-    .replace(/\{company\}/g, lead.company || '')
-    .replace(/\{phone\}/g, lead.phone || '')
+    .replace(
+      /\{name\}/g,
+      lead.name || 'العميل المحتمل'
+    )
+    .replace(
+      /\{company\}/g,
+      lead.company || ''
+    )
+    .replace(
+      /\{phone\}/g,
+      lead.phone || ''
+    )
 }
 
 function renderTaskNotificationTitle(
@@ -77,8 +104,14 @@ function renderTaskNotificationTitle(
   task: Task
 ): string {
   return template
-    .replace(/\{title\}/g, task.title || 'مهمة')
-    .replace(/\{priority\}/g, task.priority || 'متوسطة')
+    .replace(
+      /\{title\}/g,
+      task.title || 'مهمة'
+    )
+    .replace(
+      /\{priority\}/g,
+      task.priority || 'متوسطة'
+    )
 }
 
 function renderTaskNotificationBody(
@@ -86,9 +119,236 @@ function renderTaskNotificationBody(
   task: Task
 ): string {
   return template
-    .replace(/\{title\}/g, task.title || 'مهمة')
-    .replace(/\{priority\}/g, task.priority || 'متوسطة')
-    .replace(/\{due_date\}/g, task.due_date || '')
+    .replace(
+      /\{title\}/g,
+      task.title || 'مهمة'
+    )
+    .replace(
+      /\{priority\}/g,
+      task.priority || 'متوسطة'
+    )
+    .replace(
+      /\{due_date\}/g,
+      task.due_date || ''
+    )
+}
+
+/**
+ * Returns today's date according to Egypt time.
+ *
+ * Important:
+ * We intentionally do NOT use:
+ *
+ * new Date().toISOString().slice(0, 10)
+ *
+ * because that uses UTC and can produce the wrong business
+ * date around midnight in Egypt.
+ */
+function getEgyptToday(): string {
+  const formatter = new Intl.DateTimeFormat(
+    'en-CA',
+    {
+      timeZone: 'Africa/Cairo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }
+  )
+
+  return formatter.format(new Date())
+}
+
+/**
+ * =========================================================
+ * PAGINATED LEAD LOADER
+ * =========================================================
+ */
+
+async function loadStaleLeads(
+  supabase: SupabaseClient,
+  organizationId: string,
+  staleBefore: string
+): Promise<Lead[]> {
+  const allLeads: Lead[] = []
+
+  let from = 0
+
+  while (true) {
+    const to =
+      from + PAGE_SIZE - 1
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('leads')
+      .select(
+        `
+          id,
+          organization_id,
+          name,
+          company,
+          phone,
+          status,
+          assigned_to,
+          created_at,
+          deleted_at
+        `
+      )
+      .eq(
+        'organization_id',
+        organizationId
+      )
+      .eq(
+        'status',
+        'جديد'
+      )
+      .is(
+        'deleted_at',
+        null
+      )
+      .lte(
+        'created_at',
+        staleBefore
+      )
+      .order(
+        'created_at',
+        {
+          ascending: true,
+        }
+      )
+      .order(
+        'id',
+        {
+          ascending: true,
+        }
+      )
+      .range(
+        from,
+        to
+      )
+
+    if (error) {
+      throw new Error(
+        `Failed to load stale leads: ${error.message}`
+      )
+    }
+
+    const page =
+      (data ?? []) as Lead[]
+
+    allLeads.push(
+      ...page
+    )
+
+    if (
+      page.length < PAGE_SIZE
+    ) {
+      break
+    }
+
+    from += PAGE_SIZE
+  }
+
+  return allLeads
+}
+
+/**
+ * =========================================================
+ * PAGINATED TASK LOADER
+ * =========================================================
+ */
+
+async function loadTasks(
+  supabase: SupabaseClient,
+  organizationId: string
+): Promise<Task[]> {
+  const allTasks: Task[] = []
+
+  let from = 0
+
+  while (true) {
+    const to =
+      from + PAGE_SIZE - 1
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('tasks')
+      .select(
+        `
+          id,
+          organization_id,
+          title,
+          assigned_to,
+          due_date,
+          priority,
+          status
+        `
+      )
+      .eq(
+        'organization_id',
+        organizationId
+      )
+      .not(
+        'assigned_to',
+        'is',
+        null
+      )
+      .not(
+        'due_date',
+        'is',
+        null
+      )
+      .neq(
+        'status',
+        'مكتملة'
+      )
+      .neq(
+        'status',
+        'مكتمل'
+      )
+      .order(
+        'due_date',
+        {
+          ascending: true,
+        }
+      )
+      .order(
+        'id',
+        {
+          ascending: true,
+        }
+      )
+      .range(
+        from,
+        to
+      )
+
+    if (error) {
+      throw new Error(
+        `Failed to load tasks: ${error.message}`
+      )
+    }
+
+    const page =
+      (data ?? []) as Task[]
+
+    allTasks.push(
+      ...page
+    )
+
+    if (
+      page.length < PAGE_SIZE
+    ) {
+      break
+    }
+
+    from += PAGE_SIZE
+  }
+
+  return allTasks
 }
 
 /**
@@ -103,12 +363,12 @@ function renderTaskNotificationBody(
  *
  * execute_automation_task_once()
  *
- * The database function:
- * 1. Attempts to claim the automation run.
- * 2. Uses the unique constraint on automation_runs.
- * 3. Creates the task only when the claim succeeds.
- * 4. Returns false when the same automation already processed
- *    the same lead.
+ * Database uniqueness:
+ *
+ * (automation_id, target_id)
+ *
+ * means the same automation will not create the same
+ * lead task more than once.
  */
 async function executeLeadStaleAutomation(
   supabase: SupabaseClient,
@@ -118,50 +378,42 @@ async function executeLeadStaleAutomation(
     automation.config?.hours ?? 24
   )
 
-  if (!Number.isFinite(hours) || hours <= 0) {
+  if (
+    !Number.isFinite(hours) ||
+    hours <= 0
+  ) {
     return {
       success: false,
       processed: 0,
       created: 0,
       skipped: 0,
-      error: 'Invalid automation hours configuration',
+      error:
+        'Invalid automation hours configuration',
     }
   }
 
-  const staleBefore = new Date(
-    Date.now() - hours * 60 * 60 * 1000
-  ).toISOString()
+  const staleBefore =
+    new Date(
+      Date.now() -
+        hours *
+          60 *
+          60 *
+          1000
+    ).toISOString()
 
-  const {
-    data: leads,
-    error: leadsError,
-  } = await supabase
-    .from('leads')
-    .select(
-      `
-        id,
-        organization_id,
-        name,
-        company,
-        phone,
-        status,
-        assigned_to,
-        created_at,
-        deleted_at
-      `
-    )
-    .eq(
-      'organization_id',
-      automation.organization_id
-    )
-    .eq('status', 'جديد')
-    .is('deleted_at', null)
-    .lte('created_at', staleBefore)
+  let leadList: Lead[]
 
-  if (leadsError) {
+  try {
+    leadList =
+      await loadStaleLeads(
+        supabase,
+        automation.organization_id,
+        staleBefore
+      )
+  } catch (error) {
     console.error(
       `[automation-run] Failed to load stale leads for ${automation.id}:`,
-      leadsError
+      error
     )
 
     return {
@@ -169,71 +421,67 @@ async function executeLeadStaleAutomation(
       processed: 0,
       created: 0,
       skipped: 0,
-      error: 'Failed to load stale leads',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to load stale leads',
     }
   }
-
-  const leadList = (leads ?? []) as Lead[]
 
   let created = 0
   let skipped = 0
 
   const titleTemplate =
-    automation.action_config?.title_template ||
+    automation.action_config
+      ?.title_template ||
     'تابع مع {name} - عميل محتمل بدون رد'
 
   const priority =
-    automation.action_config?.priority ||
+    automation.action_config
+      ?.priority ||
     'متوسطة'
 
-  const dueDate = new Date()
-    .toISOString()
-    .slice(0, 10)
+  const dueDate =
+    getEgyptToday()
 
-  for (const lead of leadList) {
-    const taskTitle = renderLeadTaskTitle(
-      titleTemplate,
-      lead
-    )
+  for (
+    const lead of leadList
+  ) {
+    const taskTitle =
+      renderLeadTaskTitle(
+        titleTemplate,
+        lead
+      )
 
-    /**
-     * Atomic execution + deduplication.
-     *
-     * The RPC uses:
-     *
-     * (automation_id, target_id)
-     *
-     * If another execution already processed this lead,
-     * the RPC returns false and no duplicate task is created.
-     */
     const {
       data: executionResult,
       error: executionError,
-    } = await supabase.rpc(
-      'execute_automation_task_once',
-      {
-        p_automation_id:
-          automation.id,
+    } =
+      await supabase.rpc(
+        'execute_automation_task_once',
+        {
+          p_automation_id:
+            automation.id,
 
-        p_organization_id:
-          automation.organization_id,
+          p_organization_id:
+            automation.organization_id,
 
-        p_target_id:
-          lead.id,
+          p_target_id:
+            lead.id,
 
-        p_title:
-          taskTitle,
+          p_title:
+            taskTitle,
 
-        p_assigned_to:
-          lead.assigned_to,
+          p_assigned_to:
+            lead.assigned_to,
 
-        p_due_date:
-          dueDate,
+          p_due_date:
+            dueDate,
 
-        p_priority:
-          priority,
-      }
-    )
+          p_priority:
+            priority,
+        }
+      )
 
     if (executionError) {
       console.error(
@@ -246,7 +494,9 @@ async function executeLeadStaleAutomation(
       )
     }
 
-    if (executionResult === true) {
+    if (
+      executionResult === true
+    ) {
       created++
     } else {
       skipped++
@@ -255,7 +505,8 @@ async function executeLeadStaleAutomation(
 
   return {
     success: true,
-    processed: leadList.length,
+    processed:
+      leadList.length,
     created,
     skipped,
   }
@@ -270,46 +521,30 @@ async function executeLeadStaleAutomation(
  * or already overdue, then creates a notification for the
  * assigned employee.
  *
- * The database RPC:
- *
  * execute_task_due_notification_once()
  *
- * guarantees that the same automation does not generate
- * the same task notification more than once.
+ * already has database-level deduplication based on:
+ *
+ * (user_id, entity_type, entity_id, type)
+ *
+ * Therefore we intentionally do NOT pass automation_id here.
  */
 async function executeTaskDueNotificationAutomation(
   supabase: SupabaseClient,
   automation: Automation
 ): Promise<ExecutionSummary> {
-  const {
-    data: tasks,
-    error: tasksError,
-  } = await supabase
-    .from('tasks')
-    .select(
-      `
-        id,
-        organization_id,
-        title,
-        assigned_to,
-        due_date,
-        priority,
-        status
-      `
-    )
-    .eq(
-      'organization_id',
-      automation.organization_id
-    )
-    .not('assigned_to', 'is', null)
-    .not('due_date', 'is', null)
-    .neq('status', 'مكتملة')
-    .neq('status', 'مكتمل')
+  let taskList: Task[]
 
-  if (tasksError) {
+  try {
+    taskList =
+      await loadTasks(
+        supabase,
+        automation.organization_id
+      )
+  } catch (error) {
     console.error(
       `[automation-run] Failed to load due tasks for ${automation.id}:`,
-      tasksError
+      error
     )
 
     return {
@@ -317,20 +552,17 @@ async function executeTaskDueNotificationAutomation(
       processed: 0,
       created: 0,
       skipped: 0,
-      error: 'Failed to load due tasks',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to load due tasks',
     }
   }
 
-  const taskList = (tasks ?? []) as Task[]
-
-  const today = new Date()
-    .toISOString()
-    .slice(0, 10)
-
   /**
-   * V1 semantics:
+   * Egypt business date.
    *
-   * A task is considered due when:
+   * A task is due when:
    *
    * due_date <= today
    *
@@ -340,27 +572,42 @@ async function executeTaskDueNotificationAutomation(
    *
    * Future tasks are ignored.
    */
-  const dueTasks = taskList.filter(
-    (task) =>
-      Boolean(task.assigned_to) &&
-      Boolean(task.due_date) &&
-      String(task.due_date) <= today
-  )
+  const today =
+    getEgyptToday()
+
+  const dueTasks =
+    taskList.filter(
+      (task) =>
+        Boolean(
+          task.assigned_to
+        ) &&
+        Boolean(
+          task.due_date
+        ) &&
+        String(
+          task.due_date
+        ) <= today
+    )
 
   let created = 0
   let skipped = 0
 
   const titleTemplate =
-    automation.action_config?.title_template ||
+    automation.action_config
+      ?.title_template ||
     'مهمة مستحقة: {title}'
 
   const bodyTemplate =
-    automation.action_config?.body_template ||
+    automation.action_config
+      ?.body_template ||
     'لديك مهمة مستحقة تحتاج إلى متابعة: {title}'
 
-  const link = '/tasks'
+  const link =
+    '/tasks'
 
-  for (const task of dueTasks) {
+  for (
+    const task of dueTasks
+  ) {
     if (
       !task.assigned_to ||
       !task.due_date ||
@@ -385,28 +632,29 @@ async function executeTaskDueNotificationAutomation(
     const {
       data: notificationCreated,
       error: notificationError,
-    } = await supabase.rpc(
-      'execute_task_due_notification_once',
-      {
-        p_organization_id:
-          automation.organization_id,
+    } =
+      await supabase.rpc(
+        'execute_task_due_notification_once',
+        {
+          p_organization_id:
+            automation.organization_id,
 
-        p_task_id:
-          task.id,
+          p_task_id:
+            task.id,
 
-        p_user_id:
-          task.assigned_to,
+          p_user_id:
+            task.assigned_to,
 
-        p_title:
-          notificationTitle,
+          p_title:
+            notificationTitle,
 
-        p_body:
-          notificationBody,
+          p_body:
+            notificationBody,
 
-        p_link:
-          link,
-      }
-    )
+          p_link:
+            link,
+        }
+      )
 
     if (notificationError) {
       console.error(
@@ -419,7 +667,9 @@ async function executeTaskDueNotificationAutomation(
       )
     }
 
-    if (notificationCreated === true) {
+    if (
+      notificationCreated === true
+    ) {
       created++
     } else {
       skipped++
@@ -428,7 +678,8 @@ async function executeTaskDueNotificationAutomation(
 
   return {
     success: true,
-    processed: dueTasks.length,
+    processed:
+      dueTasks.length,
     created,
     skipped,
   }
@@ -439,6 +690,7 @@ async function executeTaskDueNotificationAutomation(
  * AUTOMATION DISPATCHER
  * =========================================================
  */
+
 async function executeAutomation(
   supabase: SupabaseClient,
   automation: Automation
@@ -505,15 +757,20 @@ async function executeAutomation(
  * VERCEL HANDLER
  * =========================================================
  */
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // =========================================================
-  // 1. METHOD PROTECTION
-  // =========================================================
+  /**
+   * =======================================================
+   * 1. METHOD PROTECTION
+   * =======================================================
+   */
 
-  if (req.method !== 'GET') {
+  if (
+    req.method !== 'GET'
+  ) {
     res.setHeader(
       'Allow',
       'GET'
@@ -526,9 +783,11 @@ export default async function handler(
     )
   }
 
-  // =========================================================
-  // 2. CRON SECRET
-  // =========================================================
+  /**
+   * =======================================================
+   * 2. CRON SECRET
+   * =======================================================
+   */
 
   const cronSecret =
     process.env.CRON_SECRET
@@ -545,9 +804,11 @@ export default async function handler(
     )
   }
 
-  // =========================================================
-  // 3. AUTHORIZATION
-  // =========================================================
+  /**
+   * =======================================================
+   * 3. AUTHORIZATION
+   * =======================================================
+   */
 
   const authorization =
     req.headers.authorization
@@ -564,9 +825,11 @@ export default async function handler(
     )
   }
 
-  // =========================================================
-  // 4. SERVER CONFIGURATION
-  // =========================================================
+  /**
+   * =======================================================
+   * 4. SERVER CONFIGURATION
+   * =======================================================
+   */
 
   const supabaseUrl =
     process.env.VITE_SUPABASE_URL
@@ -589,9 +852,11 @@ export default async function handler(
     )
   }
 
-  // =========================================================
-  // 5. SERVICE ROLE CLIENT
-  // =========================================================
+  /**
+   * =======================================================
+   * 5. SERVICE ROLE CLIENT
+   * =======================================================
+   */
 
   const supabase =
     createClient(
@@ -599,40 +864,48 @@ export default async function handler(
       supabaseServiceKey,
       {
         auth: {
-          autoRefreshToken: false,
-          persistSession: false,
+          autoRefreshToken:
+            false,
+
+          persistSession:
+            false,
         },
       }
     )
 
   try {
-    // =======================================================
-    // 6. LOAD ACTIVE AUTOMATIONS
-    // =======================================================
+    /**
+     * =====================================================
+     * 6. LOAD ACTIVE AUTOMATIONS
+     * =====================================================
+     */
 
     const {
       data: automations,
       error: automationsError,
-    } = await supabase
-      .from('automations')
-      .select(
-        `
-          id,
-          organization_id,
-          name,
-          trigger_event,
-          config,
-          action_type,
-          action_config,
-          active
-        `
-      )
-      .eq(
-        'active',
-        true
-      )
+    } =
+      await supabase
+        .from('automations')
+        .select(
+          `
+            id,
+            organization_id,
+            name,
+            trigger_event,
+            config,
+            action_type,
+            action_config,
+            active
+          `
+        )
+        .eq(
+          'active',
+          true
+        )
 
-    if (automationsError) {
+    if (
+      automationsError
+    ) {
       console.error(
         '[automation-run] Failed to fetch automations:',
         automationsError
@@ -646,17 +919,21 @@ export default async function handler(
     }
 
     const automationList =
-      (automations ?? []) as Automation[]
+      (automations ??
+        []) as Automation[]
 
-    // =======================================================
-    // 7. NO ACTIVE AUTOMATIONS
-    // =======================================================
+    /**
+     * =====================================================
+     * 7. NO ACTIVE AUTOMATIONS
+     * =====================================================
+     */
 
     if (
       automationList.length === 0
     ) {
       return res.status(200).json({
         success: true,
+
         message:
           'No active automations found',
 
@@ -678,9 +955,11 @@ export default async function handler(
       })
     }
 
-    // =======================================================
-    // 8. EXECUTE AUTOMATIONS
-    // =======================================================
+    /**
+     * =====================================================
+     * 8. EXECUTE AUTOMATIONS
+     * =====================================================
+     */
 
     let succeeded = 0
     let failed = 0
@@ -731,7 +1010,8 @@ export default async function handler(
           action_type:
             automation.action_type,
 
-          status: 'failed',
+          status:
+            'failed',
 
           processed: 0,
 
@@ -771,7 +1051,8 @@ export default async function handler(
             action_type:
               automation.action_type,
 
-            status: 'failed',
+            status:
+              'failed',
 
             processed:
               executionResult.processed,
@@ -827,7 +1108,8 @@ export default async function handler(
           action_type:
             automation.action_type,
 
-          status: 'success',
+          status:
+            'success',
 
           processed:
             executionResult.processed,
@@ -864,7 +1146,8 @@ export default async function handler(
           action_type:
             automation.action_type,
 
-          status: 'failed',
+          status:
+            'failed',
 
           processed: 0,
 
@@ -877,9 +1160,11 @@ export default async function handler(
       }
     }
 
-    // =======================================================
-    // 9. FINAL RESPONSE
-    // =======================================================
+    /**
+     * =====================================================
+     * 9. FINAL RESPONSE
+     * =====================================================
+     */
 
     return res.status(200).json({
       success:
