@@ -402,7 +402,7 @@ export default async function handler(
             null,
 
           plan_name:
-            subscription?.plans?.name ??
+            subscription?.plans?.[0]?.name ??
             subscription?.plan ??
             org.plan ??
             null,
