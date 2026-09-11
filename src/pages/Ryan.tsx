@@ -143,6 +143,20 @@ export default function Ryan() {
     setConversationId,
   ] = useState<string | null>(null)
 
+  /*
+   * Persist the currently active Ryan conversation
+   * per organization.
+   *
+   * This survives:
+   * - page refresh
+   * - leaving Ryan and coming back
+   * - reopening the application
+   */
+  const conversationStorageKey =
+    organizationId
+      ? `dragon-media-ryan-conversation:${organizationId}`
+      : null
+
   const [
     companyName,
     setCompanyName,
@@ -249,7 +263,7 @@ export default function Ryan() {
       }
     }
 
-    loadCompany()
+    void loadCompany()
 
     return () => {
       cancelled = true
@@ -257,10 +271,14 @@ export default function Ryan() {
   }, [organizationId])
 
   /*
-   * Restore the latest Ryan website conversation after refresh.
+   * Restore Ryan conversation after refresh / reopening.
    *
-   * The backend already persists conversations/messages.
-   * This effect restores them into the local React state.
+   * Priority:
+   * 1. Explicitly saved conversationId from localStorage.
+   * 2. Latest website conversation for the current customer.
+   *
+   * The selected conversation is persisted locally so refresh/reopen
+   * never starts a blank conversation accidentally.
    */
   useEffect(() => {
     let cancelled = false
@@ -295,8 +313,7 @@ export default function Ryan() {
         }
 
         /*
-         * Ryan's backend associates the website conversation
-         * with the customer record belonging to the organization.
+         * Find the current user's customer record.
          */
         const {
           data: customer,
@@ -324,36 +341,114 @@ export default function Ryan() {
         }
 
         /*
-         * Get the latest website conversation.
+         * First try the conversation explicitly saved
+         * by this Ryan page.
          */
-        const {
-          data: conversation,
-          error: conversationError,
-        } = await supabase
-          .from('conversations')
-          .select(
-            'id, handled_by, metadata, created_at'
-          )
-          .eq(
-            'organization_id',
-            organizationId
-          )
-          .eq(
-            'customer_id',
-            customer.id
-          )
-          .eq(
-            'channel',
-            'website'
-          )
-          .order('created_at', {
-            ascending: false,
-          })
-          .limit(1)
-          .maybeSingle()
+        let targetConversationId: string | null =
+          null
+
+        if (conversationStorageKey) {
+          try {
+            const storedId =
+              window.localStorage.getItem(
+                conversationStorageKey
+              )
+
+            if (storedId) {
+              targetConversationId =
+                storedId
+            }
+          } catch {
+            // localStorage may be unavailable.
+          }
+        }
+
+        let conversation: any = null
+
+        /*
+         * Validate the stored conversation against
+         * organization + customer + website channel.
+         */
+        if (targetConversationId) {
+          const {
+            data: storedConversation,
+            error: storedConversationError,
+          } = await supabase
+            .from('conversations')
+            .select(
+              'id, handled_by, metadata, created_at'
+            )
+            .eq(
+              'id',
+              targetConversationId
+            )
+            .eq(
+              'organization_id',
+              organizationId
+            )
+            .eq(
+              'customer_id',
+              customer.id
+            )
+            .eq(
+              'channel',
+              'website'
+            )
+            .maybeSingle()
+
+          if (
+            !storedConversationError &&
+            storedConversation?.id
+          ) {
+            conversation =
+              storedConversation
+          }
+        }
+
+        /*
+         * If no valid saved conversation exists,
+         * restore the latest website conversation.
+         */
+        if (!conversation) {
+          const {
+            data: latestConversation,
+            error: latestConversationError,
+          } = await supabase
+            .from('conversations')
+            .select(
+              'id, handled_by, metadata, created_at'
+            )
+            .eq(
+              'organization_id',
+              organizationId
+            )
+            .eq(
+              'customer_id',
+              customer.id
+            )
+            .eq(
+              'channel',
+              'website'
+            )
+            .order('created_at', {
+              ascending: false,
+            })
+            .limit(1)
+            .maybeSingle()
+
+          if (
+            latestConversationError ||
+            !latestConversation?.id ||
+            cancelled
+          ) {
+            return
+          }
+
+          conversation =
+            latestConversation
+        }
 
         if (
-          conversationError ||
           !conversation?.id ||
           cancelled
         ) {
@@ -361,17 +456,25 @@ export default function Ryan() {
         }
 
         /*
-         * Restore the conversation ID first.
+         * Persist the conversation we actually restored.
          */
+        if (conversationStorageKey) {
+          try {
+            window.localStorage.setItem(
+              conversationStorageKey,
+              conversation.id
+            )
+          } catch {
+            // Ignore storage errors.
+          }
+        }
+
         setConversationId(
           conversation.id
         )
 
         /*
-         * Load all messages from the saved conversation.
-         *
-         * select('*') is intentional here so this page remains
-         * compatible with the current messages table structure.
+         * Load all persisted messages.
          */
         const {
           data: storedMessages,
@@ -394,69 +497,74 @@ export default function Ryan() {
           return
         }
 
-        /*
-         * Explicitly type the map callback as ChatMessage | null.
-         *
-         * This prevents TypeScript from inferring an incompatible
-         * object | null union and fixes TS2322 / TS2677.
-         */
         const restoredMessages: ChatMessage[] =
           (storedMessages || [])
-            .map((row: any): ChatMessage | null => {
-              const metadata =
-                row?.metadata &&
-                typeof row.metadata === 'object'
-                  ? row.metadata
-                  : {}
+            .map(
+              (
+                row: any
+              ): ChatMessage | null => {
+                const metadata =
+                  row?.metadata &&
+                  typeof row.metadata ===
+                    'object'
+                    ? row.metadata
+                    : {}
 
-              const senderType =
-                String(
-                  row?.sender_type ||
-                    row?.sender ||
-                    row?.role ||
-                    ''
-                ).toLowerCase()
-
-              const isUser =
-                senderType === 'customer' ||
-                senderType === 'user' ||
-                senderType === 'human'
-
-              const text =
-                row?.content ??
-                row?.body ??
-                row?.text ??
-                row?.message ??
-                ''
-
-              const createdAt =
-                row?.created_at ||
-                new Date().toISOString()
-
-              if (
-                !String(text).trim()
-              ) {
-                return null
-              }
-
-              return {
-                id:
+                const senderType =
                   String(
-                    row?.id ||
-                      `restored-${createdAt}-${Math.random()}`
-                  ),
-                role: isUser
-                  ? 'user'
-                  : 'model',
-                text: String(text),
-                createdAt: String(createdAt),
-                actionTaken:
-                  metadata?.action_taken ||
-                  metadata?.actionTaken ||
-                  row?.action_taken ||
-                  null,
+                    row?.sender_type ||
+                      row?.sender ||
+                      row?.role ||
+                      ''
+                  ).toLowerCase()
+
+                const isUser =
+                  senderType ===
+                    'customer' ||
+                  senderType ===
+                    'user' ||
+                  senderType ===
+                    'human'
+
+                const text =
+                  row?.content ??
+                  row?.body ??
+                  row?.text ??
+                  row?.message ??
+                  ''
+
+                const createdAt =
+                  row?.created_at ||
+                  new Date().toISOString()
+
+                if (
+                  !String(text).trim()
+                ) {
+                  return null
+                }
+
+                return {
+                  id:
+                    String(
+                      row?.id ||
+                        `restored-${createdAt}-${Math.random()}`
+                    ),
+                  role: isUser
+                    ? 'user'
+                    : 'model',
+                  text: String(text),
+                  createdAt:
+                    String(
+                      createdAt
+                    ),
+                  actionTaken:
+                    metadata?.action_taken ||
+                    metadata?.actionTaken ||
+                    row?.action_taken ||
+                    null,
+                }
               }
-            })
+            )
             .filter(
               (
                 message
@@ -518,12 +626,15 @@ export default function Ryan() {
       }
     }
 
-    loadConversation()
+    void loadConversation()
 
     return () => {
       cancelled = true
     }
-  }, [organizationId])
+  }, [
+    organizationId,
+    conversationStorageKey,
+  ])
 
   /*
    * Load Ryan credits / packages / payment methods.
@@ -944,6 +1055,19 @@ export default function Ryan() {
           setConversationId(
             data.conversationId
           )
+
+          if (
+            conversationStorageKey
+          ) {
+            try {
+              window.localStorage.setItem(
+                conversationStorageKey,
+                data.conversationId
+              )
+            } catch {
+              // Ignore storage errors.
+            }
+          }
         }
 
         throw new Error(
@@ -952,12 +1076,26 @@ export default function Ryan() {
         )
       }
 
+      /*
+       * Persist every conversation ID returned by the backend.
+       */
       if (
         data?.conversationId
       ) {
         setConversationId(
           data.conversationId
         )
+
+        if (conversationStorageKey) {
+          try {
+            window.localStorage.setItem(
+              conversationStorageKey,
+              data.conversationId
+            )
+          } catch {
+            // Ignore storage errors.
+          }
+        }
       }
 
       const assistantMessage: ChatMessage = {
@@ -992,7 +1130,7 @@ export default function Ryan() {
 
       /*
        * Do NOT block the chat response while the credits
-       * endpoint is loading. This was causing Ryan to feel slow.
+       * endpoint is loading.
        */
       void loadRyanCredits()
     } catch (
@@ -1003,15 +1141,19 @@ export default function Ryan() {
           'تعذر الاتصال بـ RYAN'
       )
 
-      /*
-       * Refresh credits in the background only.
-       */
       void loadRyanCredits()
     } finally {
       setSending(false)
     }
   }
 
+  /*
+   * Start a genuinely new conversation.
+   *
+   * Removing the persisted conversation ID is important:
+   * the next message will reach the backend with conversationId=null,
+   * allowing the backend to create a fresh conversation.
+   */
   const handleNewConversation =
     () => {
       setMessages([])
@@ -1019,6 +1161,16 @@ export default function Ryan() {
       setPaused(false)
       setError(null)
       setInput('')
+
+      if (conversationStorageKey) {
+        try {
+          window.localStorage.removeItem(
+            conversationStorageKey
+          )
+        } catch {
+          // Ignore storage errors.
+        }
+      }
     }
 
   if (
@@ -1164,7 +1316,6 @@ export default function Ryan() {
           </div>
 
         </div>
-
       </Card>
 
       {/* =====================================================
@@ -2213,6 +2364,7 @@ export default function Ryan() {
                     </span>
 
                   </div>
+
                 )
               )}
 
