@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
+type AnyRecord = Record<string, any>
+
 const getClients = (accessToken: string) => {
   const supabaseUrl = process.env.VITE_SUPABASE_URL
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY
@@ -9,15 +11,22 @@ const getClients = (accessToken: string) => {
     return null
   }
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+  const userClient = createClient(
+    supabaseUrl,
+    anonKey,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
     },
-  })
+  )
 
-  const admin = createClient(supabaseUrl, serviceKey)
+  const admin = createClient(
+    supabaseUrl,
+    serviceKey,
+  )
 
   return {
     userClient,
@@ -72,21 +81,30 @@ const isPlatformAdmin = async (
   admin: any,
   userId: string,
 ) => {
-  const { data } = await admin
+  const { data, error } = await admin
     .from('users')
     .select('is_platform_admin, active')
     .eq('id', userId)
     .maybeSingle()
 
+  if (error) {
+    console.error(
+      'platform admin check error:',
+      error.message,
+    )
+
+    return false
+  }
+
   return Boolean(
     data?.is_platform_admin &&
-    data?.active !== false,
+      data?.active !== false,
   )
 }
 
 const writeAudit = async (
   admin: any,
-  payload: Record<string, unknown>,
+  payload: AnyRecord,
 ) => {
   const { error } = await admin
     .from('audit_logs')
@@ -97,6 +115,348 @@ const writeAudit = async (
       'organization audit log error:',
       error.message,
     )
+
+    return false
+  }
+
+  return true
+}
+
+const deleteAuthUser = async (
+  admin: any,
+  userId: string,
+) => {
+  const {
+    error,
+  } = await admin.auth.admin.deleteUser(
+    userId,
+  )
+
+  if (error) {
+    return {
+      success: false,
+      error: error.message,
+    }
+  }
+
+  return {
+    success: true,
+  }
+}
+
+/**
+ * Remove all foreign-key references to a company user
+ * before deleting the Supabase Auth user.
+ *
+ * This is required because several existing tables reference
+ * public.users(id) without ON DELETE CASCADE.
+ */
+const detachUserReferences = async (
+  admin: any,
+  userId: string,
+) => {
+  const operations: Array<{
+    table: string
+    column: string
+  }> = [
+    {
+      table: 'leads',
+      column: 'assigned_to',
+    },
+    {
+      table: 'deals',
+      column: 'owner_id',
+    },
+    {
+      table: 'conversations',
+      column: 'assigned_user_id',
+    },
+    {
+      table: 'tasks',
+      column: 'assigned_to',
+    },
+    {
+      table: 'notifications',
+      column: 'user_id',
+    },
+  ]
+
+  for (const operation of operations) {
+    const {
+      error,
+    } = await admin
+      .from(operation.table)
+      .update({
+        [operation.column]: null,
+      })
+      .eq(
+        operation.column,
+        userId,
+      )
+
+    if (error) {
+      return {
+        success: false,
+        error:
+          `تعذر تنظيف ارتباط المستخدم من ${operation.table}: ${error.message}`,
+      }
+    }
+  }
+
+  return {
+    success: true,
+  }
+}
+
+/**
+ * Delete all organization-level data that is not guaranteed
+ * to cascade from organizations.
+ *
+ * We intentionally keep this explicit so deleting a company
+ * does not depend on incomplete FK cascade configuration.
+ */
+const deleteOrganizationData = async (
+  admin: any,
+  organizationId: string,
+) => {
+  /*
+   * Messages depend on conversations.
+   */
+  const {
+    data: conversations,
+    error:
+      conversationsReadError,
+  } = await admin
+    .from('conversations')
+    .select('id')
+    .eq(
+      'organization_id',
+      organizationId,
+    )
+
+  if (conversationsReadError) {
+    return {
+      success: false,
+      error:
+        `تعذر قراءة المحادثات: ${conversationsReadError.message}`,
+    }
+  }
+
+  const conversationIds =
+    (conversations ?? [])
+      .map((item: AnyRecord) => item.id)
+      .filter(Boolean)
+
+  if (conversationIds.length) {
+    const {
+      error,
+    } = await admin
+      .from('messages')
+      .delete()
+      .in(
+        'conversation_id',
+        conversationIds,
+      )
+
+    if (error) {
+      return {
+        success: false,
+        error:
+          `تعذر حذف الرسائل: ${error.message}`,
+      }
+    }
+  }
+
+  /*
+   * Campaign messages depend on campaigns/customers.
+   */
+  const {
+    data: campaigns,
+    error:
+      campaignsReadError,
+  } = await admin
+    .from('campaigns')
+    .select('id')
+    .eq(
+      'organization_id',
+      organizationId,
+    )
+
+  if (campaignsReadError) {
+    return {
+      success: false,
+      error:
+        `تعذر قراءة الحملات: ${campaignsReadError.message}`,
+    }
+  }
+
+  const campaignIds =
+    (campaigns ?? [])
+      .map((item: AnyRecord) => item.id)
+      .filter(Boolean)
+
+  if (campaignIds.length) {
+    const {
+      error,
+    } = await admin
+      .from('campaign_messages')
+      .delete()
+      .in(
+        'campaign_id',
+        campaignIds,
+      )
+
+    if (error) {
+      return {
+        success: false,
+        error:
+          `تعذر حذف رسائل الحملات: ${error.message}`,
+      }
+    }
+  }
+
+  /*
+   * Invoices may reference subscriptions.
+   */
+  const {
+    data: subscriptions,
+    error:
+      subscriptionsReadError,
+  } = await admin
+    .from('subscriptions')
+    .select('id')
+    .eq(
+      'organization_id',
+      organizationId,
+    )
+
+  if (subscriptionsReadError) {
+    return {
+      success: false,
+      error:
+        `تعذر قراءة الاشتراكات: ${subscriptionsReadError.message}`,
+    }
+  }
+
+  const subscriptionIds =
+    (subscriptions ?? [])
+      .map((item: AnyRecord) => item.id)
+      .filter(Boolean)
+
+  if (subscriptionIds.length) {
+    const {
+      data: invoices,
+      error:
+        invoicesReadError,
+    } = await admin
+      .from('invoices')
+      .select('id')
+      .in(
+        'subscription_id',
+        subscriptionIds,
+      )
+
+    if (invoicesReadError) {
+      return {
+        success: false,
+        error:
+          `تعذر قراءة الفواتير: ${invoicesReadError.message}`,
+      }
+    }
+
+    const invoiceIds =
+      (invoices ?? [])
+        .map((item: AnyRecord) => item.id)
+        .filter(Boolean)
+
+    if (invoiceIds.length) {
+      const {
+        error,
+      } = await admin
+        .from('payments')
+        .delete()
+        .in(
+          'invoice_id',
+          invoiceIds,
+        )
+
+      if (error) {
+        return {
+          success: false,
+          error:
+            `تعذر حذف المدفوعات: ${error.message}`,
+        }
+      }
+
+      const {
+        error:
+          invoiceDeleteError,
+      } = await admin
+        .from('invoices')
+        .delete()
+        .in(
+          'id',
+          invoiceIds,
+        )
+
+      if (invoiceDeleteError) {
+        return {
+          success: false,
+          error:
+            `تعذر حذف الفواتير: ${invoiceDeleteError.message}`,
+        }
+      }
+    }
+  }
+
+  /*
+   * Delete organization-level records explicitly.
+   *
+   * Tables with their own CASCADE relationships can safely
+   * be deleted from their parent, but we keep the operations
+   * explicit to avoid FK surprises.
+   */
+
+  const simpleTables = [
+    'campaigns',
+    'conversations',
+    'ai_agents',
+    'tasks',
+    'appointments',
+    'notifications',
+    'integrations',
+    'leads',
+    'deals',
+    'services',
+    'contacts',
+    'pipeline_stages',
+    'customers',
+    'roles',
+    'subscriptions',
+  ]
+
+  for (const table of simpleTables) {
+    const {
+      error,
+    } = await admin
+      .from(table)
+      .delete()
+      .eq(
+        'organization_id',
+        organizationId,
+      )
+
+    if (error) {
+      return {
+        success: false,
+        error:
+          `تعذر حذف بيانات ${table}: ${error.message}`,
+      }
+    }
+  }
+
+  return {
+    success: true,
   }
 }
 
@@ -117,11 +477,13 @@ export default async function handler(
     return
   }
 
-  const clients = getClients(accessToken)
+  const clients =
+    getClients(accessToken)
 
   if (!clients) {
     res.status(500).json({
-      error: 'إعدادات الخادم غير مكتملة',
+      error:
+        'إعدادات الخادم غير مكتملة',
     })
     return
   }
@@ -134,24 +496,27 @@ export default async function handler(
   const {
     data: authData,
     error: authError,
-  } = await userClient.auth.getUser()
+  } =
+    await userClient.auth.getUser()
 
   if (
     authError ||
     !authData?.user
   ) {
     res.status(401).json({
-      error: 'جلسة الدخول غير صالحة',
+      error:
+        'جلسة الدخول غير صالحة',
     })
     return
   }
 
-  if (
-    !(await isPlatformAdmin(
+  const platformAdmin =
+    await isPlatformAdmin(
       admin,
       authData.user.id,
-    ))
-  ) {
+    )
+
+  if (!platformAdmin) {
     res.status(403).json({
       error:
         'هذه الصفحة مخصصة لمدير المنصة فقط',
@@ -160,8 +525,11 @@ export default async function handler(
   }
 
   /*
+   * ==========================================================
    * GET
+   * ==========================================================
    */
+
   if (req.method === 'GET') {
     const {
       data: organizations,
@@ -184,9 +552,12 @@ export default async function handler(
         created_at
         `,
       )
-      .order('created_at', {
-        ascending: false,
-      })
+      .order(
+        'created_at',
+        {
+          ascending: false,
+        },
+      )
 
     if (error) {
       res.status(500).json({
@@ -198,93 +569,96 @@ export default async function handler(
     const orgs =
       organizations ?? []
 
-    const ids = orgs.map(
-      (org: any) => org.id,
-    )
+    const ids =
+      orgs.map(
+        (org: AnyRecord) =>
+          org.id,
+      )
 
     const [
       usersRes,
       customersRes,
       leadsRes,
       subscriptionsRes,
-    ] = await Promise.all([
-      ids.length
-        ? admin
-            .from('users')
-            .select(
-              `
-              id,
-              organization_id,
-              full_name,
-              email,
-              role,
-              active
-              `,
-            )
-            .in(
-              'organization_id',
-              ids,
-            )
-        : Promise.resolve({
-            data: [],
-          }),
-
-      ids.length
-        ? admin
-            .from('customers')
-            .select(
-              'id, organization_id',
-            )
-            .in(
-              'organization_id',
-              ids,
-            )
-        : Promise.resolve({
-            data: [],
-          }),
-
-      ids.length
-        ? admin
-            .from('leads')
-            .select(
-              'id, organization_id',
-            )
-            .in(
-              'organization_id',
-              ids,
-            )
-        : Promise.resolve({
-            data: [],
-          }),
-
-      ids.length
-        ? admin
-            .from('subscriptions')
-            .select(
-              `
-              id,
-              organization_id,
-              plan_id,
-              plan,
-              status,
-              renewal_date,
-              plans(
+    ] =
+      await Promise.all([
+        ids.length
+          ? admin
+              .from('users')
+              .select(
+                `
                 id,
-                name,
-                price,
-                currency,
-                billing_cycle
+                organization_id,
+                full_name,
+                email,
+                role,
+                active
+                `,
               )
-              `,
-            )
-            .in(
-              'organization_id',
-              ids,
-            )
-        : Promise.resolve({
-            data: [],
-          }),
-    ])
+              .in(
+                'organization_id',
+                ids,
+              )
+          : Promise.resolve({
+              data: [],
+            }),
+
+        ids.length
+          ? admin
+              .from('customers')
+              .select(
+                'id, organization_id',
+              )
+              .in(
+                'organization_id',
+                ids,
+              )
+          : Promise.resolve({
+              data: [],
+            }),
+
+        ids.length
+          ? admin
+              .from('leads')
+              .select(
+                'id, organization_id',
+              )
+              .in(
+                'organization_id',
+                ids,
+              )
+          : Promise.resolve({
+              data: [],
+            }),
+
+        ids.length
+          ? admin
+              .from('subscriptions')
+              .select(
+                `
+                id,
+                organization_id,
+                plan_id,
+                plan,
+                status,
+                renewal_date,
+                plans(
+                  id,
+                  name,
+                  price,
+                  currency,
+                  billing_cycle
+                )
+                `,
+              )
+              .in(
+                'organization_id',
+                ids,
+              )
+          : Promise.resolve({
+              data: [],
+            }),
+      ])
 
     const users =
       usersRes.data ?? []
@@ -298,117 +672,119 @@ export default async function handler(
     const subscriptions =
       subscriptionsRes.data ?? []
 
-    const result = orgs.map(
-      (org: any) => {
-        const orgUsers =
-          users.filter(
-            (u: any) =>
-              u.organization_id ===
-              org.id,
-          )
-
-        const companyAdmin =
-          orgUsers.find(
-            (u: any) =>
-              u.role === 'admin',
-          ) ??
-          orgUsers.find(
-            (u: any) =>
-              u.role !==
-              'super_admin',
-          )
-
-        const orgSubscriptions =
-          subscriptions
-            .filter(
-              (s: any) =>
-                s.organization_id ===
+    const result =
+      orgs.map(
+        (org: AnyRecord) => {
+          const orgUsers =
+            users.filter(
+              (user: AnyRecord) =>
+                user.organization_id ===
                 org.id,
             )
-            .sort(
-              (
-                a: any,
-                b: any,
-              ) =>
-                String(
-                  b.renewal_date ??
-                    '',
-                ).localeCompare(
+
+          const companyAdmin =
+            orgUsers.find(
+              (user: AnyRecord) =>
+                user.role ===
+                'admin',
+            ) ??
+            orgUsers.find(
+              (user: AnyRecord) =>
+                user.role !==
+                'super_admin',
+            )
+
+          const orgSubscriptions =
+            subscriptions
+              .filter(
+                (subscription: AnyRecord) =>
+                  subscription.organization_id ===
+                  org.id,
+              )
+              .sort(
+                (
+                  a: AnyRecord,
+                  b: AnyRecord,
+                ) =>
                   String(
-                    a.renewal_date ??
+                    b.renewal_date ??
                       '',
+                  ).localeCompare(
+                    String(
+                      a.renewal_date ??
+                        '',
+                    ),
                   ),
-                ),
-            )
+              )
 
-        const subscription =
-          orgSubscriptions[0] ??
-          null
+          const subscription =
+            orgSubscriptions[0] ??
+            null
 
-        return {
-          ...org,
+          return {
+            ...org,
 
-          users_count:
-            orgUsers.length,
+            users_count:
+              orgUsers.length,
 
-          customers_count:
-            customers.filter(
-              (c: any) =>
-                c.organization_id ===
-                org.id,
-            ).length,
+            customers_count:
+              customers.filter(
+                (customer: AnyRecord) =>
+                  customer.organization_id ===
+                  org.id,
+              ).length,
 
-          leads_count:
-            leads.filter(
-              (l: any) =>
-                l.organization_id ===
-                org.id,
-            ).length,
+            leads_count:
+              leads.filter(
+                (lead: AnyRecord) =>
+                  lead.organization_id ===
+                  org.id,
+              ).length,
 
-          admin_user_id:
-            companyAdmin?.id ??
-            null,
+            admin_user_id:
+              companyAdmin?.id ??
+              null,
 
-          admin_name:
-            companyAdmin?.full_name ??
-            null,
+            admin_name:
+              companyAdmin?.full_name ??
+              null,
 
-          admin_email:
-            companyAdmin?.email ??
-            null,
+            admin_email:
+              companyAdmin?.email ??
+              null,
 
-          admin_active:
-            companyAdmin?.active ??
-            false,
+            admin_active:
+              companyAdmin?.active ??
+              false,
 
-          subscription_id:
-            subscription?.id ??
-            null,
+            subscription_id:
+              subscription?.id ??
+              null,
 
-          subscription_status:
-            subscription?.status ??
-            null,
+            subscription_status:
+              subscription?.status ??
+              null,
 
-          active_subscription:
-            subscription?.status ===
-            'active',
+            active_subscription:
+              subscription?.status ===
+              'active',
 
-          renewal_date:
-            subscription?.renewal_date ??
-            null,
+            renewal_date:
+              subscription?.renewal_date ??
+              null,
 
-          plan_id:
-            subscription?.plan_id ??
-            null,
+            plan_id:
+              subscription?.plan_id ??
+              null,
 
-          plan_name:
-            subscription?.plans?.[0]?.name ??
-            subscription?.plan ??
-            org.plan ??
-            null,
-        }
-      },
-    )
+            plan_name:
+              subscription?.plans?.[0]?.name ??
+              subscription?.plan ??
+              org.plan ??
+              null,
+          }
+        },
+      )
 
     res.status(200).json({
       organizations: result,
@@ -418,12 +794,15 @@ export default async function handler(
   }
 
   /*
+   * ==========================================================
    * POST
+   * ==========================================================
    */
 
   if (req.method !== 'POST') {
     res.status(405).json({
-      error: 'الطريقة غير مسموحة',
+      error:
+        'الطريقة غير مسموحة',
     })
     return
   }
@@ -435,7 +814,9 @@ export default async function handler(
     body.action
 
   /*
+   * ==========================================================
    * SUSPEND / ACTIVATE
+   * ==========================================================
    */
 
   if (
@@ -484,20 +865,22 @@ export default async function handler(
     const suspended =
       action === 'suspend'
 
-    const { error } =
-      await admin
-        .from('organizations')
-        .update({
-          suspended,
-        })
-        .eq(
-          'id',
-          organizationId,
-        )
+    const {
+      error,
+    } = await admin
+      .from('organizations')
+      .update({
+        suspended,
+      })
+      .eq(
+        'id',
+        organizationId,
+      )
 
     if (error) {
       res.status(500).json({
-        error: error.message,
+        error:
+          `تعذر تحديث حالة الشركة: ${error.message}`,
       })
       return
     }
@@ -547,7 +930,9 @@ export default async function handler(
   }
 
   /*
+   * ==========================================================
    * CREATE
+   * ==========================================================
    */
 
   if (action === 'create') {
@@ -597,7 +982,9 @@ export default async function handler(
 
     const planId =
       body.planId
-        ? String(body.planId)
+        ? String(
+            body.planId,
+          )
         : ''
 
     if (
@@ -633,7 +1020,8 @@ export default async function handler(
       return
     }
 
-    let plan: any = null
+    let plan: AnyRecord | null =
+      null
 
     if (planId) {
       const {
@@ -692,6 +1080,32 @@ export default async function handler(
       return
     }
 
+    const {
+      data: existingAuthUsers,
+    } =
+      await admin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      })
+
+    const authEmailExists =
+      existingAuthUsers?.users?.some(
+        (user: AnyRecord) =>
+          String(
+            user.email ??
+              '',
+          ).toLowerCase() ===
+          email,
+      )
+
+    if (authEmailExists) {
+      res.status(409).json({
+        error:
+          'يوجد حساب Auth بهذا البريد الإلكتروني بالفعل',
+      })
+      return
+    }
+
     const slug =
       await getUniqueSlug(
         admin,
@@ -700,7 +1114,8 @@ export default async function handler(
 
     const {
       data: organization,
-      error: organizationError,
+      error:
+        organizationError,
     } = await admin
       .from('organizations')
       .insert({
@@ -717,19 +1132,23 @@ export default async function handler(
         email,
 
         phone:
-          phone || null,
+          phone ||
+          null,
 
         address:
-          address || null,
+          address ||
+          null,
 
         logo_url:
-          logoUrl || null,
+          logoUrl ||
+          null,
 
         plan:
           plan?.name ??
           'أساسي',
 
-        suspended: false,
+        suspended:
+          false,
       })
       .select(
         'id, name, slug',
@@ -747,10 +1166,6 @@ export default async function handler(
       })
       return
     }
-
-    /*
-     * REAL SUPABASE AUTH ACCOUNT
-     */
 
     const {
       data: authUser,
@@ -797,12 +1212,9 @@ export default async function handler(
       return
     }
 
-    /*
-     * PUBLIC USER PROFILE
-     */
-
     const {
-      error: profileError,
+      error:
+        profileError,
     } = await admin
       .from('users')
       .insert({
@@ -817,16 +1229,19 @@ export default async function handler(
 
         email,
 
-        role: 'admin',
+        role:
+          'admin',
 
-        active: true,
+        active:
+          true,
 
         is_platform_admin:
           false,
       })
 
     if (profileError) {
-      await admin.auth.admin.deleteUser(
+      await deleteAuthUser(
+        admin,
         authUser.user.id,
       )
 
@@ -840,19 +1255,14 @@ export default async function handler(
 
       res.status(500).json({
         error:
-          profileError.message,
+          `تعذر إنشاء ملف المستخدم: ${profileError.message}`,
       })
-
       return
     }
 
-    /*
-     * SUBSCRIPTION
-     */
-
     let subscription:
-      | any
-      | null = null
+      AnyRecord | null =
+      null
 
     if (plan) {
       const renewalDate =
@@ -904,7 +1314,16 @@ export default async function handler(
       if (
         subscriptionError
       ) {
-        await admin.auth.admin.deleteUser(
+        await admin
+          .from('users')
+          .delete()
+          .eq(
+            'id',
+            authUser.user.id,
+          )
+
+        await deleteAuthUser(
+          admin,
           authUser.user.id,
         )
 
@@ -918,9 +1337,8 @@ export default async function handler(
 
         res.status(500).json({
           error:
-            subscriptionError.message,
+            `تعذر إنشاء الاشتراك: ${subscriptionError.message}`,
         })
-
         return
       }
 
@@ -959,10 +1377,12 @@ export default async function handler(
           email,
 
           phone:
-            phone || null,
+            phone ||
+            null,
 
           address:
-            address || null,
+            address ||
+            null,
 
           plan_id:
             plan?.id ??
@@ -1001,7 +1421,8 @@ export default async function handler(
         full_name:
           managerName,
 
-        role: 'admin',
+        role:
+          'admin',
       },
 
       subscription,
@@ -1011,7 +1432,9 @@ export default async function handler(
   }
 
   /*
+   * ==========================================================
    * UPDATE
+   * ==========================================================
    */
 
   if (action === 'update') {
@@ -1031,7 +1454,8 @@ export default async function handler(
 
     const {
       data: before,
-      error: findError,
+      error:
+        findError,
     } = await admin
       .from('organizations')
       .select(
@@ -1066,9 +1490,11 @@ export default async function handler(
     }
 
     const updates:
-      Record<string, any> = {}
+      AnyRecord = {}
 
-    const fields = [
+    const fields: Array<
+      [string, string]
+    > = [
       [
         'name',
         'name',
@@ -1111,14 +1537,35 @@ export default async function handler(
           input,
         )
       ) {
-        updates[
-          column
-        ] =
+        updates[column] =
           String(
             body[input] ??
               '',
           ).trim() ||
           null
+      }
+    }
+
+    if (
+      updates.email
+    ) {
+      updates.email =
+        String(
+          updates.email,
+        )
+          .trim()
+          .toLowerCase()
+
+      if (
+        !/^\S+@\S+\.\S+$/.test(
+          updates.email,
+        )
+      ) {
+        res.status(400).json({
+          error:
+            'البريد الإلكتروني غير صالح',
+        })
+        return
       }
     }
 
@@ -1133,9 +1580,40 @@ export default async function handler(
         )
     }
 
+    if (
+      updates.email &&
+      updates.email !==
+        before.email
+    ) {
+      const {
+        data: emailOwner,
+      } =
+        await admin
+          .from('users')
+          .select('id')
+          .ilike(
+            'email',
+            updates.email,
+          )
+          .neq(
+            'organization_id',
+            organizationId,
+          )
+          .maybeSingle()
+
+      if (emailOwner) {
+        res.status(409).json({
+          error:
+            'البريد الإلكتروني مستخدم بالفعل',
+        })
+        return
+      }
+    }
+
     const {
       data: updated,
-      error: updateError,
+      error:
+        updateError,
     } = await admin
       .from('organizations')
       .update(updates)
@@ -1173,33 +1651,27 @@ export default async function handler(
       return
     }
 
-    /*
-     * Sync Company Admin profile
-     */
-
     const {
       data: companyAdmin,
-    } = await admin
-      .from('users')
-      .select(
-        'id, email',
-      )
-      .eq(
-        'organization_id',
-        organizationId,
-      )
-      .eq(
-        'role',
-        'admin',
-      )
-      .maybeSingle()
+    } =
+      await admin
+        .from('users')
+        .select(
+          'id, email, full_name',
+        )
+        .eq(
+          'organization_id',
+          organizationId,
+        )
+        .eq(
+          'role',
+          'admin',
+        )
+        .maybeSingle()
 
-    if (
-      companyAdmin
-    ) {
+    if (companyAdmin) {
       const profileUpdates:
-        Record<string, any> =
-        {}
+        AnyRecord = {}
 
       if (
         body.managerName !==
@@ -1261,7 +1733,10 @@ export default async function handler(
           profileUpdates,
         ).length
       ) {
-        await admin
+        const {
+          error:
+            profileUpdateError,
+        } = await admin
           .from('users')
           .update(
             profileUpdates,
@@ -1270,11 +1745,21 @@ export default async function handler(
             'id',
             companyAdmin.id,
           )
+
+        if (
+          profileUpdateError
+        ) {
+          res.status(500).json({
+            error:
+              `تعذر تحديث بيانات المستخدم: ${profileUpdateError.message}`,
+          })
+          return
+        }
       }
     }
 
     /*
-     * Optional plan change
+     * Optional plan change.
      */
 
     if (
@@ -1317,7 +1802,10 @@ export default async function handler(
         return
       }
 
-      await admin
+      const {
+        error:
+          organizationPlanError,
+      } = await admin
         .from('organizations')
         .update({
           plan:
@@ -1327,6 +1815,16 @@ export default async function handler(
           'id',
           organizationId,
         )
+
+      if (
+        organizationPlanError
+      ) {
+        res.status(500).json({
+          error:
+            `تعذر تحديث باقة الشركة: ${organizationPlanError.message}`,
+        })
+        return
+      }
 
       const renewalDate =
         new Date()
@@ -1339,6 +1837,8 @@ export default async function handler(
       const {
         data:
           currentSubscription,
+        error:
+          subscriptionLookupError,
       } = await admin
         .from('subscriptions')
         .select('id')
@@ -1349,17 +1849,32 @@ export default async function handler(
         .order(
           'renewal_date',
           {
-            ascending: false,
-            nullsFirst: false,
+            ascending:
+              false,
+            nullsFirst:
+              false,
           },
         )
         .limit(1)
         .maybeSingle()
 
       if (
+        subscriptionLookupError
+      ) {
+        res.status(500).json({
+          error:
+            `تعذر قراءة الاشتراك الحالي: ${subscriptionLookupError.message}`,
+        })
+        return
+      }
+
+      if (
         currentSubscription?.id
       ) {
-        await admin
+        const {
+          error:
+            subscriptionUpdateError,
+        } = await admin
           .from('subscriptions')
           .update({
             plan_id:
@@ -1383,8 +1898,21 @@ export default async function handler(
             'id',
             currentSubscription.id,
           )
+
+        if (
+          subscriptionUpdateError
+        ) {
+          res.status(500).json({
+            error:
+              `تعذر تحديث الاشتراك: ${subscriptionUpdateError.message}`,
+          })
+          return
+        }
       } else {
-        await admin
+        const {
+          error:
+            subscriptionInsertError,
+        } = await admin
           .from('subscriptions')
           .insert({
             organization_id:
@@ -1407,6 +1935,16 @@ export default async function handler(
                   10,
                 ),
           })
+
+        if (
+          subscriptionInsertError
+        ) {
+          res.status(500).json({
+            error:
+              `تعذر إنشاء الاشتراك: ${subscriptionInsertError.message}`,
+          })
+          return
+        }
       }
     }
 
@@ -1451,7 +1989,9 @@ export default async function handler(
   }
 
   /*
-   * DELETE
+   * ==========================================================
+   * DELETE ORGANIZATION
+   * ==========================================================
    */
 
   if (action === 'delete') {
@@ -1469,12 +2009,17 @@ export default async function handler(
       return
     }
 
+    /*
+     * Load organization first.
+     */
     const {
       data: organization,
+      error:
+        organizationLookupError,
     } = await admin
       .from('organizations')
       .select(
-        'id, name, email',
+        'id, name, email, plan, suspended',
       )
       .eq(
         'id',
@@ -1482,7 +2027,10 @@ export default async function handler(
       )
       .single()
 
-    if (!organization) {
+    if (
+      organizationLookupError ||
+      !organization
+    ) {
       res.status(404).json({
         error:
           'الشركة غير موجودة',
@@ -1491,15 +2039,16 @@ export default async function handler(
     }
 
     /*
-     * Don't allow accidental
-     * deletion of the platform owner org.
+     * Never allow deletion of a company
+     * containing a platform administrator.
      */
-
     const {
       data: platformUsers,
+      error:
+        platformUsersError,
     } = await admin
       .from('users')
-      .select('id')
+      .select('id, email')
       .eq(
         'organization_id',
         organizationId,
@@ -1508,6 +2057,16 @@ export default async function handler(
         'is_platform_admin',
         true,
       )
+
+    if (
+      platformUsersError
+    ) {
+      res.status(500).json({
+        error:
+          `تعذر التحقق من مدير المنصة: ${platformUsersError.message}`,
+      })
+      return
+    }
 
     if (
       platformUsers?.length
@@ -1519,56 +2078,199 @@ export default async function handler(
       return
     }
 
+    /*
+     * Load all company users before any deletion.
+     */
     const {
       data: orgUsers,
+      error:
+        usersLookupError,
     } = await admin
       .from('users')
-      .select('id')
+      .select(
+        'id, email, role',
+      )
       .eq(
         'organization_id',
         organizationId,
       )
 
+    if (
+      usersLookupError
+    ) {
+      res.status(500).json({
+        error:
+          `تعذر قراءة مستخدمي الشركة: ${usersLookupError.message}`,
+      })
+      return
+    }
+
     const userIds =
       (orgUsers ?? [])
         .map(
-          (user: any) =>
+          (user: AnyRecord) =>
             user.id,
         )
         .filter(Boolean)
 
     /*
-     * Remove Auth users first.
+     * Write the audit BEFORE destructive operations.
+     *
+     * This preserves the action even if the deletion
+     * partially fails.
      */
+    const auditWritten =
+      await writeAudit(
+        admin,
+        {
+          actor_id:
+            authData.user.id,
 
+          organization_id:
+            organizationId,
+
+          action:
+            'delete_organization',
+
+          entity:
+            'organizations',
+
+          entity_id:
+            organizationId,
+
+          old_value:
+            organization,
+
+          details: {
+            source:
+              'admin_organizations',
+
+            deleted_user_ids:
+              userIds,
+
+            user_count:
+              userIds.length,
+          },
+        },
+      )
+
+    if (!auditWritten) {
+      res.status(500).json({
+        error:
+          'تعذر تسجيل عملية الحذف في سجل التدقيق، وتم إيقاف الحذف لحماية السجل',
+      })
+      return
+    }
+
+    /*
+     * STEP 1:
+     * Detach user references from tenant data.
+     *
+     * This fixes:
+     * Database error deleting user
+     */
     for (
       const userId of userIds
     ) {
-      const {
-        error:
-          authDeleteError,
-      } =
-        await admin.auth.admin.deleteUser(
+      const detachResult =
+        await detachUserReferences(
+          admin,
           userId,
         )
 
       if (
-        authDeleteError
+        !detachResult.success
       ) {
         res.status(500).json({
           error:
-            `تعذر حذف حساب المستخدم: ${authDeleteError.message}`,
+            detachResult.error,
         })
         return
       }
     }
 
     /*
-     * Organizations have
-     * cascading tenant relations
-     * in the current schema.
+     * STEP 2:
+     * Delete tenant data that is not guaranteed
+     * to cascade correctly.
      */
+    const tenantDeleteResult =
+      await deleteOrganizationData(
+        admin,
+        organizationId,
+      )
 
+    if (
+      !tenantDeleteResult.success
+    ) {
+      res.status(500).json({
+        error:
+          tenantDeleteResult.error,
+      })
+      return
+    }
+
+    /*
+     * STEP 3:
+     * Remove public.users records explicitly.
+     *
+     * This is done BEFORE auth.users so the FK direction
+     * cannot block Auth deletion.
+     */
+    if (userIds.length) {
+      const {
+        error:
+          publicUsersDeleteError,
+      } = await admin
+        .from('users')
+        .delete()
+        .in(
+          'id',
+          userIds,
+        )
+
+      if (
+        publicUsersDeleteError
+      ) {
+        res.status(500).json({
+          error:
+            `تعذر حذف ملفات مستخدمي الشركة: ${publicUsersDeleteError.message}`,
+        })
+        return
+      }
+    }
+
+    /*
+     * STEP 4:
+     * Delete Auth users.
+     *
+     * public.users has already been removed, so the FK
+     * cannot block auth.admin.deleteUser().
+     */
+    for (
+      const userId of userIds
+    ) {
+      const authDeleteResult =
+        await deleteAuthUser(
+          admin,
+          userId,
+        )
+
+      if (
+        !authDeleteResult.success
+      ) {
+        res.status(500).json({
+          error:
+            `تعذر حذف حساب المستخدم من Auth: ${authDeleteResult.error}`,
+        })
+        return
+      }
+    }
+
+    /*
+     * STEP 5:
+     * Finally delete the organization itself.
+     */
     const {
       error:
         organizationDeleteError,
@@ -1589,34 +2291,6 @@ export default async function handler(
       })
       return
     }
-
-    await writeAudit(
-      admin,
-      {
-        actor_id:
-          authData.user.id,
-
-        action:
-          'delete_organization',
-
-        entity:
-          'organizations',
-
-        entity_id:
-          organizationId,
-
-        old_value:
-          organization,
-
-        details: {
-          source:
-            'admin_organizations',
-
-          deleted_user_ids:
-            userIds,
-        },
-      },
-    )
 
     res.status(200).json({
       success: true,
