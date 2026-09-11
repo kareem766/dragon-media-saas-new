@@ -113,73 +113,261 @@ const tools = [
   },
 ]
 
+type FunctionResult = {
+  success: boolean
+  error?: string
+  data?: any
+}
+
 async function runFunction(
   client: any,
   name: string,
   args: any
+): Promise<FunctionResult> {
+  try {
+    if (name === 'create_lead') {
+      const { data, error } = await client.rpc(
+        'ai_create_lead',
+        {
+          p_name: args?.name,
+          p_phone: args?.phone || null,
+          p_company: args?.company || null,
+          p_source: args?.source || 'RYAN AI',
+        }
+      )
+
+      if (error) {
+        console.error(
+          'Ryan create_lead RPC error:',
+          error
+        )
+
+        return {
+          success: false,
+          error: error.message,
+        }
+      }
+
+      return {
+        success: true,
+        data,
+      }
+    }
+
+    if (name === 'create_deal') {
+      const { data, error } = await client.rpc(
+        'ai_create_deal',
+        {
+          p_title: args?.title,
+          p_value:
+            typeof args?.value === 'number'
+              ? args.value
+              : Number(args?.value || 0),
+
+          p_customer_name:
+            args?.customer_name || null,
+        }
+      )
+
+      if (error) {
+        console.error(
+          'Ryan create_deal RPC error:',
+          error
+        )
+
+        return {
+          success: false,
+          error: error.message,
+        }
+      }
+
+      return {
+        success: true,
+        data,
+      }
+    }
+
+    if (name === 'book_appointment') {
+      const { data, error } = await client.rpc(
+        'ai_book_appointment',
+        {
+          p_customer_name:
+            args?.customer_name || null,
+
+          p_service_name:
+            args?.service_name || null,
+
+          p_date:
+            args?.date,
+
+          p_time:
+            args?.time,
+        }
+      )
+
+      if (error) {
+        console.error(
+          'Ryan book_appointment RPC error:',
+          error
+        )
+
+        return {
+          success: false,
+          error: error.message,
+        }
+      }
+
+      return {
+        success: true,
+        data,
+      }
+    }
+
+    if (name === 'request_human_handoff') {
+      const { data, error } = await client.rpc(
+        'ai_request_handoff',
+        {
+          p_customer_name:
+            args?.customer_name || null,
+
+          p_reason:
+            args?.reason,
+        }
+      )
+
+      if (error) {
+        console.error(
+          'Ryan request_human_handoff RPC error:',
+          error
+        )
+
+        return {
+          success: false,
+          error: error.message,
+        }
+      }
+
+      return {
+        success: true,
+        data,
+      }
+    }
+
+    return {
+      success: false,
+      error: 'أداة غير معروفة',
+    }
+  } catch (error: any) {
+    console.error(
+      `Ryan tool "${name}" exception:`,
+      error
+    )
+
+    return {
+      success: false,
+      error:
+        error?.message ||
+        'حدث خطأ أثناء تنفيذ الإجراء',
+    }
+  }
+}
+
+function getToolSuccessReply(
+  toolNames: string[],
+  argsList: any[]
 ) {
-  if (name === 'create_lead') {
-    const { error } = await client.rpc(
-      'ai_create_lead',
-      {
-        p_name: args.name,
-        p_phone: args.phone || null,
-        p_company: args.company || null,
-        p_source: args.source || 'RYAN AI',
-      }
+  const names = new Set(toolNames)
+
+  if (
+    names.has('request_human_handoff')
+  ) {
+    return 'تمام، حولت المحادثة للفريق المختص وهيتواصل مع حضرتك في أقرب وقت.'
+  }
+
+  if (
+    names.has('book_appointment')
+  ) {
+    const appointmentIndex =
+      toolNames.indexOf(
+        'book_appointment'
+      )
+
+    const appointmentArgs =
+      argsList[appointmentIndex] || {}
+
+    const date =
+      appointmentArgs?.date
+
+    const time =
+      appointmentArgs?.time
+
+    if (date && time) {
+      return `تمام، تم تسجيل الموعد يوم ${date} الساعة ${time}.`
+    }
+
+    return 'تمام، تم تسجيل الموعد بنجاح.'
+  }
+
+  if (
+    names.has('create_deal')
+  ) {
+    return 'تمام، تم تسجيل الصفقة في نظام المبيعات.'
+  }
+
+  if (
+    names.has('create_lead')
+  ) {
+    return 'تمام، سجلت بيانات حضرتك عندنا في الـCRM.'
+  }
+
+  return 'تمام، تم تنفيذ الطلب بنجاح.'
+}
+
+function getToolFailureReply(
+  toolNames: string[],
+  errors: string[]
+) {
+  console.error(
+    'Ryan tool execution failures:',
+    {
+      toolNames,
+      errors,
+    }
+  )
+
+  if (
+    toolNames.includes(
+      'request_human_handoff'
     )
-
-    return { error }
+  ) {
+    return 'حصلت مشكلة بسيطة أثناء تحويل المحادثة للفريق المختص. حاول مرة تانية من فضلك.'
   }
 
-  if (name === 'create_deal') {
-    const { error } = await client.rpc(
-      'ai_create_deal',
-      {
-        p_title: args.title,
-        p_value: args.value || 0,
-        p_customer_name:
-          args.customer_name || null,
-      }
+  if (
+    toolNames.includes(
+      'book_appointment'
     )
-
-    return { error }
+  ) {
+    return 'حصلت مشكلة أثناء تسجيل الموعد. ممكن نحاول مرة تانية؟'
   }
 
-  if (name === 'book_appointment') {
-    const { error } = await client.rpc(
-      'ai_book_appointment',
-      {
-        p_customer_name:
-          args.customer_name || null,
-        p_service_name:
-          args.service_name || null,
-        p_date: args.date,
-        p_time: args.time,
-      }
+  if (
+    toolNames.includes(
+      'create_deal'
     )
-
-    return { error }
+  ) {
+    return 'حصلت مشكلة أثناء تسجيل الصفقة. ممكن نحاول مرة تانية؟'
   }
 
-  if (name === 'request_human_handoff') {
-    const { error } = await client.rpc(
-      'ai_request_handoff',
-      {
-        p_customer_name:
-          args.customer_name || null,
-        p_reason: args.reason,
-      }
+  if (
+    toolNames.includes(
+      'create_lead'
     )
-
-    return { error }
+  ) {
+    return 'حصلت مشكلة أثناء تسجيل بيانات العميل. ممكن نحاول مرة تانية؟'
   }
 
-  return {
-    error: {
-      message: 'أداة غير معروفة',
-    },
-  }
+  return 'حصلت مشكلة أثناء تنفيذ الطلب. ممكن نحاول مرة تانية؟'
 }
 
 async function getOrganization(
@@ -207,24 +395,6 @@ async function getOrganization(
   return data
 }
 
-/**
- * يقرأ حدود Ryan من الخطة الفعالة.
- *
- * الأولوية:
- * 1. subscription المرتبط بالخطة عن طريق plan_id
- * 2. organizations.plan كـfallback
- *
- * أمثلة limits الحالية:
- * {
- *   "ai_messages": 1000
- * }
- *
- * ويمكن لاحقًا إضافة:
- * {
- *   "ai_messages": 1000,
- *   "ryan_tokens": 100000
- * }
- */
 async function getRyanEntitlements(
   client: any,
   organizationId: string
@@ -901,14 +1071,6 @@ export default async function handler(
     }
   )
 
-  /*
-   * FIX:
-   * organizationId أصبح string دائمًا بعد
-   * التحقق من وجود organization_id.
-   *
-   * هذا يمنع أخطاء:
-   * string | null is not assignable to string
-   */
   let organizationId = ''
 
   let currentConversationId:
@@ -951,11 +1113,6 @@ export default async function handler(
       return
     }
 
-    /*
-     * FIX:
-     * التأكيد لـ TypeScript أن القيمة
-     * أصبحت string بعد التحقق السابق.
-     */
     organizationId =
       dbUser.organization_id as string
 
@@ -971,10 +1128,6 @@ export default async function handler(
         organizationId
       )
 
-    /**
-     * منع استخدام Ryan إذا وصلت الشركة
-     * إلى الحد الشهري الموجود في plans.limits.
-     */
     if (
       entitlements.aiMessages !== null &&
       usage.messageCount >=
@@ -1003,10 +1156,6 @@ export default async function handler(
       return
     }
 
-    /**
-     * إذا كان هناك حد Tokens في الخطة،
-     * يتم تطبيقه كذلك.
-     */
     if (
       entitlements.ryanTokens !== null &&
       usage.totalTokens >=
@@ -1214,12 +1363,12 @@ ${knowledgeText}
       },
     ]
 
-    /**
-     * Gemini request #1
-     */
+    const geminiUrl =
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`
+
     let response =
       await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
+        geminiUrl,
         {
           method:
             'POST',
@@ -1316,202 +1465,304 @@ ${knowledgeText}
 
     let parts =
       data?.candidates?.[0]
-        ?.content?.parts
+        ?.content?.parts || []
+
+    /*
+     * Gemini يمكن أن يرجع أكثر من functionCall
+     * داخل نفس الاستجابة.
+     *
+     * الكود القديم كان ينفذ أول واحدة فقط.
+     */
+    const functionCallParts =
+      parts.filter(
+        (part: any) =>
+          part?.functionCall?.name
+      )
 
     let actionTaken:
       | string
       | null = null
 
-    const functionCallPart =
-      parts?.find(
-        (part: any) =>
-          part.functionCall
-      )
+    const successfulTools: string[] = []
+    const failedTools: string[] = []
+    const toolErrors: string[] = []
+    const toolArgs: any[] = []
 
-    if (functionCallPart) {
-      const {
-        name,
-        args,
-      } =
-        functionCallPart.functionCall
-
-      /**
-       * تسجيل Tool Call في usage.
+    if (
+      functionCallParts.length > 0
+    ) {
+      /*
+       * تسجيل وتنفيذ كل الأدوات المطلوبة
+       * بالترتيب.
        */
-      await recordUsage(
-        client,
-        {
-          organizationId,
+      for (
+        const functionCallPart of
+          functionCallParts
+      ) {
+        const functionCall =
+          functionCallPart.functionCall
+
+        const name =
+          functionCall?.name
+
+        const args =
+          functionCall?.args || {}
+
+        if (!name) {
+          continue
+        }
+
+        toolArgs.push(args)
+
+        await recordUsage(
+          client,
+          {
+            organizationId,
+
+            conversationId:
+              conversation.id,
+
+            userId:
+              authData.user.id,
+
+            eventType:
+              'tool_call',
+
+            metadata: {
+              tool:
+                name,
+
+              args,
+            },
+          }
+        )
+
+        const result =
+          await runFunction(
+            client,
+            name,
+            args
+          )
+
+        if (result.success) {
+          successfulTools.push(
+            name
+          )
+
+          actionTaken =
+            actionTaken
+              ? `${actionTaken},${name}`
+              : name
+
+          /*
+           * Handoff يحتاج بالإضافة إلى RPC
+           * إلى تحديث conversation نفسها.
+           */
+          if (
+            name ===
+            'request_human_handoff'
+          ) {
+            const {
+              error:
+                handoffUpdateError,
+            } =
+              await client
+                .from(
+                  'conversations'
+                )
+                .update({
+                  handled_by:
+                    'human',
+
+                  status:
+                    'pending',
+
+                  metadata: {
+                    ...(conversation.metadata &&
+                    typeof conversation.metadata ===
+                      'object'
+                      ? conversation.metadata
+                      : {}),
+
+                    handoff:
+                      true,
+
+                    handoff_reason:
+                      args?.reason ||
+                      null,
+
+                    handoff_requested_at:
+                      new Date().toISOString(),
+                  },
+                })
+                .eq(
+                  'id',
+                  conversation.id
+                )
+                .eq(
+                  'organization_id',
+                  organizationId
+                )
+
+            if (
+              handoffUpdateError
+            ) {
+              console.error(
+                'Ryan handoff update error:',
+                handoffUpdateError
+              )
+
+              /*
+               * لا نفشل الـhandoff بالكامل
+               * إذا كان RPC نفسه نجح.
+               */
+            }
+          }
+        } else {
+          failedTools.push(
+            name
+          )
+
+          toolErrors.push(
+            result.error ||
+              'فشل تنفيذ الأداة'
+          )
+        }
+      }
+
+      /*
+       * إذا نجحت أداة واحدة على الأقل،
+       * نرجع confirmation مباشر.
+       *
+       * هذا يلغي Gemini request #2،
+       * وبالتالي Ryan أسرع بكثير،
+       * والأهم أن الرد يعتمد على تنفيذ
+       * الـRPC الحقيقي وليس على تخمين Gemini.
+       */
+      if (
+        successfulTools.length > 0 &&
+        failedTools.length === 0
+      ) {
+        const reply =
+          getToolSuccessReply(
+            successfulTools,
+            toolArgs
+          )
+
+        await recordUsage(
+          client,
+          {
+            organizationId,
+
+            conversationId:
+              conversation.id,
+
+            userId:
+              authData.user.id,
+
+            eventType:
+              'message',
+
+            inputTokens:
+              totalInputTokens,
+
+            outputTokens:
+              totalOutputTokens,
+
+            estimatedCost:
+              totalEstimatedCost,
+
+            metadata: {
+              action:
+                actionTaken,
+
+              tools:
+                successfulTools,
+
+              plan:
+                entitlements.planName,
+
+              subscription_id:
+                entitlements.subscriptionId,
+
+              plan_id:
+                entitlements.planId,
+            },
+          }
+        )
+
+        await insertMessage(
+          client,
+          conversation.id,
+          'ai',
+          reply,
+          {
+            source:
+              'ryan',
+
+            action:
+              actionTaken,
+
+            tool_results: {
+              successful:
+                successfulTools,
+
+              failed:
+                failedTools,
+            },
+
+            usage: {
+              input_tokens:
+                totalInputTokens,
+
+              output_tokens:
+                totalOutputTokens,
+
+              total_tokens:
+                totalInputTokens +
+                totalOutputTokens,
+
+              estimated_cost:
+                totalEstimatedCost,
+            },
+          }
+        )
+
+        res.status(200).json({
+          reply,
+
+          actionTaken,
 
           conversationId:
             conversation.id,
 
-          userId:
-            authData.user.id,
+          usage: {
+            inputTokens:
+              totalInputTokens,
 
-          eventType:
-            'tool_call',
+            outputTokens:
+              totalOutputTokens,
 
-          metadata: {
-            tool:
-              name,
-
-            args:
-              args || {},
+            totalTokens:
+              totalInputTokens +
+              totalOutputTokens,
           },
-        }
-      )
+        })
 
-      const {
-        error:
-          functionError,
-      } =
-        await runFunction(
-          client,
-          name,
-          args
-        )
-
-      const functionResult =
-        functionError
-          ? {
-              success:
-                false,
-
-              error:
-                functionError.message,
-            }
-          : {
-              success:
-                true,
-            }
-
-      if (!functionError) {
-        actionTaken =
-          name
+        return
       }
 
-      if (
-        name ===
-          'request_human_handoff' &&
-        !functionError
-      ) {
-        const {
-          error:
-            handoffUpdateError,
-        } =
-          await client
-            .from(
-              'conversations'
-            )
-            .update({
-              handled_by:
-                'human',
-
-              status:
-                'pending',
-
-              metadata: {
-                ...(conversation.metadata ||
-                  {}),
-
-                handoff:
-                  true,
-
-                handoff_reason:
-                  args?.reason ||
-                  null,
-              },
-            })
-            .eq(
-              'id',
-              conversation.id
-            )
-            .eq(
-              'organization_id',
-              organizationId
-            )
-
-        if (
-          handoffUpdateError
-        ) {
-          console.error(
-            'Ryan handoff update error:',
-            handoffUpdateError
-          )
-        }
-      }
-
-      contents.push({
-        role:
-          'model',
-
-        parts: [
-          functionCallPart,
-        ],
-      })
-
-      contents.push({
-        role:
-          'user',
-
-        parts: [
-          {
-            functionResponse: {
-              name,
-
-              response:
-                functionResult,
-            },
-          },
-        ],
-      })
-
-      /**
-       * Gemini request #2
-       *
-       * يتم تنفيذه فقط عندما Ryan
-       * استخدم Tool.
+      /*
+       * إذا فشلت بعض الأدوات،
+       * لا نقول للعميل إنها نجحت.
        */
-      response =
-        await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
-          {
-            method:
-              'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-
-            body:
-              JSON.stringify({
-                contents,
-                tools,
-              }),
-          }
-        )
-
-      data =
-        await response.json()
-
-      if (!response.ok) {
-        const usageMetadata =
-          getUsageMetadata(
-            data
-          )
-
-        totalInputTokens +=
-          usageMetadata.inputTokens
-
-        totalOutputTokens +=
-          usageMetadata.outputTokens
-
-        totalEstimatedCost +=
-          estimateCost(
-            usageMetadata.inputTokens,
-            usageMetadata.outputTokens
+      if (
+        failedTools.length > 0
+      ) {
+        const reply =
+          getToolFailureReply(
+            failedTools,
+            toolErrors
           )
 
         await recordUsage(
@@ -1529,70 +1780,80 @@ ${knowledgeText}
               'error',
 
             inputTokens:
-              usageMetadata.inputTokens,
+              totalInputTokens,
 
             outputTokens:
-              usageMetadata.outputTokens,
+              totalOutputTokens,
 
             estimatedCost:
-              estimateCost(
-                usageMetadata.inputTokens,
-                usageMetadata.outputTokens
-              ),
+              totalEstimatedCost,
 
             metadata: {
               stage:
-                'tool_followup_gemini_request',
+                'tool_execution',
 
-              status:
-                response.status,
+              successfulTools,
 
-              tool:
-                name,
+              failedTools,
+
+              toolErrors,
             },
           }
         )
 
-        res.status(502).json({
-          error:
-            'تم تنفيذ الإجراء لكن تعذر استلام رد Ryan النهائي',
+        await insertMessage(
+          client,
+          conversation.id,
+          'ai',
+          reply,
+          {
+            source:
+              'ryan',
+
+            action:
+              actionTaken,
+
+            tool_results: {
+              successful:
+                successfulTools,
+
+              failed:
+                failedTools,
+
+              errors:
+                toolErrors,
+            },
+          }
+        )
+
+        res.status(200).json({
+          reply,
+
+          actionTaken,
 
           conversationId:
             conversation.id,
 
-          actionTaken,
+          toolError:
+            true,
         })
 
         return
       }
-
-      const secondUsage =
-        getUsageMetadata(
-          data
-        )
-
-      totalInputTokens +=
-        secondUsage.inputTokens
-
-      totalOutputTokens +=
-        secondUsage.outputTokens
-
-      totalEstimatedCost +=
-        estimateCost(
-          secondUsage.inputTokens,
-          secondUsage.outputTokens
-        )
-
-      parts =
-        data?.candidates?.[0]
-          ?.content?.parts
     }
 
+    /*
+     * لا توجد Tools.
+     *
+     * هنا فقط نحتاج رد Gemini الطبيعي.
+     */
     const reply =
       parts?.find(
         (part: any) =>
-          part.text
-      )?.text
+          typeof part?.text ===
+          'string' &&
+          part.text.trim()
+      )?.text?.trim()
 
     if (!reply) {
       await recordUsage(
@@ -1638,9 +1899,6 @@ ${knowledgeText}
       return
     }
 
-    /**
-     * تسجيل إجمالي استخدام رسالة Ryan.
-     */
     await recordUsage(
       client,
       {
@@ -1735,32 +1993,36 @@ ${knowledgeText}
       error
     )
 
-    /*
-     * organizationId يبدأ بقيمة فارغة.
-     * لذلك لن يتم تسجيل الخطأ إلا بعد نجاح
-     * تحديد الشركة فعليًا.
-     */
     if (
       organizationId
     ) {
-      await recordUsage(
-        client,
-        {
-          organizationId,
+      try {
+        await recordUsage(
+          client,
+          {
+            organizationId,
 
-          conversationId:
-            currentConversationId,
+            conversationId:
+              currentConversationId,
 
-          eventType:
-            'error',
+            eventType:
+              'error',
 
-          metadata: {
-            message:
-              error?.message ||
-              'unknown_error',
-          },
-        }
-      )
+            metadata: {
+              message:
+                error?.message ||
+                'unknown_error',
+            },
+          }
+        )
+      } catch (
+        usageError
+      ) {
+        console.error(
+          'Ryan error usage recording failed:',
+          usageError
+        )
+      }
     }
 
     res.status(500).json({
