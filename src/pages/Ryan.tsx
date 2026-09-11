@@ -394,13 +394,18 @@ export default function Ryan() {
           return
         }
 
+        /*
+         * Explicitly type the map callback as ChatMessage | null.
+         *
+         * This prevents TypeScript from inferring an incompatible
+         * object | null union and fixes TS2322 / TS2677.
+         */
         const restoredMessages: ChatMessage[] =
           (storedMessages || [])
-            .map((row: any) => {
+            .map((row: any): ChatMessage | null => {
               const metadata =
                 row?.metadata &&
-                typeof row.metadata ===
-                  'object'
+                typeof row.metadata === 'object'
                   ? row.metadata
                   : {}
 
@@ -413,12 +418,9 @@ export default function Ryan() {
                 ).toLowerCase()
 
               const isUser =
-                senderType ===
-                  'customer' ||
-                senderType ===
-                  'user' ||
-                senderType ===
-                  'human'
+                senderType === 'customer' ||
+                senderType === 'user' ||
+                senderType === 'human'
 
               const text =
                 row?.content ??
@@ -447,7 +449,7 @@ export default function Ryan() {
                   ? 'user'
                   : 'model',
                 text: String(text),
-                createdAt,
+                createdAt: String(createdAt),
                 actionTaken:
                   metadata?.action_taken ||
                   metadata?.actionTaken ||
@@ -459,7 +461,7 @@ export default function Ryan() {
               (
                 message
               ): message is ChatMessage =>
-                Boolean(message)
+                message !== null
             )
 
         if (!cancelled) {
@@ -494,10 +496,8 @@ export default function Ryan() {
         const hasHumanHandoff =
           handledBy === 'human' ||
           handledBy === 'agent' ||
-          handoffStatus ===
-            'human' ||
-          handoffStatus ===
-            'pending'
+          handoffStatus === 'human' ||
+          handoffStatus === 'pending'
 
         if (!cancelled) {
           setPaused(
