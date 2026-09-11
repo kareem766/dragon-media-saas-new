@@ -26,7 +26,8 @@ const tools = [
             },
             source: {
               type: 'STRING',
-              description: 'مصدر التواصل، مثل واتساب أو فيسبوك أو الموقع',
+              description:
+                'مصدر التواصل، مثل واتساب أو فيسبوك أو الموقع',
             },
           },
           required: ['name'],
@@ -41,15 +42,18 @@ const tools = [
           properties: {
             title: {
               type: 'STRING',
-              description: 'عنوان الصفقة، مثل اسم الخدمة أو المنتج المطلوب',
+              description:
+                'عنوان الصفقة، مثل اسم الخدمة أو المنتج المطلوب',
             },
             value: {
               type: 'NUMBER',
-              description: 'القيمة التقديرية للصفقة بالجنيه المصري إن ذُكرت',
+              description:
+                'القيمة التقديرية للصفقة بالجنيه المصري إن ذُكرت',
             },
             customer_name: {
               type: 'STRING',
-              description: 'اسم العميل المرتبط بالصفقة إن كان موجودًا في النظام كعميل',
+              description:
+                'اسم العميل المرتبط بالصفقة إن كان موجودًا في النظام كعميل',
             },
           },
           required: ['title'],
@@ -72,11 +76,13 @@ const tools = [
             },
             date: {
               type: 'STRING',
-              description: 'تاريخ الموعد بصيغة YYYY-MM-DD',
+              description:
+                'تاريخ الموعد بصيغة YYYY-MM-DD',
             },
             time: {
               type: 'STRING',
-              description: 'وقت الموعد بصيغة HH:MM بنظام 24 ساعة',
+              description:
+                'وقت الموعد بصيغة HH:MM بنظام 24 ساعة',
             },
           },
           required: ['date', 'time'],
@@ -91,11 +97,13 @@ const tools = [
           properties: {
             customer_name: {
               type: 'STRING',
-              description: 'اسم العميل إن كان معروفًا',
+              description:
+                'اسم العميل إن كان معروفًا',
             },
             reason: {
               type: 'STRING',
-              description: 'سبب طلب التحويل باختصار',
+              description:
+                'سبب طلب التحويل باختصار',
             },
           },
           required: ['reason'],
@@ -111,42 +119,58 @@ async function runFunction(
   args: any
 ) {
   if (name === 'create_lead') {
-    const { error } = await client.rpc('ai_create_lead', {
-      p_name: args.name,
-      p_phone: args.phone || null,
-      p_company: args.company || null,
-      p_source: args.source || 'RYAN AI',
-    })
+    const { error } = await client.rpc(
+      'ai_create_lead',
+      {
+        p_name: args.name,
+        p_phone: args.phone || null,
+        p_company: args.company || null,
+        p_source: args.source || 'RYAN AI',
+      }
+    )
 
     return { error }
   }
 
   if (name === 'create_deal') {
-    const { error } = await client.rpc('ai_create_deal', {
-      p_title: args.title,
-      p_value: args.value || 0,
-      p_customer_name: args.customer_name || null,
-    })
+    const { error } = await client.rpc(
+      'ai_create_deal',
+      {
+        p_title: args.title,
+        p_value: args.value || 0,
+        p_customer_name:
+          args.customer_name || null,
+      }
+    )
 
     return { error }
   }
 
   if (name === 'book_appointment') {
-    const { error } = await client.rpc('ai_book_appointment', {
-      p_customer_name: args.customer_name || null,
-      p_service_name: args.service_name || null,
-      p_date: args.date,
-      p_time: args.time,
-    })
+    const { error } = await client.rpc(
+      'ai_book_appointment',
+      {
+        p_customer_name:
+          args.customer_name || null,
+        p_service_name:
+          args.service_name || null,
+        p_date: args.date,
+        p_time: args.time,
+      }
+    )
 
     return { error }
   }
 
   if (name === 'request_human_handoff') {
-    const { error } = await client.rpc('ai_request_handoff', {
-      p_customer_name: args.customer_name || null,
-      p_reason: args.reason,
-    })
+    const { error } = await client.rpc(
+      'ai_request_handoff',
+      {
+        p_customer_name:
+          args.customer_name || null,
+        p_reason: args.reason,
+      }
+    )
 
     return { error }
   }
@@ -164,7 +188,9 @@ async function getOrganization(
 ) {
   const { data, error } = await client
     .from('users')
-    .select('organization_id, full_name, email')
+    .select(
+      'organization_id, full_name, email'
+    )
     .eq('id', userId)
     .maybeSingle()
 
@@ -173,7 +199,9 @@ async function getOrganization(
   }
 
   if (!data?.organization_id) {
-    throw new Error('الحساب غير مرتبط بشركة')
+    throw new Error(
+      'الحساب غير مرتبط بشركة'
+    )
   }
 
   return data
@@ -201,47 +229,57 @@ async function getRyanEntitlements(
   client: any,
   organizationId: string
 ) {
-  const { data: subscription, error: subscriptionError } =
-    await client
-      .from('subscriptions')
-      .select(`
+  const {
+    data: subscription,
+    error: subscriptionError,
+  } = await client
+    .from('subscriptions')
+    .select(`
+      id,
+      organization_id,
+      plan,
+      status,
+      renewal_date,
+      plan_id,
+      plans (
         id,
-        organization_id,
-        plan,
-        status,
-        renewal_date,
-        plan_id,
-        plans (
-          id,
-          name,
-          limits,
-          status
-        )
-      `)
-      .eq('organization_id', organizationId)
-      .eq('status', 'active')
-      .order('renewal_date', {
-        ascending: false,
-      })
-      .limit(1)
-      .maybeSingle()
+        name,
+        limits,
+        status
+      )
+    `)
+    .eq(
+      'organization_id',
+      organizationId
+    )
+    .eq('status', 'active')
+    .order('renewal_date', {
+      ascending: false,
+    })
+    .limit(1)
+    .maybeSingle()
 
   if (subscriptionError) {
-    throw new Error(subscriptionError.message)
+    throw new Error(
+      subscriptionError.message
+    )
   }
 
   const plan = subscription?.plans as
     | {
         id?: string
         name?: string
-        limits?: Record<string, unknown> | null
+        limits?:
+          | Record<string, unknown>
+          | null
         status?: string
       }
     | null
     | undefined
 
   const limits =
-    plan?.limits && typeof plan.limits === 'object'
+    plan?.limits &&
+    typeof plan.limits === 'object'
       ? plan.limits
       : {}
 
@@ -257,24 +295,40 @@ async function getRyanEntitlements(
 
   const aiMessages =
     typeof aiMessagesRaw === 'number'
-      ? Math.max(0, Math.floor(aiMessagesRaw))
+      ? Math.max(
+          0,
+          Math.floor(aiMessagesRaw)
+        )
       : null
 
   const ryanTokens =
     typeof ryanTokensRaw === 'number'
-      ? Math.max(0, Math.floor(ryanTokensRaw))
+      ? Math.max(
+          0,
+          Math.floor(ryanTokensRaw)
+        )
       : null
 
   return {
-    subscriptionId: subscription?.id || null,
-    planId: plan?.id || subscription?.plan_id || null,
+    subscriptionId:
+      subscription?.id || null,
+
+    planId:
+      plan?.id ||
+      subscription?.plan_id ||
+      null,
+
     planName:
       plan?.name ||
       subscription?.plan ||
       'الخطة الحالية',
+
     aiMessages,
     ryanTokens,
-    renewalDate: subscription?.renewal_date || null,
+
+    renewalDate:
+      subscription?.renewal_date ||
+      null,
   }
 }
 
@@ -282,10 +336,14 @@ async function getMonthlyUsage(
   client: any,
   organizationId: string
 ) {
-  const { data, error } = await client.rpc(
+  const {
+    data,
+    error,
+  } = await client.rpc(
     'ryan_monthly_usage',
     {
-      p_organization_id: organizationId,
+      p_organization_id:
+        organizationId,
     }
   )
 
@@ -298,11 +356,25 @@ async function getMonthlyUsage(
     : data
 
   return {
-    inputTokens: Number(row?.input_tokens || 0),
-    outputTokens: Number(row?.output_tokens || 0),
-    totalTokens: Number(row?.total_tokens || 0),
-    estimatedCost: Number(row?.estimated_cost || 0),
-    messageCount: Number(row?.message_count || 0),
+    inputTokens: Number(
+      row?.input_tokens || 0
+    ),
+
+    outputTokens: Number(
+      row?.output_tokens || 0
+    ),
+
+    totalTokens: Number(
+      row?.total_tokens || 0
+    ),
+
+    estimatedCost: Number(
+      row?.estimated_cost || 0
+    ),
+
+    messageCount: Number(
+      row?.message_count || 0
+    ),
   }
 }
 
@@ -312,11 +384,17 @@ async function recordUsage(
     organizationId: string
     conversationId?: string | null
     userId?: string | null
-    eventType?: 'message' | 'tool_call' | 'error'
+    eventType?:
+      | 'message'
+      | 'tool_call'
+      | 'error'
     inputTokens?: number
     outputTokens?: number
     estimatedCost?: number
-    metadata?: Record<string, unknown>
+    metadata?: Record<
+      string,
+      unknown
+    >
   }
 ) {
   const {
@@ -330,29 +408,56 @@ async function recordUsage(
     metadata = {},
   } = params
 
-  const { error } = await client.rpc(
-    'record_ryan_usage',
-    {
-      p_organization_id: organizationId,
-      p_conversation_id: conversationId,
-      p_user_id: userId,
-      p_model: MODEL,
-      p_event_type: eventType,
-      p_input_tokens: Math.max(
-        0,
-        Math.floor(Number(inputTokens) || 0)
-      ),
-      p_output_tokens: Math.max(
-        0,
-        Math.floor(Number(outputTokens) || 0)
-      ),
-      p_estimated_cost: Math.max(
-        0,
-        Number(estimatedCost) || 0
-      ),
-      p_metadata: metadata,
-    }
-  )
+  const { error } =
+    await client.rpc(
+      'record_ryan_usage',
+      {
+        p_organization_id:
+          organizationId,
+
+        p_conversation_id:
+          conversationId,
+
+        p_user_id:
+          userId,
+
+        p_model: MODEL,
+
+        p_event_type:
+          eventType,
+
+        p_input_tokens:
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                inputTokens
+              ) || 0
+            )
+          ),
+
+        p_output_tokens:
+          Math.max(
+            0,
+            Math.floor(
+              Number(
+                outputTokens
+              ) || 0
+            )
+          ),
+
+        p_estimated_cost:
+          Math.max(
+            0,
+            Number(
+              estimatedCost
+            ) || 0
+          ),
+
+        p_metadata:
+          metadata,
+      }
+    )
 
   if (error) {
     console.error(
@@ -365,22 +470,24 @@ async function recordUsage(
 function getUsageMetadata(
   data: any
 ) {
-  const usage = data?.usageMetadata || {}
+  const usage =
+    data?.usageMetadata || {}
 
   return {
     inputTokens: Number(
       usage.promptTokenCount ||
-      usage.inputTokenCount ||
-      0
+        usage.inputTokenCount ||
+        0
     ),
+
     outputTokens: Number(
       usage.candidatesTokenCount ||
-      usage.outputTokenCount ||
-      0
+        usage.outputTokenCount ||
+        0
     ),
+
     totalTokens: Number(
-      usage.totalTokenCount ||
-      0
+      usage.totalTokenCount || 0
     ),
   }
 }
@@ -391,18 +498,22 @@ function estimateCost(
 ) {
   const inputPrice =
     Number(
-      process.env.RYAN_GEMINI_INPUT_COST_PER_1M
+      process.env
+        .RYAN_GEMINI_INPUT_COST_PER_1M
     ) || 0
 
   const outputPrice =
     Number(
-      process.env.RYAN_GEMINI_OUTPUT_COST_PER_1M
+      process.env
+        .RYAN_GEMINI_OUTPUT_COST_PER_1M
     ) || 0
 
   return (
-    (inputTokens / 1_000_000) *
+    (inputTokens /
+      1_000_000) *
       inputPrice +
-    (outputTokens / 1_000_000) *
+    (outputTokens /
+      1_000_000) *
       outputPrice
   )
 }
@@ -436,7 +547,10 @@ async function getOrCreateCustomer(
         'organization_id',
         organizationId
       )
-      .eq('email', email)
+      .eq(
+        'email',
+        email
+      )
       .limit(1)
       .maybeSingle()
 
@@ -459,9 +573,13 @@ async function getOrCreateCustomer(
     .insert({
       organization_id:
         organizationId,
+
       name,
+
       email,
+
       source: 'RYAN AI',
+
       notes:
         'تم إنشاء العميل تلقائيًا من محادثة RYAN.',
     })
@@ -506,7 +624,10 @@ async function getOrCreateConversation(
         metadata,
         updated_at
       `)
-      .eq('id', conversationId)
+      .eq(
+        'id',
+        conversationId
+      )
       .eq(
         'organization_id',
         organizationId
@@ -518,7 +639,9 @@ async function getOrCreateConversation(
       .maybeSingle()
 
     if (error) {
-      throw new Error(error.message)
+      throw new Error(
+        error.message
+      )
     }
 
     if (data) {
@@ -554,8 +677,14 @@ async function getOrCreateConversation(
       'customer_id',
       customerId
     )
-    .eq('channel', 'website')
-    .eq('status', 'open')
+    .eq(
+      'channel',
+      'website'
+    )
+    .eq(
+      'status',
+      'open'
+    )
     .order('created_at', {
       ascending: false,
     })
@@ -580,15 +709,31 @@ async function getOrCreateConversation(
     .insert({
       organization_id:
         organizationId,
-      customer_id: customerId,
-      channel: 'website',
-      handled_by: 'ai',
-      status: 'open',
-      subject: 'محادثة RYAN AI',
-      unread_count: 0,
+
+      customer_id:
+        customerId,
+
+      channel:
+        'website',
+
+      handled_by:
+        'ai',
+
+      status:
+        'open',
+
+      subject:
+        'محادثة RYAN AI',
+
+      unread_count:
+        0,
+
       metadata: {
-        source: 'ryan',
-        interface: 'ryan-dashboard',
+        source:
+          'ryan',
+
+        interface:
+          'ryan-dashboard',
       },
     })
     .select(`
@@ -620,9 +765,14 @@ async function getOrCreateConversation(
 async function insertMessage(
   client: any,
   conversationId: string,
-  senderType: 'customer' | 'ai',
+  senderType:
+    | 'customer'
+    | 'ai',
   content: string,
-  metadata: Record<string, unknown> = {}
+  metadata: Record<
+    string,
+    unknown
+  > = {}
 ) {
   const {
     data,
@@ -632,9 +782,12 @@ async function insertMessage(
     .insert({
       conversation_id:
         conversationId,
+
       sender_type:
         senderType,
+
       content,
+
       metadata,
     })
     .select(`
@@ -668,6 +821,7 @@ export default async function handler(
       error:
         'الطريقة غير مسموحة',
     })
+
     return
   }
 
@@ -689,6 +843,7 @@ export default async function handler(
       error:
         'الإعدادات غير مكتملة على السيرفر',
     })
+
     return
   }
 
@@ -708,6 +863,7 @@ export default async function handler(
       error:
         'الرسالة مطلوبة',
     })
+
     return
   }
 
@@ -719,6 +875,7 @@ export default async function handler(
       error:
         'الرسالة لا يمكن أن تكون فارغة',
     })
+
     return
   }
 
@@ -727,6 +884,7 @@ export default async function handler(
       error:
         'يجب تسجيل الدخول',
     })
+
     return
   }
 
@@ -743,8 +901,15 @@ export default async function handler(
     }
   )
 
-  let organizationId: string | null =
-    null
+  /*
+   * FIX:
+   * organizationId أصبح string دائمًا بعد
+   * التحقق من وجود organization_id.
+   *
+   * هذا يمنع أخطاء:
+   * string | null is not assignable to string
+   */
+  let organizationId = ''
 
   let currentConversationId:
     | string
@@ -765,6 +930,7 @@ export default async function handler(
         error:
           'جلسة الدخول غير صالحة',
       })
+
       return
     }
 
@@ -774,15 +940,24 @@ export default async function handler(
         authData.user.id
       )
 
-    if (!dbUser?.organization_id) {
+    if (
+      !dbUser?.organization_id
+    ) {
       res.status(403).json({
-        error: 'لا توجد شركة مرتبطة بهذا المستخدم',
+        error:
+          'لا توجد شركة مرتبطة بهذا المستخدم',
       })
+
       return
     }
 
+    /*
+     * FIX:
+     * التأكيد لـ TypeScript أن القيمة
+     * أصبحت string بعد التحقق السابق.
+     */
     organizationId =
-      dbUser.organization_id
+      dbUser.organization_id as string
 
     const entitlements =
       await getRyanEntitlements(
@@ -799,9 +974,6 @@ export default async function handler(
     /**
      * منع استخدام Ryan إذا وصلت الشركة
      * إلى الحد الشهري الموجود في plans.limits.
-     *
-     * لو ai_messages غير موجود:
-     * لا يتم تطبيق حد الرسائل من هذا المستوى.
      */
     if (
       entitlements.aiMessages !== null &&
@@ -811,17 +983,23 @@ export default async function handler(
       res.status(429).json({
         error:
           'تم الوصول إلى الحد الشهري لاستخدام Ryan في خطتك الحالية.',
+
         code:
           'RYAN_MONTHLY_MESSAGE_LIMIT',
+
         plan:
           entitlements.planName,
+
         limit:
           entitlements.aiMessages,
+
         used:
           usage.messageCount,
+
         conversationId:
           conversationId || null,
       })
+
       return
     }
 
@@ -837,17 +1015,23 @@ export default async function handler(
       res.status(429).json({
         error:
           'تم الوصول إلى الحد الشهري لاستخدام Tokens الخاص بـ Ryan في خطتك الحالية.',
+
         code:
           'RYAN_MONTHLY_TOKEN_LIMIT',
+
         plan:
           entitlements.planName,
+
         limit:
           entitlements.ryanTokens,
+
         used:
           usage.totalTokens,
+
         conversationId:
           conversationId || null,
       })
+
       return
     }
 
@@ -862,6 +1046,7 @@ export default async function handler(
               .user_metadata
               ?.full_name ||
             null,
+
           email:
             dbUser.email ||
             authData.user.email ||
@@ -887,10 +1072,14 @@ export default async function handler(
       res.status(409).json({
         error:
           'تم تحويل هذه المحادثة إلى موظف بشري بالفعل.',
+
         conversationId:
           conversation.id,
-        handoff: true,
+
+        handoff:
+          true,
       })
+
       return
     }
 
@@ -902,6 +1091,7 @@ export default async function handler(
       {
         source:
           'ryan-dashboard',
+
         user_id:
           authData.user.id,
       }
@@ -911,12 +1101,15 @@ export default async function handler(
 
     const {
       data: kb,
-    } = await client
-      .from('knowledge_base')
-      .select(
-        'title, content'
-      )
-      .limit(15)
+    } =
+      await client
+        .from(
+          'knowledge_base'
+        )
+        .select(
+          'title, content'
+        )
+        .limit(15)
 
     if (
       kb &&
@@ -983,7 +1176,9 @@ ${knowledgeText}
 
     const contents: any[] = [
       {
-        role: 'user',
+        role:
+          'user',
+
         parts: [
           {
             text:
@@ -991,8 +1186,11 @@ ${knowledgeText}
           },
         ],
       },
+
       {
-        role: 'model',
+        role:
+          'model',
+
         parts: [
           {
             text:
@@ -1000,9 +1198,13 @@ ${knowledgeText}
           },
         ],
       },
+
       ...safeHistory,
+
       {
-        role: 'user',
+        role:
+          'user',
+
         parts: [
           {
             text:
@@ -1019,15 +1221,19 @@ ${knowledgeText}
       await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
         {
-          method: 'POST',
+          method:
+            'POST',
+
           headers: {
             'Content-Type':
               'application/json',
           },
-          body: JSON.stringify({
-            contents,
-            tools,
-          }),
+
+          body:
+            JSON.stringify({
+              contents,
+              tools,
+            }),
         }
       )
 
@@ -1036,30 +1242,40 @@ ${knowledgeText}
 
     if (!response.ok) {
       const usageMetadata =
-        getUsageMetadata(data)
+        getUsageMetadata(
+          data
+        )
 
       await recordUsage(
         client,
         {
           organizationId,
+
           conversationId:
             conversation.id,
+
           userId:
             authData.user.id,
+
           eventType:
             'error',
+
           inputTokens:
             usageMetadata.inputTokens,
+
           outputTokens:
             usageMetadata.outputTokens,
+
           estimatedCost:
             estimateCost(
               usageMetadata.inputTokens,
               usageMetadata.outputTokens
             ),
+
           metadata: {
             stage:
               'initial_gemini_request',
+
             status:
               response.status,
           },
@@ -1069,9 +1285,11 @@ ${knowledgeText}
       res.status(502).json({
         error:
           'تعذر الاتصال بمحرك الذكاء الاصطناعي',
+
         conversationId:
           conversation.id,
       })
+
       return
     }
 
@@ -1080,7 +1298,9 @@ ${knowledgeText}
     let totalEstimatedCost = 0
 
     const firstUsage =
-      getUsageMetadata(data)
+      getUsageMetadata(
+        data
+      )
 
     totalInputTokens +=
       firstUsage.inputTokens
@@ -1099,7 +1319,8 @@ ${knowledgeText}
         ?.content?.parts
 
     let actionTaken:
-      string | null = null
+      | string
+      | null = null
 
     const functionCallPart =
       parts?.find(
@@ -1121,15 +1342,20 @@ ${knowledgeText}
         client,
         {
           organizationId,
+
           conversationId:
             conversation.id,
+
           userId:
             authData.user.id,
+
           eventType:
             'tool_call',
+
           metadata: {
             tool:
               name,
+
             args:
               args || {},
           },
@@ -1137,7 +1363,8 @@ ${knowledgeText}
       )
 
       const {
-        error: functionError,
+        error:
+          functionError,
       } =
         await runFunction(
           client,
@@ -1150,6 +1377,7 @@ ${knowledgeText}
           ? {
               success:
                 false,
+
               error:
                 functionError.message,
             }
@@ -1179,12 +1407,17 @@ ${knowledgeText}
             .update({
               handled_by:
                 'human',
+
               status:
                 'pending',
+
               metadata: {
-                ...conversation.metadata,
+                ...(conversation.metadata ||
+                  {}),
+
                 handoff:
                   true,
+
                 handoff_reason:
                   args?.reason ||
                   null,
@@ -1196,7 +1429,8 @@ ${knowledgeText}
             )
             .eq(
               'organization_id',
-              organizationId)
+              organizationId
+            )
 
         if (
           handoffUpdateError
@@ -1211,6 +1445,7 @@ ${knowledgeText}
       contents.push({
         role:
           'model',
+
         parts: [
           functionCallPart,
         ],
@@ -1219,35 +1454,42 @@ ${knowledgeText}
       contents.push({
         role:
           'user',
+
         parts: [
           {
-            functionResponse:
-              {
-                name,
-                response:
-                  functionResult,
-              },
+            functionResponse: {
+              name,
+
+              response:
+                functionResult,
+            },
           },
         ],
       })
 
       /**
        * Gemini request #2
-       * يتم تنفيذه فقط عندما Ryan استخدم Tool.
+       *
+       * يتم تنفيذه فقط عندما Ryan
+       * استخدم Tool.
        */
       response =
         await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
           {
-            method: 'POST',
+            method:
+              'POST',
+
             headers: {
               'Content-Type':
                 'application/json',
             },
-            body: JSON.stringify({
-              contents,
-              tools,
-            }),
+
+            body:
+              JSON.stringify({
+                contents,
+                tools,
+              }),
           }
         )
 
@@ -1276,26 +1518,35 @@ ${knowledgeText}
           client,
           {
             organizationId,
+
             conversationId:
               conversation.id,
+
             userId:
               authData.user.id,
+
             eventType:
               'error',
+
             inputTokens:
               usageMetadata.inputTokens,
+
             outputTokens:
               usageMetadata.outputTokens,
+
             estimatedCost:
               estimateCost(
                 usageMetadata.inputTokens,
                 usageMetadata.outputTokens
               ),
+
             metadata: {
               stage:
                 'tool_followup_gemini_request',
+
               status:
                 response.status,
+
               tool:
                 name,
             },
@@ -1305,10 +1556,13 @@ ${knowledgeText}
         res.status(502).json({
           error:
             'تم تنفيذ الإجراء لكن تعذر استلام رد Ryan النهائي',
+
           conversationId:
             conversation.id,
+
           actionTaken,
         })
+
         return
       }
 
@@ -1345,18 +1599,25 @@ ${knowledgeText}
         client,
         {
           organizationId,
+
           conversationId:
             conversation.id,
+
           userId:
             authData.user.id,
+
           eventType:
             'error',
+
           inputTokens:
             totalInputTokens,
+
           outputTokens:
             totalOutputTokens,
+
           estimatedCost:
             totalEstimatedCost,
+
           metadata: {
             stage:
               'empty_gemini_reply',
@@ -1367,56 +1628,57 @@ ${knowledgeText}
       res.status(502).json({
         error:
           'لم يتم استلام رد من الذكاء الاصطناعي',
+
         conversationId:
           conversation.id,
+
         actionTaken,
       })
+
       return
     }
 
     /**
      * تسجيل إجمالي استخدام رسالة Ryan.
-     *
-     * مهم:
-     * في حالة Tool Call يوجد request أول
-     * وrequest ثاني، لذلك يتم تسجيل الإجمالي.
      */
     await recordUsage(
       client,
       {
         organizationId,
+
         conversationId:
           conversation.id,
+
         userId:
           authData.user.id,
+
         eventType:
           'message',
+
         inputTokens:
           totalInputTokens,
+
         outputTokens:
           totalOutputTokens,
+
         estimatedCost:
           totalEstimatedCost,
+
         metadata: {
           action:
             actionTaken,
+
           plan:
             entitlements.planName,
+
           subscription_id:
             entitlements.subscriptionId,
+
           plan_id:
             entitlements.planId,
         },
       }
     )
-
-    /**
-     * حماية إضافية:
-     * إذا كان تسجيل الاستخدام جعلنا
-     * نتجاوز حد الـTokens، لا نحذف الرد.
-     * الرسالة الحالية مسموحة، والحد سيطبق
-     * على الطلب التالي.
-     */
 
     await insertMessage(
       client,
@@ -1426,16 +1688,21 @@ ${knowledgeText}
       {
         source:
           'ryan',
+
         action:
           actionTaken,
+
         usage: {
           input_tokens:
             totalInputTokens,
+
           output_tokens:
             totalOutputTokens,
+
           total_tokens:
             totalInputTokens +
             totalOutputTokens,
+
           estimated_cost:
             totalEstimatedCost,
         },
@@ -1444,14 +1711,19 @@ ${knowledgeText}
 
     res.status(200).json({
       reply,
+
       actionTaken,
+
       conversationId:
         conversation.id,
+
       usage: {
         inputTokens:
           totalInputTokens,
+
         outputTokens:
           totalOutputTokens,
+
         totalTokens:
           totalInputTokens +
           totalOutputTokens,
@@ -1463,6 +1735,11 @@ ${knowledgeText}
       error
     )
 
+    /*
+     * organizationId يبدأ بقيمة فارغة.
+     * لذلك لن يتم تسجيل الخطأ إلا بعد نجاح
+     * تحديد الشركة فعليًا.
+     */
     if (
       organizationId
     ) {
@@ -1470,10 +1747,13 @@ ${knowledgeText}
         client,
         {
           organizationId,
+
           conversationId:
             currentConversationId,
+
           eventType:
             'error',
+
           metadata: {
             message:
               error?.message ||
@@ -1487,6 +1767,7 @@ ${knowledgeText}
       error:
         error?.message ||
         'حدث خطأ غير متوقع',
+
       conversationId:
         currentConversationId,
     })
