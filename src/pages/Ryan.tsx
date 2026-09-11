@@ -909,6 +909,15 @@ export default function Ryan() {
       }
     }
 
+  /*
+   * Send a message to Ryan.
+   *
+   * IMPORTANT:
+   * - The Supabase access token is sent through the Authorization header.
+   * - The token is NOT sent inside the request body.
+   * - The response is read as text first so a malformed/non-JSON API response
+   *   does not produce an opaque browser JSON parsing error.
+   */
   const handleSend = async (
     event: React.FormEvent
   ) => {
@@ -991,20 +1000,36 @@ export default function Ryan() {
             headers: {
               'Content-Type':
                 'application/json',
+              Authorization:
+                `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               message:
                 userMessage,
               history,
               companyName,
-              accessToken,
               conversationId,
             }),
           }
         )
 
-      const data =
-        await response.json()
+      const responseText =
+        await response.text()
+
+      let data: any = null
+
+      if (responseText) {
+        try {
+          data =
+            JSON.parse(
+              responseText
+            )
+        } catch {
+          throw new Error(
+            `Ryan API returned an invalid response (${response.status})`
+          )
+        }
+      }
 
       if (
         data?.conversationId
@@ -1026,7 +1051,7 @@ export default function Ryan() {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-            'حدث خطأ أثناء التواصل مع Ryan'
+            `حدث خطأ أثناء التواصل مع Ryan (${response.status})`
         )
       }
 
@@ -1034,12 +1059,12 @@ export default function Ryan() {
         id: `ryan-${Date.now()}`,
         role: 'model',
         text:
-          data.reply ||
+          data?.reply ||
           'تم استلام رسالتك.',
         createdAt:
           new Date().toISOString(),
         actionTaken:
-          data.actionTaken ||
+          data?.actionTaken ||
           null,
       }
 
@@ -1054,7 +1079,7 @@ export default function Ryan() {
       ])
 
       if (
-        data.actionTaken ===
+        data?.actionTaken ===
         'request_human_handoff'
       ) {
         setPaused(true)
