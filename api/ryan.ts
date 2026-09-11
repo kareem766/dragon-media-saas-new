@@ -29,6 +29,9 @@ type RyanHistoryItem = {
   sender?: string
   text?: string
   content?: string
+  parts?: Array<{
+    text?: string
+  }>
 }
 
 type GeminiPart = {
@@ -242,17 +245,37 @@ function containsKeyword(
   )
 }
 
+function getHistoryItemText(
+  item: RyanHistoryItem,
+) {
+  if (item.text) {
+    return item.text
+  }
+
+  if (item.content) {
+    return item.content
+  }
+
+  if (
+    Array.isArray(item.parts)
+  ) {
+    return item.parts
+      .map((part) => part?.text || '')
+      .join('')
+      .trim()
+  }
+
+  return ''
+}
+
 function getHistoryText(
   history: RyanHistoryItem[],
   count = 6,
 ) {
   return history
     .slice(-count)
-    .map(
-      (item) =>
-        item.text ||
-        item.content ||
-        '',
+    .map((item) =>
+      getHistoryItemText(item),
     )
     .filter(Boolean)
     .join(' ')
@@ -265,9 +288,7 @@ function isRecentBookingContext(
 
   return recent.some((item) => {
     const text =
-      item.text ||
-      item.content ||
-      ''
+      getHistoryItemText(item)
 
     return containsKeyword(
       text,
@@ -294,11 +315,7 @@ function getLatestAssistantMessage(
       item.sender === 'ai'
 
     if (isAssistant) {
-      return (
-        item.text ||
-        item.content ||
-        ''
-      )
+      return getHistoryItemText(item)
     }
   }
 
@@ -405,10 +422,7 @@ function detectIntent(
   history: RyanHistoryItem[] = [],
 ): RyanIntent {
   /*
-   * IMPORTANT:
-   * The current user message has priority.
-   * We only use recent history when the current message
-   * is clearly a continuation of an existing booking flow.
+   * Current message has priority.
    */
 
   if (
@@ -439,11 +453,7 @@ function detectIntent(
   }
 
   /*
-   * Example:
-   * Ryan: تحب تحجز أي خدمة؟
-   * User: إدارة صفحات
-   * The current message does not contain حجز,
-   * but the recent conversation clearly does.
+   * Booking continuation.
    */
   if (isRecentBookingContext(history)) {
     return 'booking'
@@ -474,11 +484,6 @@ function getToolsForIntent(
     ]
   }
 
-  /*
-   * Keep general mode conservative.
-   * Booking/handoff/deal should normally be triggered
-   * by deterministic intent detection first.
-   */
   return [
     TOOL_DEFINITIONS.create_lead,
     TOOL_DEFINITIONS.create_deal,
@@ -498,13 +503,6 @@ function getSupabaseClient(
     )
   }
 
-  /*
-   * Important:
-   * Use the authenticated user's JWT for all database
-   * operations performed by Ryan.
-   * This allows Supabase RLS to evaluate auth.uid()
-   * against the actual signed-in user.
-   */
   return createClient(
     supabaseUrl,
     supabaseAnonKey,
@@ -567,11 +565,6 @@ async function getOrganizationId(
   >,
   userId: string,
 ) {
-  /*
-   * Current Dragon Media schema uses users.organization_id.
-   * Keep organization lookup server-side and never trust
-   * an organization id coming from the browser.
-   */
   const {
     data,
     error,
@@ -596,12 +589,6 @@ async function getRyanEntitlements(
   >,
   organizationId: string,
 ) {
-  /*
-   * IMPORTANT:
-   * subscriptions.created_at does not exist in the
-   * current Dragon Media schema.
-   * Do not order by created_at here.
-   */
   const {
     data,
     error,
@@ -815,6 +802,56 @@ function recordUsageNonBlocking(
   })
 }
 
+async function saveMessage(
+  supabase: SupabaseClient<
+    any,
+    'public',
+    any
+  >,
+  payload: {
+    conversationId: string
+    senderType: 'customer' | 'ai'
+    content: string
+    metadata?: Record<
+      string,
+      unknown
+    >
+  },
+) {
+  const {
+    error,
+  } = await supabase
+    .from('messages')
+    .insert({
+      conversation_id:
+        payload.conversationId,
+
+      sender_type:
+        payload.senderType,
+
+      content:
+        payload.content,
+
+      ...(payload.metadata
+        ? {
+            metadata:
+              payload.metadata,
+          }
+        : {}),
+    })
+
+  if (error) {
+    console.error(
+      'Ryan message save error:',
+      error,
+    )
+
+    return false
+  }
+
+  return true
+}
+
 async function getOrCreateCustomer(
   supabase: SupabaseClient<
     any,
@@ -882,10 +919,6 @@ async function getOrCreateCustomer(
     .single()
 
   if (error) {
-    /*
-     * If a unique constraint exists and another request
-     * created the customer at the same time, retry lookup.
-     */
     const retry =
       await supabase
         .from('customers')
@@ -930,10 +963,6 @@ async function getOrCreateConversation(
   customerId: string,
   conversationId?: string | null,
 ) {
-  /*
-   * If the frontend sends a conversation id,
-   * restore ONLY that exact conversation.
-   */
   if (conversationId) {
     const {
       data,
@@ -968,11 +997,6 @@ async function getOrCreateConversation(
     }
   }
 
-  /*
-   * IMPORTANT:
-   * Never fallback to the latest conversation.
-   * No conversation id means a genuinely new conversation.
-   */
   const {
     data,
     error,
@@ -1464,30 +1488,30 @@ export default async function handler(
   }
 
   const {
-  message,
-  history = [],
-  companyName = '',
-  conversationId = null,
-} = req.body || {}
+    message,
+    history = [],
+    companyName = '',
+    conversationId = null,
+  } = req.body || {}
 
-const authorizationHeader =
-  req.headers.authorization ||
-  req.headers.Authorization
+  const authorizationHeader =
+    req.headers.authorization ||
+    req.headers.Authorization
 
-const headerAccessToken =
-  typeof authorizationHeader === 'string' &&
-  authorizationHeader.startsWith('Bearer ')
-    ? authorizationHeader.slice(7).trim()
-    : ''
+  const headerAccessToken =
+    typeof authorizationHeader === 'string' &&
+    authorizationHeader.startsWith('Bearer ')
+      ? authorizationHeader.slice(7).trim()
+      : ''
 
-const bodyAccessToken =
-  typeof req.body?.accessToken === 'string'
-    ? req.body.accessToken.trim()
-    : ''
+  const bodyAccessToken =
+    typeof req.body?.accessToken === 'string'
+      ? req.body.accessToken.trim()
+      : ''
 
-const accessToken =
-  headerAccessToken ||
-  bodyAccessToken
+  const accessToken =
+    headerAccessToken ||
+    bodyAccessToken
 
   if (
     !message ||
@@ -1561,6 +1585,15 @@ const accessToken =
         })
     }
 
+    /*
+     * Normalize history.
+     *
+     * Ryan.ts now sends:
+     * { role, text }
+     *
+     * But we also support the older content/parts shapes
+     * so existing conversations do not break.
+     */
     const safeHistory: RyanHistoryItem[] =
       Array.isArray(history)
         ? history
@@ -1569,6 +1602,19 @@ const accessToken =
                 item &&
                 typeof item ===
                   'object',
+            )
+            .map((item) => ({
+              ...item,
+              text:
+                getHistoryItemText(
+                  item,
+                ),
+            }))
+            .filter(
+              (item) =>
+                String(
+                  item.text || '',
+                ).trim() !== '',
             )
             .slice(
               -HISTORY_LIMIT,
@@ -1582,7 +1628,85 @@ const accessToken =
       )
 
     /*
-     * Entitlements and usage can be loaded in parallel.
+     * Customer and conversation MUST be created
+     * before limits are checked.
+     *
+     * This guarantees that the customer's message
+     * is not lost when the Ryan limit is reached.
+     */
+    const customer =
+      await getOrCreateCustomer(
+        supabase,
+        organizationId,
+        user.email ||
+          `user-${user.id}@website.local`,
+        user.user_metadata
+          ?.full_name ||
+          user.user_metadata
+            ?.name ||
+          null,
+      )
+
+    const conversation =
+      await getOrCreateConversation(
+        supabase,
+        organizationId,
+        customer.id,
+        conversationId,
+      )
+
+    /*
+     * Save the customer's message BEFORE:
+     * - limits
+     * - handoff
+     * - Gemini
+     *
+     * messages does NOT contain organization_id
+     * or sender_id in the current schema.
+     */
+    await saveMessage(
+      supabase,
+      {
+        conversationId:
+          conversation.id,
+
+        senderType:
+          'customer',
+
+        content:
+          message,
+      },
+    )
+
+    /*
+     * Human handoff protection.
+     *
+     * The current customer message has already
+     * been saved above.
+     */
+    if (
+      conversation.handled_by ===
+      'human'
+    ) {
+      return res
+        .status(200)
+        .json({
+          reply:
+            'المحادثة حاليًا مع أحد أفراد الفريق وسيتم الرد عليك قريبًا.',
+
+          conversationId:
+            conversation.id,
+
+          actionTaken:
+            'request_human_handoff',
+
+          handoff: true,
+        })
+    }
+
+    /*
+     * Entitlements and usage are loaded AFTER
+     * the customer's message has been persisted.
      */
     const [
       entitlements,
@@ -1609,7 +1733,9 @@ const accessToken =
         .json({
           error:
             'تم استهلاك حد رسائل Ryan لهذا الشهر.',
-          conversationId,
+
+          conversationId:
+            conversation.id,
         })
     }
 
@@ -1623,91 +1749,10 @@ const accessToken =
         .json({
           error:
             'تم استهلاك حد Ryan الشهري.',
-          conversationId,
-        })
-    }
-
-    /*
-     * Customer is scoped to this organization.
-     */
-    const customer =
-      await getOrCreateCustomer(
-        supabase,
-        organizationId,
-        user.email ||
-          `user-${user.id}@website.local`,
-        user.user_metadata
-          ?.full_name ||
-          user.user_metadata
-            ?.name ||
-          null,
-      )
-
-    /*
-     * Existing conversation id = restore exact conversation.
-     * Missing id = create genuinely new conversation.
-     */
-    const conversation =
-      await getOrCreateConversation(
-        supabase,
-        organizationId,
-        customer.id,
-        conversationId,
-      )
-
-    /*
-     * Human handoff protection.
-     */
-    if (
-      conversation.handled_by ===
-      'human'
-    ) {
-      return res
-        .status(200)
-        .json({
-          reply:
-            'المحادثة حاليًا مع أحد أفراد الفريق وسيتم الرد عليك قريبًا.',
 
           conversationId:
             conversation.id,
-
-          handoff: true,
         })
-    }
-
-    /*
-     * Save customer message.
-     *
-     * IMPORTANT:
-     * messages does NOT contain organization_id.
-     * Organization is already available through conversation_id.
-     */
-    const {
-      error:
-        customerMessageError,
-    } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id:
-          conversation.id,
-
-        sender_type:
-          'customer',
-
-        sender_id:
-          customer.id,
-
-        content:
-          message,
-      })
-
-    if (
-      customerMessageError
-    ) {
-      console.error(
-        'Ryan customer message error:',
-        customerMessageError,
-      )
     }
 
     /*
@@ -1735,24 +1780,22 @@ const accessToken =
 
         const reply =
           customerName
-            ? `أهلاً بك يا ${customerName}، تحب تحجز أنهي خدمة؟`
+            ? `أهلاً يا ${customerName}، تحب تحجز أنهي خدمة؟`
             : 'أهلاً بك، تحب تحجز أنهي خدمة؟'
 
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id:
+        await saveMessage(
+          supabase,
+          {
+            conversationId:
               conversation.id,
 
-            sender_type:
+            senderType:
               'ai',
-
-            sender_id:
-              user.id,
 
             content:
               reply,
-          })
+          },
+        )
 
         return res
           .status(200)
@@ -1771,21 +1814,19 @@ const accessToken =
         const reply =
           'تمام، تحب الحجز يكون يوم إيه؟'
 
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id:
+        await saveMessage(
+          supabase,
+          {
+            conversationId:
               conversation.id,
 
-            sender_type:
+            senderType:
               'ai',
-
-            sender_id:
-              user.id,
 
             content:
               reply,
-          })
+          },
+        )
 
         return res
           .status(200)
@@ -1804,21 +1845,19 @@ const accessToken =
         const reply =
           'تمام، تحب الموعد الساعة كام؟'
 
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id:
+        await saveMessage(
+          supabase,
+          {
+            conversationId:
               conversation.id,
 
-            sender_type:
+            senderType:
               'ai',
-
-            sender_id:
-              user.id,
 
             content:
               reply,
-          })
+          },
+        )
 
         return res
           .status(200)
@@ -1886,9 +1925,9 @@ const accessToken =
       ...safeHistory
         .map((item) => {
           const text =
-            item.text ||
-            item.content ||
-            ''
+            getHistoryItemText(
+              item,
+            )
 
           if (!text) {
             return null
@@ -1901,7 +1940,9 @@ const accessToken =
               item.role ===
                 'model' ||
               item.sender ===
-                'model'
+                'model' ||
+              item.sender ===
+                'assistant'
                 ? 'model'
                 : 'user',
 
@@ -2224,6 +2265,10 @@ const accessToken =
           continue
         }
 
+        /*
+         * Extra safety:
+         * handoff intent can ONLY call handoff.
+         */
         if (
           intent ===
             'handoff' &&
@@ -2384,17 +2429,14 @@ const accessToken =
             ? `تم تسجيل حجز ${serviceName} بنجاح يوم ${date} الساعة ${time}.`
             : `تم تسجيل حجز ${serviceName} بنجاح.`
 
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id:
+        await saveMessage(
+          supabase,
+          {
+            conversationId:
               conversation.id,
 
-            sender_type:
+            senderType:
               'ai',
-
-            sender_id:
-              user.id,
 
             content:
               reply,
@@ -2403,7 +2445,8 @@ const accessToken =
               action_taken:
                 'book_appointment',
             },
-          })
+          },
+        )
 
         return res
           .status(200)
@@ -2413,7 +2456,7 @@ const accessToken =
             conversationId:
               conversation.id,
 
-            action:
+            actionTaken:
               'book_appointment',
           })
       }
@@ -2432,17 +2475,14 @@ const accessToken =
         const reply =
           'تمام، هحوّل المحادثة لحد من الفريق ويتواصل معاك قريبًا.'
 
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id:
+        await saveMessage(
+          supabase,
+          {
+            conversationId:
               conversation.id,
 
-            sender_type:
+            senderType:
               'ai',
-
-            sender_id:
-              user.id,
 
             content:
               reply,
@@ -2454,7 +2494,8 @@ const accessToken =
               status:
                 'pending',
             },
-          })
+          },
+        )
 
         return res
           .status(200)
@@ -2464,7 +2505,7 @@ const accessToken =
             conversationId:
               conversation.id,
 
-            action:
+            actionTaken:
               'request_human_handoff',
 
             handoff:
@@ -2486,17 +2527,14 @@ const accessToken =
         const reply =
           'تمام، سجلت طلبك وهنتابع معاك بخصوص الخدمة والتفاصيل.'
 
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id:
+        await saveMessage(
+          supabase,
+          {
+            conversationId:
               conversation.id,
 
-            sender_type:
+            senderType:
               'ai',
-
-            sender_id:
-              user.id,
 
             content:
               reply,
@@ -2505,7 +2543,8 @@ const accessToken =
               action_taken:
                 'create_deal',
             },
-          })
+          },
+        )
 
         return res
           .status(200)
@@ -2515,7 +2554,7 @@ const accessToken =
             conversationId:
               conversation.id,
 
-            action:
+            actionTaken:
               'create_deal',
           })
       }
@@ -2534,17 +2573,14 @@ const accessToken =
         const reply =
           'تمام، سجلت بياناتك وهنتابع معاك قريبًا.'
 
-        await supabase
-          .from('messages')
-          .insert({
-            conversation_id:
+        await saveMessage(
+          supabase,
+          {
+            conversationId:
               conversation.id,
 
-            sender_type:
+            senderType:
               'ai',
-
-            sender_id:
-              user.id,
 
             content:
               reply,
@@ -2553,7 +2589,8 @@ const accessToken =
               action_taken:
                 'create_lead',
             },
-          })
+          },
+        )
 
         return res
           .status(200)
@@ -2563,7 +2600,7 @@ const accessToken =
             conversationId:
               conversation.id,
 
-            action:
+            actionTaken:
               'create_lead',
           })
       }
@@ -2583,9 +2620,7 @@ const accessToken =
         .trim()
 
     /*
-     * Gemini can return MAX_TOKENS when it reaches
-     * the configured output limit. Never return a
-     * partial/cut-off Ryan sentence to the customer.
+     * Never return partial/cut-off Ryan text.
      */
     if (
       finishReason ===
@@ -2630,20 +2665,14 @@ const accessToken =
         },
       )
 
-      const {
-        error:
-          fallbackMessageError,
-      } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id:
+      await saveMessage(
+        supabase,
+        {
+          conversationId:
             conversation.id,
 
-          sender_type:
+          senderType:
             'ai',
-
-          sender_id:
-            user.id,
 
           content:
             fallbackReply,
@@ -2656,16 +2685,8 @@ const accessToken =
               finishReason ||
               'EMPTY_RESPONSE',
           },
-        })
-
-      if (
-        fallbackMessageError
-      ) {
-        console.error(
-          'Ryan fallback message error:',
-          fallbackMessageError,
-        )
-      }
+        },
+      )
 
       return res
         .status(200)
@@ -2721,31 +2742,19 @@ const accessToken =
       },
     )
 
-    const {
-      error:
-        aiMessageError,
-    } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id:
+    await saveMessage(
+      supabase,
+      {
+        conversationId:
           conversation.id,
 
-        sender_type:
+        senderType:
           'ai',
-
-        sender_id:
-          user.id,
 
         content:
           reply,
-      })
-
-    if (aiMessageError) {
-      console.error(
-        'Ryan AI message error:',
-        aiMessageError,
-      )
-    }
+      },
+    )
 
     return res
       .status(200)
