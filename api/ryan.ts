@@ -13,9 +13,10 @@ const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
 const geminiApiKey = process.env.GEMINI_API_KEY
 
 type RyanIntent =
-  | 'booking'
+  | 'appointment'
   | 'handoff'
   | 'deal'
+  | 'lead'
   | 'general'
 
 type RyanToolName =
@@ -65,21 +66,40 @@ const TOOL_DEFINITIONS = {
   create_lead: {
     name: 'create_lead',
     description:
-      'Create a sales lead only when the customer shows genuine interest in the company services. Never use this merely because the customer provided a name or phone number. Never use this during booking intent.',
+      `
+Create or register a genuine sales/customer-service lead in the CRM.
+
+Use this when the customer has shown meaningful interest in Dragon Media, a service, consultation, pricing, page management, advertising, content, design, marketing, or another business need.
+
+The purpose is to save the useful customer information already collected during the conversation.
+
+Do NOT wait for every field if enough meaningful information is already available.
+
+Do NOT create a lead merely because the customer said hello, asked a completely generic question, or only provided a name.
+
+IMPORTANT:
+- Extract information from the conversation.
+- Do not ask for information that the customer already provided.
+- Do not repeat questions unnecessarily.
+- The customer name is preferred, but do not invent it.
+- Include service, activity, goal and notes whenever they are known.
+- If phone is known, include it.
+- This tool is NOT an appointment booking tool.
+`,
     parameters: {
       type: 'OBJECT',
       properties: {
         name: {
           type: 'STRING',
-          description: 'Customer name',
+          description: 'Customer name if known',
         },
         phone: {
           type: 'STRING',
-          description: 'Customer phone number',
+          description: 'Customer phone number if known',
         },
         service: {
           type: 'STRING',
-          description: 'Requested service',
+          description: 'Service or area the customer is interested in',
         },
         activity: {
           type: 'STRING',
@@ -87,11 +107,11 @@ const TOOL_DEFINITIONS = {
         },
         goal: {
           type: 'STRING',
-          description: 'Customer goal',
+          description: 'Customer goal or need',
         },
         notes: {
           type: 'STRING',
-          description: 'Additional notes',
+          description: 'Useful contextual notes from the conversation',
         },
       },
       required: ['name'],
@@ -101,7 +121,20 @@ const TOOL_DEFINITIONS = {
   create_deal: {
     name: 'create_deal',
     description:
-      'Create a deal only when the customer clearly wants to purchase or contract for a service.',
+      `
+Create a CRM deal only when the customer has clearly moved from inquiry/interest to a serious purchase or contracting intention.
+
+Examples:
+- العميل يريد التعاقد.
+- العميل يقول إنه يريد شراء الخدمة.
+- العميل وافق على البدء.
+- العميل يطلب تنفيذ الخدمة بعد الاتفاق.
+
+Do NOT create a deal just because the customer asked about a service or price.
+
+Use the information already available in the conversation.
+Do not ask unnecessary questions only to fill optional fields.
+`,
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -128,22 +161,44 @@ const TOOL_DEFINITIONS = {
   book_appointment: {
     name: 'book_appointment',
     description:
-      'Book an appointment only when service_name, date, and time are all known. Never claim success unless the booking function succeeds.',
+      `
+Create a CRM appointment ONLY when the customer explicitly wants a real appointment, meeting, consultation meeting, call with a team member, or to meet someone from Dragon Media.
+
+This is NOT for booking a Dragon Media service.
+
+Do NOT use this tool when the customer simply says:
+- عايز احجز خدمة
+- عايز أبدأ الخدمة
+- عايز إدارة صفحات
+- عايز اشتري خدمة
+
+Those cases should be handled as a normal sales/customer-service conversation and may create a lead or deal.
+
+Use this tool only when there is a genuine appointment/meeting request.
+
+Before calling the tool, service_name, date and time must be known.
+The service_name should describe the subject of the meeting/consultation, such as:
+- استشارة تسويقية
+- مقابلة لمناقشة إدارة الصفحات
+- اجتماع بخصوص الإعلانات
+
+Never claim the appointment was created unless the tool succeeds.
+`,
     parameters: {
       type: 'OBJECT',
       properties: {
         service_name: {
           type: 'STRING',
           description:
-            'The service the customer wants to book',
+            'Subject/purpose of the appointment or meeting',
         },
         date: {
           type: 'STRING',
-          description: 'Appointment date',
+          description: 'Requested appointment date',
         },
         time: {
           type: 'STRING',
-          description: 'Appointment time',
+          description: 'Requested appointment time',
         },
       },
       required: [
@@ -157,7 +212,13 @@ const TOOL_DEFINITIONS = {
   request_human_handoff: {
     name: 'request_human_handoff',
     description:
-      'Transfer the conversation to a human team member when the customer explicitly asks for a human or human assistance.',
+      `
+Transfer the conversation to a human team member when the customer explicitly asks for a human, employee, sales representative, customer-service representative, manager, or someone from the team.
+
+Also use it when the situation genuinely requires human intervention and Ryan cannot responsibly complete it.
+
+Do not use it simply because the conversation is long.
+`,
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -171,21 +232,6 @@ const TOOL_DEFINITIONS = {
   },
 } as const
 
-const BOOKING_KEYWORDS = [
-  'احجز',
-  'حجز',
-  'حجزت',
-  'موعد',
-  'ميعاد',
-  'احجزلي',
-  'عايز احجز',
-  'حابب احجز',
-  'اريد حجز',
-  'ممكن احجز',
-  'عايز احجز موعد',
-  'حجز موعد',
-]
-
 const HANDOFF_KEYWORDS = [
   'موظف',
   'خدمة عملاء',
@@ -195,30 +241,81 @@ const HANDOFF_KEYWORDS = [
   'بني ادم',
   'شخص حقيقي',
   'موظف حقيقي',
+  'عايز حد',
+  'عايز موظف',
+  'اكلم حد',
+  'اكلم موظف',
+]
+
+const APPOINTMENT_KEYWORDS = [
+  'مقابلة',
+  'مقابله',
+  'اجتماع',
+  'اجتماع مع',
+  'اقابل',
+  'أقابل',
+  'قابل',
+  'مقابله مع',
+  'موعد مع',
+  'ميعاد مع',
+  'موعد مع حد',
+  'ميعاد مع حد',
+  'ممكن اقابل',
+  'ممكن أقابل',
+  'عايز اقابل',
+  'عايز أقابل',
+  'عايز مقابلة',
+  'حابب اقابل',
+  'حابب أقابل',
+  'استشارة',
+  'جلسة استشارة',
+  'مكالمة مع الفريق',
+  'اتكلم مع الفريق',
 ]
 
 const DEAL_KEYWORDS = [
   'شراء',
   'اشتري',
   'عايز الخدمة',
-  'اتعاقد',
-  'عرض سعر',
   'عايز أشتري',
   'عايز اشتري',
+  'اتعاقد',
   'التعاقد',
+  'عايز اتعاقد',
+  'عايز أتعاقد',
+  'نبدأ',
+  'ابدأ',
+  'أبدأ',
+  'ابدأ الخدمة',
+  'أبدأ الخدمة',
+  'عايز ابدأ',
+  'عايز أبدأ',
 ]
 
-const BOOKING_CONTEXT_KEYWORDS = [
-  'الخدمة',
-  'اسم الخدمة',
-  'تاريخ',
-  'التاريخ',
-  'يوم',
-  'ميعاد',
-  'موعد',
-  'وقت',
-  'الساعة',
-  'الوقت',
+const LEAD_INTEREST_KEYWORDS = [
+  'مهتم',
+  'محتاج',
+  'عايز اعرف',
+  'عايز أعرف',
+  'ممكن تفاصيل',
+  'عايز تفاصيل',
+  'عايز معلومات',
+  'معلومات عن',
+  'تفاصيل عن',
+  'سعر',
+  'الاسعار',
+  'الأسعار',
+  'تكلفة',
+  'كام',
+  'إدارة الصفحات',
+  'ادارة الصفحات',
+  'اعلانات',
+  'إعلانات',
+  'محتوى',
+  'تصميم',
+  'تسويق',
+  'خدماتكم',
+  'الخدمات',
 ]
 
 function normalizeArabic(value: string) {
@@ -256,9 +353,7 @@ function getHistoryItemText(
     return item.content
   }
 
-  if (
-    Array.isArray(item.parts)
-  ) {
+  if (Array.isArray(item.parts)) {
     return item.parts
       .map((part) => part?.text || '')
       .join('')
@@ -270,7 +365,7 @@ function getHistoryItemText(
 
 function getHistoryText(
   history: RyanHistoryItem[],
-  count = 6,
+  count = 8,
 ) {
   return history
     .slice(-count)
@@ -279,22 +374,6 @@ function getHistoryText(
     )
     .filter(Boolean)
     .join(' ')
-}
-
-function isRecentBookingContext(
-  history: RyanHistoryItem[],
-) {
-  const recent = history.slice(-4)
-
-  return recent.some((item) => {
-    const text =
-      getHistoryItemText(item)
-
-    return containsKeyword(
-      text,
-      BOOKING_CONTEXT_KEYWORDS,
-    )
-  })
 }
 
 function getLatestAssistantMessage(
@@ -340,91 +419,13 @@ function extractCustomerName(
     .join(' ')
 }
 
-function getBookingStep(
-  message: string,
-  history: RyanHistoryItem[],
-) {
-  const latestAssistant =
-    normalizeArabic(
-      getLatestAssistantMessage(
-        history,
-      ),
-    )
-
-  /*
-   * The latest Ryan question is the most reliable
-   * indicator of what the customer is answering.
-   */
-
-  if (
-    latestAssistant.includes(
-      'تحب تحجز انهي خدمه',
-    ) ||
-    latestAssistant.includes(
-      'تحب تحجز اي خدمه',
-    ) ||
-    latestAssistant.includes(
-      'انهي خدمه',
-    ) ||
-    latestAssistant.includes(
-      'اي خدمه',
-    )
-  ) {
-    return 'date'
-  }
-
-  if (
-    latestAssistant.includes(
-      'التاريخ',
-    ) ||
-    latestAssistant.includes(
-      'يوم ايه',
-    ) ||
-    latestAssistant.includes(
-      'يوم اي',
-    ) ||
-    latestAssistant.includes(
-      'عايز تحجز يوم',
-    ) ||
-    latestAssistant.includes(
-      'تحب الحجز يوم',
-    )
-  ) {
-    return 'time'
-  }
-
-  if (
-    latestAssistant.includes(
-      'الوقت',
-    ) ||
-    latestAssistant.includes(
-      'الساعه',
-    ) ||
-    latestAssistant.includes(
-      'ساعة',
-    ) ||
-    latestAssistant.includes(
-      'ميعاد الحجز',
-    )
-  ) {
-    return 'ready'
-  }
-
-  /*
-   * If Ryan did not previously ask a booking question,
-   * this is the beginning of the booking flow.
-   */
-  return 'service'
-}
-
 function detectIntent(
   message: string,
   history: RyanHistoryItem[] = [],
 ): RyanIntent {
   /*
-   * Current message has priority.
+   * Explicit human request always wins.
    */
-
   if (
     containsKeyword(
       message,
@@ -434,15 +435,24 @@ function detectIntent(
     return 'handoff'
   }
 
+  /*
+   * A real appointment/meeting request.
+   *
+   * IMPORTANT:
+   * "عايز احجز خدمة" is NOT an appointment.
+   */
   if (
     containsKeyword(
       message,
-      BOOKING_KEYWORDS,
+      APPOINTMENT_KEYWORDS,
     )
   ) {
-    return 'booking'
+    return 'appointment'
   }
 
+  /*
+   * Explicit purchase/contract intent.
+   */
   if (
     containsKeyword(
       message,
@@ -453,10 +463,45 @@ function detectIntent(
   }
 
   /*
-   * Booking continuation.
+   * Genuine service/business interest.
    */
-  if (isRecentBookingContext(history)) {
-    return 'booking'
+  if (
+    containsKeyword(
+      message,
+      LEAD_INTEREST_KEYWORDS,
+    )
+  ) {
+    return 'lead'
+  }
+
+  /*
+   * If the conversation is already about an appointment,
+   * continue that context without treating ordinary date/time
+   * messages as a new intent.
+   */
+  const recentHistory =
+    getHistoryText(
+      history,
+      6,
+    )
+
+  if (
+    containsKeyword(
+      recentHistory,
+      APPOINTMENT_KEYWORDS,
+    )
+  ) {
+    const normalizedMessage =
+      normalizeArabic(message)
+
+    const looksLikeDateOrTime =
+      /بكره|غدا|غداً|النهارده|اليوم|الاحد|الاتنين|الثلاث|الاربع|الخميس|الجمعه|السبت|الساعة|الساعه|الوقت|ميعاد|موعد|\d/.test(
+        normalizedMessage,
+      )
+
+    if (looksLikeDateOrTime) {
+      return 'appointment'
+    }
   }
 
   return 'general'
@@ -465,9 +510,10 @@ function detectIntent(
 function getToolsForIntent(
   intent: RyanIntent,
 ) {
-  if (intent === 'booking') {
+  if (intent === 'appointment') {
     return [
       TOOL_DEFINITIONS.book_appointment,
+      TOOL_DEFINITIONS.request_human_handoff,
     ]
   }
 
@@ -481,6 +527,15 @@ function getToolsForIntent(
     return [
       TOOL_DEFINITIONS.create_deal,
       TOOL_DEFINITIONS.create_lead,
+      TOOL_DEFINITIONS.request_human_handoff,
+    ]
+  }
+
+  if (intent === 'lead') {
+    return [
+      TOOL_DEFINITIONS.create_lead,
+      TOOL_DEFINITIONS.create_deal,
+      TOOL_DEFINITIONS.request_human_handoff,
     ]
   }
 
@@ -1186,7 +1241,7 @@ async function runFunction(
     ) {
       return {
         success: false,
-        type: 'booking',
+        type: 'appointment',
         error:
           'Missing service_name, date, or time',
       }
@@ -1224,7 +1279,7 @@ async function runFunction(
 
     return {
       success: true,
-      type: 'booking',
+      type: 'appointment',
       data,
     }
   }
@@ -1396,66 +1451,191 @@ function buildSystemPrompt(
       .join('\n')
 
   return `
-أنت Ryan، موظف مبيعات وخدمة عملاء حقيقي داخل شركة ${
+أنت Ryan، موظف خدمة عملاء ومبيعات حقيقي داخل شركة ${
     companyName ||
     'الشركة'
   }.
 
-تحدث باللهجة المصرية بطريقة طبيعية ومهنية ومحترمة.
+مهمتك ليست أن تكون chatbot أو أن تمشي العميل في خطوات ثابتة.
 
-القواعد الأساسية:
+تصرف كموظف مصري محترف يتحدث مع عميل حقيقي.
 
-* رد قصير ومباشر.
-* غالبًا جملة واحدة أو جملتين فقط.
+========================
+أسلوب المحادثة
+========================
+
+* تحدث باللهجة المصرية الطبيعية والمحترمة.
+* كن ودودًا واحترافيًا.
+* اجعل الرد غالبًا جملة أو جملتين.
+* اسأل سؤالًا واحدًا فقط عندما تحتاج معلومة.
+* لا تكرر نفس السؤال إذا كان العميل أجاب عنه بالفعل.
+* لا تبدأ المحادثة من جديد بعد كل رسالة.
+* حافظ على سياق المحادثة بالكامل.
+* لا تستخدم نفس تركيب الجملة في كل رد.
+* لا تقل "تمام، تحب..." في كل رسالة.
 * لا تستخدم إيموجي.
-* اسأل سؤالًا واحدًا فقط في كل رسالة.
-* لا تكرر مقدمة المحادثة.
-* لا تقل إنك ذكاء اصطناعي إلا إذا سُئلت مباشرة.
 * لا تستخدم "يافندم" أو "أستاذ" بشكل مبالغ فيه.
-* لا تخترع أسعارًا أو خدمات أو مواعيد.
-* لا تدعي تنفيذ أي عملية إلا إذا نجحت الأداة فعلًا.
+* لا تقل إنك ذكاء اصطناعي إلا إذا سُئلت مباشرة.
+* لا تخترع أسعارًا أو خدمات أو عروضًا أو مواعيد.
+* لا تدعي تنفيذ أي شيء إلا إذا نجحت الأداة فعلًا.
 
-أولوية الحجز:
-إذا كان العميل يريد حجز موعد، فالحجز أهم من إنشاء Lead أو Deal.
+========================
+أنت موظف وليس Flow
+========================
 
-لا تستخدم create_lead لمجرد أن العميل ذكر:
+لا تتعامل مع المحادثة كالتالي:
 
-* اسمه
-* رقم هاتفه
-* أنه مهتم
-* أنه يريد معرفة التفاصيل
+سؤال 1
+ثم سؤال 2
+ثم سؤال 3
 
-في حالة الحجز:
-اجمع البيانات الناقصة بالترتيب:
+بدلًا من ذلك:
 
-1. الخدمة
-2. التاريخ
-3. الوقت
+افهم ما قاله العميل.
+استخرج المعلومات الموجودة بالفعل.
+احتفظ بها في سياق المحادثة.
+اسأل فقط عن أهم معلومة ناقصة.
 
-اسأل عن عنصر واحد فقط في كل رسالة.
+إذا قال العميل أكثر من معلومة في رسالة واحدة، استخدم كل المعلومات.
 
-لا تستدعِ book_appointment إلا عندما تكون:
+مثال:
+
+العميل:
+"أنا أحمد وعندي شركة ملابس وعايز إدارة صفحات"
+
+أنت تعرف بالفعل:
+الاسم = أحمد
+النشاط = شركة ملابس
+الخدمة = إدارة صفحات
+
+لا تسأل عن هذه المعلومات مرة أخرى.
+
+يمكنك أن تسأل عن الهدف أو أي معلومة ضرورية أخرى فقط.
+
+========================
+مفهوم الحجز
+========================
+
+ممنوع اعتبار كلمة "حجز" حجز خدمة تلقائيًا.
+
+إذا قال العميل:
+"عايز احجز خدمة"
+فهو غالبًا يعبر عن رغبته في بدء/الاستفسار عن خدمة.
+
+لا تنشئ Appointment بسبب ذلك.
+
+تعامل معه كعميل مهتم بالخدمة، وتحدث معه طبيعيًا، واجمع بياناته وسجل Lead عندما تكون هناك معلومات كافية.
+
+========================
+Appointment / مقابلة
+========================
+
+استخدم Appointment فقط عندما يطلب العميل فعلًا:
+
+* مقابلة.
+* اجتماع.
+* موعد مع شخص من الفريق.
+* مقابلة مع موظف.
+* استشارة في موعد.
+* مكالمة أو اجتماع محدد بوقت.
+* أي لقاء فعلي يحتاج تاريخًا ووقتًا.
+
+مثال:
+
+العميل:
+"ممكن أقابل حد من الفريق؟"
+
+أنت:
+"أكيد، تحب المقابلة تكون إمتى؟"
+
+إذا قال:
+"الأحد الساعة 2"
+
+افهم أن التاريخ والوقت تم تحديدهما.
+
+لا تسأل عن التاريخ مرة أخرى.
+
+ولا تستخدم Appointment إلا عندما تكون:
 service_name
 و date
 و time
-موجودة بالفعل.
+موجودة.
 
-بعد نجاح الحجز فقط أخبر العميل أن الحجز تم.
+إذا كانت معلومة واحدة ناقصة، اسأل عنها فقط.
 
-إذا طلب العميل التحدث مع موظف حقيقي:
-استخدم request_human_handoff.
+========================
+Lead / CRM
+========================
 
-إذا أظهر العميل نية شراء أو تعاقد واضحة:
-يمكن استخدام create_deal.
+هدف Ryan الأساسي هو جمع معلومات مفيدة عن العميل بطريقة طبيعية.
 
-إذا كان مجرد استفسار:
-لا تنشئ Lead أو Deal تلقائيًا.
+المعلومات الممكن جمعها:
 
-معلومات الشركة وقاعدة المعرفة:
+* الاسم.
+* رقم الهاتف.
+* النشاط.
+* الخدمة المطلوبة.
+* الهدف.
+* الميزانية إذا ذكرها العميل.
+* رابط الصفحة أو الموقع إذا ذكره.
+* أي تفاصيل مهمة أخرى.
+
+لا تحول الحوار إلى استبيان.
+
+لا تسأل كل هذه الأسئلة مرة واحدة.
+
+اجمع المعلومات من كلام العميل.
+
+إذا ظهر اهتمام حقيقي بخدمة Dragon Media، استخدم create_lead عندما يكون لديك بيانات مفيدة يمكن تسجيلها في CRM.
+
+لا تنشئ Lead لمجرد:
+"السلام عليكم"
+أو سؤال عام جدًا بدون اهتمام حقيقي.
+
+========================
+Deal
+========================
+
+استخدم create_deal فقط عندما يظهر قصد شراء أو تعاقد واضح.
+
+مثال:
+"أنا موافق ونبدأ."
+"عايز أتعاقد."
+"عايز أشتري الخدمة."
+
+مجرد السؤال عن السعر أو الخدمة لا يعني Deal.
+
+========================
+Human Handoff
+========================
+
+إذا طلب العميل شخصًا حقيقيًا أو موظفًا أو أحد أفراد الفريق، استخدم request_human_handoff.
+
+بعد نجاح الأداة فقط أخبر العميل أن المحادثة تم تحويلها.
+
+========================
+المعلومات وقاعدة المعرفة
+========================
+
+لا تخترع أي معلومة غير موجودة في قاعدة المعرفة أو المحادثة.
+
+معلومات الشركة:
 ${
     knowledgeText ||
     'لا توجد معلومات إضافية متاحة حاليًا.'
   }
+
+========================
+قاعدة مهمة جدًا
+========================
+
+لا تسأل العميل عن معلومة قالها بالفعل.
+
+لا تعيد تشغيل الحوار من البداية.
+
+لا تحول كل رسالة إلى سؤال جديد.
+
+افهم السياق أولًا ثم رد كموظف حقيقي.
 `
 }
 
@@ -1557,18 +1737,14 @@ export default async function handler(
         })
     }
 
-    /*
-     * Use the authenticated JWT for all subsequent
-     * Supabase operations.
-     */
     const supabase =
       getSupabaseClient(
         accessToken,
       )
 
     /*
-     * Organization comes from the authenticated user's
-     * database record — never from the request body.
+     * Organization comes from the authenticated
+     * user's database record.
      */
     const organizationId =
       await getOrganizationId(
@@ -1587,12 +1763,6 @@ export default async function handler(
 
     /*
      * Normalize history.
-     *
-     * Ryan.ts now sends:
-     * { role, text }
-     *
-     * But we also support the older content/parts shapes
-     * so existing conversations do not break.
      */
     const safeHistory: RyanHistoryItem[] =
       Array.isArray(history)
@@ -1628,11 +1798,7 @@ export default async function handler(
       )
 
     /*
-     * Customer and conversation MUST be created
-     * before limits are checked.
-     *
-     * This guarantees that the customer's message
-     * is not lost when the Ryan limit is reached.
+     * Customer first.
      */
     const customer =
       await getOrCreateCustomer(
@@ -1647,6 +1813,9 @@ export default async function handler(
           null,
       )
 
+    /*
+     * Conversation.
+     */
     const conversation =
       await getOrCreateConversation(
         supabase,
@@ -1656,13 +1825,7 @@ export default async function handler(
       )
 
     /*
-     * Save the customer's message BEFORE:
-     * - limits
-     * - handoff
-     * - Gemini
-     *
-     * messages does NOT contain organization_id
-     * or sender_id in the current schema.
+     * Always save the customer's current message.
      */
     await saveMessage(
       supabase,
@@ -1679,10 +1842,8 @@ export default async function handler(
     )
 
     /*
-     * Human handoff protection.
-     *
-     * The current customer message has already
-     * been saved above.
+     * If a human is already handling the conversation,
+     * do not let Ryan answer it.
      */
     if (
       conversation.handled_by ===
@@ -1705,8 +1866,7 @@ export default async function handler(
     }
 
     /*
-     * Entitlements and usage are loaded AFTER
-     * the customer's message has been persisted.
+     * Entitlements and usage.
      */
     const [
       entitlements,
@@ -1756,122 +1916,7 @@ export default async function handler(
     }
 
     /*
-     * DETERMINISTIC BOOKING FLOW
-     *
-     * service -> date -> time -> Gemini/tool
-     */
-    if (
-      intent === 'booking'
-    ) {
-      const bookingStep =
-        getBookingStep(
-          message,
-          safeHistory,
-        )
-
-      if (
-        bookingStep ===
-        'service'
-      ) {
-        const customerName =
-          extractCustomerName(
-            message,
-          )
-
-        const reply =
-          customerName
-            ? `أهلاً يا ${customerName}، تحب تحجز أنهي خدمة؟`
-            : 'أهلاً بك، تحب تحجز أنهي خدمة؟'
-
-        await saveMessage(
-          supabase,
-          {
-            conversationId:
-              conversation.id,
-
-            senderType:
-              'ai',
-
-            content:
-              reply,
-          },
-        )
-
-        return res
-          .status(200)
-          .json({
-            reply,
-
-            conversationId:
-              conversation.id,
-          })
-      }
-
-      if (
-        bookingStep ===
-        'date'
-      ) {
-        const reply =
-          'تمام، تحب الحجز يكون يوم إيه؟'
-
-        await saveMessage(
-          supabase,
-          {
-            conversationId:
-              conversation.id,
-
-            senderType:
-              'ai',
-
-            content:
-              reply,
-          },
-        )
-
-        return res
-          .status(200)
-          .json({
-            reply,
-
-            conversationId:
-              conversation.id,
-          })
-      }
-
-      if (
-        bookingStep ===
-        'time'
-      ) {
-        const reply =
-          'تمام، تحب الموعد الساعة كام؟'
-
-        await saveMessage(
-          supabase,
-          {
-            conversationId:
-              conversation.id,
-
-            senderType:
-              'ai',
-
-            content:
-              reply,
-          },
-        )
-
-        return res
-          .status(200)
-          .json({
-            reply,
-
-            conversationId:
-              conversation.id,
-          })
-      }
-    }
-
-    /*
-     * Knowledge Base MUST be organization scoped.
+     * Knowledge Base is organization scoped.
      */
     const {
       data: knowledgeRows,
@@ -1899,6 +1944,13 @@ export default async function handler(
         knowledgeRows || [],
       )
 
+    /*
+     * Build Gemini conversation.
+     *
+     * The system prompt is injected as the first
+     * user message because this implementation uses
+     * generateContent directly.
+     */
     const contents = [
       {
         role: 'user',
@@ -1917,7 +1969,7 @@ export default async function handler(
         parts: [
           {
             text:
-              'تمام، هساعد العميل بشكل مختصر وطبيعي.',
+              'فهمت. هتعامل مع العميل كموظف خدمة عملاء ومبيعات حقيقي، وهحافظ على سياق المحادثة من غير تكرار.',
           },
         ],
       },
@@ -1942,7 +1994,9 @@ export default async function handler(
               item.sender ===
                 'model' ||
               item.sender ===
-                'assistant'
+                'assistant' ||
+              item.sender ===
+                'ai'
                 ? 'model'
                 : 'user',
 
@@ -2224,9 +2278,9 @@ export default async function handler(
       )
 
     /*
-     * Execute tools deterministically.
+     * Execute tools.
      *
-     * We intentionally do NOT make a second Gemini request.
+     * No second Gemini request.
      */
     if (
       validFunctionCalls.length >
@@ -2248,17 +2302,19 @@ export default async function handler(
           call.args || {}
 
         /*
-         * Extra safety:
-         * booking intent can NEVER call lead/deal.
+         * Appointment intent can ONLY create
+         * an appointment or handoff.
          */
         if (
           intent ===
-            'booking' &&
+            'appointment' &&
           functionName !==
-            'book_appointment'
+            'book_appointment' &&
+          functionName !==
+            'request_human_handoff'
         ) {
           console.warn(
-            'Blocked non-booking Ryan tool during booking intent:',
+            'Blocked sales tool during appointment intent:',
             functionName,
           )
 
@@ -2266,8 +2322,7 @@ export default async function handler(
         }
 
         /*
-         * Extra safety:
-         * handoff intent can ONLY call handoff.
+         * Handoff intent can ONLY call handoff.
          */
         if (
           intent ===
@@ -2283,6 +2338,9 @@ export default async function handler(
           continue
         }
 
+        /*
+         * Record actual AI tool usage.
+         */
         recordUsageNonBlocking(
           supabase,
           {
@@ -2389,16 +2447,16 @@ export default async function handler(
       )
 
       /*
-       * Booking success.
+       * Appointment success.
        */
-      const booking =
+      const appointment =
         successfulToolResults.find(
           (item) =>
             item.name ===
             'book_appointment',
         )
 
-      if (booking) {
+      if (appointment) {
         const args =
           validFunctionCalls.find(
             (call) =>
@@ -2409,7 +2467,7 @@ export default async function handler(
         const serviceName =
           String(
             args.service_name ||
-              'الخدمة',
+              'المقابلة',
           )
 
         const date =
@@ -2426,8 +2484,8 @@ export default async function handler(
 
         const reply =
           date && time
-            ? `تم تسجيل حجز ${serviceName} بنجاح يوم ${date} الساعة ${time}.`
-            : `تم تسجيل حجز ${serviceName} بنجاح.`
+            ? `تمام، سجلت لك ${serviceName} يوم ${date} الساعة ${time}.`
+            : `تمام، سجلت لك الموعد.`
 
         await saveMessage(
           supabase,
@@ -2473,7 +2531,7 @@ export default async function handler(
 
       if (handoff) {
         const reply =
-          'تمام، هحوّل المحادثة لحد من الفريق ويتواصل معاك قريبًا.'
+          'أكيد، هحوّل المحادثة لحد من الفريق ويتابع معاك.'
 
         await saveMessage(
           supabase,
@@ -2571,7 +2629,7 @@ export default async function handler(
 
       if (lead) {
         const reply =
-          'تمام، سجلت بياناتك وهنتابع معاك قريبًا.'
+          'تمام، سجلت بياناتك وهنتابع معاك بخصوص طلبك.'
 
         await saveMessage(
           supabase,
@@ -2607,7 +2665,7 @@ export default async function handler(
     }
 
     /*
-     * Extract normal text response.
+     * Normal text response.
      */
     const rawText =
       parts
@@ -2620,7 +2678,7 @@ export default async function handler(
         .trim()
 
     /*
-     * Never return partial/cut-off Ryan text.
+     * Never return partial/cut-off text.
      */
     if (
       finishReason ===
@@ -2628,9 +2686,9 @@ export default async function handler(
       !rawText
     ) {
       const fallbackReply =
-        intent === 'booking'
-          ? 'تمام، نكمل الحجز. تحب تحجز أنهي خدمة؟'
-          : 'تمام، ممكن توضّحلي طلبك أكتر؟'
+        intent === 'appointment'
+          ? 'أكيد، تحب المقابلة تكون إمتى؟'
+          : 'تمام، احكيلي تفاصيل طلبك وأنا أساعدك.'
 
       recordUsageNonBlocking(
         supabase,
@@ -2708,7 +2766,7 @@ export default async function handler(
     }
 
     /*
-     * Normal text response.
+     * Normal Ryan response.
      */
     const reply =
       rawText ||
