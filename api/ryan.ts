@@ -774,6 +774,13 @@ export default async function handler(
         authData.user.id
       )
 
+    if (!dbUser?.organization_id) {
+      res.status(403).json({
+        error: 'لا توجد شركة مرتبطة بهذا المستخدم',
+      })
+      return
+    }
+
     organizationId =
       dbUser.organization_id
 
