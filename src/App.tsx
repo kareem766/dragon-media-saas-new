@@ -54,10 +54,7 @@ export default function App() {
             <Route path="/support" element={<Support />} />
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
-              <Route
-                path="/admin/organizations"
-                element={<AdminOrganizations />}
-              />
+              <Route path="/admin/organizations" element={<AdminOrganizations />} />
               <Route path="/crm" element={<CRM />} />
               <Route path="/crm/customer/:id" element={<CustomerDetail />} />
               <Route path="/pipeline" element={<Pipeline />} />
