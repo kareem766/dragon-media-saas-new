@@ -71,20 +71,19 @@ Create or register a genuine sales/customer-service lead in the CRM.
 
 Use this when the customer has shown meaningful interest in Dragon Media, a service, consultation, pricing, page management, advertising, content, design, marketing, or another business need.
 
-The purpose is to save the useful customer information already collected during the conversation.
-
-Do NOT wait for every field if enough meaningful information is already available.
-
-Do NOT create a lead merely because the customer said hello, asked a completely generic question, or only provided a name.
-
 IMPORTANT:
+- "عايز احجز خدمة" means the customer wants to start/request a service. It does NOT mean an appointment.
+- This tool is NOT an appointment booking tool.
+- Do NOT ask for a date or time for a normal service request.
 - Extract information from the conversation.
 - Do not ask for information that the customer already provided.
 - Do not repeat questions unnecessarily.
 - The customer name is preferred, but do not invent it.
 - Include service, activity, goal and notes whenever they are known.
 - If phone is known, include it.
-- This tool is NOT an appointment booking tool.
+- Do not create a lead merely because the customer said hello or asked a completely generic question.
+- Do not create a lead simply because a name was provided.
+- Create the lead when there is genuine business/service interest and useful customer information can be recorded.
 `,
     parameters: {
       type: 'OBJECT',
@@ -130,9 +129,14 @@ Examples:
 - العميل وافق على البدء.
 - العميل يطلب تنفيذ الخدمة بعد الاتفاق.
 
-Do NOT create a deal just because the customer asked about a service or price.
+Do NOT create a deal just because the customer:
+- asked about a service
+- asked about price
+- asked for details
+- said they are interested
 
 Use the information already available in the conversation.
+
 Do not ask unnecessary questions only to fill optional fields.
 `,
     parameters: {
@@ -162,25 +166,37 @@ Do not ask unnecessary questions only to fill optional fields.
     name: 'book_appointment',
     description:
       `
-Create a CRM appointment ONLY when the customer explicitly wants a real appointment, meeting, consultation meeting, call with a team member, or to meet someone from Dragon Media.
+Create a CRM appointment ONLY when the customer explicitly wants a real appointment, meeting, consultation meeting, scheduled call, or to meet someone from Dragon Media.
 
-This is NOT for booking a Dragon Media service.
+This is NOT for normal service requests.
 
-Do NOT use this tool when the customer simply says:
+Do NOT use this tool when the customer says:
 - عايز احجز خدمة
 - عايز أبدأ الخدمة
 - عايز إدارة صفحات
 - عايز اشتري خدمة
+- عايز استشارة
+- ممكن تفاصيل الاستشارة
+- عايز أعرف عن الاستشارة
 
-Those cases should be handled as a normal sales/customer-service conversation and may create a lead or deal.
+Those are normal sales/service conversations unless the customer explicitly asks for a scheduled meeting, appointment, or call.
 
 Use this tool only when there is a genuine appointment/meeting request.
 
+Examples:
+- ممكن أقابل حد من الفريق؟
+- عايز أحدد ميعاد مقابلة.
+- ممكن اجتماع يوم الأحد؟
+- عايز مكالمة مع حد من المبيعات الساعة 5.
+- عايز أحجز موعد استشارة.
+
 Before calling the tool, service_name, date and time must be known.
-The service_name should describe the subject of the meeting/consultation, such as:
+
+The service_name should describe the subject/purpose of the meeting, such as:
 - استشارة تسويقية
 - مقابلة لمناقشة إدارة الصفحات
 - اجتماع بخصوص الإعلانات
+- مكالمة مع فريق المبيعات
 
 Never claim the appointment was created unless the tool succeeds.
 `,
@@ -213,11 +229,29 @@ Never claim the appointment was created unless the tool succeeds.
     name: 'request_human_handoff',
     description:
       `
-Transfer the conversation to a human team member when the customer explicitly asks for a human, employee, sales representative, customer-service representative, manager, or someone from the team.
+Transfer the conversation to a human team member when the customer explicitly asks for human assistance.
+
+Use this when the customer asks for:
+- موظف
+- مسؤول
+- مدير
+- حد من الفريق
+- حد من المبيعات
+- خدمة العملاء
+- شخص حقيقي
+- شخص من الشركة
+- حد يكلمني
+- حد يتواصل معايا
+- عايز أكلم حد
+- عايز حد من الفريق
+- عايز أكلم مسؤول
+- عايز أكلم المدير
 
 Also use it when the situation genuinely requires human intervention and Ryan cannot responsibly complete it.
 
 Do not use it simply because the conversation is long.
+
+Do not use it just because the customer asks a difficult but answerable question.
 `,
     parameters: {
       type: 'OBJECT',
@@ -234,17 +268,49 @@ Do not use it simply because the conversation is long.
 
 const HANDOFF_KEYWORDS = [
   'موظف',
+  'موظفه',
   'خدمة عملاء',
+  'خدمه عملاء',
   'حد من الفريق',
+  'حد من الشركة',
+  'حد من الشركه',
+  'حد من المبيعات',
+  'مسؤول',
+  'مسئول',
+  'مسؤولة',
+  'مسئوله',
+  'المدير',
+  'مدير',
   'اتكلم مع شخص',
+  'اتكلم مع حد',
+  'اكلم شخص',
+  'اكلم حد',
+  'اكلم موظف',
+  'اكلم مسؤول',
+  'اكلم المدير',
+  'كلموني',
+  'كلمني حد',
+  'حد يكلمني',
+  'حد يتواصل معايا',
+  'حد يتواصل معي',
+  'يتواصل معايا',
+  'يتواصل معي',
   'بني آدم',
   'بني ادم',
+  'بنيادمي',
   'شخص حقيقي',
   'موظف حقيقي',
   'عايز حد',
+  'عاوز حد',
   'عايز موظف',
-  'اكلم حد',
-  'اكلم موظف',
+  'عاوز موظف',
+  'عايز مسؤول',
+  'عاوز مسؤول',
+  'عايز مدير',
+  'عاوز مدير',
+  'ممكن حد يكلمني',
+  'ممكن حد يتصل',
+  'ممكن موظف يكلمني',
 ]
 
 const APPOINTMENT_KEYWORDS = [
@@ -256,33 +322,60 @@ const APPOINTMENT_KEYWORDS = [
   'أقابل',
   'قابل',
   'مقابله مع',
+  'مقابلة مع',
   'موعد مع',
   'ميعاد مع',
   'موعد مع حد',
   'ميعاد مع حد',
+  'موعد مقابلة',
+  'ميعاد مقابلة',
+  'موعد اجتماع',
+  'ميعاد اجتماع',
   'ممكن اقابل',
   'ممكن أقابل',
   'عايز اقابل',
   'عايز أقابل',
   'عايز مقابلة',
+  'عايز مقابله',
   'حابب اقابل',
   'حابب أقابل',
-  'استشارة',
+  'حددلي معاد',
+  'حدد لي معاد',
+  'حددلي موعد',
+  'حدد لي موعد',
+  'احجز موعد',
+  'احجزلي موعد',
+  'احجز لي موعد',
+  'حجز موعد',
+  'حجز مقابلة',
+  'حجز مقابله',
+  'موعد استشارة',
+  'ميعاد استشارة',
+  'احجز استشارة',
+  'حجز استشارة',
   'جلسة استشارة',
   'مكالمة مع الفريق',
-  'اتكلم مع الفريق',
+  'مكالمة مع المبيعات',
+  'مكالمة مع حد',
+  'مكالمة مع موظف',
+  'مكالمة محددة',
 ]
 
 const DEAL_KEYWORDS = [
   'شراء',
   'اشتري',
-  'عايز الخدمة',
-  'عايز أشتري',
   'عايز اشتري',
+  'عاوز اشتري',
+  'عايز أشتري',
+  'عاوز أشتري',
+  'عايز الخدمة',
+  'عاوز الخدمة',
   'اتعاقد',
   'التعاقد',
   'عايز اتعاقد',
   'عايز أتعاقد',
+  'عاوز اتعاقد',
+  'عاوز أتعاقد',
   'نبدأ',
   'ابدأ',
   'أبدأ',
@@ -290,32 +383,64 @@ const DEAL_KEYWORDS = [
   'أبدأ الخدمة',
   'عايز ابدأ',
   'عايز أبدأ',
+  'عاوز ابدأ',
+  'عاوز أبدأ',
+  'ابدأ معاكم',
+  'نبدأ معاكم',
+  'عايز نبدأ',
+  'موافق ونبدأ',
+  'موافق ابدأ',
+  'موافق نبدأ',
 ]
 
 const LEAD_INTEREST_KEYWORDS = [
   'مهتم',
   'محتاج',
+  'محتاجين',
   'عايز اعرف',
   'عايز أعرف',
+  'عاوز اعرف',
+  'عاوز أعرف',
   'ممكن تفاصيل',
   'عايز تفاصيل',
+  'عاوز تفاصيل',
   'عايز معلومات',
+  'عاوز معلومات',
   'معلومات عن',
   'تفاصيل عن',
   'سعر',
   'الاسعار',
   'الأسعار',
+  'السعر',
   'تكلفة',
   'كام',
   'إدارة الصفحات',
   'ادارة الصفحات',
+  'إدارة السوشيال',
+  'ادارة السوشيال',
+  'ادارة السوشيال ميديا',
+  'إدارة السوشيال ميديا',
   'اعلانات',
   'إعلانات',
+  'اعلان',
+  'إعلان',
   'محتوى',
   'تصميم',
   'تسويق',
   'خدماتكم',
   'الخدمات',
+  'الخدمة',
+  'خدمتكم',
+  'عايز خدمة',
+  'عاوز خدمة',
+  'عايز احجز خدمة',
+  'عاوز احجز خدمة',
+  'عايز أحجز خدمة',
+  'عاوز أحجز خدمة',
+  'عايز ابدأ خدمة',
+  'عاوز ابدأ خدمة',
+  'عايز أبدأ خدمة',
+  'عاوز أبدأ خدمة',
 ]
 
 function normalizeArabic(value: string) {
@@ -376,49 +501,6 @@ function getHistoryText(
     .join(' ')
 }
 
-function getLatestAssistantMessage(
-  history: RyanHistoryItem[],
-) {
-  for (
-    let index = history.length - 1;
-    index >= 0;
-    index--
-  ) {
-    const item = history[index]
-
-    const isAssistant =
-      item.role === 'assistant' ||
-      item.role === 'model' ||
-      item.sender === 'assistant' ||
-      item.sender === 'model' ||
-      item.sender === 'ai'
-
-    if (isAssistant) {
-      return getHistoryItemText(item)
-    }
-  }
-
-  return ''
-}
-
-function extractCustomerName(
-  message: string,
-) {
-  const match = message.match(
-    /(?:اسمي|انا اسمي|أنا اسمي)\s+([^\d،,.\n]+)/,
-  )
-
-  if (!match?.[1]) {
-    return null
-  }
-
-  return match[1]
-    .trim()
-    .split(/\s+/)
-    .slice(0, 3)
-    .join(' ')
-}
-
 function detectIntent(
   message: string,
   history: RyanHistoryItem[] = [],
@@ -436,10 +518,10 @@ function detectIntent(
   }
 
   /*
-   * A real appointment/meeting request.
+   * Explicit appointment/meeting request.
    *
    * IMPORTANT:
-   * "عايز احجز خدمة" is NOT an appointment.
+   * Normal service "booking" is NOT an appointment.
    */
   if (
     containsKeyword(
@@ -475,27 +557,33 @@ function detectIntent(
   }
 
   /*
-   * If the conversation is already about an appointment,
-   * continue that context without treating ordinary date/time
-   * messages as a new intent.
+   * Continue appointment context only if the previous
+   * conversation clearly contains an explicit appointment
+   * request.
+   *
+   * We intentionally do NOT treat any "موعد/ميعاد/ساعة"
+   * word in history as enough.
    */
   const recentHistory =
     getHistoryText(
       history,
-      6,
+      8,
     )
 
-  if (
+  const hasRecentAppointmentRequest =
     containsKeyword(
       recentHistory,
       APPOINTMENT_KEYWORDS,
     )
+
+  if (
+    hasRecentAppointmentRequest
   ) {
     const normalizedMessage =
       normalizeArabic(message)
 
     const looksLikeDateOrTime =
-      /بكره|غدا|غداً|النهارده|اليوم|الاحد|الاتنين|الثلاث|الاربع|الخميس|الجمعه|السبت|الساعة|الساعه|الوقت|ميعاد|موعد|\d/.test(
+      /بكره|غدا|غداً|النهارده|اليوم|الاحد|الاتنين|الثلاث|الاربع|الخميس|الجمعه|السبت|الساعة|الساعه|\d/.test(
         normalizedMessage,
       )
 
@@ -1513,55 +1601,29 @@ function buildSystemPrompt(
 يمكنك أن تسأل عن الهدف أو أي معلومة ضرورية أخرى فقط.
 
 ========================
-مفهوم الحجز
+مهم جدًا: معنى "الحجز"
 ========================
 
-ممنوع اعتبار كلمة "حجز" حجز خدمة تلقائيًا.
+لا تعتبر كلمة "حجز" وحدها موعدًا.
 
 إذا قال العميل:
 "عايز احجز خدمة"
-فهو غالبًا يعبر عن رغبته في بدء/الاستفسار عن خدمة.
 
-لا تنشئ Appointment بسبب ذلك.
+فهذا يعني غالبًا أنه يريد طلب/بدء الخدمة.
 
-تعامل معه كعميل مهتم بالخدمة، وتحدث معه طبيعيًا، واجمع بياناته وسجل Lead عندما تكون هناك معلومات كافية.
+لا تسأل عن التاريخ أو الوقت.
 
-========================
-Appointment / مقابلة
-========================
+لا تستخدم book_appointment.
 
-استخدم Appointment فقط عندما يطلب العميل فعلًا:
+تعامل معه كعميل مهتم بالخدمة واجمع بياناته بشكل طبيعي وسجل Lead عندما تكون هناك معلومات مفيدة واهتمام حقيقي.
 
-* مقابلة.
-* اجتماع.
-* موعد مع شخص من الفريق.
-* مقابلة مع موظف.
-* استشارة في موعد.
-* مكالمة أو اجتماع محدد بوقت.
-* أي لقاء فعلي يحتاج تاريخًا ووقتًا.
+نفس الشيء مع:
+"عايز أحجز إدارة صفحات"
+"عايز أحجز خدمة إعلانات"
+"عايز أبدأ معاكم"
+"عايز أطلب الخدمة"
 
-مثال:
-
-العميل:
-"ممكن أقابل حد من الفريق؟"
-
-أنت:
-"أكيد، تحب المقابلة تكون إمتى؟"
-
-إذا قال:
-"الأحد الساعة 2"
-
-افهم أن التاريخ والوقت تم تحديدهما.
-
-لا تسأل عن التاريخ مرة أخرى.
-
-ولا تستخدم Appointment إلا عندما تكون:
-service_name
-و date
-و time
-موجودة.
-
-إذا كانت معلومة واحدة ناقصة، اسأل عنها فقط.
+هذه ليست Appointment.
 
 ========================
 Lead / CRM
@@ -1577,7 +1639,7 @@ Lead / CRM
 * الخدمة المطلوبة.
 * الهدف.
 * الميزانية إذا ذكرها العميل.
-* رابط الصفحة أو الموقع إذا ذكره.
+* رابط الصفحة أو الموقع إذا ذكره العميل.
 * أي تفاصيل مهمة أخرى.
 
 لا تحول الحوار إلى استبيان.
@@ -1586,7 +1648,12 @@ Lead / CRM
 
 اجمع المعلومات من كلام العميل.
 
-إذا ظهر اهتمام حقيقي بخدمة Dragon Media، استخدم create_lead عندما يكون لديك بيانات مفيدة يمكن تسجيلها في CRM.
+إذا قال العميل:
+"أنا أحمد وعندي محل ملابس وعايز إدارة صفحات"
+
+لا تسأله عن اسمه أو نشاطه أو الخدمة مرة أخرى.
+
+إذا كان هناك اهتمام حقيقي، استخدم create_lead عندما يكون لديك اسم ومعلومات مفيدة عن الطلب.
 
 لا تنشئ Lead لمجرد:
 "السلام عليكم"
@@ -1598,20 +1665,107 @@ Deal
 
 استخدم create_deal فقط عندما يظهر قصد شراء أو تعاقد واضح.
 
-مثال:
+مثل:
+
 "أنا موافق ونبدأ."
 "عايز أتعاقد."
 "عايز أشتري الخدمة."
+"ابدأوا معايا."
 
 مجرد السؤال عن السعر أو الخدمة لا يعني Deal.
+
+========================
+Appointment / مقابلة
+========================
+
+استخدم Appointment فقط عندما يطلب العميل لقاءً أو موعدًا فعليًا.
+
+مثل:
+
+* مقابلة.
+* اجتماع.
+* موعد مع شخص من الفريق.
+* مقابلة مع موظف.
+* استشارة في موعد محدد.
+* مكالمة مجدولة.
+* اجتماع مع المبيعات.
+* موعد استشارة.
+
+مثال:
+
+العميل:
+"ممكن أقابل حد من الفريق؟"
+
+Ryan:
+"أكيد، تحب المقابلة تكون إمتى؟"
+
+إذا قال:
+"الأحد الساعة 2"
+
+فالتاريخ والوقت أصبحا معروفين.
+
+لا تسأل عنهما مرة أخرى.
+
+إذا كانت المعلومة الناقصة هي التاريخ فقط، اسأل عن التاريخ فقط.
+
+إذا كانت المعلومة الناقصة هي الوقت فقط، اسأل عن الوقت فقط.
+
+لا تستخدم book_appointment إلا عندما يكون:
+service_name
+و date
+و time
+موجودين.
+
+مهم:
+"عايز استشارة"
+وحدها ليست Appointment.
+
+لكن:
+"عايز أحجز موعد استشارة"
+أو
+"عايز استشارة يوم الأحد الساعة 3"
+
+هي Appointment.
 
 ========================
 Human Handoff
 ========================
 
-إذا طلب العميل شخصًا حقيقيًا أو موظفًا أو أحد أفراد الفريق، استخدم request_human_handoff.
+إذا طلب العميل شخصًا حقيقيًا أو موظفًا أو مسؤولًا أو مديرًا أو أحد أفراد الفريق، استخدم request_human_handoff.
+
+أمثلة:
+
+"عايز أكلم حد."
+"ممكن حد من الفريق يكلمني؟"
+"عايز أكلم مسؤول."
+"خليني أكلم المدير."
+"ممكن موظف من المبيعات يتواصل معايا؟"
+"عايز خدمة العملاء."
 
 بعد نجاح الأداة فقط أخبر العميل أن المحادثة تم تحويلها.
+
+لا تقل إنه تم التحويل إذا فشلت الأداة.
+
+إذا طلب العميل إنسانًا بشكل صريح، لا تحاول إقناعه بأن تكمل أنت بدلًا منه.
+
+========================
+ترتيب الأولويات
+========================
+
+إذا طلب العميل تدخلًا بشريًا بشكل صريح:
+Human Handoff له الأولوية.
+
+إذا طلب مقابلة أو اجتماعًا فعليًا:
+Appointment.
+
+إذا أظهر نية شراء أو تعاقد واضحة:
+Deal.
+
+إذا أظهر اهتمامًا حقيقيًا بخدمة:
+Lead.
+
+إذا لم يكن هناك أي من ذلك:
+استمر كمحادثة خدمة عملاء طبيعية.
 
 ========================
 المعلومات وقاعدة المعرفة
@@ -1626,7 +1780,7 @@ ${
   }
 
 ========================
-قاعدة مهمة جدًا
+قواعد مهمة جدًا
 ========================
 
 لا تسأل العميل عن معلومة قالها بالفعل.
@@ -1634,6 +1788,16 @@ ${
 لا تعيد تشغيل الحوار من البداية.
 
 لا تحول كل رسالة إلى سؤال جديد.
+
+لا تطلب التاريخ والوقت لمجرد أن العميل قال "حجز".
+
+لا تنشئ Appointment لمجرد أن العميل يريد خدمة.
+
+لا تنشئ Deal لمجرد أن العميل سأل عن السعر.
+
+لا تنشئ Lead لمجرد التحية.
+
+لا تستخدم الأدوات بشكل آلي إذا لم يكن استخدامها منطقيًا.
 
 افهم السياق أولًا ثم رد كموظف حقيقي.
 `
@@ -1946,10 +2110,6 @@ export default async function handler(
 
     /*
      * Build Gemini conversation.
-     *
-     * The system prompt is injected as the first
-     * user message because this implementation uses
-     * generateContent directly.
      */
     const contents = [
       {
@@ -1969,7 +2129,7 @@ export default async function handler(
         parts: [
           {
             text:
-              'فهمت. هتعامل مع العميل كموظف خدمة عملاء ومبيعات حقيقي، وهحافظ على سياق المحادثة من غير تكرار.',
+              'فهمت. هتعامل مع العميل كموظف خدمة عملاء ومبيعات حقيقي، وهحافظ على سياق المحادثة من غير تكرار أو تحويل كل طلب خدمة لموعد.',
           },
         ],
       },
@@ -2583,7 +2743,7 @@ export default async function handler(
 
       if (deal) {
         const reply =
-          'تمام، سجلت طلبك وهنتابع معاك بخصوص الخدمة والتفاصيل.'
+          'تمام، سجلت طلب التعاقد وهنتابع معاك بالتفاصيل.'
 
         await saveMessage(
           supabase,
@@ -2629,7 +2789,7 @@ export default async function handler(
 
       if (lead) {
         const reply =
-          'تمام، سجلت بياناتك وهنتابع معاك بخصوص طلبك.'
+          'تمام، سجلت بياناتك عندنا وهنتابع معاك بخصوص طلبك.'
 
         await saveMessage(
           supabase,
@@ -2685,10 +2845,28 @@ export default async function handler(
         'MAX_TOKENS' ||
       !rawText
     ) {
-      const fallbackReply =
-        intent === 'appointment'
-          ? 'أكيد، تحب المقابلة تكون إمتى؟'
-          : 'تمام، احكيلي تفاصيل طلبك وأنا أساعدك.'
+      let fallbackReply =
+        'تمام، احكيلي تفاصيل طلبك وأنا أساعدك.'
+
+      if (
+        intent ===
+        'appointment'
+      ) {
+        fallbackReply =
+          'أكيد، تحب المقابلة تكون إمتى؟'
+      } else if (
+        intent ===
+        'handoff'
+      ) {
+        fallbackReply =
+          'أكيد، هحوّل المحادثة لحد من الفريق يتابع معاك.'
+      } else if (
+        intent ===
+        'lead'
+      ) {
+        fallbackReply =
+          'تمام، قولي اسمك وابدأ معاك من هنا.'
+      }
 
       recordUsageNonBlocking(
         supabase,
