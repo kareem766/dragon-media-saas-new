@@ -20,42 +20,153 @@ import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 import { useSubscription } from '../lib/useSubscription'
 import { useBranding } from '../hooks/useBranding'
 
-const items = [
-  { to: '/', label: 'الرئيسية', icon: IconGrid, end: true },
-  { to: '/crm', label: 'إدارة العملاء (CRM)', icon: IconUsers },
-  { to: '/pipeline', label: 'مسار المبيعات', icon: IconFunnel },
-  { to: '/services', label: 'الخدمات', icon: IconLayers },
-  { to: '/campaigns', label: 'الحملات التسويقية', icon: IconMegaphone },
-  { to: '/inbox', label: 'صندوق المحادثات', icon: IconChat },
-  { to: '/ryan', label: 'RYAN AI', icon: IconSpark },
-  { to: '/automations', label: 'الأتمتة', icon: IconSettings },
-  { to: '/tasks', label: 'المهام والمتابعات', icon: IconCheck },
-  { to: '/appointments', label: 'المواعيد', icon: IconCalendar },
-  { to: '/billing', label: 'الفواتير والاشتراكات', icon: IconCard },
-  { to: '/reports', label: 'التقارير', icon: IconChart },
-  { to: '/users', label: 'المستخدمون والصلاحيات', icon: IconShield },
-  { to: '/tickets', label: 'الدعم الفني', icon: IconChat },
-  { to: '/settings', label: 'الإعدادات', icon: IconSettings },
+type FeatureKey =
+  | 'crm'
+  | 'campaigns'
+  | 'ryan'
+  | 'automations'
+  | 'advanced_reports'
+
+type SidebarItem = {
+  to: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  end?: boolean
+  feature?: FeatureKey
+}
+
+const items: SidebarItem[] = [
+  {
+    to: '/',
+    label: 'الرئيسية',
+    icon: IconGrid,
+    end: true,
+  },
+  {
+    to: '/crm',
+    label: 'إدارة العملاء (CRM)',
+    icon: IconUsers,
+    feature: 'crm',
+  },
+  {
+    to: '/pipeline',
+    label: 'مسار المبيعات',
+    icon: IconFunnel,
+    feature: 'crm',
+  },
+  {
+    to: '/services',
+    label: 'الخدمات',
+    icon: IconLayers,
+  },
+  {
+    to: '/campaigns',
+    label: 'الحملات التسويقية',
+    icon: IconMegaphone,
+    feature: 'campaigns',
+  },
+  {
+    to: '/inbox',
+    label: 'صندوق المحادثات',
+    icon: IconChat,
+  },
+  {
+    to: '/ryan',
+    label: 'RYAN AI',
+    icon: IconSpark,
+    feature: 'ryan',
+  },
+  {
+    to: '/automations',
+    label: 'الأتمتة',
+    icon: IconSettings,
+    feature: 'automations',
+  },
+  {
+    to: '/tasks',
+    label: 'المهام والمتابعات',
+    icon: IconCheck,
+  },
+  {
+    to: '/appointments',
+    label: 'المواعيد',
+    icon: IconCalendar,
+  },
+  {
+    to: '/billing',
+    label: 'الفواتير والاشتراكات',
+    icon: IconCard,
+  },
+  {
+    to: '/reports',
+    label: 'التقارير',
+    icon: IconChart,
+    feature: 'advanced_reports',
+  },
+  {
+    to: '/users',
+    label: 'المستخدمون والصلاحيات',
+    icon: IconShield,
+  },
+  {
+    to: '/tickets',
+    label: 'الدعم الفني',
+    icon: IconChat,
+  },
+  {
+    to: '/settings',
+    label: 'الإعدادات',
+    icon: IconSettings,
+  },
 ]
 
 const adminItems = [
-  { to: '/admin', label: 'الرئيسية', icon: IconGrid, end: true },
+  {
+    to: '/admin',
+    label: 'الرئيسية',
+    icon: IconGrid,
+    end: true,
+  },
   {
     to: '/admin/payments',
     label: 'المدفوعات وطلبات الدفع',
     icon: IconCard,
   },
-  { to: '/admin/plans', label: 'إدارة الباقات', icon: IconLayers },
+  {
+    to: '/admin/plans',
+    label: 'إدارة الباقات',
+    icon: IconLayers,
+  },
   {
     to: '/admin/ryan-credits',
     label: 'باقات RYAN الإضافية',
     icon: IconSpark,
   },
-  { to: '/admin/branding', label: 'هوية المنصة', icon: IconDragon },
-  { to: '/admin/settings', label: 'إعدادات المنصة', icon: IconSettings },
-  { to: '/admin/roles', label: 'الأدوار والصلاحيات', icon: IconShield },
-  { to: '/admin/audit-logs', label: 'سجل النشاط', icon: IconChart },
-  { to: '/admin/tickets', label: 'تذاكر الدعم', icon: IconChat },
+  {
+    to: '/admin/branding',
+    label: 'هوية المنصة',
+    icon: IconDragon,
+  },
+  {
+    to: '/admin/settings',
+    label: 'إعدادات المنصة',
+    icon: IconSettings,
+  },
+  {
+    to: '/admin/roles',
+    label: 'الأدوار والصلاحيات',
+    icon: IconShield,
+  },
+  {
+    to: '/admin/audit-logs',
+    label: 'سجل النشاط',
+    icon: IconChart,
+  },
+  {
+    to: '/admin/tickets',
+    label: 'تذاكر الدعم',
+    icon: IconChat,
+  },
 ]
 
 export default function Sidebar({
@@ -75,6 +186,7 @@ export default function Sidebar({
     isExpired,
     isPendingPayment,
     formattedRenewalDate,
+    hasFeature,
   } = useSubscription()
 
   const platformName = branding?.platform_name || 'Dragon Media'
@@ -124,6 +236,18 @@ export default function Sidebar({
     return 'اختر باقتك للبدء'
   })()
 
+  const isFeatureLocked = (feature?: FeatureKey) => {
+    if (!feature) {
+      return false
+    }
+
+    if (!isActive) {
+      return true
+    }
+
+    return !hasFeature(feature)
+  }
+
   return (
     <>
       {open && (
@@ -157,24 +281,41 @@ export default function Sidebar({
         </div>
 
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-          {items.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[15px] transition-colors ${
-                  isActive
-                    ? 'bg-gold-500/15 text-gold-400 font-semibold'
-                    : 'text-sand-100/70 hover:bg-white/5 hover:text-sand-100'
-                }`
-              }
-            >
-              <Icon className="w-5 h-5 shrink-0" />
-              <span>{label}</span>
-            </NavLink>
-          ))}
+          {items.map(({ to, label, icon: Icon, end, feature }) => {
+            const locked = isFeatureLocked(feature)
+
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[15px] transition-colors ${
+                    isActive
+                      ? 'bg-gold-500/15 text-gold-400 font-semibold'
+                      : locked
+                        ? 'text-sand-100/40 hover:bg-white/5 hover:text-sand-100/60'
+                        : 'text-sand-100/70 hover:bg-white/5 hover:text-sand-100'
+                  }`
+                }
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+
+                <span className="flex-1">{label}</span>
+
+                {locked && (
+                  <span
+                    className="text-xs text-sand-100/35"
+                    title="الميزة غير متاحة في باقتك الحالية"
+                    aria-label="الميزة غير متاحة في باقتك الحالية"
+                  >
+                    🔒
+                  </span>
+                )}
+              </NavLink>
+            )
+          })}
 
           {isAdmin && (
             <div className="mt-2 pt-2 border-t border-white/10">
