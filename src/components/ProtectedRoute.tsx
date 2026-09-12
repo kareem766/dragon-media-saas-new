@@ -151,8 +151,14 @@ export default function ProtectedRoute({
   }
 
   if (needsOnboarding) {
-    return <Onboarding />
-  }
+  return (
+    <Onboarding
+      onDone={() => {
+        refresh()
+      }}
+    />
+  )
+}
 
   if (suspensionError) {
     return (
