@@ -2,6 +2,12 @@ import { createClient } from '@supabase/supabase-js'
 
 type AnyRecord = Record<string, any>
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const EMAIL_REGEX =
+  /^\S+@\S+\.\S+$/
+
 const getClients = (accessToken: string) => {
   const supabaseUrl = process.env.VITE_SUPABASE_URL
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY
@@ -34,6 +40,33 @@ const getClients = (accessToken: string) => {
   }
 }
 
+const isValidUuid = (value: string) =>
+  UUID_REGEX.test(value)
+
+const isValidEmail = (value: string) =>
+  EMAIL_REGEX.test(value)
+
+const normalizeEmail = (value: any) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+
+const getDateString = (date: Date) =>
+  date
+    .toISOString()
+    .slice(0, 10)
+
+const addDays = (
+  date: Date,
+  days: number,
+) => {
+  const result = new Date(date)
+  result.setDate(
+    result.getDate() + days,
+  )
+  return result
+}
+
 const slugify = (value: string) => {
   const slug = value
     .trim()
@@ -62,10 +95,14 @@ const getUniqueSlug = async (
       .eq('slug', slug)
 
     if (currentId) {
-      query.neq('id', currentId)
+      query.neq(
+        'id',
+        currentId,
+      )
     }
 
-    const { data } = await query.maybeSingle()
+    const { data } =
+      await query.maybeSingle()
 
     if (!data) {
       return slug
@@ -81,10 +118,18 @@ const isPlatformAdmin = async (
   admin: any,
   userId: string,
 ) => {
-  const { data, error } = await admin
+  const {
+    data,
+    error,
+  } = await admin
     .from('users')
-    .select('is_platform_admin, active')
-    .eq('id', userId)
+    .select(
+      'is_platform_admin, active',
+    )
+    .eq(
+      'id',
+      userId,
+    )
     .maybeSingle()
 
   if (error) {
@@ -106,7 +151,9 @@ const writeAudit = async (
   admin: any,
   payload: AnyRecord,
 ) => {
-  const { error } = await admin
+  const {
+    error,
+  } = await admin
     .from('audit_logs')
     .insert(payload)
 
@@ -128,9 +175,10 @@ const deleteAuthUser = async (
 ) => {
   const {
     error,
-  } = await admin.auth.admin.deleteUser(
-    userId,
-  )
+  } =
+    await admin.auth.admin.deleteUser(
+      userId,
+    )
 
   if (error) {
     return {
@@ -144,12 +192,65 @@ const deleteAuthUser = async (
   }
 }
 
+const findAuthUserByEmail = async (
+  admin: any,
+  email: string,
+) => {
+  const normalizedEmail =
+    normalizeEmail(email)
+
+  if (!normalizedEmail) {
+    return null
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+
+  if (error) {
+    throw new Error(
+      `تعذر التحقق من حساب Auth: ${error.message}`,
+    )
+  }
+
+  return (
+    data?.users?.find(
+      (user: AnyRecord) =>
+        normalizeEmail(
+          user.email,
+        ) === normalizedEmail,
+    ) ?? null
+  )
+}
+
+const validateOrganizationId = (
+  organizationId: string,
+) =>
+  Boolean(
+    organizationId &&
+      isValidUuid(
+        organizationId,
+      ),
+  )
+
+const validatePlanId = (
+  planId: string,
+) =>
+  Boolean(
+    planId &&
+      isValidUuid(
+        planId,
+      ),
+  )
+
 /**
  * Remove all foreign-key references to a company user
  * before deleting the Supabase Auth user.
- *
- * This is required because several existing tables reference
- * public.users(id) without ON DELETE CASCADE.
  */
 const detachUserReferences = async (
   admin: any,
@@ -181,7 +282,9 @@ const detachUserReferences = async (
     },
   ]
 
-  for (const operation of operations) {
+  for (
+    const operation of operations
+  ) {
     const {
       error,
     } = await admin
@@ -208,20 +311,10 @@ const detachUserReferences = async (
   }
 }
 
-/**
- * Delete all organization-level data that is not guaranteed
- * to cascade from organizations.
- *
- * We intentionally keep this explicit so deleting a company
- * does not depend on incomplete FK cascade configuration.
- */
 const deleteOrganizationData = async (
   admin: any,
   organizationId: string,
 ) => {
-  /*
-   * Messages depend on conversations.
-   */
   const {
     data: conversations,
     error:
@@ -244,7 +337,10 @@ const deleteOrganizationData = async (
 
   const conversationIds =
     (conversations ?? [])
-      .map((item: AnyRecord) => item.id)
+      .map(
+        (item: AnyRecord) =>
+          item.id,
+      )
       .filter(Boolean)
 
   if (conversationIds.length) {
@@ -267,9 +363,6 @@ const deleteOrganizationData = async (
     }
   }
 
-  /*
-   * Campaign messages depend on campaigns/customers.
-   */
   const {
     data: campaigns,
     error:
@@ -292,7 +385,10 @@ const deleteOrganizationData = async (
 
   const campaignIds =
     (campaigns ?? [])
-      .map((item: AnyRecord) => item.id)
+      .map(
+        (item: AnyRecord) =>
+          item.id,
+      )
       .filter(Boolean)
 
   if (campaignIds.length) {
@@ -315,9 +411,6 @@ const deleteOrganizationData = async (
     }
   }
 
-  /*
-   * Invoices may reference subscriptions.
-   */
   const {
     data: subscriptions,
     error:
@@ -340,7 +433,10 @@ const deleteOrganizationData = async (
 
   const subscriptionIds =
     (subscriptions ?? [])
-      .map((item: AnyRecord) => item.id)
+      .map(
+        (item: AnyRecord) =>
+          item.id,
+      )
       .filter(Boolean)
 
   if (subscriptionIds.length) {
@@ -366,7 +462,10 @@ const deleteOrganizationData = async (
 
     const invoiceIds =
       (invoices ?? [])
-        .map((item: AnyRecord) => item.id)
+        .map(
+          (item: AnyRecord) =>
+            item.id,
+        )
         .filter(Boolean)
 
     if (invoiceIds.length) {
@@ -409,14 +508,6 @@ const deleteOrganizationData = async (
     }
   }
 
-  /*
-   * Delete organization-level records explicitly.
-   *
-   * Tables with their own CASCADE relationships can safely
-   * be deleted from their parent, but we keep the operations
-   * explicit to avoid FK surprises.
-   */
-
   const simpleTables = [
     'campaigns',
     'conversations',
@@ -435,7 +526,9 @@ const deleteOrganizationData = async (
     'subscriptions',
   ]
 
-  for (const table of simpleTables) {
+  for (
+    const table of simpleTables
+  ) {
     const {
       error,
     } = await admin
@@ -523,12 +616,6 @@ export default async function handler(
     })
     return
   }
-
-  /*
-   * ==========================================================
-   * GET
-   * ==========================================================
-   */
 
   if (req.method === 'GET') {
     const {
@@ -793,12 +880,6 @@ export default async function handler(
     return
   }
 
-  /*
-   * ==========================================================
-   * POST
-   * ==========================================================
-   */
-
   if (req.method !== 'POST') {
     res.status(405).json({
       error:
@@ -813,12 +894,6 @@ export default async function handler(
   const action =
     body.action
 
-  /*
-   * ==========================================================
-   * SUSPEND / ACTIVATE
-   * ==========================================================
-   */
-
   if (
     action === 'suspend' ||
     action === 'activate'
@@ -829,10 +904,14 @@ export default async function handler(
           '',
       )
 
-    if (!organizationId) {
+    if (
+      !validateOrganizationId(
+        organizationId,
+      )
+    ) {
       res.status(400).json({
         error:
-          'معرّف الشركة مطلوب',
+          'معرّف الشركة غير صالح',
       })
       return
     }
@@ -929,12 +1008,6 @@ export default async function handler(
     return
   }
 
-  /*
-   * ==========================================================
-   * CREATE
-   * ==========================================================
-   */
-
   if (action === 'create') {
     const name =
       String(
@@ -948,11 +1021,9 @@ export default async function handler(
       ).trim()
 
     const email =
-      String(
-        body.email || '',
+      normalizeEmail(
+        body.email,
       )
-        .trim()
-        .toLowerCase()
 
     const password =
       String(
@@ -1008,11 +1079,7 @@ export default async function handler(
       return
     }
 
-    if (
-      !/^\S+@\S+\.\S+$/.test(
-        email,
-      )
-    ) {
+    if (!isValidEmail(email)) {
       res.status(400).json({
         error:
           'البريد الإلكتروني غير صالح',
@@ -1020,7 +1087,19 @@ export default async function handler(
       return
     }
 
-    let plan: AnyRecord | null =
+    if (
+      planId &&
+      !validatePlanId(planId)
+    ) {
+      res.status(400).json({
+        error:
+          'معرّف الباقة غير صالح',
+      })
+      return
+    }
+
+    let plan:
+      AnyRecord | null =
       null
 
     if (planId) {
@@ -1034,6 +1113,7 @@ export default async function handler(
           id,
           name,
           price,
+          yearly_price,
           currency,
           billing_cycle,
           status
@@ -1080,23 +1160,25 @@ export default async function handler(
       return
     }
 
-    const {
-      data: existingAuthUsers,
-    } =
-      await admin.auth.admin.listUsers({
-        page: 1,
-        perPage: 1000,
-      })
+    let authEmailExists = false
 
-    const authEmailExists =
-      existingAuthUsers?.users?.some(
-        (user: AnyRecord) =>
-          String(
-            user.email ??
-              '',
-          ).toLowerCase() ===
+    try {
+      const authUser =
+        await findAuthUserByEmail(
+          admin,
           email,
-      )
+        )
+
+      authEmailExists =
+        Boolean(authUser)
+    } catch (error: any) {
+      res.status(500).json({
+        error:
+          error?.message ||
+          'تعذر التحقق من البريد الإلكتروني',
+      })
+      return
+    }
 
     if (authEmailExists) {
       res.status(409).json({
@@ -1265,13 +1347,19 @@ export default async function handler(
       null
 
     if (plan) {
-      const renewalDate =
+      const today =
         new Date()
 
-      renewalDate.setDate(
-        renewalDate.getDate() +
-          30,
-      )
+      const startedAt =
+        getDateString(today)
+
+      const expiresAt =
+        getDateString(
+          addDays(
+            today,
+            30,
+          ),
+        )
 
       const {
         data,
@@ -1293,12 +1381,16 @@ export default async function handler(
             'active',
 
           renewal_date:
-            renewalDate
-              .toISOString()
-              .slice(
-                0,
-                10,
-              ),
+            expiresAt,
+
+          billing_cycle:
+            'monthly',
+
+          started_at:
+            startedAt,
+
+          expires_at:
+            expiresAt,
         })
         .select(
           `
@@ -1306,7 +1398,10 @@ export default async function handler(
           plan_id,
           plan,
           status,
-          renewal_date
+          renewal_date,
+          billing_cycle,
+          started_at,
+          expires_at
           `,
         )
         .single()
@@ -1431,12 +1526,6 @@ export default async function handler(
     return
   }
 
-  /*
-   * ==========================================================
-   * UPDATE
-   * ==========================================================
-   */
-
   if (action === 'update') {
     const organizationId =
       String(
@@ -1444,10 +1533,14 @@ export default async function handler(
           '',
       )
 
-    if (!organizationId) {
+    if (
+      !validateOrganizationId(
+        organizationId,
+      )
+    ) {
       res.status(400).json({
         error:
-          'معرّف الشركة مطلوب',
+          'معرّف الشركة غير صالح',
       })
       return
     }
@@ -1550,14 +1643,12 @@ export default async function handler(
       updates.email
     ) {
       updates.email =
-        String(
+        normalizeEmail(
           updates.email,
         )
-          .trim()
-          .toLowerCase()
 
       if (
-        !/^\S+@\S+\.\S+$/.test(
+        !isValidEmail(
           updates.email,
         )
       ) {
@@ -1580,11 +1671,56 @@ export default async function handler(
         )
     }
 
-    if (
-      updates.email &&
-      updates.email !==
-        before.email
-    ) {
+    const {
+      data: companyAdmin,
+      error:
+        companyAdminError,
+    } = await admin
+      .from('users')
+      .select(
+        'id, email, full_name',
+      )
+      .eq(
+        'organization_id',
+        organizationId,
+      )
+      .eq(
+        'role',
+        'admin',
+      )
+      .maybeSingle()
+
+    if (companyAdminError) {
+      res.status(500).json({
+        error:
+          `تعذر قراءة مدير الشركة: ${companyAdminError.message}`,
+      })
+      return
+    }
+
+    const oldOrganizationEmail =
+      normalizeEmail(
+        before.email,
+      )
+
+    const newOrganizationEmail =
+      updates.email
+        ? normalizeEmail(
+            updates.email,
+          )
+        : oldOrganizationEmail
+
+    const emailChanged =
+      Boolean(
+        companyAdmin &&
+          newOrganizationEmail &&
+          newOrganizationEmail !==
+            normalizeEmail(
+              companyAdmin.email,
+            ),
+      )
+
+    if (emailChanged) {
       const {
         data: emailOwner,
       } =
@@ -1593,25 +1729,163 @@ export default async function handler(
           .select('id')
           .ilike(
             'email',
-            updates.email,
+            newOrganizationEmail,
           )
           .neq(
-            'organization_id',
-            organizationId,
+            'id',
+            companyAdmin.id,
           )
           .maybeSingle()
 
       if (emailOwner) {
         res.status(409).json({
           error:
-            'البريد الإلكتروني مستخدم بالفعل',
+            'البريد الإلكتروني مستخدم بالفعل في حساب آخر',
+        })
+        return
+      }
+
+      let authEmailUser:
+        AnyRecord | null =
+        null
+
+      try {
+        authEmailUser =
+          await findAuthUserByEmail(
+            admin,
+            newOrganizationEmail,
+          )
+      } catch (error: any) {
+        res.status(500).json({
+          error:
+            error?.message ||
+            'تعذر التحقق من البريد الإلكتروني في Auth',
+        })
+        return
+      }
+
+      if (
+        authEmailUser &&
+        authEmailUser.id !==
+          companyAdmin.id
+      ) {
+        res.status(409).json({
+          error:
+            'البريد الإلكتروني مستخدم بالفعل في حساب Auth آخر',
         })
         return
       }
     }
 
+    /*
+     * --------------------------------------------------------
+     * Email synchronization
+     * --------------------------------------------------------
+     *
+     * Update Auth first. If a later database operation fails,
+     * attempt to restore the previous Auth email.
+     */
+    let authEmailChanged =
+      false
+
+    if (
+      emailChanged &&
+      companyAdmin
+    ) {
+      const {
+        error:
+          authUpdateError,
+      } =
+        await admin.auth.admin.updateUserById(
+          companyAdmin.id,
+          {
+            email:
+              newOrganizationEmail,
+          },
+        )
+
+      if (authUpdateError) {
+        res.status(400).json({
+          error:
+            `تعذر تحديث بريد المستخدم في Auth: ${authUpdateError.message}`,
+        })
+        return
+      }
+
+      authEmailChanged = true
+    }
+
+    /*
+     * Update the public user profile before the organization.
+     */
+    if (
+      companyAdmin
+    ) {
+      const profileUpdates:
+        AnyRecord = {}
+
+      if (
+        body.managerName !==
+        undefined
+      ) {
+        profileUpdates.full_name =
+          String(
+            body.managerName ??
+              '',
+          ).trim()
+      }
+
+      if (emailChanged) {
+        profileUpdates.email =
+          newOrganizationEmail
+      }
+
+      if (
+        Object.keys(
+          profileUpdates,
+        ).length
+      ) {
+        const {
+          error:
+            profileUpdateError,
+        } = await admin
+          .from('users')
+          .update(
+            profileUpdates,
+          )
+          .eq(
+            'id',
+            companyAdmin.id,
+          )
+
+        if (
+          profileUpdateError
+        ) {
+          if (
+            authEmailChanged
+          ) {
+            await admin.auth.admin.updateUserById(
+              companyAdmin.id,
+              {
+                email:
+                  normalizeEmail(
+                    companyAdmin.email,
+                  ),
+              },
+            )
+          }
+
+          res.status(500).json({
+            error:
+              `تعذر تحديث بيانات المستخدم: ${profileUpdateError.message}`,
+          })
+          return
+        }
+      }
+    }
+
     const {
-      data: updated,
+      data: updatedBase,
       error:
         updateError,
     } = await admin
@@ -1641,8 +1915,62 @@ export default async function handler(
 
     if (
       updateError ||
-      !updated
+      !updatedBase
     ) {
+      /*
+       * Roll back the profile and Auth email
+       * if the organization update failed.
+       */
+      if (
+        companyAdmin
+      ) {
+        const rollbackProfile:
+          AnyRecord = {}
+
+        if (emailChanged) {
+          rollbackProfile.email =
+            companyAdmin.email
+        }
+
+        if (
+          body.managerName !==
+          undefined
+        ) {
+          rollbackProfile.full_name =
+            companyAdmin.full_name
+        }
+
+        if (
+          Object.keys(
+            rollbackProfile,
+          ).length
+        ) {
+          await admin
+            .from('users')
+            .update(
+              rollbackProfile,
+            )
+            .eq(
+              'id',
+              companyAdmin.id,
+            )
+        }
+
+        if (
+          authEmailChanged
+        ) {
+          await admin.auth.admin.updateUserById(
+            companyAdmin.id,
+            {
+              email:
+                normalizeEmail(
+                  companyAdmin.email,
+                ),
+            },
+          )
+        }
+      }
+
       res.status(500).json({
         error:
           updateError?.message ||
@@ -1651,124 +1979,31 @@ export default async function handler(
       return
     }
 
-    const {
-      data: companyAdmin,
-    } =
-      await admin
-        .from('users')
-        .select(
-          'id, email, full_name',
-        )
-        .eq(
-          'organization_id',
-          organizationId,
-        )
-        .eq(
-          'role',
-          'admin',
-        )
-        .maybeSingle()
-
-    if (companyAdmin) {
-      const profileUpdates:
-        AnyRecord = {}
-
-      if (
-        body.managerName !==
-        undefined
-      ) {
-        profileUpdates.full_name =
-          String(
-            body.managerName ||
-              '',
-          ).trim()
-      }
-
-      if (
-        body.email !==
-        undefined
-      ) {
-        const newEmail =
-          String(
-            body.email ||
-              '',
-          )
-            .trim()
-            .toLowerCase()
-
-        if (
-          newEmail &&
-          newEmail !==
-            companyAdmin.email
-        ) {
-          const {
-            error:
-              authUpdateError,
-          } =
-            await admin.auth.admin.updateUserById(
-              companyAdmin.id,
-              {
-                email:
-                  newEmail,
-              },
-            )
-
-          if (
-            authUpdateError
-          ) {
-            res.status(400).json({
-              error:
-                `تعذر تحديث بريد المستخدم: ${authUpdateError.message}`,
-            })
-            return
-          }
-
-          profileUpdates.email =
-            newEmail
-        }
-      }
-
-      if (
-        Object.keys(
-          profileUpdates,
-        ).length
-      ) {
-        const {
-          error:
-            profileUpdateError,
-        } = await admin
-          .from('users')
-          .update(
-            profileUpdates,
-          )
-          .eq(
-            'id',
-            companyAdmin.id,
-          )
-
-        if (
-          profileUpdateError
-        ) {
-          res.status(500).json({
-            error:
-              `تعذر تحديث بيانات المستخدم: ${profileUpdateError.message}`,
-          })
-          return
-        }
-      }
-    }
-
-    /*
-     * Optional plan change.
-     */
+    let planOverride:
+      AnyRecord | null =
+      null
 
     if (
-      body.planId
+      body.planId !==
+      undefined
     ) {
       const planId =
         String(
-          body.planId,
+          body.planId ||
+            '',
         )
+
+      if (
+        !validatePlanId(
+          planId,
+        )
+      ) {
+        res.status(400).json({
+          error:
+            'معرّف الباقة غير صالح',
+        })
+        return
+      }
 
       const {
         data: plan,
@@ -1780,6 +2015,9 @@ export default async function handler(
           `
           id,
           name,
+          price,
+          yearly_price,
+          currency,
           status
           `,
         )
@@ -1802,37 +2040,19 @@ export default async function handler(
         return
       }
 
-      const {
-        error:
-          organizationPlanError,
-      } = await admin
-        .from('organizations')
-        .update({
-          plan:
-            plan.name,
-        })
-        .eq(
-          'id',
-          organizationId,
-        )
-
-      if (
-        organizationPlanError
-      ) {
-        res.status(500).json({
-          error:
-            `تعذر تحديث باقة الشركة: ${organizationPlanError.message}`,
-        })
-        return
-      }
-
-      const renewalDate =
+      const today =
         new Date()
 
-      renewalDate.setDate(
-        renewalDate.getDate() +
-          30,
-      )
+      const startedAt =
+        getDateString(today)
+
+      const expiresAt =
+        getDateString(
+          addDays(
+            today,
+            30,
+          ),
+        )
 
       const {
         data:
@@ -1841,7 +2061,18 @@ export default async function handler(
           subscriptionLookupError,
       } = await admin
         .from('subscriptions')
-        .select('id')
+        .select(
+          `
+          id,
+          plan_id,
+          plan,
+          status,
+          renewal_date,
+          billing_cycle,
+          started_at,
+          expires_at
+          `,
+        )
         .eq(
           'organization_id',
           organizationId,
@@ -1887,12 +2118,16 @@ export default async function handler(
               'active',
 
             renewal_date:
-              renewalDate
-                .toISOString()
-                .slice(
-                  0,
-                  10,
-                ),
+              expiresAt,
+
+            billing_cycle:
+              'monthly',
+
+            started_at:
+              startedAt,
+
+            expires_at:
+              expiresAt,
           })
           .eq(
             'id',
@@ -1908,8 +2143,38 @@ export default async function handler(
           })
           return
         }
+
+        planOverride = {
+          subscription_id:
+            currentSubscription.id,
+
+          old_plan_id:
+            currentSubscription.plan_id ??
+            null,
+
+          old_plan_name:
+            currentSubscription.plan ??
+            null,
+
+          new_plan_id:
+            plan.id,
+
+          new_plan_name:
+            plan.name,
+
+          billing_cycle:
+            'monthly',
+
+          started_at:
+            startedAt,
+
+          expires_at:
+            expiresAt,
+        }
       } else {
         const {
+          data:
+            insertedSubscription,
           error:
             subscriptionInsertError,
         } = await admin
@@ -1928,13 +2193,30 @@ export default async function handler(
               'active',
 
             renewal_date:
-              renewalDate
-                .toISOString()
-                .slice(
-                  0,
-                  10,
-                ),
+              expiresAt,
+
+            billing_cycle:
+              'monthly',
+
+            started_at:
+              startedAt,
+
+            expires_at:
+              expiresAt,
           })
+          .select(
+            `
+            id,
+            plan_id,
+            plan,
+            status,
+            renewal_date,
+            billing_cycle,
+            started_at,
+            expires_at
+            `,
+          )
+          .single()
 
         if (
           subscriptionInsertError
@@ -1945,7 +2227,160 @@ export default async function handler(
           })
           return
         }
+
+        planOverride = {
+          subscription_id:
+            insertedSubscription?.id ??
+            null,
+
+          old_plan_id:
+            null,
+
+          old_plan_name:
+            null,
+
+          new_plan_id:
+            plan.id,
+
+          new_plan_name:
+            plan.name,
+
+          billing_cycle:
+            'monthly',
+
+          started_at:
+            startedAt,
+
+          expires_at:
+            expiresAt,
+        }
       }
+
+      /*
+       * Keep organizations.plan synchronized with the
+       * selected active plan.
+       */
+      const {
+        error:
+          organizationPlanError,
+      } = await admin
+        .from('organizations')
+        .update({
+          plan:
+            plan.name,
+        })
+        .eq(
+          'id',
+          organizationId,
+        )
+
+      if (
+        organizationPlanError
+      ) {
+        res.status(500).json({
+          error:
+            `تعذر تحديث باقة الشركة: ${organizationPlanError.message}`,
+        })
+        return
+      }
+
+      await writeAudit(
+        admin,
+        {
+          actor_id:
+            authData.user.id,
+
+          organization_id:
+            organizationId,
+
+          action:
+            'admin_override_subscription_plan',
+
+          entity:
+            'subscriptions',
+
+          entity_id:
+            planOverride.subscription_id,
+
+          old_value: {
+            plan_id:
+              planOverride.old_plan_id,
+
+            plan_name:
+              planOverride.old_plan_name,
+          },
+
+          new_value: {
+            plan_id:
+              planOverride.new_plan_id,
+
+            plan_name:
+              planOverride.new_plan_name,
+
+            billing_cycle:
+              planOverride.billing_cycle,
+
+            started_at:
+              planOverride.started_at,
+
+            expires_at:
+              planOverride.expires_at,
+          },
+
+          details: {
+            source:
+              'admin_organizations',
+
+            reason:
+              'manual_platform_admin_override',
+          },
+        },
+      )
+    }
+
+    /*
+     * Re-read the organization after all changes.
+     * This guarantees the response contains the new plan,
+     * email, slug, and all other current values.
+     */
+    const {
+      data: updated,
+      error:
+        finalOrganizationError,
+    } = await admin
+      .from('organizations')
+      .select(
+        `
+        id,
+        name,
+        slug,
+        phone,
+        email,
+        business_type,
+        suspended,
+        manager_name,
+        address,
+        logo_url,
+        plan,
+        created_at
+        `,
+      )
+      .eq(
+        'id',
+        organizationId,
+      )
+      .single()
+
+    if (
+      finalOrganizationError ||
+      !updated
+    ) {
+      res.status(500).json({
+        error:
+          finalOrganizationError?.message ||
+          'تعذر قراءة بيانات الشركة بعد التحديث',
+      })
+      return
     }
 
     await writeAudit(
@@ -1975,24 +2410,34 @@ export default async function handler(
         details: {
           source:
             'admin_organizations',
+
+          email_changed:
+            emailChanged,
+
+          admin_user_id:
+            companyAdmin?.id ??
+            null,
+
+          plan_override:
+            Boolean(
+              planOverride,
+            ),
         },
       },
     )
 
     res.status(200).json({
       success: true,
+
       organization:
         updated,
+
+      plan_override:
+        planOverride,
     })
 
     return
   }
-
-  /*
-   * ==========================================================
-   * DELETE ORGANIZATION
-   * ==========================================================
-   */
 
   if (action === 'delete') {
     const organizationId =
@@ -2001,17 +2446,18 @@ export default async function handler(
           '',
       )
 
-    if (!organizationId) {
+    if (
+      !validateOrganizationId(
+        organizationId,
+      )
+    ) {
       res.status(400).json({
         error:
-          'معرّف الشركة مطلوب',
+          'معرّف الشركة غير صالح',
       })
       return
     }
 
-    /*
-     * Load organization first.
-     */
     const {
       data: organization,
       error:
@@ -2038,10 +2484,6 @@ export default async function handler(
       return
     }
 
-    /*
-     * Never allow deletion of a company
-     * containing a platform administrator.
-     */
     const {
       data: platformUsers,
       error:
@@ -2078,9 +2520,6 @@ export default async function handler(
       return
     }
 
-    /*
-     * Load all company users before any deletion.
-     */
     const {
       data: orgUsers,
       error:
@@ -2113,12 +2552,6 @@ export default async function handler(
         )
         .filter(Boolean)
 
-    /*
-     * Write the audit BEFORE destructive operations.
-     *
-     * This preserves the action even if the deletion
-     * partially fails.
-     */
     const auditWritten =
       await writeAudit(
         admin,
@@ -2162,13 +2595,6 @@ export default async function handler(
       return
     }
 
-    /*
-     * STEP 1:
-     * Detach user references from tenant data.
-     *
-     * This fixes:
-     * Database error deleting user
-     */
     for (
       const userId of userIds
     ) {
@@ -2189,11 +2615,6 @@ export default async function handler(
       }
     }
 
-    /*
-     * STEP 2:
-     * Delete tenant data that is not guaranteed
-     * to cascade correctly.
-     */
     const tenantDeleteResult =
       await deleteOrganizationData(
         admin,
@@ -2210,13 +2631,6 @@ export default async function handler(
       return
     }
 
-    /*
-     * STEP 3:
-     * Remove public.users records explicitly.
-     *
-     * This is done BEFORE auth.users so the FK direction
-     * cannot block Auth deletion.
-     */
     if (userIds.length) {
       const {
         error:
@@ -2240,13 +2654,6 @@ export default async function handler(
       }
     }
 
-    /*
-     * STEP 4:
-     * Delete Auth users.
-     *
-     * public.users has already been removed, so the FK
-     * cannot block auth.admin.deleteUser().
-     */
     for (
       const userId of userIds
     ) {
@@ -2267,10 +2674,6 @@ export default async function handler(
       }
     }
 
-    /*
-     * STEP 5:
-     * Finally delete the organization itself.
-     */
     const {
       error:
         organizationDeleteError,
