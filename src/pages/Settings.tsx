@@ -42,6 +42,11 @@ interface Integration {
   updated_at: string | null
 }
 
+type MetaProvider =
+  | 'whatsapp'
+  | 'facebook'
+  | 'instagram'
+
 const initialOrg: OrgData = {
   name: '',
   manager_name: '',
@@ -480,7 +485,9 @@ export default function Settings() {
     }
   }
 
-  const handleMetaConnect = async () => {
+  const handleMetaConnect = async (
+    provider: MetaProvider = 'whatsapp'
+  ) => {
     if (!supabase) {
       setMetaConnectionError(
         'تعذر الاتصال بخدمة المصادقة.'
@@ -515,7 +522,9 @@ export default function Settings() {
       }
 
       const response = await fetch(
-        '/api/meta/oauth/start',
+        `/api/meta/oauth/start?provider=${encodeURIComponent(
+          provider
+        )}`,
         {
           method: 'GET',
           headers: {
@@ -1355,7 +1364,9 @@ function IntegrationsSection({
       | 'danger'
       | 'neutral'
   }
-  onMetaConnect: () => void
+  onMetaConnect: (
+    provider: MetaProvider
+  ) => void
   metaConnecting: boolean
   metaConnectionError: string
 }) {
@@ -1509,8 +1520,10 @@ function IntegrationsSection({
                               ? item.connectedActionLabel
                               : item.actionLabel
                           }
-                          onClick={
-                            onMetaConnect
+                          onClick={() =>
+                            onMetaConnect(
+                              item.provider as MetaProvider
+                            )
                           }
                           disabled={
                             metaConnecting
@@ -1655,7 +1668,9 @@ function WhatsAppSection({
       | 'danger'
       | 'neutral'
   }
-  onMetaConnect: () => void
+  onMetaConnect: (
+    provider: MetaProvider
+  ) => void
   metaConnecting: boolean
   metaConnectionError: string
 }) {
@@ -1714,7 +1729,9 @@ function WhatsAppSection({
                     ? 'إدارة WhatsApp'
                     : 'ربط WhatsApp'
                 }
-                onClick={onMetaConnect}
+                onClick={() =>
+                  onMetaConnect('whatsapp')
+                }
                 disabled={metaConnecting}
                 className="relative z-10 inline-flex min-h-11 min-w-[140px] cursor-pointer touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
