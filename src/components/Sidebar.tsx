@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
+
 import {
   IconGrid,
   IconUsers,
@@ -16,6 +17,7 @@ import {
   IconSettings,
   IconDragon,
 } from './Icon'
+
 import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 import { useSubscription } from '../lib/useSubscription'
 import { useBranding } from '../hooks/useBranding'
@@ -128,9 +130,9 @@ const adminItems = [
     end: true,
   },
   {
-  to: '/admin/organizations',
-  label: 'إدارة الشركات',
-  icon: IconUsers,
+    to: '/admin/organizations',
+    label: 'إدارة الشركات',
+    icon: IconUsers,
   },
   {
     to: '/admin/payments',
@@ -174,6 +176,66 @@ const adminItems = [
   },
 ]
 
+function LockIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect
+        x="5"
+        y="10"
+        width="14"
+        height="10"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M8 10V7.5C8 5.29 9.79 3.5 12 3.5C14.21 3.5 16 5.29 16 7.5V10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 14V16"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={[
+        'shrink-0 transition-transform duration-200',
+        open ? 'rotate-180' : '',
+      ].join(' ')}
+      aria-hidden="true"
+    >
+      <path
+        d="M6 9L12 15L18 9"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export default function Sidebar({
   open,
   onClose,
@@ -181,6 +243,9 @@ export default function Sidebar({
   open: boolean
   onClose: () => void
 }) {
+  const location = useLocation()
+  const { pathname } = location
+
   const { isAdmin } = useIsPlatformAdmin()
   const { branding, logoUrl } = useBranding()
 
@@ -195,7 +260,16 @@ export default function Sidebar({
   } = useSubscription()
 
   const platformName = branding?.platform_name || 'Dragon Media'
+
   const [adminOpen, setAdminOpen] = useState(false)
+
+  const isAdminRoute = pathname.startsWith('/admin')
+
+  useEffect(() => {
+    if (isAdminRoute) {
+      setAdminOpen(true)
+    }
+  }, [isAdminRoute])
 
   const planName = subscription?.plan?.name || null
 
@@ -211,11 +285,15 @@ export default function Sidebar({
     }
 
     if (isExpired) {
-      return planName ? `${planName} - منتهية` : 'لا يوجد اشتراك فعال'
+      return planName
+        ? `${planName} - منتهية`
+        : 'لا يوجد اشتراك فعال'
     }
 
     if (isActive) {
-      return planName ? `الباقة الحالية: ${planName}` : 'الباقة الحالية'
+      return planName
+        ? `الباقة الحالية: ${planName}`
+        : 'الباقة الحالية'
     }
 
     return 'لا يوجد اشتراك فعال'
@@ -256,145 +334,335 @@ export default function Sidebar({
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+        <button
+          type="button"
+          aria-label="إغلاق القائمة"
+          className={[
+            'fixed inset-0 z-30 lg:hidden',
+            'bg-black/45 backdrop-blur-[2px]',
+            'transition-opacity duration-200',
+          ].join(' ')}
           onClick={onClose}
         />
       )}
 
       <aside
-        className={`fixed lg:static z-40 h-full w-72 shrink-0 bg-ink-950 text-sand-100 flex flex-col transition-transform duration-200 ${
-          open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
-        }`}
+        aria-label="القائمة الرئيسية"
+        className={[
+          'fixed lg:static z-40',
+          'top-0 right-0 bottom-0',
+          'w-[min(84vw,18rem)] lg:w-72',
+          'shrink-0',
+          'bg-ink-950 text-sand-100',
+          'flex flex-col',
+          'border-l border-white/5',
+          'shadow-2xl lg:shadow-none',
+          'transition-transform duration-300 ease-out',
+          open
+            ? 'translate-x-0'
+            : 'translate-x-full lg:translate-x-0',
+        ].join(' ')}
       >
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-white/10">
-          <img
-            src={logoUrl}
-            alt={platformName}
-            className="w-10 h-10 rounded-lg object-contain bg-white/5"
-          />
+        {/* Brand Header */}
+        <div className="relative shrink-0 px-4 sm:px-5 py-5 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="relative w-11 h-11 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+              <img
+                src={logoUrl}
+                alt={platformName}
+                className="w-9 h-9 object-contain"
+              />
 
-          <div>
-            <div className="font-bold text-lg leading-tight">
-              {platformName}
+              <span
+                className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/10 to-transparent pointer-events-none"
+                aria-hidden="true"
+              />
             </div>
 
-            <div className="text-xs text-sand-100/50">
-              منصة التسويق والمبيعات
+            <div className="min-w-0 flex-1">
+              <div className="font-bold text-[17px] leading-tight text-white truncate">
+                {platformName}
+              </div>
+
+              <div className="text-[11px] text-sand-100/45 mt-1 truncate">
+                منصة التسويق والمبيعات
+              </div>
             </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="إغلاق القائمة"
+              className="lg:hidden w-9 h-9 rounded-xl text-sand-100/60 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+            >
+              <svg
+                width="19"
+                height="19"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  d="M6 6L18 18M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-          {items.map(({ to, label, icon: Icon, end, feature }) => {
-            const locked = isFeatureLocked(feature)
+        {/* Navigation */}
+        <nav
+          className={[
+            'flex-1 min-h-0 overflow-y-auto',
+            'py-4 px-3',
+            'space-y-1',
+            'scrollbar-thin',
+          ].join(' ')}
+        >
+          {items.map(
+            ({
+              to,
+              label,
+              icon: Icon,
+              end,
+              feature,
+            }) => {
+              const locked = isFeatureLocked(feature)
 
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[15px] transition-colors ${
-                    isActive
-                      ? 'bg-gold-500/15 text-gold-400 font-semibold'
-                      : locked
-                        ? 'text-sand-100/40 hover:bg-white/5 hover:text-sand-100/60'
-                        : 'text-sand-100/70 hover:bg-white/5 hover:text-sand-100'
-                  }`
-                }
-              >
-                <Icon className="w-5 h-5 shrink-0" />
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  onClick={onClose}
+                  className={({ isActive: active }) =>
+                    [
+                      'group relative',
+                      'flex items-center gap-3',
+                      'min-h-11',
+                      'px-3 py-2.5',
+                      'rounded-xl',
+                      'text-[14px] sm:text-[15px]',
+                      'transition-all duration-200 ease-out',
+                      'select-none',
+                      active
+                        ? [
+                            'bg-gold-500/15',
+                            'text-gold-300',
+                            'font-semibold',
+                            'shadow-[inset_0_0_0_1px_rgba(245,158,11,0.08)]',
+                          ].join(' ')
+                        : locked
+                          ? [
+                              'text-sand-100/35',
+                              'hover:bg-white/[0.04]',
+                              'hover:text-sand-100/55',
+                            ].join(' ')
+                          : [
+                              'text-sand-100/65',
+                              'hover:bg-white/[0.055]',
+                              'hover:text-white',
+                              'hover:translate-x-[-1px]',
+                            ].join(' '),
+                    ].join(' ')
+                  }
+                >
+                  {({ isActive: active }) => (
+                    <>
+                      {active && (
+                        <span
+                          className="absolute right-0 top-2 bottom-2 w-0.5 rounded-full bg-gold-400"
+                          aria-hidden="true"
+                        />
+                      )}
 
-                <span className="flex-1">{label}</span>
+                      <span
+                        className={[
+                          'w-9 h-9 rounded-lg',
+                          'flex items-center justify-center',
+                          'shrink-0',
+                          'transition-colors duration-200',
+                          active
+                            ? 'bg-gold-500/10'
+                            : 'bg-transparent group-hover:bg-white/[0.04]',
+                        ].join(' ')}
+                      >
+                        <Icon className="w-[19px] h-[19px] shrink-0" />
+                      </span>
 
-                {locked && (
-                  <span
-                    className="text-xs text-sand-100/35"
-                    title="الميزة غير متاحة في باقتك الحالية"
-                    aria-label="الميزة غير متاحة في باقتك الحالية"
-                  >
-                    🔒
-                  </span>
-                )}
-              </NavLink>
-            )
-          })}
+                      <span className="flex-1 truncate">
+                        {label}
+                      </span>
 
+                      {locked && (
+                        <span
+                          className="text-sand-100/30 shrink-0"
+                          title="الميزة غير متاحة في باقتك الحالية"
+                          aria-label="الميزة غير متاحة في باقتك الحالية"
+                        >
+                          <LockIcon />
+                        </span>
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              )
+            }
+          )}
+
+          {/* Admin Navigation */}
           {isAdmin && (
-            <div className="mt-2 pt-2 border-t border-white/10">
+            <div className="mt-3 pt-3 border-t border-white/10">
               <button
                 type="button"
-                onClick={() => setAdminOpen((current) => !current)}
-                className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-[15px] transition-colors ${
-                  adminOpen
-                    ? 'bg-gold-500/15 text-gold-400 font-semibold'
-                    : 'text-gold-400/80 hover:bg-white/5 hover:text-gold-300'
-                }`}
+                aria-expanded={adminOpen}
+                onClick={() =>
+                  setAdminOpen((current) => !current)
+                }
+                className={[
+                  'w-full min-h-11',
+                  'flex items-center justify-between gap-3',
+                  'px-3 py-2.5',
+                  'rounded-xl',
+                  'text-[14px] sm:text-[15px]',
+                  'transition-all duration-200',
+                  'focus-visible:outline-none',
+                  'focus-visible:ring-2',
+                  'focus-visible:ring-gold-400/40',
+                  adminOpen || isAdminRoute
+                    ? 'bg-gold-500/15 text-gold-300 font-semibold'
+                    : 'text-gold-400/75 hover:bg-white/[0.055] hover:text-gold-300',
+                ].join(' ')}
               >
-                <span className="flex items-center gap-3">
-                  <IconShield className="w-5 h-5 shrink-0" />
-                  <span>لوحة تحكم المنصة</span>
+                <span className="flex items-center gap-3 min-w-0">
+                  <span className="w-9 h-9 rounded-lg bg-gold-500/10 flex items-center justify-center shrink-0">
+                    <IconShield className="w-[19px] h-[19px]" />
+                  </span>
+
+                  <span className="truncate">
+                    لوحة تحكم المنصة
+                  </span>
                 </span>
 
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className={`transition-transform ${
-                    adminOpen ? 'rotate-180' : ''
-                  }`}
-                >
-                  <path
-                    d="M6 9L12 15L18 9"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                <ChevronIcon open={adminOpen} />
               </button>
 
-              {adminOpen && (
-                <div className="mt-1 mr-2 pr-2 border-r border-white/10 space-y-0.5">
-                  {adminItems.map(({ to, label, icon: Icon, end }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={end}
-                      onClick={onClose}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                          isActive
-                            ? 'bg-gold-500/15 text-gold-400 font-semibold'
-                            : 'text-sand-100/60 hover:bg-white/5 hover:text-sand-100'
-                        }`
-                      }
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span>{label}</span>
-                    </NavLink>
-                  ))}
+              <div
+                className={[
+                  'overflow-hidden transition-all duration-200 ease-out',
+                  adminOpen
+                    ? 'max-h-[520px] opacity-100'
+                    : 'max-h-0 opacity-0',
+                ].join(' ')}
+              >
+                <div className="mt-1 mr-2 pr-2 border-r border-white/10 space-y-1">
+                  {adminItems.map(
+                    ({
+                      to,
+                      label,
+                      icon: Icon,
+                      end,
+                    }) => (
+                      <NavLink
+                        key={to}
+                        to={to}
+                        end={end}
+                        onClick={onClose}
+                        className={({ isActive: active }) =>
+                          [
+                            'group flex items-center gap-3',
+                            'min-h-10',
+                            'px-3 py-2',
+                            'rounded-lg',
+                            'text-sm',
+                            'transition-all duration-200',
+                            active
+                              ? 'bg-gold-500/15 text-gold-300 font-semibold'
+                              : 'text-sand-100/55 hover:bg-white/[0.055] hover:text-white hover:translate-x-[-1px]',
+                          ].join(' ')
+                        }
+                      >
+                        {({ isActive: active }) => (
+                          <>
+                            <span
+                              className={[
+                                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                                active
+                                  ? 'bg-gold-500/10'
+                                  : 'bg-transparent group-hover:bg-white/[0.04]',
+                              ].join(' ')}
+                            >
+                              <Icon className="w-[17px] h-[17px] shrink-0" />
+                            </span>
+
+                            <span className="truncate">
+                              {label}
+                            </span>
+                          </>
+                        )}
+                      </NavLink>
+                    )
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </nav>
 
-        <div className="p-4 border-t border-white/10">
+        {/* Subscription Card */}
+        <div className="shrink-0 p-3 sm:p-4 border-t border-white/10">
           <Link
             to="/billing"
             onClick={onClose}
-            className="block rounded-xl bg-white/5 p-3.5 hover:bg-white/10 transition-colors"
+            className={[
+              'group block rounded-2xl',
+              'bg-white/[0.055]',
+              'border border-white/[0.06]',
+              'p-3.5',
+              'transition-all duration-200',
+              'hover:bg-white/[0.085]',
+              'hover:border-white/10',
+              'hover:shadow-lg hover:shadow-black/10',
+            ].join(' ')}
           >
-            <div className="text-sm font-semibold text-sand-100">
-              {subscriptionLabel}
-            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gold-500/10 text-gold-400 flex items-center justify-center shrink-0">
+                <IconCard
+                  className="w-[18px] h-[18px]"
+                />
+              </div>
 
-            <div className="text-xs text-sand-100/50 mt-1">
-              {renewalLabel}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-white truncate">
+                  {subscriptionLabel}
+                </div>
+
+                <div className="text-[11px] leading-5 text-sand-100/45 mt-1">
+                  {renewalLabel}
+                </div>
+              </div>
+
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="mt-1 text-sand-100/30 group-hover:text-gold-400 transition-colors shrink-0"
+                aria-hidden="true"
+              >
+                <path
+                  d="M9 18L15 12L9 6"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
           </Link>
         </div>
