@@ -13,6 +13,14 @@ type PaymentMethod = {
   display_order: number
 }
 
+type SelectedPlan = {
+  id: string
+  name: string
+  price: number
+  yearly_price: number | null
+  currency: string
+}
+
 const MAX_RECEIPT_SIZE = 5 * 1024 * 1024
 
 const RECEIPT_TYPES = [
@@ -21,15 +29,6 @@ const RECEIPT_TYPES = [
   'image/webp',
   'application/pdf',
 ]
-
-function getDetail(method: PaymentMethod, key: string) {
-  const value = method.details?.[key]
-
-  if (typeof value !== 'string') return null
-
-  const trimmed = value.trim()
-  return trimmed ? trimmed : null
-}
 
 function renderPaymentDetails(method: PaymentMethod) {
   const details = method.details ?? {}
@@ -104,16 +103,26 @@ export default function PaymentRequest() {
     loading: subLoading,
   } = useSubscription()
 
+  const selectedPlanId =
+    searchParams.get('plan_id') ??
+    subscription?.plan?.id ??
+    null
+
   const billingCycle =
     searchParams.get('cycle') === 'yearly'
       ? 'yearly'
       : 'monthly'
 
+  const [selectedPlan, setSelectedPlan] =
+    useState<SelectedPlan | null>(null)
+
+  const [planLoading, setPlanLoading] = useState(true)
+  const [planError, setPlanError] = useState<string | null>(null)
+
   const [methods, setMethods] = useState<PaymentMethod[]>([])
   const [methodsLoading, setMethodsLoading] = useState(true)
-  const [methodsError, setMethodsError] = useState<string | null>(
-    null
-  )
+  const [methodsError, setMethodsError] =
+    useState<string | null>(null)
 
   const [method, setMethod] = useState('')
   const [reference, setReference] = useState('')
@@ -125,14 +134,78 @@ export default function PaymentRequest() {
   const [error, setError] = useState<string | null>(null)
 
   const amount = useMemo(() => {
-    if (!subscription?.plan) return null
+    if (!selectedPlan) return null
 
     if (billingCycle === 'yearly') {
-      return subscription.plan.yearly_price ?? null
+      return selectedPlan.yearly_price ?? null
     }
 
-    return subscription.plan.price
-  }, [subscription, billingCycle])
+    return selectedPlan.price
+  }, [selectedPlan, billingCycle])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadSelectedPlan = async () => {
+      if (!supabase) {
+        setPlanLoading(false)
+        setPlanError(
+          'قاعدة البيانات غير متاحة حاليًا.'
+        )
+        return
+      }
+
+      if (!selectedPlanId) {
+        setPlanLoading(false)
+        setPlanError(
+          'لم يتم تحديد الباقة المطلوبة.'
+        )
+        return
+      }
+
+      setPlanLoading(true)
+      setPlanError(null)
+
+      const { data, error: queryError } =
+        await supabase
+          .from('plans')
+          .select(
+            'id, name, price, yearly_price, currency'
+          )
+          .eq('id', selectedPlanId)
+          .eq('status', 'active')
+          .maybeSingle()
+
+      if (cancelled) return
+
+      if (queryError) {
+        setSelectedPlan(null)
+        setPlanError(
+          'تعذر تحميل الباقة المختارة حاليًا.'
+        )
+        setPlanLoading(false)
+        return
+      }
+
+      if (!data) {
+        setSelectedPlan(null)
+        setPlanError(
+          'الباقة المختارة غير متاحة حاليًا.'
+        )
+        setPlanLoading(false)
+        return
+      }
+
+      setSelectedPlan(data as SelectedPlan)
+      setPlanLoading(false)
+    }
+
+    loadSelectedPlan()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedPlanId])
 
   useEffect(() => {
     let cancelled = false
@@ -149,15 +222,16 @@ export default function PaymentRequest() {
       setMethodsLoading(true)
       setMethodsError(null)
 
-      const { data, error: queryError } = await supabase
-        .from('payment_methods')
-        .select(
-          'id, method_key, name, details, enabled, display_order'
-        )
-        .eq('enabled', true)
-        .order('display_order', {
-          ascending: true,
-        })
+      const { data, error: queryError } =
+        await supabase
+          .from('payment_methods')
+          .select(
+            'id, method_key, name, details, enabled, display_order'
+          )
+          .eq('enabled', true)
+          .order('display_order', {
+            ascending: true,
+          })
 
       if (cancelled) return
 
@@ -199,19 +273,19 @@ export default function PaymentRequest() {
 
   useEffect(() => {
     if (
-      !subLoading &&
-      subscription?.plan &&
+      !planLoading &&
+      selectedPlan &&
       billingCycle === 'yearly' &&
-      (!subscription.plan.yearly_price ||
-        subscription.plan.yearly_price <= 0)
+      (!selectedPlan.yearly_price ||
+        selectedPlan.yearly_price <= 0)
     ) {
       navigate('/plans', { replace: true })
     }
   }, [
     billingCycle,
     navigate,
-    subLoading,
-    subscription,
+    planLoading,
+    selectedPlan,
   ])
 
   const selectedMethod = methods.find(
@@ -251,10 +325,16 @@ export default function PaymentRequest() {
     setReceipt(file)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (
+    e: React.FormEvent
+  ) => {
     e.preventDefault()
 
-    if (!supabase || !subscription?.plan || !selectedMethod) {
+    if (
+      !supabase ||
+      !selectedPlan ||
+      !selectedMethod
+    ) {
       return
     }
 
@@ -307,32 +387,43 @@ export default function PaymentRequest() {
         )
       }
 
-      const { data: userRow, error: userError } =
-        await supabase
-          .from('users')
-          .select('organization_id')
-          .eq('id', authData.user.id)
-          .single()
+      const {
+        data: userRow,
+        error: userError,
+      } = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', authData.user.id)
+        .single()
 
-      if (userError || !userRow?.organization_id) {
+      if (
+        userError ||
+        !userRow?.organization_id
+      ) {
         throw new Error(
           'تعذر تحديد الشركة المرتبطة بالحساب.'
         )
       }
 
       if (receipt) {
-        const extension = getFileExtension(receipt)
+        const extension =
+          getFileExtension(receipt)
 
         receiptPath = `${userRow.organization_id}/${crypto.randomUUID()}.${extension}`
 
-        const { error: uploadError } =
-          await supabase.storage
-            .from('payment-receipts')
-            .upload(receiptPath, receipt, {
+        const {
+          error: uploadError,
+        } = await supabase.storage
+          .from('payment-receipts')
+          .upload(
+            receiptPath,
+            receipt,
+            {
               cacheControl: '3600',
               upsert: false,
               contentType: receipt.type,
-            })
+            }
+          )
 
         if (uploadError) {
           throw new Error(
@@ -341,21 +432,26 @@ export default function PaymentRequest() {
         }
       }
 
-      const { error: submitError } =
-        await supabase.rpc(
-          'submit_payment_request',
-          {
-            p_plan_id: subscription.plan.id,
-            p_amount: amount,
-            p_method:
-              selectedMethod.method_key,
-            p_reference: reference.trim(),
-            p_date: date,
-            p_note: note.trim() || null,
-            p_billing_cycle: billingCycle,
-            p_receipt_url: receiptPath,
-          }
-        )
+      const {
+        error: submitError,
+      } = await supabase.rpc(
+        'submit_payment_request',
+        {
+          p_plan_id: selectedPlan.id,
+          p_amount: amount,
+          p_method:
+            selectedMethod.method_key,
+          p_reference:
+            reference.trim(),
+          p_date: date,
+          p_note:
+            note.trim() || null,
+          p_billing_cycle:
+            billingCycle,
+          p_receipt_url:
+            receiptPath,
+        }
+      )
 
       if (submitError) {
         if (receiptPath) {
@@ -382,7 +478,7 @@ export default function PaymentRequest() {
     }
   }
 
-  if (subLoading) {
+  if (subLoading || planLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
@@ -390,11 +486,12 @@ export default function PaymentRequest() {
     )
   }
 
-  if (!subscription?.plan) {
+  if (!selectedPlan) {
     return (
       <Card className="p-6">
-        <p className="text-sm text-ink-900/60">
-          لازم تختار باقة الأول.
+        <p className="text-sm text-red-600">
+          {planError ??
+            'لم يتم تحديد الباقة المطلوبة.'}
         </p>
 
         <Button
@@ -409,13 +506,17 @@ export default function PaymentRequest() {
 
   if (
     billingCycle === 'yearly' &&
-    (!subscription.plan.yearly_price ||
-      subscription.plan.yearly_price <= 0)
+    (!selectedPlan.yearly_price ||
+      selectedPlan.yearly_price <= 0)
   ) {
     return null
   }
 
-  const monthlyPrice = subscription.plan.price
+  const monthlyPrice =
+    selectedPlan.price
+
+  const currency =
+    selectedPlan.currency || 'EGP'
 
   return (
     <div className="max-w-lg space-y-6">
@@ -425,8 +526,18 @@ export default function PaymentRequest() {
         </div>
 
         <div className="text-xl font-bold mt-1">
-          {subscription.plan.name}
+          {selectedPlan.name}
         </div>
+
+        {subscription?.plan?.id ===
+          selectedPlan.id &&
+          (subscription.status === 'active' ||
+            subscription.status ===
+              'trialing') && (
+            <div className="mt-2 text-xs text-sand-100/50">
+              هذه هي باقتك الحالية
+            </div>
+          )}
 
         <div className="mt-2 text-sm text-sand-100/70">
           دورة الفوترة:{' '}
@@ -437,17 +548,21 @@ export default function PaymentRequest() {
 
         <div className="mt-3">
           <span className="text-3xl font-bold">
-            {amount?.toLocaleString('ar-EG')}
+            {amount?.toLocaleString(
+              'ar-EG'
+            )}
           </span>
 
           <span className="text-sm text-sand-100/60 mr-1">
-            ج.م
+            {currency}
           </span>
 
           {billingCycle === 'yearly' ? (
             <div className="text-xs text-sand-100/50 mt-1">
-              {monthlyPrice.toLocaleString('ar-EG')} ج.م
-              شهريًا عند الحساب الشهري
+              {monthlyPrice.toLocaleString(
+                'ar-EG'
+              )}{' '}
+              {currency} شهريًا عند الحساب الشهري
             </div>
           ) : (
             <div className="text-xs text-sand-100/50 mt-1">
