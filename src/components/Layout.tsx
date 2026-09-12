@@ -120,7 +120,7 @@ function SubscriptionExpiredScreen({
                 strokeLinecap="round"
               />
               <path
-                d="M10.3 4.7L2.9 17.5C2.13 18.83 3.09 20.5 4.63 20.5H19.37C20.91 20.5 21.87 18.83 21.1 17.5L13.7 4.7C12.93 3.37 11.07 3.37 10.3 4.7Z"
+                d="M10.3 4.7L2.9 17.5C2.13 18.83 3.09 20.5 4.63 20.5H19.37C20.91 20.5 21.87 18.83 21.87 17.5L13.7 4.7C12.93 3.37 11.07 3.37 10.3 4.7Z"
                 stroke="currentColor"
                 strokeWidth="1.8"
               />
@@ -187,15 +187,15 @@ function SubscriptionBanner({
       role="status"
       aria-live="polite"
       className={[
-        'border-b px-4 sm:px-8 py-3 shrink-0',
+        'border-b px-3 sm:px-4 md:px-8 py-3 shrink-0',
         'transition-colors duration-200',
         isUrgent
           ? 'bg-red-50 border-red-200'
           : 'bg-gold-500/15 border-gold-500/30',
       ].join(' ')}
     >
-      <div className="mx-auto w-full max-w-[1600px] flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
+      <div className="mx-auto w-full max-w-[1600px] flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3 min-w-0">
           <div
             className={[
               'w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
@@ -232,7 +232,7 @@ function SubscriptionBanner({
           <div className="min-w-0">
             <p
               className={[
-                'text-sm font-semibold',
+                'text-sm font-semibold leading-6',
                 isUrgent
                   ? 'text-red-800'
                   : 'text-ink-950',
@@ -244,7 +244,7 @@ function SubscriptionBanner({
             </p>
 
             {formattedRenewalDate && (
-              <p className="text-xs text-sand-600 mt-0.5 truncate">
+              <p className="text-xs text-sand-600 mt-0.5 leading-5 break-words">
                 تاريخ الانتهاء: {formattedRenewalDate}
               </p>
             )}
@@ -254,10 +254,14 @@ function SubscriptionBanner({
         <Link
           to="/plans"
           className={[
-            'text-sm font-bold whitespace-nowrap transition-colors',
+            'inline-flex items-center justify-center',
+            'w-full sm:w-auto shrink-0',
+            'min-h-10 rounded-xl px-4 py-2',
+            'text-sm font-bold whitespace-nowrap',
+            'transition-colors',
             isUrgent
-              ? 'text-red-700 hover:text-red-800'
-              : 'text-gold-700 hover:text-gold-800',
+              ? 'bg-red-100 text-red-700 hover:bg-red-200'
+              : 'bg-gold-100 text-gold-700 hover:bg-gold-200',
           ].join(' ')}
         >
           تجديد الاشتراك
@@ -344,22 +348,22 @@ export default function Layout() {
           <div
             role="status"
             aria-live="polite"
-            className="bg-gold-500/15 border-b border-gold-500/30 px-4 sm:px-8 py-3 shrink-0"
+            className="bg-gold-500/15 border-b border-gold-500/30 px-3 sm:px-4 md:px-8 py-3 shrink-0"
           >
-            <div className="mx-auto w-full max-w-[1600px] flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <p className="text-sm font-semibold text-ink-950">
+            <div className="mx-auto w-full max-w-[1600px] flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink-950 leading-6">
                   طلب الاشتراك قيد المراجعة
                 </p>
 
-                <p className="text-xs text-sand-600 mt-0.5">
+                <p className="text-xs text-sand-600 mt-0.5 leading-5">
                   سيتم تفعيل مميزات الباقة بعد تأكيد الدفع.
                 </p>
               </div>
 
               <Link
                 to="/billing"
-                className="text-sm font-bold text-gold-700 hover:underline"
+                className="inline-flex items-center justify-center w-full sm:w-auto shrink-0 min-h-10 rounded-xl px-4 py-2 bg-gold-100 text-sm font-bold text-gold-700 hover:bg-gold-200 transition-colors"
               >
                 متابعة الدفع
               </Link>
@@ -374,22 +378,22 @@ export default function Layout() {
             <div
               role="alert"
               aria-live="assertive"
-              className="bg-red-50 border-b border-red-200 px-4 sm:px-8 py-3 shrink-0"
+              className="bg-red-50 border-b border-red-200 px-3 sm:px-4 md:px-8 py-3 shrink-0"
             >
-              <div className="mx-auto w-full max-w-[1600px] flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <p className="text-sm font-semibold text-red-800">
+              <div className="mx-auto w-full max-w-[1600px] flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-red-800 leading-6">
                     انتهى اشتراكك وتم إيقاف مميزات المنصة
                   </p>
 
-                  <p className="text-xs text-red-700/80 mt-0.5">
+                  <p className="text-xs text-red-700/80 mt-0.5 leading-5">
                     جدد اشتراكك لاستعادة الوصول.
                   </p>
                 </div>
 
                 <Link
                   to="/plans"
-                  className="text-sm font-bold text-red-700 hover:underline"
+                  className="inline-flex items-center justify-center w-full sm:w-auto shrink-0 min-h-10 rounded-xl px-4 py-2 bg-red-100 text-sm font-bold text-red-700 hover:bg-red-200 transition-colors"
                 >
                   تجديد الاشتراك
                 </Link>
