@@ -11,6 +11,11 @@ const tabs = [
   'الفوترة',
 ]
 
+type MetaProvider =
+  | 'whatsapp'
+  | 'facebook'
+  | 'instagram'
+
 interface OrgData {
   name: string
   manager_name: string
@@ -41,11 +46,6 @@ interface Integration {
   error_message: string | null
   updated_at: string | null
 }
-
-type MetaProvider =
-  | 'whatsapp'
-  | 'facebook'
-  | 'instagram'
 
 const initialOrg: OrgData = {
   name: '',
