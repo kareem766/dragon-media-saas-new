@@ -190,7 +190,7 @@ export default function Search() {
       </Card>
 
       {error && (
-        <Card className="p-5 border-red-200 bg-red-50/60" role="alert">
+        <Card className="p-5 border-red-200 bg-red-50/60">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="font-semibold text-red-900">
