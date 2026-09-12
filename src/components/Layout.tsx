@@ -15,10 +15,7 @@ import {
   useSubscription,
 } from '../lib/useSubscription'
 
-const titles: Record<
-  string,
-  string
-> = {
+const titles: Record<string, string> = {
   '/': 'نظرة عامة',
   '/crm': 'إدارة العملاء (CRM)',
   '/pipeline': 'مسار المبيعات',
@@ -49,14 +46,6 @@ const titles: Record<
   '/admin/tickets': 'تذاكر الدعم',
 }
 
-/*
- * الصفحات التي يجب أن تظل متاحة
- * حتى بعد انتهاء الاشتراك.
- *
- * السبب:
- * المستخدم يحتاج الوصول إلى الباقات
- * والفوترة والدفع حتى يستطيع التجديد.
- */
 const subscriptionExemptPaths = [
   '/plans',
   '/billing',
@@ -66,12 +55,6 @@ const subscriptionExemptPaths = [
   '/tickets',
 ]
 
-/*
- * صفحات Admin لا يتم قفلها بسبب اشتراك العميل.
- *
- * صلاحيات الـ Admin نفسها يتم التحكم فيها
- * بواسطة نظام الصلاحيات الموجود في المشروع.
- */
 const adminPaths = [
   '/admin',
   '/admin/organizations',
@@ -84,9 +67,7 @@ const adminPaths = [
   '/admin/tickets',
 ]
 
-function isPathAllowedWithoutSubscription(
-  pathname: string
-) {
+function isPathAllowedWithoutSubscription(pathname: string) {
   return subscriptionExemptPaths.some(
     (path) =>
       pathname === path ||
@@ -94,9 +75,7 @@ function isPathAllowedWithoutSubscription(
   )
 }
 
-function isAdminPath(
-  pathname: string
-) {
+function isAdminPath(pathname: string) {
   return adminPaths.some(
     (path) =>
       pathname === path ||
@@ -114,12 +93,10 @@ function SubscriptionExpiredScreen({
   return (
     <div
       dir="rtl"
-      className="min-h-[calc(100vh-140px)] flex items-center justify-center py-10"
+      className="min-h-[calc(100vh-140px)] flex items-center justify-center py-8 sm:py-10"
     >
       <div className="w-full max-w-xl">
         <div className="bg-white border border-sand-200 rounded-3xl shadow-sm p-6 sm:p-10 text-center">
-
-          {/* Icon */}
           <div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
             <svg
               width="30"
@@ -128,6 +105,7 @@ function SubscriptionExpiredScreen({
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
               className="text-red-600"
+              aria-hidden="true"
             >
               <path
                 d="M12 9V13"
@@ -197,32 +175,27 @@ function SubscriptionBanner({
   daysRemaining: number | null
   formattedRenewalDate: string | null
 }) {
-  if (
-    daysRemaining === null ||
-    daysRemaining > 14
-  ) {
+  if (daysRemaining === null || daysRemaining > 14) {
     return null
   }
 
-  const isToday =
-    daysRemaining === 0
-
-  const isUrgent =
-    daysRemaining <= 3
+  const isToday = daysRemaining === 0
+  const isUrgent = daysRemaining <= 3
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={[
-        'border-b px-4 sm:px-8 py-3',
+        'border-b px-4 sm:px-8 py-3 shrink-0',
+        'transition-colors duration-200',
         isUrgent
           ? 'bg-red-50 border-red-200'
           : 'bg-gold-500/15 border-gold-500/30',
       ].join(' ')}
     >
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-
+      <div className="mx-auto w-full max-w-[1600px] flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-
           <div
             className={[
               'w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
@@ -237,6 +210,7 @@ function SubscriptionBanner({
               viewBox="0 0 24 24"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
               <circle
                 cx="12"
@@ -266,17 +240,12 @@ function SubscriptionBanner({
             >
               {isToday
                 ? 'اشتراكك ينتهي اليوم'
-                : `متبقي ${daysRemaining} ${
-                    daysRemaining === 1
-                      ? 'يوم'
-                      : 'يوم'
-                  } على انتهاء اشتراكك`}
+                : `متبقي ${daysRemaining} يوم على انتهاء اشتراكك`}
             </p>
 
             {formattedRenewalDate && (
-              <p className="text-xs text-sand-600 mt-0.5">
-                تاريخ الانتهاء:{' '}
-                {formattedRenewalDate}
+              <p className="text-xs text-sand-600 mt-0.5 truncate">
+                تاريخ الانتهاء: {formattedRenewalDate}
               </p>
             )}
           </div>
@@ -285,7 +254,7 @@ function SubscriptionBanner({
         <Link
           to="/plans"
           className={[
-            'text-sm font-bold whitespace-nowrap',
+            'text-sm font-bold whitespace-nowrap transition-colors',
             isUrgent
               ? 'text-red-700 hover:text-red-800'
               : 'text-gold-700 hover:text-gold-800',
@@ -299,19 +268,12 @@ function SubscriptionBanner({
 }
 
 export default function Layout() {
-  const [open, setOpen] =
-    useState(false)
+  const [open, setOpen] = useState(false)
+  const { pathname } = useLocation()
+
+  const title = titles[pathname] ?? 'Dragon Media'
 
   const {
-    pathname,
-  } = useLocation()
-
-  const title =
-    titles[pathname] ??
-    'Dragon Media'
-
-  const {
-    subscription,
     loading,
     isActive,
     isExpired,
@@ -320,10 +282,6 @@ export default function Layout() {
     formattedRenewalDate,
   } = useSubscription()
 
-  /*
-   * نستخدم State محلي لمنع تغيير الصفحة
-   * أثناء تحميل بيانات الاشتراك.
-   */
   const [
     accessResolved,
     setAccessResolved,
@@ -335,18 +293,16 @@ export default function Layout() {
     }
   }, [loading])
 
+  useEffect(() => {
+    setOpen(false)
+  }, [pathname])
+
   const exempt =
-    isPathAllowedWithoutSubscription(
-      pathname
-    )
+    isPathAllowedWithoutSubscription(pathname)
 
   const adminRoute =
     isAdminPath(pathname)
 
-  /*
-   * لا نقفل صفحات Admin بناءً على اشتراك
-   * العميل، لأن Admin هو مدير المنصة.
-   */
   const shouldLockPage =
     accessResolved &&
     !loading &&
@@ -354,12 +310,6 @@ export default function Layout() {
     !exempt &&
     !adminRoute
 
-  /*
-   * Pending Payment:
-   * المستخدم لا يعتبر لديه اشتراك فعال،
-   * لكن لا نعرض له شاشة "انتهى اشتراكك"
-   * لأن طلب الدفع قد يكون قيد المراجعة.
-   */
   const showPendingBanner =
     accessResolved &&
     !loading &&
@@ -370,45 +320,38 @@ export default function Layout() {
   return (
     <div
       dir="rtl"
-      className="flex h-screen overflow-hidden bg-sand-50"
+      className="flex h-screen min-h-0 overflow-hidden bg-sand-50"
     >
       <Sidebar
         open={open}
-        onClose={() =>
-          setOpen(false)
-        }
+        onClose={() => setOpen(false)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
-
+      <div className="flex-1 flex min-w-0 min-h-0 flex-col">
         <Topbar
           title={title}
-          onMenuClick={() =>
-            setOpen(true)
-          }
+          onMenuClick={() => setOpen(true)}
         />
 
-        {/* Subscription countdown */}
-        {!loading &&
-          isActive && (
-            <SubscriptionBanner
-              daysRemaining={
-                daysRemaining
-              }
-              formattedRenewalDate={
-                formattedRenewalDate
-              }
-            />
-          )}
+        {!loading && isActive && (
+          <SubscriptionBanner
+            daysRemaining={daysRemaining}
+            formattedRenewalDate={formattedRenewalDate}
+          />
+        )}
 
-        {/* Pending payment */}
         {showPendingBanner && (
-          <div className="bg-gold-500/15 border-b border-gold-500/30 px-4 sm:px-8 py-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div
+            role="status"
+            aria-live="polite"
+            className="bg-gold-500/15 border-b border-gold-500/30 px-4 sm:px-8 py-3 shrink-0"
+          >
+            <div className="mx-auto w-full max-w-[1600px] flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-sm font-semibold text-ink-950">
                   طلب الاشتراك قيد المراجعة
                 </p>
+
                 <p className="text-xs text-sand-600 mt-0.5">
                   سيتم تفعيل مميزات الباقة بعد تأكيد الدفع.
                 </p>
@@ -424,13 +367,16 @@ export default function Layout() {
           </div>
         )}
 
-        {/* Expired / locked banner */}
         {!loading &&
           isExpired &&
           !exempt &&
           !adminRoute && (
-            <div className="bg-red-50 border-b border-red-200 px-4 sm:px-8 py-3">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="bg-red-50 border-b border-red-200 px-4 sm:px-8 py-3 shrink-0"
+            >
+              <div className="mx-auto w-full max-w-[1600px] flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <p className="text-sm font-semibold text-red-800">
                     انتهى اشتراكك وتم إيقاف مميزات المنصة
@@ -451,21 +397,17 @@ export default function Layout() {
             </div>
           )}
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
-
-          {shouldLockPage ? (
-            <SubscriptionExpiredScreen
-              daysRemaining={
-                daysRemaining
-              }
-              formattedRenewalDate={
-                formattedRenewalDate
-              }
-            />
-          ) : (
-            <Outlet />
-          )}
-
+        <main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
+          <div className="mx-auto w-full max-w-[1600px] min-h-full">
+            {shouldLockPage ? (
+              <SubscriptionExpiredScreen
+                daysRemaining={daysRemaining}
+                formattedRenewalDate={formattedRenewalDate}
+              />
+            ) : (
+              <Outlet />
+            )}
+          </div>
         </main>
       </div>
     </div>
