@@ -2,11 +2,113 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body {
+:root {
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  direction: rtl;
+  scroll-behavior: smooth;
+  background: #FAF8F4;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
   font-family: 'IBM Plex Sans Arabic', 'Tajawal', sans-serif;
-  background-color: #FAF8F4;
+  background: #FAF8F4;
+  color: #171717;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  transition-property:
+    color,
+    background-color,
+    border-color,
+    box-shadow,
+    opacity,
+    transform;
+  transition-duration: 180ms;
+  transition-timing-function: ease-out;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(245, 158, 11, 0.32);
+  outline-offset: 2px;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+::selection {
+  background: rgba(245, 158, 11, 0.24);
 }
 
 * {
   scrollbar-width: thin;
+  scrollbar-color: rgba(120, 113, 108, 0.35) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(120, 113, 108, 0.28);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 113, 108, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    overflow-x: hidden;
+  }
 }
