@@ -1,39 +1,97 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type {
+  VercelRequest,
+  VercelResponse,
+} from '@vercel/node'
+
 import { createClient } from '@supabase/supabase-js'
-import { createHmac, timingSafeEqual } from 'node:crypto'
+
+import {
+  createHmac,
+  timingSafeEqual,
+} from 'node:crypto'
 
 const META_AUTH_VERSION =
-  process.env.META_GRAPH_API_VERSION || 'v23.0'
+  process.env.META_GRAPH_API_VERSION ||
+  'v23.0'
+
+type MetaProvider =
+  | 'whatsapp'
+  | 'facebook'
+  | 'instagram'
+
+interface MetaState {
+  user_id: string
+  organization_id: string
+  provider: MetaProvider
+  nonce: string
+  issued_at: number
+}
 
 function getEnv(name: string): string {
   const value = process.env[name]
 
   if (!value) {
-    throw new Error(`Missing environment variable: ${name}`)
+    throw new Error(
+      `Missing environment variable: ${name}`
+    )
   }
 
   return value
 }
 
-function verifyState(state: string, secret: string) {
-  const separator = state.lastIndexOf('.')
+function getProvider(
+  value: unknown
+): MetaProvider {
+  if (
+    value === 'facebook' ||
+    value === 'instagram' ||
+    value === 'whatsapp'
+  ) {
+    return value
+  }
+
+  return 'whatsapp'
+}
+
+function verifyState(
+  state: string,
+  secret: string
+): MetaState | null {
+  const separator =
+    state.lastIndexOf('.')
 
   if (separator <= 0) {
     return null
   }
 
-  const payload = state.slice(0, separator)
-  const signature = state.slice(separator + 1)
+  const payload =
+    state.slice(
+      0,
+      separator
+    )
 
-  const expected = createHmac('sha256', secret)
-    .update(payload)
-    .digest('base64url')
+  const signature =
+    state.slice(
+      separator + 1
+    )
 
-  const providedBuffer = Buffer.from(signature)
-  const expectedBuffer = Buffer.from(expected)
+  const expected =
+    createHmac(
+      'sha256',
+      secret
+    )
+      .update(payload)
+      .digest('base64url')
+
+  const providedBuffer =
+    Buffer.from(signature)
+
+  const expectedBuffer =
+    Buffer.from(expected)
 
   if (
-    providedBuffer.length !== expectedBuffer.length ||
+    providedBuffer.length !==
+      expectedBuffer.length ||
     !timingSafeEqual(
       providedBuffer,
       expectedBuffer
@@ -43,12 +101,24 @@ function verifyState(state: string, secret: string) {
   }
 
   try {
-    const decoded = Buffer.from(
-      payload,
-      'base64url'
-    ).toString('utf8')
+    const decoded =
+      Buffer.from(
+        payload,
+        'base64url'
+      ).toString('utf8')
 
-    return JSON.parse(decoded)
+    const parsed =
+      JSON.parse(decoded)
+
+    if (
+      !parsed ||
+      typeof parsed !==
+        'object'
+    ) {
+      return null
+    }
+
+    return parsed as MetaState
   } catch {
     return null
   }
@@ -56,7 +126,10 @@ function verifyState(state: string, secret: string) {
 
 function redirectToSettings(
   res: VercelResponse,
-  status: 'connected' | 'error'
+  status:
+    | 'connected'
+    | 'error',
+  provider: MetaProvider = 'whatsapp'
 ) {
   const redirectUri =
     process.env.META_REDIRECT_URI
@@ -67,16 +140,205 @@ function redirectToSettings(
 
   try {
     const origin =
-      new URL(redirectUri).origin
+      new URL(
+        redirectUri
+      ).origin
 
     const url =
-      `${origin}/#/settings?meta=${status}`
+      `${origin}/#/settings?meta=${status}&provider=${encodeURIComponent(provider)}`
 
-    res.redirect(303, url)
+    res.redirect(
+      303,
+      url
+    )
 
     return true
   } catch {
     return false
+  }
+}
+
+async function graphRequest(
+  path: string,
+  accessToken: string
+) {
+  const separator =
+    path.includes('?')
+      ? '&'
+      : '?'
+
+  const response =
+    await fetch(
+      `https://graph.facebook.com/${META_AUTH_VERSION}${path}${separator}access_token=${encodeURIComponent(
+        accessToken
+      )}`
+    )
+
+  const data =
+    await response
+      .json()
+      .catch(() => null)
+
+  return {
+    response,
+    data,
+  }
+}
+
+async function discoverWhatsAppData(
+  accessToken: string,
+  metaUserId: string
+) {
+  let businessId:
+    | string
+    | null = null
+
+  let wabaId:
+    | string
+    | null = null
+
+  let phoneNumberId:
+    | string
+    | null = null
+
+  let displayPhoneNumber:
+    | string
+    | null = null
+
+  let verifiedName:
+    | string
+    | null = null
+
+  /*
+   * Try to discover businesses available
+   * to the Meta user.
+   *
+   * Failure here is not fatal because
+   * some Meta app configurations only
+   * return the user token initially.
+   */
+  try {
+    const {
+      response,
+      data,
+    } = await graphRequest(
+      `/${encodeURIComponent(
+        metaUserId
+      )}/businesses?fields=id,name`,
+      accessToken
+    )
+
+    if (
+      response.ok &&
+      Array.isArray(
+        data?.data
+      ) &&
+      data.data.length > 0
+    ) {
+      businessId =
+        String(
+          data.data[0].id
+        )
+    }
+  } catch (error) {
+    console.warn(
+      'WhatsApp business discovery failed:',
+      error
+    )
+  }
+
+  /*
+   * Discover WABA owned by the business.
+   */
+  if (businessId) {
+    try {
+      const {
+        response,
+        data,
+      } = await graphRequest(
+        `/${encodeURIComponent(
+          businessId
+        )}/owned_whatsapp_business_accounts?fields=id,name`,
+        accessToken
+      )
+
+      if (
+        response.ok &&
+        Array.isArray(
+          data?.data
+        ) &&
+        data.data.length > 0
+      ) {
+        wabaId =
+          String(
+            data.data[0].id
+          )
+      }
+    } catch (error) {
+      console.warn(
+        'WhatsApp WABA discovery failed:',
+        error
+      )
+    }
+  }
+
+  /*
+   * Discover the first phone number
+   * available on the WABA.
+   */
+  if (wabaId) {
+    try {
+      const {
+        response,
+        data,
+      } = await graphRequest(
+        `/${encodeURIComponent(
+          wabaId
+        )}/phone_numbers?fields=id,display_phone_number,verified_name`,
+        accessToken
+      )
+
+      if (
+        response.ok &&
+        Array.isArray(
+          data?.data
+        ) &&
+        data.data.length > 0
+      ) {
+        const phone =
+          data.data[0]
+
+        phoneNumberId =
+          phone?.id
+            ? String(phone.id)
+            : null
+
+        displayPhoneNumber =
+          typeof phone?.display_phone_number ===
+          'string'
+            ? phone.display_phone_number
+            : null
+
+        verifiedName =
+          typeof phone?.verified_name ===
+          'string'
+            ? phone.verified_name
+            : null
+      }
+    } catch (error) {
+      console.warn(
+        'WhatsApp phone discovery failed:',
+        error
+      )
+    }
+  }
+
+  return {
+    businessId,
+    wabaId,
+    phoneNumberId,
+    displayPhoneNumber,
+    verifiedName,
   }
 }
 
@@ -92,22 +354,31 @@ export default async function handler(
   if (req.method !== 'GET') {
     return res
       .status(405)
-      .send('Method not allowed')
+      .send(
+        'Method not allowed'
+      )
   }
+
+  let provider:
+    MetaProvider =
+    'whatsapp'
 
   try {
     const code =
-      typeof req.query.code === 'string'
+      typeof req.query.code ===
+      'string'
         ? req.query.code
         : null
 
     const state =
-      typeof req.query.state === 'string'
+      typeof req.query.state ===
+      'string'
         ? req.query.state
         : null
 
     const metaError =
-      typeof req.query.error === 'string'
+      typeof req.query.error ===
+      'string'
         ? req.query.error
         : null
 
@@ -117,19 +388,50 @@ export default async function handler(
         ? req.query.error_description
         : null
 
+    /*
+     * We cannot trust provider from the
+     * callback query. Provider must come
+     * from the signed state.
+     */
+    let preliminaryState:
+      | MetaState
+      | null = null
+
+    if (state) {
+      preliminaryState =
+        verifyState(
+          state,
+          getEnv(
+            'META_STATE_SECRET'
+          )
+        )
+
+      if (
+        preliminaryState?.provider
+      ) {
+        provider =
+          getProvider(
+            preliminaryState.provider
+          )
+      }
+    }
+
     if (metaError) {
       console.error(
         'Meta OAuth denied:',
         {
-          error: metaError,
+          error:
+            metaError,
           errorDescription,
+          provider,
         }
       )
 
       if (
         redirectToSettings(
           res,
-          'error'
+          'error',
+          provider
         )
       ) {
         return
@@ -142,7 +444,10 @@ export default async function handler(
         )
     }
 
-    if (!code || !state) {
+    if (
+      !code ||
+      !state
+    ) {
       return res
         .status(400)
         .send(
@@ -151,6 +456,7 @@ export default async function handler(
     }
 
     const stateData =
+      preliminaryState ||
       verifyState(
         state,
         getEnv(
@@ -165,6 +471,11 @@ export default async function handler(
           'رابط الربط غير صالح أو انتهت صلاحيته.'
         )
     }
+
+    provider =
+      getProvider(
+        stateData.provider
+      )
 
     if (
       !stateData.organization_id ||
@@ -197,16 +508,24 @@ export default async function handler(
     }
 
     const appId =
-      getEnv('META_APP_ID')
+      getEnv(
+        'META_APP_ID'
+      )
 
     const appSecret =
-      getEnv('META_APP_SECRET')
+      getEnv(
+        'META_APP_SECRET'
+      )
 
     const redirectUri =
-      getEnv('META_REDIRECT_URI')
+      getEnv(
+        'META_REDIRECT_URI'
+      )
 
     const supabaseUrl =
-      getEnv('VITE_SUPABASE_URL')
+      getEnv(
+        'VITE_SUPABASE_URL'
+      )
 
     const serviceKey =
       getEnv(
@@ -219,9 +538,15 @@ export default async function handler(
      */
     const tokenParams =
       new URLSearchParams({
-        client_id: appId,
-        client_secret: appSecret,
-        redirect_uri: redirectUri,
+        client_id:
+          appId,
+
+        client_secret:
+          appSecret,
+
+        redirect_uri:
+          redirectUri,
+
         code,
       })
 
@@ -252,7 +577,8 @@ export default async function handler(
       if (
         redirectToSettings(
           res,
-          'error'
+          'error',
+          provider
         )
       ) {
         return
@@ -266,13 +592,33 @@ export default async function handler(
     }
 
     const accessToken =
-      tokenData.access_token as string
+      String(
+        tokenData.access_token
+      )
 
     /*
-     * IMPORTANT:
-     * Never expose the Meta access token
-     * to the browser.
+     * Never expose this token to the
+     * browser or store it in the
+     * frontend-readable integrations
+     * table.
      */
+    const expiresIn =
+      Number(
+        tokenData.expires_in
+      )
+
+    const tokenExpiresAt =
+      Number.isFinite(
+        expiresIn
+      ) &&
+      expiresIn > 0
+        ? new Date(
+            Date.now() +
+              expiresIn *
+                1000
+          ).toISOString()
+        : null
+
     const admin =
       createClient(
         supabaseUrl,
@@ -291,14 +637,17 @@ export default async function handler(
     const {
       data: organization,
       error: organizationError,
-    } = await admin
-      .from('organizations')
-      .select('id')
-      .eq(
-        'id',
-        stateData.organization_id
-      )
-      .maybeSingle()
+    } =
+      await admin
+        .from(
+          'organizations'
+        )
+        .select('id')
+        .eq(
+          'id',
+          stateData.organization_id
+        )
+        .maybeSingle()
 
     if (
       organizationError ||
@@ -322,20 +671,21 @@ export default async function handler(
     const {
       data: membership,
       error: membershipError,
-    } = await admin
-      .from('users')
-      .select(
-        'organization_id'
-      )
-      .eq(
-        'id',
-        stateData.user_id
-      )
-      .eq(
-        'organization_id',
-        stateData.organization_id
-      )
-      .maybeSingle()
+    } =
+      await admin
+        .from('users')
+        .select(
+          'organization_id'
+        )
+        .eq(
+          'id',
+          stateData.user_id
+        )
+        .eq(
+          'organization_id',
+          stateData.organization_id
+        )
+        .maybeSingle()
 
     if (
       membershipError ||
@@ -354,21 +704,18 @@ export default async function handler(
     }
 
     /*
-     * Validate the Meta token.
-     * Only non-sensitive Meta identity
-     * information is stored.
+     * Validate Meta access token.
      */
-    const meResponse =
-      await fetch(
-        `https://graph.facebook.com/${META_AUTH_VERSION}/me?fields=id,name&access_token=${encodeURIComponent(
-          accessToken
-        )}`
+    const {
+      response:
+        meResponse,
+      data:
+        meData,
+    } =
+      await graphRequest(
+        '/me?fields=id,name',
+        accessToken
       )
-
-    const meData =
-      await meResponse
-        .json()
-        .catch(() => null)
 
     if (
       !meResponse.ok ||
@@ -387,7 +734,8 @@ export default async function handler(
       if (
         redirectToSettings(
           res,
-          'error'
+          'error',
+          provider
         )
       ) {
         return
@@ -400,81 +748,311 @@ export default async function handler(
         )
     }
 
+    const metaUserId =
+      String(
+        meData.id
+      )
+
+    const metaUserName =
+      typeof meData.name ===
+      'string'
+        ? meData.name
+        : null
+
+    let businessId:
+      | string
+      | null = null
+
+    let wabaId:
+      | string
+      | null = null
+
+    let phoneNumberId:
+      | string
+      | null = null
+
+    let displayPhoneNumber:
+      | string
+      | null = null
+
+    let verifiedName:
+      | string
+      | null = null
+
+    /*
+     * WhatsApp-specific discovery.
+     */
+    if (
+      provider ===
+      'whatsapp'
+    ) {
+      const whatsappData =
+        await discoverWhatsAppData(
+          accessToken,
+          metaUserId
+        )
+
+      businessId =
+        whatsappData.businessId
+
+      wabaId =
+        whatsappData.wabaId
+
+      phoneNumberId =
+        whatsappData.phoneNumberId
+
+      displayPhoneNumber =
+        whatsappData.displayPhoneNumber
+
+      verifiedName =
+        whatsappData.verifiedName
+    }
+
     const now =
       new Date().toISOString()
 
-    const metadata = {
-      meta_user_id:
-        String(meData.id),
+    /*
+     * Store sensitive credentials ONLY
+     * inside the server-only
+     * meta_connections table.
+     */
+    const {
+      data:
+        existingConnection,
+    } =
+      await admin
+        .from(
+          'meta_connections'
+        )
+        .select(
+          'id, metadata'
+        )
+        .eq(
+          'organization_id',
+          stateData.organization_id
+        )
+        .eq(
+          'provider',
+          provider
+        )
+        .maybeSingle()
+
+    const existingConnectionMetadata =
+      existingConnection?.metadata &&
+      typeof existingConnection.metadata ===
+        'object'
+        ? existingConnection.metadata
+        : {}
+
+    const connectionMetadata = {
+      ...existingConnectionMetadata,
 
       meta_user_name:
-        typeof meData.name ===
-        'string'
-          ? meData.name
-          : null,
+        metaUserName,
 
       connection_type:
         'meta_login_business',
 
       last_oauth_verified_at:
         now,
+
+      ready_for_messaging:
+        provider ===
+          'whatsapp'
+          ? Boolean(
+              wabaId &&
+                phoneNumberId
+            )
+          : true,
     }
 
-    /*
-     * Find existing WhatsApp integration.
-     */
-    const {
-      data: existingIntegration,
-      error: existingError,
-    } = await admin
-      .from('integrations')
-      .select(
-        'id, metadata, connected_at'
-      )
-      .eq(
-        'organization_id',
-        stateData.organization_id
-      )
-      .eq(
-        'provider',
-        'whatsapp'
-      )
-      .maybeSingle()
+    const connectionPayload = {
+      organization_id:
+        stateData.organization_id,
 
-    if (existingError) {
+      provider,
+
+      access_token:
+        accessToken,
+
+      token_expires_at:
+        tokenExpiresAt,
+
+      meta_user_id:
+        metaUserId,
+
+      business_id:
+        businessId,
+
+      waba_id:
+        wabaId,
+
+      phone_number_id:
+        phoneNumberId,
+
+      display_phone_number:
+        displayPhoneNumber,
+
+      verified_name:
+        verifiedName,
+
+      status:
+        'connected',
+
+      metadata:
+        connectionMetadata,
+
+      updated_at:
+        now,
+    }
+
+    let connectionResult
+
+    if (
+      existingConnection?.id
+    ) {
+      connectionResult =
+        await admin
+          .from(
+            'meta_connections'
+          )
+          .update(
+            connectionPayload
+          )
+          .eq(
+            'id',
+            existingConnection.id
+          )
+    } else {
+      connectionResult =
+        await admin
+          .from(
+            'meta_connections'
+          )
+          .insert(
+            connectionPayload
+          )
+    }
+
+    if (
+      connectionResult.error
+    ) {
       console.error(
-        'Meta OAuth integration lookup failed:',
-        existingError
+        'Meta credential persistence failed:',
+        connectionResult.error
       )
 
       return res
         .status(500)
         .send(
-          'تعذر تحديث حالة تكامل WhatsApp.'
+          'تم التحقق من Meta لكن تعذر حفظ بيانات الاتصال الآمنة.'
         )
     }
 
-    const existingMetadata =
+    /*
+     * IMPORTANT:
+     *
+     * integrations.metadata must never
+     * contain access_token.
+     */
+    const {
+      data:
+        existingIntegration,
+      error:
+        existingIntegrationError,
+    } =
+      await admin
+        .from('integrations')
+        .select(
+          'id, metadata, connected_at'
+        )
+        .eq(
+          'organization_id',
+          stateData.organization_id
+        )
+        .eq(
+          'provider',
+          provider
+        )
+        .maybeSingle()
+
+    if (
+      existingIntegrationError
+    ) {
+      console.error(
+        'Meta OAuth integration lookup failed:',
+        existingIntegrationError
+      )
+
+      return res
+        .status(500)
+        .send(
+          'تم حفظ الاتصال الآمن لكن تعذر تحديث حالة التكامل.'
+        )
+    }
+
+    const existingIntegrationMetadata =
       existingIntegration?.metadata &&
       typeof existingIntegration.metadata ===
         'object'
         ? existingIntegration.metadata
         : {}
 
+    const integrationMetadata = {
+      ...existingIntegrationMetadata,
+
+      meta_user_id:
+        metaUserId,
+
+      meta_user_name:
+        metaUserName,
+
+      connection_type:
+        'meta_login_business',
+
+      last_oauth_verified_at:
+        now,
+
+      ...(provider ===
+      'whatsapp'
+        ? {
+            business_id:
+              businessId,
+
+            waba_id:
+              wabaId,
+
+            phone_number_id:
+              phoneNumberId,
+
+            display_phone_number:
+              displayPhoneNumber,
+
+            verified_name:
+              verifiedName,
+
+            ready_for_messaging:
+              Boolean(
+                wabaId &&
+                  phoneNumberId
+              ),
+          }
+        : {}),
+    }
+
     const integrationPayload = {
       organization_id:
         stateData.organization_id,
 
-      provider: 'whatsapp',
+      provider,
 
       connected: true,
 
-      status: 'connected',
+      status:
+        'connected',
 
-      metadata: {
-        ...existingMetadata,
-        ...metadata,
-      },
+      metadata:
+        integrationMetadata,
 
       connected_at:
         existingIntegration?.connected_at ||
@@ -492,10 +1070,14 @@ export default async function handler(
 
     let integrationResult
 
-    if (existingIntegration?.id) {
+    if (
+      existingIntegration?.id
+    ) {
       integrationResult =
         await admin
-          .from('integrations')
+          .from(
+            'integrations'
+          )
           .update(
             integrationPayload
           )
@@ -506,13 +1088,17 @@ export default async function handler(
     } else {
       integrationResult =
         await admin
-          .from('integrations')
+          .from(
+            'integrations'
+          )
           .insert(
             integrationPayload
           )
     }
 
-    if (integrationResult.error) {
+    if (
+      integrationResult.error
+    ) {
       console.error(
         'Meta OAuth integration persistence failed:',
         integrationResult.error
@@ -521,18 +1107,18 @@ export default async function handler(
       return res
         .status(500)
         .send(
-          'تم التحقق من Meta لكن تعذر حفظ حالة التكامل.'
+          'تم حفظ اتصال Meta لكن تعذر تحديث حالة التكامل.'
         )
     }
 
     /*
-     * Do not return the access token.
-     * Return the user to Dragon Media.
+     * Never return the access token.
      */
     if (
       redirectToSettings(
         res,
-        'connected'
+        'connected',
+        provider
       )
     ) {
       return
@@ -568,7 +1154,7 @@ export default async function handler(
 
               <p>
                 يمكنك العودة إلى Dragon Media
-                لمراجعة حالة WhatsApp Business.
+                لمراجعة حالة التكامل.
               </p>
             </main>
           </body>
@@ -583,7 +1169,8 @@ export default async function handler(
     if (
       redirectToSettings(
         res,
-        'error'
+        'error',
+        provider
       )
     ) {
       return
