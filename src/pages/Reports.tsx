@@ -461,7 +461,9 @@ export default function Reports() {
           <SkeletonCard />
         </div>
 
-        <Card className="h-48 animate-pulse border-sand-200/70" />
+        <Card className="h-48 animate-pulse border-sand-200/70">
+          <div />
+        </Card>
       </div>
     )
   }
