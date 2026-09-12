@@ -59,18 +59,22 @@ export default function AdminTickets() {
 const [tickets, setTickets] = useState<DBTicket[]>([])
 const [loading, setLoading] = useState(true)
 const [error, setError] = useState<string | null>(null)
+
 const [activeId, setActiveId] = useState<string | null>(null)
 const [messages, setMessages] = useState<DBMessage[]>([])
 const [messagesLoading, setMessagesLoading] = useState(false)
 const [messagesError, setMessagesError] = useState<string | null>(null)
+
 const [reply, setReply] = useState(’’)
 const [sending, setSending] = useState(false)
 const [statusSaving, setStatusSaving] = useState<string | null>(null)
 
 const getToken = async () => {
 if (!supabase) return ‘’
+
 const { data } = await supabase.auth.getSession()
-return data.session?.access_token ?? ‘’
+return data.session?.access_token ?? ''
+
 }
 
 const load = async () => {
@@ -210,7 +214,9 @@ return (
 if (error) {
 return (
 !
-    <h2 className="font-bold text-red-900">تعذر تحميل تذاكر الدعم</h2>
+    <h2 className="font-bold text-red-900">
+      تعذر تحميل تذاكر الدعم
+    </h2>
     <p className="mt-1 text-sm text-red-700">
       {error}
     </p>
@@ -249,12 +255,20 @@ return (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              <Badge tone={ticket ? statusTones[ticket.status] : 'default'}>
-                {ticket ? (statusLabels[ticket.status] ?? ticket.status) : '—'}
+              <Badge
+                tone={
+                  ticket
+                    ? statusTones[ticket.status] || 'default'
+                    : 'default'
+                }
+              >
+                {ticket
+                  ? statusLabels[ticket.status] || ticket.status
+                  : '—'}
               </Badge>
               {ticket?.priority && (
                 <span className="rounded-full bg-sand-100 px-2.5 py-1 text-xs font-medium text-ink-900/60">
-                  أولوية: {priorityLabels[ticket.priority] ?? ticket.priority}
+                  أولوية: {priorityLabels[ticket.priority] || ticket.priority}
                 </span>
               )}
             </div>
@@ -262,11 +276,15 @@ return (
               {ticket?.subject || 'تذكرة دعم'}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-900/45">
-              <span>{ticket?.organizations?.name || 'شركة غير محددة'}</span>
+              <span>
+                {ticket?.organizations?.name || 'شركة غير محددة'}
+              </span>
               {ticket?.updated_at && (
                 <>
                   <span className="hidden sm:inline">•</span>
-                  <span>آخر تحديث: {formatDate(ticket.updated_at)}</span>
+                  <span>
+                    آخر تحديث: {formatDate(ticket.updated_at)}
+                  </span>
                 </>
               )}
             </div>
@@ -282,7 +300,10 @@ return (
               <div className="mr-auto h-14 w-2/3 rounded-2xl bg-sand-100" />
             </div>
           ) : messagesError ? (
-            <div className="flex min-h-[220px] flex-col items-center justify-center text-center" role="alert">
+            <div
+              className="flex min-h-[220px] flex-col items-center justify-center text-center"
+              role="alert"
+            >
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
                 !
               </div>
@@ -339,7 +360,9 @@ return (
                         : 'text-ink-900/40'
                     }`}
                   >
-                    {m.sender_type === 'admin' ? 'أنت — الدعم' : 'العميل'}
+                    {m.sender_type === 'admin'
+                      ? 'أنت — الدعم'
+                      : 'العميل'}
                     {' · '}
                     {formatDate(m.created_at)}
                   </div>
@@ -437,15 +460,20 @@ return (
                   <span className="break-words text-sm font-bold text-ink-950">
                     {t.subject}
                   </span>
-                  <Badge tone={statusTones[t.status]}>
-                    {statusLabels[t.status] ?? t.status}
+                  <Badge
+                    tone={statusTones[t.status] || 'default'}
+                  >
+                    {statusLabels[t.status] || t.status}
                   </Badge>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-900/45">
                   <span>
                     {t.organizations?.name || 'شركة غير محددة'}
                   </span>
-                  <span>الأولوية: {priorityLabels[t.priority] ?? t.priority}</span>
+                  <span>
+                    الأولوية:{' '}
+                    {priorityLabels[t.priority] || t.priority}
+                  </span>
                   {t.updated_at && (
                     <span>{formatDate(t.updated_at)}</span>
                   )}
