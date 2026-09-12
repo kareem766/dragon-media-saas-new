@@ -151,6 +151,16 @@ export default function Settings() {
     setIntegrationsError,
   ] = useState('')
 
+  const [
+    metaConnecting,
+    setMetaConnecting,
+  ] = useState(false)
+
+  const [
+    metaConnectionError,
+    setMetaConnectionError,
+  ] = useState('')
+
   const updateOrg = (
     field: keyof OrgData,
     value: string
@@ -452,6 +462,78 @@ export default function Settings() {
     return {
       label: 'غير متصل',
       tone: 'neutral' as const,
+    }
+  }
+
+  const handleMetaConnect = async () => {
+    if (!supabase) {
+      setMetaConnectionError(
+        'تعذر الاتصال بخدمة المصادقة.'
+      )
+      return
+    }
+
+    if (metaConnecting) {
+      return
+    }
+
+    setMetaConnecting(true)
+    setMetaConnectionError('')
+
+    try {
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        throw sessionError
+      }
+
+      const accessToken =
+        sessionData.session?.access_token
+
+      if (!accessToken) {
+        throw new Error(
+          'يرجى تسجيل الدخول مرة أخرى ثم محاولة ربط Meta.'
+        )
+      }
+
+      const response = await fetch(
+        '/api/meta/oauth/start',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+        }
+      )
+
+      const data = await response
+        .json()
+        .catch(() => null)
+
+      if (
+        !response.ok ||
+        !data?.auth_url
+      ) {
+        throw new Error(
+          data?.error ||
+            'تعذر بدء عملية ربط Meta. حاول مرة أخرى.'
+        )
+      }
+
+      window.location.assign(
+        data.auth_url
+      )
+    } catch (err: any) {
+      setMetaConnectionError(
+        err?.message ||
+          'تعذر بدء ربط Meta. حاول مرة أخرى.'
+      )
+      setMetaConnecting(false)
     }
   }
 
@@ -788,6 +870,15 @@ export default function Settings() {
               getIntegrationStatus={
                 getIntegrationStatus
               }
+              onMetaConnect={
+                handleMetaConnect
+              }
+              metaConnecting={
+                metaConnecting
+              }
+              metaConnectionError={
+                metaConnectionError
+              }
             />
           )}
 
@@ -799,6 +890,15 @@ export default function Settings() {
               status={getIntegrationStatus(
                 getIntegration('whatsapp')
               )}
+              onMetaConnect={
+                handleMetaConnect
+              }
+              metaConnecting={
+                metaConnecting
+              }
+              metaConnectionError={
+                metaConnectionError
+              }
             />
           )}
 
@@ -1154,7 +1254,7 @@ function NotificationsSection({
                 preferences.overdue_tasks
               }
               onChange={value =>
-                updatePreference(
+                updateNotificationPreference(
                   'overdue_tasks',
                   value
                 )
@@ -1219,6 +1319,9 @@ function IntegrationsSection({
   loadIntegrations,
   getIntegration,
   getIntegrationStatus,
+  onMetaConnect,
+  metaConnecting,
+  metaConnectionError,
 }: {
   integrations: Integration[]
   loading: boolean
@@ -1237,6 +1340,9 @@ function IntegrationsSection({
       | 'danger'
       | 'neutral'
   }
+  onMetaConnect: () => void
+  metaConnecting: boolean
+  metaConnectionError: string
 }) {
   return (
     <section>
@@ -1245,29 +1351,76 @@ function IntegrationsSection({
         title="التكاملات"
         description="حالة التكاملات الخاصة بمؤسستك مأخوذة مباشرة من Supabase."
         action={
-          <button
-            type="button"
-            onClick={loadIntegrations}
-            disabled={loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-sand-300 bg-white px-4 py-2.5 text-xs font-bold text-ink-900 transition hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading && (
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-900/20 border-t-ink-900" />
-            )}
-            {loading
-              ? 'جاري التحديث...'
-              : 'تحديث الحالة'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onMetaConnect}
+              disabled={metaConnecting}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {metaConnecting && (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              )}
+
+              {metaConnecting
+                ? 'جاري ربط Meta...'
+                : 'ربط Meta'}
+            </button>
+
+            <button
+              type="button"
+              onClick={loadIntegrations}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-sand-300 bg-white px-4 py-2.5 text-xs font-bold text-ink-900 transition hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading && (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-900/20 border-t-ink-900" />
+              )}
+
+              {loading
+                ? 'جاري التحديث...'
+                : 'تحديث الحالة'}
+            </button>
+          </div>
         }
       />
 
       <div className="p-6 sm:p-8">
-        {error && (
-          <MessageBox
-            type="error"
-            message={error}
-          />
+        {metaConnectionError && (
+          <div className="mb-5">
+            <MessageBox
+              type="error"
+              message={metaConnectionError}
+            />
+          </div>
         )}
+
+        {error && (
+          <div className="mb-5">
+            <MessageBox
+              type="error"
+              message={error}
+            />
+          </div>
+        )}
+
+        <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50/60 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-xs font-black text-blue-700">
+              M
+            </div>
+
+            <div>
+              <div className="text-sm font-bold text-blue-900">
+                ربط Meta الرسمي
+              </div>
+
+              <p className="mt-1 text-xs leading-5 text-blue-800/70">
+                ربط Meta يتيح إعداد أصول WhatsApp Business وFacebook وInstagram الخاصة بشركتك من خلال الاتصال الرسمي. بيانات الاعتماد الحساسة لا يتم عرضها داخل لوحة التحكم.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -1427,6 +1580,9 @@ function IntegrationsSection({
 function WhatsAppSection({
   integration,
   status,
+  onMetaConnect,
+  metaConnecting,
+  metaConnectionError,
 }: {
   integration?: Integration
   status: {
@@ -1437,6 +1593,9 @@ function WhatsAppSection({
       | 'danger'
       | 'neutral'
   }
+  onMetaConnect: () => void
+  metaConnecting: boolean
+  metaConnectionError: string
 }) {
   return (
     <section>
@@ -1447,6 +1606,15 @@ function WhatsAppSection({
       />
 
       <div className="p-6 sm:p-8">
+        {metaConnectionError && (
+          <div className="mb-5">
+            <MessageBox
+              type="error"
+              message={metaConnectionError}
+            />
+          </div>
+        )}
+
         <div
           className={`rounded-3xl border p-6 ${
             status.label === 'متصل'
@@ -1471,10 +1639,30 @@ function WhatsAppSection({
               </div>
             </div>
 
-            <StatusBadge
-              label={status.label}
-              tone={status.tone}
-            />
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <StatusBadge
+                label={status.label}
+                tone={status.tone}
+              />
+
+              {status.label !==
+                'متصل' && (
+                <button
+                  type="button"
+                  onClick={onMetaConnect}
+                  disabled={metaConnecting}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {metaConnecting && (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  )}
+
+                  {metaConnecting
+                    ? 'جاري الربط...'
+                    : 'ربط Meta'}
+                </button>
+              )}
+            </div>
           </div>
 
           {integration?.connected_at && (
