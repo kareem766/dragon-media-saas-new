@@ -8,6 +8,7 @@ import AdminRoute from './components/AdminRoute'
 import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
 
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
@@ -55,11 +56,35 @@ export default function App() {
       <AuthProvider>
         <HashRouter>
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/support" element={<Support />} />
+            {/* Public website */}
+            <Route
+              path="/home"
+              element={<Landing />}
+            />
 
+            {/* Authentication */}
+            <Route
+              path="/login"
+              element={<Login />}
+            />
+
+            {/* Legal / support */}
+            <Route
+              path="/privacy"
+              element={<Privacy />}
+            />
+
+            <Route
+              path="/terms"
+              element={<Terms />}
+            />
+
+            <Route
+              path="/support"
+              element={<Support />}
+            />
+
+            {/* Protected application */}
             <Route
               element={
                 <ProtectedRoute>
@@ -67,7 +92,10 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="/" element={<Dashboard />} />
+              <Route
+                path="/"
+                element={<Dashboard />}
+              />
 
               <Route
                 path="/crm"
@@ -249,6 +277,7 @@ export default function App() {
                 element={<Settings />}
               />
 
+              {/* Admin */}
               <Route
                 path="/admin"
                 element={
