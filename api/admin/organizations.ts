@@ -1721,6 +1721,14 @@ export default async function handler(
       )
 
     if (emailChanged) {
+      if (!companyAdmin) {
+        res.status(400).json({
+          error:
+            'تعذر العثور على مدير الشركة لتحديث البريد الإلكتروني',
+        })
+        return
+      }
+
       const {
         data: emailOwner,
       } =
