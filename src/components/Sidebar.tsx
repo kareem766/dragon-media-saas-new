@@ -128,6 +128,11 @@ const adminItems = [
     end: true,
   },
   {
+  to: '/admin/organizations',
+  label: 'إدارة الشركات',
+  icon: IconUsers,
+  },
+  {
     to: '/admin/payments',
     label: 'المدفوعات وطلبات الدفع',
     icon: IconCard,
