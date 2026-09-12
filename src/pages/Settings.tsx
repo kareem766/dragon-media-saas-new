@@ -1254,7 +1254,7 @@ function NotificationsSection({
                 preferences.overdue_tasks
               }
               onChange={value =>
-                updateNotificationPreference(
+                updatePreference(
                   'overdue_tasks',
                   value
                 )
