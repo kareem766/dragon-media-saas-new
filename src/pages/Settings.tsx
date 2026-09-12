@@ -1451,7 +1451,7 @@ function IntegrationsSection({
               return (
                 <div
                   key={item.provider}
-                  className={`rounded-2xl border p-5 transition-all duration-200 ${
+                  className={`relative flex min-h-[190px] flex-col overflow-visible rounded-2xl border p-5 transition-all duration-200 ${
                     connected
                       ? 'border-emerald-200 bg-emerald-50/40'
                       : status.label ===
@@ -1491,7 +1491,7 @@ function IntegrationsSection({
                     />
                   </div>
 
-                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-sand-200/70 pt-4">
+                  <div className="mt-auto flex flex-col gap-3 border-t border-sand-200/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="text-xs text-ink-900/40">
                       {connected
                         ? 'الاتصال مفعل'
@@ -1501,42 +1501,49 @@ function IntegrationsSection({
                     </div>
 
                     {isMetaProvider ? (
-                      <button
-                        type="button"
-                        onClick={
-                          onMetaConnect
-                        }
-                        disabled={
-                          metaConnecting
-                        }
-                        className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                          connected
-                            ? 'border border-sand-300 bg-white text-ink-900 hover:bg-sand-50'
-                            : 'bg-ink-950 text-white hover:bg-ink-900'
-                        }`}
-                      >
-                        {metaConnecting && (
-                          <span
-                            className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${
-                              connected
-                                ? 'border-ink-900/20 border-t-ink-900'
-                                : 'border-white/30 border-t-white'
-                            }`}
-                          />
-                        )}
+                      <div className="relative z-10 flex shrink-0">
+                        <button
+                          type="button"
+                          aria-label={
+                            connected
+                              ? item.connectedActionLabel
+                              : item.actionLabel
+                          }
+                          onClick={
+                            onMetaConnect
+                          }
+                          disabled={
+                            metaConnecting
+                          }
+                          className={`relative z-10 inline-flex min-h-11 min-w-[128px] cursor-pointer touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 ${
+                            connected
+                              ? 'border border-sand-300 bg-white text-ink-900 hover:border-sand-400 hover:bg-sand-50'
+                              : 'bg-ink-950 text-white hover:bg-ink-900'
+                          }`}
+                        >
+                          {metaConnecting && (
+                            <span
+                              className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
+                                connected
+                                  ? 'border-ink-900/20 border-t-ink-900'
+                                  : 'border-white/30 border-t-white'
+                              }`}
+                            />
+                          )}
 
-                        {metaConnecting
-                          ? 'جاري الربط...'
-                          : connected
-                            ? item.connectedActionLabel
-                            : item.actionLabel}
-                      </button>
+                          {metaConnecting
+                            ? 'جاري الربط...'
+                            : connected
+                              ? item.connectedActionLabel
+                              : item.actionLabel}
+                        </button>
+                      </div>
                     ) : (
                       <button
                         type="button"
                         disabled
                         title="سيتم تفعيل تدفق الربط الخاص بهذا التكامل بعد اكتمال الـAPI الخاص به."
-                        className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50 px-4 py-2.5 text-xs font-bold text-ink-900/40"
+                        className="inline-flex min-h-11 shrink-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50 px-4 py-2.5 text-xs font-bold text-ink-900/40"
                       >
                         {connected
                           ? item.connectedActionLabel
@@ -1694,7 +1701,7 @@ function WhatsAppSection({
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="relative z-10 flex shrink-0 flex-wrap items-center gap-2">
               <StatusBadge
                 label={status.label}
                 tone={status.tone}
@@ -1702,12 +1709,17 @@ function WhatsAppSection({
 
               <button
                 type="button"
+                aria-label={
+                  status.label === 'متصل'
+                    ? 'إدارة WhatsApp'
+                    : 'ربط WhatsApp'
+                }
                 onClick={onMetaConnect}
                 disabled={metaConnecting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
+                className="relative z-10 inline-flex min-h-11 min-w-[140px] cursor-pointer touch-manipulation items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {metaConnecting && (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 )}
 
                 {metaConnecting
