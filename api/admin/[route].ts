@@ -1,38 +1,38 @@
-const handlerLoaders: Record<
-  string,
-  () => Promise<{ default: any }>
-> = {
-  'audit-logs': () =>
-    import('../../src/server/admin/audit-logs'),
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-  financial: () =>
-    import('../../src/server/admin/financial'),
+import auditLogs from '../../src/server/admin/audit-logs'
+import financial from '../../src/server/admin/financial'
+import organizations from '../../src/server/admin/organizations'
+import overview from '../../src/server/admin/overview'
+import payments from '../../src/server/admin/payments'
+import tickets from '../../src/server/admin/tickets'
 
-  organizations: () =>
-    import('../../src/server/admin/organizations'),
+type Handler = (
+  req: VercelRequest,
+  res: VercelResponse
+) => unknown | Promise<unknown>
 
-  overview: () =>
-    import('../../src/server/admin/overview'),
-
-  payments: () =>
-    import('../../src/server/admin/payments'),
-
-  tickets: () =>
-    import('../../src/server/admin/tickets'),
+const handlers: Record<string, Handler> = {
+  'audit-logs': auditLogs,
+  financial,
+  organizations,
+  overview,
+  payments,
+  tickets,
 }
 
 export default async function handler(
-  req: any,
-  res: any
+  req: VercelRequest,
+  res: VercelResponse
 ) {
   const route = Array.isArray(req.query?.route)
     ? req.query.route[0]
     : req.query?.route
 
-  const loadHandler =
-    handlerLoaders[String(route || '')]
+  const routeName = String(route || '')
+  const routeHandler = handlers[routeName]
 
-  if (!loadHandler) {
+  if (!routeHandler) {
     res.status(404).json({
       error: 'Admin API route not found',
     })
@@ -40,25 +40,17 @@ export default async function handler(
   }
 
   try {
-    const module = await loadHandler()
-    const routeHandler = module.default
-
-    if (typeof routeHandler !== 'function') {
-      res.status(500).json({
-        error: 'Admin API handler is invalid',
-      })
-      return
-    }
-
-    return routeHandler(req, res)
+    return await routeHandler(req, res)
   } catch (error) {
     console.error(
-      'Admin API handler load failed:',
+      `Admin API route "${routeName}" failed:`,
       error
     )
 
-    res.status(500).json({
-      error: 'Internal server error',
-    })
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Internal server error',
+      })
+    }
   }
 }
