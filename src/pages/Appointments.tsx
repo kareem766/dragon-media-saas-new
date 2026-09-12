@@ -26,22 +26,22 @@ date: ‘’,
 time: ‘’,
 }
 
-function CalendarIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+function CalendarIcon() {
 return (
 )
 }
 
-function ClockIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+function ClockIcon() {
 return (
 )
 }
 
-function UserIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+function UserIcon() {
 return (
 )
 }
 
-function ServiceIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+function ServiceIcon() {
 return (
 )
 }
@@ -52,7 +52,11 @@ return (
 }
 
 export default function Appointments() {
-const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
+const {
+organizationId,
+loading: orgLoading,
+error: orgError,
+} = useOrganization()
 
 const [appointments, setAppointments] = useState<DBAppointment[]>([])
 const [customers, setCustomers] = useState<Option[]>([])
@@ -122,7 +126,7 @@ if (error) {
 }
 setForm(emptyForm)
 setShowForm(false)
-loadData()
+await loadData()
 
 }
 
@@ -162,15 +166,7 @@ const pendingCount = appointments.filter(
 (appointment) => appointment.status === ‘قيد الانتظار’
 ).length
 
-const scheduledCount = appointments.length
-
 return (
-{/* Header */}
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3.5">
-          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-white shadow-sm">
-            <CalendarIcon className="h-5 w-5" />
-          </div>
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-sand-200 bg-sand-50 px-2.5 py-1 text-[11px] font-semibold text-ink-900/60">
@@ -209,7 +205,6 @@ return (
       </div>
     </div>
   </section>
-  {/* Summary */}
   <section
     aria-label="ملخص المواعيد"
     className="grid grid-cols-1 gap-3 sm:grid-cols-3"
@@ -221,11 +216,11 @@ return (
             إجمالي المواعيد
           </p>
           <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink-950">
-            {scheduledCount}
+            {appointments.length}
           </p>
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
-          <CalendarIcon className="h-5 w-5" />
+          <CalendarIcon />
         </div>
       </div>
     </Card>
@@ -240,7 +235,7 @@ return (
           </p>
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-          <ClockIcon className="h-5 w-5" />
+          <ClockIcon />
         </div>
       </div>
     </Card>
@@ -248,25 +243,24 @@ return (
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-medium text-ink-900/45">
-            العملاء المتاحون للحجز
+            العملاء المتاحون
           </p>
           <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink-950">
             {customers.length}
           </p>
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
-          <UserIcon className="h-5 w-5" />
+          <UserIcon />
         </div>
       </div>
     </Card>
   </section>
-  {/* Create appointment */}
   {showForm && (
     <Card className="overflow-hidden border-sand-200/80 shadow-[0_10px_35px_rgba(15,23,42,0.05)]">
       <div className="border-b border-sand-200/70 bg-sand-50/45 px-5 py-4 sm:px-6">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-white">
-            <CalendarIcon className="h-5 w-5" />
+            <CalendarIcon />
           </div>
           <div>
             <h2 className="text-sm font-bold text-ink-950 sm:text-base">
@@ -306,7 +300,7 @@ return (
                   </option>
                 ))}
               </select>
-              <UserIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-900/35" />
+              <UserIcon />
             </div>
           </div>
           <div>
@@ -335,7 +329,7 @@ return (
                   </option>
                 ))}
               </select>
-              <ServiceIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-900/35" />
+              <ServiceIcon />
             </div>
           </div>
           <div>
@@ -345,20 +339,18 @@ return (
             >
               التاريخ
             </label>
-            <div className="relative">
-              <input
-                id="appointment-date"
-                type="date"
-                value={form.date}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    date: e.target.value,
-                  })
-                }
-                className="w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
-              />
-            </div>
+            <input
+              id="appointment-date"
+              type="date"
+              value={form.date}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  date: e.target.value,
+                })
+              }
+              className="w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+            />
           </div>
           <div>
             <label
@@ -367,55 +359,37 @@ return (
             >
               الوقت
             </label>
-            <div className="relative">
-              <input
-                id="appointment-time"
-                type="time"
-                value={form.time}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    time: e.target.value,
-                  })
-                }
-                className="w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
-              />
-            </div>
+            <input
+              id="appointment-time"
+              type="time"
+              value={form.time}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  time: e.target.value,
+                })
+              }
+              className="w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+            />
           </div>
           {error && (
             <div
               role="alert"
               className="sm:col-span-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
             >
-              <div className="flex items-start gap-2">
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 24 24"
-                  className="mt-0.5 h-5 w-5 shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <circle cx="12" cy="12" r="9" />
-                  <path strokeLinecap="round" d="M12 8v4M12 16h.01" />
-                </svg>
-                <span>{error}</span>
-              </div>
+              {error}
             </div>
           )}
         </div>
-        <div className="mt-5 flex flex-col-reverse gap-2 border-t border-sand-200/70 pt-5 sm:flex-row sm:justify-start">
+        <div className="mt-5 flex flex-col-reverse gap-2 border-t border-sand-200/70 pt-5 sm:flex-row">
           <Button
             type="submit"
             disabled={saving}
             className="w-full sm:w-auto"
           >
             {saving ? (
-              <span className="inline-flex items-center justify-center gap-2">
-                <span
-                  aria-hidden="true"
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
-                />
+              <span className="inline-flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white" />
                 جاري الحفظ...
               </span>
             ) : (
@@ -439,26 +413,23 @@ return (
       </form>
     </Card>
   )}
-  {/* Appointments list */}
   <section aria-labelledby="appointments-list-title">
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <div>
-        <h2
-          id="appointments-list-title"
-          className="text-base font-bold text-ink-950"
-        >
-          المواعيد الحالية
-        </h2>
-        <p className="mt-1 text-xs text-ink-900/45">
-          جميع الحجوزات المرتبطة بمساحة العمل الحالية.
-        </p>
-      </div>
+    <div className="mb-3">
+      <h2
+        id="appointments-list-title"
+        className="text-base font-bold text-ink-950"
+      >
+        المواعيد الحالية
+      </h2>
+      <p className="mt-1 text-xs text-ink-900/45">
+        جميع الحجوزات المرتبطة بمساحة العمل الحالية.
+      </p>
     </div>
     {appointments.length === 0 ? (
       <Card className="border-dashed border-sand-300 bg-white p-8 sm:p-12">
         <div className="mx-auto max-w-md text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sand-100 text-ink-900">
-            <CalendarIcon className="h-7 w-7" />
+            <CalendarIcon />
           </div>
           <h3 className="mt-4 text-base font-bold text-ink-950">
             لا توجد مواعيد بعد
@@ -484,14 +455,13 @@ return (
       </Card>
     ) : (
       <Card className="overflow-hidden border-sand-200/80 p-0 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
-        {/* Mobile */}
         <div className="divide-y divide-sand-200/60 sm:hidden">
           {appointments.map((appointment) => (
             <div key={appointment.id} className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
-                    <CalendarIcon className="h-5 w-5" />
+                    <CalendarIcon />
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-ink-950">
@@ -508,19 +478,13 @@ return (
               </div>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div className="rounded-xl bg-sand-50 px-3 py-2.5">
-                  <div className="flex items-center gap-2 text-[11px] text-ink-900/40">
-                    <CalendarIcon className="h-3.5 w-3.5" />
-                    التاريخ
-                  </div>
+                  <p className="text-[11px] text-ink-900/40">التاريخ</p>
                   <p className="mt-1 text-xs font-semibold text-ink-900/75">
                     {appointment.appointment_date ?? 'غير محدد'}
                   </p>
                 </div>
                 <div className="rounded-xl bg-sand-50 px-3 py-2.5">
-                  <div className="flex items-center gap-2 text-[11px] text-ink-900/40">
-                    <ClockIcon className="h-3.5 w-3.5" />
-                    الوقت
-                  </div>
+                  <p className="text-[11px] text-ink-900/40">الوقت</p>
                   <p className="mt-1 text-xs font-semibold text-ink-900/75">
                     {appointment.appointment_time ?? 'غير محدد'}
                   </p>
@@ -529,7 +493,6 @@ return (
             </div>
           ))}
         </div>
-        {/* Desktop */}
         <div className="hidden overflow-x-auto sm:block">
           <Table head={['العميل', 'الخدمة', 'التاريخ', 'الوقت', 'الحالة']}>
             {appointments.map((appointment) => (
@@ -540,7 +503,7 @@ return (
                 <td className="whitespace-nowrap px-4 py-3.5">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
-                      <UserIcon className="h-4 w-4" />
+                      <UserIcon />
                     </div>
                     <span className="font-semibold text-ink-950">
                       {appointment.customers?.name ?? '—'}
