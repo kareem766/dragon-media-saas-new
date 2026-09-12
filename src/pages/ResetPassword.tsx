@@ -26,7 +26,9 @@ export default function ResetPassword() {
     branding?.platform_name?.trim() || 'Dragon Media'
 
   useEffect(() => {
-    if (!supabase) {
+    const client = supabase
+
+    if (!client) {
       setError(
         'تعذر الاتصال بالخدمة حاليًا. حاول مرة أخرى.'
       )
@@ -38,7 +40,7 @@ export default function ResetPassword() {
     const checkSession = async () => {
       const {
         data: { session },
-      } = await supabase.auth.getSession()
+      } = await client.auth.getSession()
 
       if (!mounted) return
 
@@ -55,7 +57,7 @@ export default function ResetPassword() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
+    } = client.auth.onAuthStateChange(
       (event, session) => {
         if (!mounted) return
 
@@ -82,7 +84,9 @@ export default function ResetPassword() {
 
     setError('')
 
-    if (!supabase) {
+    const client = supabase
+
+    if (!client) {
       setError(
         'تعذر الاتصال بالخدمة حاليًا. حاول مرة أخرى.'
       )
@@ -112,7 +116,7 @@ export default function ResetPassword() {
 
     try {
       const { error: updateError } =
-        await supabase.auth.updateUser({
+        await client.auth.updateUser({
           password,
         })
 
@@ -123,7 +127,7 @@ export default function ResetPassword() {
 
       setSuccess(true)
 
-      await supabase.auth.signOut()
+      await client.auth.signOut()
     } catch (err) {
       setError(
         err instanceof Error
@@ -268,9 +272,7 @@ export default function ResetPassword() {
                               ? 'text'
                               : 'password'
                           }
-                          value={
-                            confirmPassword
-                          }
+                          value={confirmPassword}
                           onChange={(event) =>
                             setConfirmPassword(
                               event.target.value
