@@ -2154,9 +2154,6 @@ export default function AdminOrganizations() {
 
           <Card
             className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.22)]"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="organization-modal-title"
           >
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-sand-100 bg-white px-4 py-4 sm:px-6 sm:py-5">
               <div className="min-w-0">
