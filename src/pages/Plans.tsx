@@ -97,19 +97,18 @@ export default function Plans() {
     setSelecting(plan.id)
     setError(null)
 
-    const { error: rpcError } = await supabase.rpc('select_plan', {
-      p_plan_id: plan.id,
-      p_billing_cycle: cycle,
-    })
-
+    /*
+     * Do not change the active subscription here.
+     *
+     * The selected plan is carried to the payment page.
+     * The subscription remains unchanged until the payment request
+     * is reviewed and approved by the platform admin.
+     */
     setSelecting(null)
 
-    if (rpcError) {
-      setError(rpcError.message || 'تعذر اختيار الباقة حاليًا.')
-      return
-    }
-
-    navigate(`/billing/pay?cycle=${cycle}`)
+    navigate(
+      `/billing/pay?cycle=${cycle}&plan_id=${encodeURIComponent(plan.id)}`
+    )
   }
 
   const allFeatureKeys = Array.from(
