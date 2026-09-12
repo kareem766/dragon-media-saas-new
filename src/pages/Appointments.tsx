@@ -1,147 +1,574 @@
-import React, { useEffect, useState } from 'react'
-import { Card, Badge, Button, Table, statusTone } from '../components/ui'
-import { IconPlus } from '../components/Icon'
-import { supabase } from '../lib/supabaseClient'
-import { useOrganization } from '../lib/useOrganization'
+import React, { useEffect, useState } from ‘react’
+import { Card, Badge, Button, Table, statusTone } from ‘../components/ui’
+import { IconPlus } from ‘../components/Icon’
+import { supabase } from ‘../lib/supabaseClient’
+import { useOrganization } from ‘../lib/useOrganization’
 
 interface DBAppointment {
-  id: string
-  appointment_date: string | null
-  appointment_time: string | null
-  status: string
-  notes: string | null
-  customers: { name: string } | null
-  services: { name: string } | null
+id: string
+appointment_date: string | null
+appointment_time: string | null
+status: string
+notes: string | null
+customers: { name: string } | null
+services: { name: string } | null
 }
 
 interface Option {
-  id: string
-  name: string
+id: string
+name: string
+}
+
+const emptyForm = {
+customerId: ‘’,
+serviceId: ‘’,
+date: ‘’,
+time: ‘’,
+}
+
+function CalendarIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+return (
+)
+}
+
+function ClockIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+return (
+)
+}
+
+function UserIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+return (
+)
+}
+
+function ServiceIcon({ className = ‘h-5 w-5’ }: { className?: string }) {
+return (
+)
+}
+
+function SkeletonRow() {
+return (
+)
 }
 
 export default function Appointments() {
-  const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
-  const [appointments, setAppointments] = useState<DBAppointment[]>([])
-  const [customers, setCustomers] = useState<Option[]>([])
-  const [services, setServices] = useState<Option[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({ customerId: '', serviceId: '', date: '', time: '' })
+const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
 
-  const loadData = async () => {
-    if (!supabase || !organizationId) return
-    setLoading(true)
-    const [apRes, custRes, servRes] = await Promise.all([
-      supabase.from('appointments').select('*, customers(name), services(name)').eq('organization_id', organizationId).order('appointment_date', { ascending: true }),
-      supabase.from('customers').select('id, name').eq('organization_id', organizationId),
-      supabase.from('services').select('id, name').eq('organization_id', organizationId),
-    ])
-    if (apRes.data) setAppointments(apRes.data as unknown as DBAppointment[])
-    if (custRes.data) setCustomers(custRes.data as Option[])
-    if (servRes.data) setServices(servRes.data as Option[])
-    setLoading(false)
-  }
+const [appointments, setAppointments] = useState<DBAppointment[]>([])
+const [customers, setCustomers] = useState<Option[]>([])
+const [services, setServices] = useState<Option[]>([])
+const [loading, setLoading] = useState(true)
+const [showForm, setShowForm] = useState(false)
+const [saving, setSaving] = useState(false)
+const [error, setError] = useState<string | null>(null)
+const [form, setForm] = useState(emptyForm)
 
-  useEffect(() => {
-    if (organizationId) loadData()
-  }, [organizationId])
+const loadData = async () => {
+if (!supabase || !organizationId) return
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!supabase || !organizationId) return
-    setSaving(true)
-    setError(null)
-    const { error } = await supabase.from('appointments').insert({
-      organization_id: organizationId,
-      customer_id: form.customerId || null,
-      service_id: form.serviceId || null,
-      appointment_date: form.date || null,
-      appointment_time: form.time || null,
-      status: 'قيد الانتظار',
-    })
-    setSaving(false)
-    if (error) {
-      setError(error.message)
-      return
-    }
-    setForm({ customerId: '', serviceId: '', date: '', time: '' })
-    setShowForm(false)
-    loadData()
-  }
+setLoading(true)
+const [apRes, custRes, servRes] = await Promise.all([
+  supabase
+    .from('appointments')
+    .select('*, customers(name), services(name)')
+    .eq('organization_id', organizationId)
+    .order('appointment_date', { ascending: true }),
+  supabase
+    .from('customers')
+    .select('id, name')
+    .eq('organization_id', organizationId),
+  supabase
+    .from('services')
+    .select('id, name')
+    .eq('organization_id', organizationId),
+])
+if (apRes.data) {
+  setAppointments(apRes.data as unknown as DBAppointment[])
+}
+if (custRes.data) {
+  setCustomers(custRes.data as Option[])
+}
+if (servRes.data) {
+  setServices(servRes.data as Option[])
+}
+setLoading(false)
 
-  if (orgLoading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
-      </div>
-    )
-  }
+}
 
-  if (orgError || !organizationId) {
-    return (
-      <div className="text-center py-20 text-sm text-red-600">
+useEffect(() => {
+if (organizationId) {
+loadData()
+}
+}, [organizationId])
+
+const handleAdd = async (e: React.FormEvent) => {
+e.preventDefault()
+
+if (!supabase || !organizationId) return
+setSaving(true)
+setError(null)
+const { error } = await supabase.from('appointments').insert({
+  organization_id: organizationId,
+  customer_id: form.customerId || null,
+  service_id: form.serviceId || null,
+  appointment_date: form.date || null,
+  appointment_time: form.time || null,
+  status: 'قيد الانتظار',
+})
+setSaving(false)
+if (error) {
+  setError(error.message)
+  return
+}
+setForm(emptyForm)
+setShowForm(false)
+loadData()
+
+}
+
+if (orgLoading || loading) {
+return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      <div className="h-24 animate-pulse rounded-2xl border border-sand-200/70 bg-white" />
+      <div className="h-24 animate-pulse rounded-2xl border border-sand-200/70 bg-white" />
+      <div className="h-24 animate-pulse rounded-2xl border border-sand-200/70 bg-white" />
+    </div>
+    <Card className="overflow-hidden p-0">
+      <SkeletonRow />
+      <SkeletonRow />
+      <SkeletonRow />
+      <SkeletonRow />
+    </Card>
+  </div>
+)
+
+}
+
+if (orgError || !organizationId) {
+return (
+      <h2 className="mt-4 text-base font-bold text-red-900">
+        تعذر تحميل بيانات المؤسسة
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-red-700/80">
         {orgError ?? 'تعذر تحديد المؤسسة الخاصة بحسابك'}
-      </div>
-    )
-  }
+      </p>
+    </Card>
+  </div>
+)
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
-      </div>
-    )
-  }
+}
 
-  return (
-    <div className="space-y-5">
-      <div className="flex justify-end">
-        <Button onClick={() => setShowForm(v => !v)}>
-          <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> حجز موعد</span>
+const pendingCount = appointments.filter(
+(appointment) => appointment.status === ‘قيد الانتظار’
+).length
+
+const scheduledCount = appointments.length
+
+return (
+{/* Header */}
+      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3.5">
+          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-white shadow-sm">
+            <CalendarIcon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-sand-200 bg-sand-50 px-2.5 py-1 text-[11px] font-semibold text-ink-900/60">
+                إدارة المواعيد
+              </span>
+              {appointments.length > 0 && (
+                <Badge tone={pendingCount > 0 ? 'success' : 'default'}>
+                  {pendingCount > 0
+                    ? `${pendingCount} قيد الانتظار`
+                    : 'لا توجد مواعيد معلّقة'}
+                </Badge>
+              )}
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-ink-950 sm:text-3xl">
+              المواعيد
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-900/55">
+              نظّم مواعيد العملاء والخدمات في مكان واحد وتابع الحجوزات بسهولة.
+            </p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          onClick={() => {
+            setShowForm((value) => !value)
+            setError(null)
+          }}
+          aria-expanded={showForm}
+          className="w-full shrink-0 sm:w-auto"
+        >
+          <span className="inline-flex items-center justify-center gap-2">
+            <IconPlus className="h-4 w-4" />
+            {showForm ? 'إخفاء النموذج' : 'حجز موعد'}
+          </span>
         </Button>
       </div>
-
-      {showForm && (
-        <Card className="p-5">
-          <form onSubmit={handleAdd} className="grid sm:grid-cols-2 gap-3">
-            <select value={form.customerId} onChange={e => setForm({ ...form, customerId: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white">
-              <option value="">اختر عميل</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <select value={form.serviceId} onChange={e => setForm({ ...form, serviceId: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white">
-              <option value="">اختر خدمة</option>
-              {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
-            <input type="time" value={form.time} onChange={e => setForm({ ...form, time: e.target.value })} className="border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
-            {error && <div className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">{error}</div>}
-            <div className="sm:col-span-2 flex gap-2">
-              <Button type="submit" disabled={saving}>{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
-              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>إلغاء</Button>
+    </div>
+  </section>
+  {/* Summary */}
+  <section
+    aria-label="ملخص المواعيد"
+    className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+  >
+    <Card className="border-sand-200/70 p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium text-ink-900/45">
+            إجمالي المواعيد
+          </p>
+          <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink-950">
+            {scheduledCount}
+          </p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
+          <CalendarIcon className="h-5 w-5" />
+        </div>
+      </div>
+    </Card>
+    <Card className="border-sand-200/70 p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium text-ink-900/45">
+            قيد الانتظار
+          </p>
+          <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink-950">
+            {pendingCount}
+          </p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+          <ClockIcon className="h-5 w-5" />
+        </div>
+      </div>
+    </Card>
+    <Card className="border-sand-200/70 p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium text-ink-900/45">
+            العملاء المتاحون للحجز
+          </p>
+          <p className="mt-1.5 text-2xl font-bold tracking-tight text-ink-950">
+            {customers.length}
+          </p>
+        </div>
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
+          <UserIcon className="h-5 w-5" />
+        </div>
+      </div>
+    </Card>
+  </section>
+  {/* Create appointment */}
+  {showForm && (
+    <Card className="overflow-hidden border-sand-200/80 shadow-[0_10px_35px_rgba(15,23,42,0.05)]">
+      <div className="border-b border-sand-200/70 bg-sand-50/45 px-5 py-4 sm:px-6">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-white">
+            <CalendarIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-ink-950 sm:text-base">
+              حجز موعد جديد
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-ink-900/50">
+              اختر العميل والخدمة وحدد موعد الحجز.
+            </p>
+          </div>
+        </div>
+      </div>
+      <form onSubmit={handleAdd} className="p-5 sm:p-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="appointment-customer"
+              className="mb-1.5 block text-xs font-semibold text-ink-900/65"
+            >
+              العميل
+            </label>
+            <div className="relative">
+              <select
+                id="appointment-customer"
+                value={form.customerId}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    customerId: e.target.value,
+                  })
+                }
+                className="w-full appearance-none rounded-xl border border-sand-200 bg-white px-3.5 py-3 pr-10 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+              >
+                <option value="">اختر العميل</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name}
+                  </option>
+                ))}
+              </select>
+              <UserIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-900/35" />
             </div>
-          </form>
-        </Card>
-      )}
-
-      <Card className="p-2 sm:p-4">
-        {appointments.length === 0 ? (
-          <div className="text-center py-12 text-sm text-ink-900/40">لا توجد مواعيد بعد</div>
-        ) : (
+          </div>
+          <div>
+            <label
+              htmlFor="appointment-service"
+              className="mb-1.5 block text-xs font-semibold text-ink-900/65"
+            >
+              الخدمة
+            </label>
+            <div className="relative">
+              <select
+                id="appointment-service"
+                value={form.serviceId}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    serviceId: e.target.value,
+                  })
+                }
+                className="w-full appearance-none rounded-xl border border-sand-200 bg-white px-3.5 py-3 pr-10 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+              >
+                <option value="">اختر الخدمة</option>
+                {services.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name}
+                  </option>
+                ))}
+              </select>
+              <ServiceIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-900/35" />
+            </div>
+          </div>
+          <div>
+            <label
+              htmlFor="appointment-date"
+              className="mb-1.5 block text-xs font-semibold text-ink-900/65"
+            >
+              التاريخ
+            </label>
+            <div className="relative">
+              <input
+                id="appointment-date"
+                type="date"
+                value={form.date}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    date: e.target.value,
+                  })
+                }
+                className="w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+              />
+            </div>
+          </div>
+          <div>
+            <label
+              htmlFor="appointment-time"
+              className="mb-1.5 block text-xs font-semibold text-ink-900/65"
+            >
+              الوقت
+            </label>
+            <div className="relative">
+              <input
+                id="appointment-time"
+                type="time"
+                value={form.time}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    time: e.target.value,
+                  })
+                }
+                className="w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+              />
+            </div>
+          </div>
+          {error && (
+            <div
+              role="alert"
+              className="sm:col-span-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+            >
+              <div className="flex items-start gap-2">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="mt-0.5 h-5 w-5 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path strokeLinecap="round" d="M12 8v4M12 16h.01" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="mt-5 flex flex-col-reverse gap-2 border-t border-sand-200/70 pt-5 sm:flex-row sm:justify-start">
+          <Button
+            type="submit"
+            disabled={saving}
+            className="w-full sm:w-auto"
+          >
+            {saving ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                />
+                جاري الحفظ...
+              </span>
+            ) : (
+              'حفظ الموعد'
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={saving}
+            onClick={() => {
+              setForm(emptyForm)
+              setError(null)
+              setShowForm(false)
+            }}
+            className="w-full sm:w-auto"
+          >
+            إلغاء
+          </Button>
+        </div>
+      </form>
+    </Card>
+  )}
+  {/* Appointments list */}
+  <section aria-labelledby="appointments-list-title">
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <div>
+        <h2
+          id="appointments-list-title"
+          className="text-base font-bold text-ink-950"
+        >
+          المواعيد الحالية
+        </h2>
+        <p className="mt-1 text-xs text-ink-900/45">
+          جميع الحجوزات المرتبطة بمساحة العمل الحالية.
+        </p>
+      </div>
+    </div>
+    {appointments.length === 0 ? (
+      <Card className="border-dashed border-sand-300 bg-white p-8 sm:p-12">
+        <div className="mx-auto max-w-md text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sand-100 text-ink-900">
+            <CalendarIcon className="h-7 w-7" />
+          </div>
+          <h3 className="mt-4 text-base font-bold text-ink-950">
+            لا توجد مواعيد بعد
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-ink-900/45">
+            ابدأ بإضافة أول موعد للعميل حتى تظهر الحجوزات هنا.
+          </p>
+          <div className="mt-5">
+            <Button
+              type="button"
+              onClick={() => {
+                setError(null)
+                setShowForm(true)
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <IconPlus className="h-4 w-4" />
+                حجز أول موعد
+              </span>
+            </Button>
+          </div>
+        </div>
+      </Card>
+    ) : (
+      <Card className="overflow-hidden border-sand-200/80 p-0 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+        {/* Mobile */}
+        <div className="divide-y divide-sand-200/60 sm:hidden">
+          {appointments.map((appointment) => (
+            <div key={appointment.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
+                    <CalendarIcon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-ink-950">
+                      {appointment.customers?.name ?? 'عميل غير محدد'}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-ink-900/50">
+                      {appointment.services?.name ?? 'خدمة غير محددة'}
+                    </p>
+                  </div>
+                </div>
+                <Badge tone={statusTone(appointment.status)}>
+                  {appointment.status}
+                </Badge>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-sand-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2 text-[11px] text-ink-900/40">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    التاريخ
+                  </div>
+                  <p className="mt-1 text-xs font-semibold text-ink-900/75">
+                    {appointment.appointment_date ?? 'غير محدد'}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-sand-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2 text-[11px] text-ink-900/40">
+                    <ClockIcon className="h-3.5 w-3.5" />
+                    الوقت
+                  </div>
+                  <p className="mt-1 text-xs font-semibold text-ink-900/75">
+                    {appointment.appointment_time ?? 'غير محدد'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Desktop */}
+        <div className="hidden overflow-x-auto sm:block">
           <Table head={['العميل', 'الخدمة', 'التاريخ', 'الوقت', 'الحالة']}>
-            {appointments.map(a => (
-              <tr key={a.id} className="hover:bg-sand-50">
-                <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{a.customers?.name ?? '—'}</td>
-                <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{a.services?.name ?? '—'}</td>
-                <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{a.appointment_date ?? '—'}</td>
-                <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap">{a.appointment_time ?? '—'}</td>
-                <td className="py-3 px-3"><Badge tone={statusTone(a.status)}>{a.status}</Badge></td>
+            {appointments.map((appointment) => (
+              <tr
+                key={appointment.id}
+                className="border-b border-sand-200/60 transition last:border-0 hover:bg-sand-50/70"
+              >
+                <td className="whitespace-nowrap px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sand-100 text-ink-900">
+                      <UserIcon className="h-4 w-4" />
+                    </div>
+                    <span className="font-semibold text-ink-950">
+                      {appointment.customers?.name ?? '—'}
+                    </span>
+                  </div>
+                </td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-sm text-ink-900/70">
+                  {appointment.services?.name ?? '—'}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-sm text-ink-900/70">
+                  {appointment.appointment_date ?? '—'}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3.5 text-sm text-ink-900/70">
+                  {appointment.appointment_time ?? '—'}
+                </td>
+                <td className="px-4 py-3.5">
+                  <Badge tone={statusTone(appointment.status)}>
+                    {appointment.status}
+                  </Badge>
+                </td>
               </tr>
             ))}
           </Table>
-        )}
+        </div>
       </Card>
-    </div>
-  )
+    )}
+  </section>
+</div>
+
+)
 }
