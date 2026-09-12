@@ -62,46 +62,53 @@ const STAGE_STYLE: Record<
 > = {
   جديد: {
     dot: 'bg-blue-500',
-    bg: 'bg-blue-50/50',
+    bg: 'bg-blue-50/60',
     border: 'border-blue-100',
     badge: 'bg-blue-50 text-blue-700',
   },
   'تم التواصل': {
     dot: 'bg-indigo-500',
-    bg: 'bg-indigo-50/40',
+    bg: 'bg-indigo-50/60',
     border: 'border-indigo-100',
     badge: 'bg-indigo-50 text-indigo-700',
   },
   مهتم: {
     dot: 'bg-amber-500',
-    bg: 'bg-amber-50/50',
+    bg: 'bg-amber-50/70',
     border: 'border-amber-100',
     badge: 'bg-amber-50 text-amber-700',
   },
   'عرض سعر': {
     dot: 'bg-purple-500',
-    bg: 'bg-purple-50/40',
+    bg: 'bg-purple-50/60',
     border: 'border-purple-100',
     badge: 'bg-purple-50 text-purple-700',
   },
   تفاوض: {
     dot: 'bg-orange-500',
-    bg: 'bg-orange-50/40',
+    bg: 'bg-orange-50/60',
     border: 'border-orange-100',
     badge: 'bg-orange-50 text-orange-700',
   },
   'تم التعاقد': {
     dot: 'bg-emerald-500',
-    bg: 'bg-emerald-50/50',
+    bg: 'bg-emerald-50/70',
     border: 'border-emerald-100',
     badge: 'bg-emerald-50 text-emerald-700',
   },
   خسرنا: {
     dot: 'bg-red-500',
-    bg: 'bg-red-50/50',
+    bg: 'bg-red-50/60',
     border: 'border-red-100',
     badge: 'bg-red-50 text-red-700',
   },
+}
+
+const DEFAULT_STAGE_STYLE = {
+  dot: 'bg-ink-500',
+  bg: 'bg-sand-50/80',
+  border: 'border-sand-200',
+  badge: 'bg-sand-100 text-ink-900',
 }
 
 const formatMoney = (value: number | null | undefined) =>
@@ -147,6 +154,113 @@ const normalizeDeal = (raw: any): Deal => ({
     ? raw.users[0] ?? null
     : raw?.users ?? null,
 })
+
+const IconSearch = ({ className = '' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    className={className}
+    aria-hidden="true"
+  >
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+  </svg>
+)
+
+const IconFilter = ({ className = '' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    className={className}
+    aria-hidden="true"
+  >
+    <path
+      d="M4 6h16M7 12h10M10 18h4"
+      strokeLinecap="round"
+    />
+  </svg>
+)
+
+const IconClose = ({ className = '' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    className={className}
+    aria-hidden="true"
+  >
+    <path d="m7 7 10 10M17 7 7 17" strokeLinecap="round" />
+  </svg>
+)
+
+const IconRefresh = ({ className = '' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    className={className}
+    aria-hidden="true"
+  >
+    <path
+      d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+const IconGrip = ({ className = '' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+    aria-hidden="true"
+  >
+    <circle cx="8" cy="7" r="1.2" />
+    <circle cx="16" cy="7" r="1.2" />
+    <circle cx="8" cy="12" r="1.2" />
+    <circle cx="16" cy="12" r="1.2" />
+    <circle cx="8" cy="17" r="1.2" />
+    <circle cx="16" cy="17" r="1.2" />
+  </svg>
+)
+
+const IconCalendar = ({ className = '' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    className={className}
+    aria-hidden="true"
+  >
+    <rect x="4" y="5" width="16" height="15" rx="2" />
+    <path d="M8 3v4M16 3v4M4 9h16" strokeLinecap="round" />
+  </svg>
+)
+
+const IconUser = ({ className = '' }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    className={className}
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="8" r="3.5" />
+    <path
+      d="M5 20c.8-3.5 3.1-5.3 7-5.3s6.2 1.8 7 5.3"
+      strokeLinecap="round"
+    />
+  </svg>
+)
 
 export default function Pipeline() {
   const {
@@ -257,6 +371,7 @@ export default function Pipeline() {
       setUsers((usersResult.data || []) as UserOption[])
     } catch (err) {
       console.error('Pipeline load error:', err)
+
       setError(
         err instanceof Error
           ? err.message
@@ -519,9 +634,7 @@ export default function Pipeline() {
 
         setDeals((current) =>
           current.map((deal) =>
-            deal.id === editingDeal.id
-              ? normalizedDeal
-              : deal
+            deal.id === editingDeal.id ? normalizedDeal : deal
           )
         )
 
@@ -588,10 +701,7 @@ export default function Pipeline() {
 
         const normalizedDeal = normalizeDeal(data)
 
-        setDeals((current) => [
-          normalizedDeal,
-          ...current,
-        ])
+        setDeals((current) => [normalizedDeal, ...current])
 
         await recordActivity(
           normalizedDeal.id,
@@ -711,10 +821,14 @@ export default function Pipeline() {
 
   if (!supabase) {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-red-700">
+      <div
+        dir="rtl"
+        className="rounded-2xl border border-red-200 bg-red-50 p-8 text-red-700"
+      >
         <h2 className="text-xl font-bold">
           قاعدة البيانات غير متصلة
         </h2>
+
         <p className="mt-2 text-sm">
           تأكد من إعداد متغيرات Supabase في بيئة التشغيل.
         </p>
@@ -724,20 +838,40 @@ export default function Pipeline() {
 
   if (orgLoading || loading) {
     return (
-      <div className="space-y-5">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div dir="rtl" className="space-y-6 pb-8">
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-10 w-72" />
+          <Skeleton className="h-5 w-96 max-w-full" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
-            <Skeleton key={item} className="h-28" />
+            <Card key={item} className="p-5">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-3 h-8 w-28" />
+            </Card>
           ))}
         </div>
 
-        <div className="flex gap-4 overflow-hidden">
-          {[1, 2, 3, 4].map((item) => (
-            <Skeleton
-              key={item}
-              className="h-[520px] w-72 shrink-0"
-            />
-          ))}
+        <Card className="p-4">
+          <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px_auto]">
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+            <Skeleton className="h-12" />
+          </div>
+        </Card>
+
+        <div className="overflow-hidden">
+          <div className="flex min-w-max gap-4">
+            {[1, 2, 3, 4].map((item) => (
+              <Skeleton
+                key={item}
+                className="h-[520px] w-[310px] shrink-0 rounded-2xl"
+              />
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -745,8 +879,20 @@ export default function Pipeline() {
 
   if (orgError || !organizationId) {
     return (
-      <div className="py-20 text-center text-sm text-red-600">
-        {orgError || 'تعذر تحديد المؤسسة الخاصة بحسابك'}
+      <div dir="rtl" className="py-20">
+        <Card className="mx-auto max-w-lg border-red-100 bg-red-50/60 p-8 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-red-600 shadow-sm">
+            !
+          </div>
+
+          <h2 className="mt-4 font-bold text-red-800">
+            تعذر تحميل بيانات المؤسسة
+          </h2>
+
+          <p className="mt-2 text-sm leading-6 text-red-700/70">
+            {orgError || 'تعذر تحديد المؤسسة الخاصة بحسابك'}
+          </p>
+        </Card>
       </div>
     )
   }
@@ -754,88 +900,136 @@ export default function Pipeline() {
   return (
     <div dir="rtl" className="space-y-6 pb-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-ink-900/45">
-            <span>CRM</span>
-            <span>•</span>
-            <span>المبيعات</span>
+      <div className="relative overflow-hidden rounded-3xl border border-sand-200 bg-gradient-to-br from-white via-white to-sand-50 p-5 shadow-sm sm:p-7">
+        <div className="pointer-events-none absolute -left-16 -top-20 h-48 w-48 rounded-full bg-gold-400/10 blur-3xl" />
+
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-ink-900/40">
+              <span>CRM</span>
+              <span aria-hidden="true">/</span>
+              <span>المبيعات</span>
+              <span aria-hidden="true">/</span>
+              <span className="text-ink-900/60">
+                Pipeline
+              </span>
+            </div>
+
+            <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-ink-950 sm:text-3xl">
+              Pipeline المبيعات
+            </h1>
+
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-900/50">
+              تابع الصفقات، قيمتها، المسؤول عنها، وحركها بين مراحل البيع بسهولة.
+            </p>
           </div>
 
-          <h1 className="mt-1 text-2xl font-bold text-ink-950 sm:text-3xl">
-            Pipeline المبيعات
-          </h1>
-
-          <p className="mt-1 text-sm text-ink-900/50">
-            تابع الصفقات وحركها بين مراحل البيع بسهولة.
-          </p>
+          <Button
+            onClick={openCreateForm}
+            className="w-full shrink-0 sm:w-auto"
+          >
+            <span className="inline-flex items-center justify-center gap-2">
+              <IconPlus className="h-4 w-4" />
+              إضافة صفقة
+            </span>
+          </Button>
         </div>
-
-        <Button onClick={openCreateForm}>
-          <span className="inline-flex items-center gap-2">
-            <IconPlus className="h-4 w-4" />
-            إضافة صفقة
-          </span>
-        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="p-4 sm:p-5">
-          <div className="text-xs text-ink-900/45">
+        <Card className="group relative overflow-hidden p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-ink-900/10" />
+
+          <div className="text-xs font-medium text-ink-900/45">
             إجمالي الصفقات
           </div>
-          <div className="mt-2 text-2xl font-bold text-ink-950">
+
+          <div className="mt-2 text-2xl font-extrabold text-ink-950">
             {pipelineStats.count.toLocaleString('ar-EG')}
           </div>
+
+          <div className="mt-1 text-[11px] text-ink-900/35">
+            بعد تطبيق الفلاتر
+          </div>
         </Card>
 
-        <Card className="p-4 sm:p-5">
-          <div className="text-xs text-ink-900/45">
+        <Card className="group relative overflow-hidden p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-gold-500/60" />
+
+          <div className="text-xs font-medium text-ink-900/45">
             إجمالي قيمة الـ Pipeline
           </div>
-          <div className="mt-2 text-xl font-bold text-gold-600 sm:text-2xl">
+
+          <div className="mt-2 truncate text-lg font-extrabold text-gold-600 sm:text-2xl">
             {formatMoney(pipelineStats.totalValue)}
           </div>
+
+          <div className="mt-1 text-[11px] text-ink-900/35">
+            القيمة الإجمالية
+          </div>
         </Card>
 
-        <Card className="p-4 sm:p-5">
-          <div className="text-xs text-ink-900/45">
+        <Card className="group relative overflow-hidden p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-blue-500/50" />
+
+          <div className="text-xs font-medium text-ink-900/45">
             الصفقات المفتوحة
           </div>
-          <div className="mt-2 text-xl font-bold text-blue-700 sm:text-2xl">
+
+          <div className="mt-2 truncate text-lg font-extrabold text-blue-700 sm:text-2xl">
             {formatMoney(pipelineStats.activeValue)}
+          </div>
+
+          <div className="mt-1 text-[11px] text-ink-900/35">
+            فرص البيع الحالية
           </div>
         </Card>
 
-        <Card className="p-4 sm:p-5">
-          <div className="text-xs text-ink-900/45">
+        <Card className="group relative overflow-hidden p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5">
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-emerald-500/50" />
+
+          <div className="text-xs font-medium text-ink-900/45">
             تم التعاقد
           </div>
-          <div className="mt-2 text-xl font-bold text-emerald-600 sm:text-2xl">
+
+          <div className="mt-2 truncate text-lg font-extrabold text-emerald-600 sm:text-2xl">
             {formatMoney(pipelineStats.wonValue)}
+          </div>
+
+          <div className="mt-1 text-[11px] text-ink-900/35">
+            صفقات مكتملة
           </div>
         </Card>
       </div>
 
       {/* Filters */}
-      <Card className="p-4">
+      <Card className="border-sand-200/80 p-4 shadow-sm sm:p-5">
+        <div className="mb-3 flex items-center gap-2 text-xs font-bold text-ink-900/55">
+          <IconFilter className="h-4 w-4" />
+          تصفية الصفقات
+        </div>
+
         <div className="grid gap-3 lg:grid-cols-[1fr_220px_220px_auto]">
           <div className="relative">
+            <IconSearch className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-900/30" />
+
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="ابحث باسم الصفقة أو العميل أو الشركة..."
-              className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-ink-700"
+              aria-label="البحث في الصفقات"
+              className="w-full rounded-xl border border-sand-200 bg-sand-50/30 py-3 pe-11 ps-10 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/30 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
             />
 
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-ink-900/40 hover:text-ink-900"
+                aria-label="مسح البحث"
+                className="absolute left-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-ink-900/35 transition hover:bg-sand-100 hover:text-ink-900"
               >
-                مسح
+                <IconClose className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -843,9 +1037,11 @@ export default function Pipeline() {
           <select
             value={stageFilter}
             onChange={(event) => setStageFilter(event.target.value)}
-            className="rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm outline-none focus:border-ink-700"
+            aria-label="تصفية حسب المرحلة"
+            className="rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
           >
             <option value="الكل">كل المراحل</option>
+
             {stages.map((stage) => (
               <option key={stage.id} value={stage.id}>
                 {stage.name}
@@ -856,9 +1052,11 @@ export default function Pipeline() {
           <select
             value={ownerFilter}
             onChange={(event) => setOwnerFilter(event.target.value)}
-            className="rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm outline-none focus:border-ink-700"
+            aria-label="تصفية حسب المسؤول"
+            className="rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
           >
             <option value="الكل">كل المسؤولين</option>
+
             {users.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.full_name}
@@ -874,49 +1072,82 @@ export default function Pipeline() {
               setStageFilter('الكل')
               setOwnerFilter('الكل')
             }}
+            className="w-full lg:w-auto"
           >
-            إعادة ضبط
+            <span className="inline-flex items-center justify-center gap-2">
+              <IconRefresh className="h-4 w-4" />
+              إعادة ضبط
+            </span>
           </Button>
         </div>
       </Card>
 
       {error && !showForm && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50/80 px-4 py-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>{error}</span>
+
+          <button
+            type="button"
+            onClick={loadData}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-100"
+          >
+            <IconRefresh className="h-4 w-4" />
+            إعادة المحاولة
+          </button>
         </div>
       )}
 
       {/* Pipeline */}
       {stages.length === 0 ? (
-        <Card className="p-12 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sand-100 text-2xl">
-            +
+        <Card className="p-10 text-center sm:p-14">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sand-100 text-ink-900">
+            <IconFilter className="h-6 w-6" />
           </div>
 
           <h3 className="mt-4 font-bold text-ink-950">
             لا توجد مراحل مبيعات
           </h3>
 
-          <p className="mt-1 text-sm text-ink-900/45">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-900/45">
             أضف مراحل المبيعات من إعدادات المؤسسة أولًا.
           </p>
         </Card>
       ) : filteredDeals.length === 0 ? (
-        <Card className="p-12 text-center">
-          <div className="text-4xl">⌁</div>
+        <Card className="p-10 text-center sm:p-14">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sand-100 text-ink-900">
+            <IconSearch className="h-6 w-6" />
+          </div>
 
           <h3 className="mt-4 font-bold text-ink-950">
             لا توجد صفقات مطابقة
           </h3>
 
-          <p className="mt-1 text-sm text-ink-900/45">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-900/45">
             جرّب تغيير البحث أو الفلاتر، أو أضف صفقة جديدة.
           </p>
 
-          <div className="mt-5">
+          <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
             <Button onClick={openCreateForm}>
-              إضافة أول صفقة
+              إضافة صفقة
             </Button>
+
+            {(search ||
+              stageFilter !== 'الكل' ||
+              ownerFilter !== 'الكل') && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSearch('')
+                  setStageFilter('الكل')
+                  setOwnerFilter('الكل')
+                }}
+              >
+                مسح الفلاتر
+              </Button>
+            )}
           </div>
         </Card>
       ) : (
@@ -933,12 +1164,7 @@ export default function Pipeline() {
               )
 
               const style =
-                STAGE_STYLE[stage.name] || {
-                  dot: 'bg-ink-500',
-                  bg: 'bg-sand-50',
-                  border: 'border-sand-200',
-                  badge: 'bg-sand-100 text-ink-900',
-                }
+                STAGE_STYLE[stage.name] || DEFAULT_STAGE_STYLE
 
               const isDropTarget =
                 dragOverStageId === stage.id
@@ -946,7 +1172,7 @@ export default function Pipeline() {
               return (
                 <div
                   key={stage.id}
-                  className="w-[310px] shrink-0"
+                  className="w-[290px] shrink-0 sm:w-[310px]"
                   onDragOver={(event) => {
                     event.preventDefault()
                     setDragOverStageId(stage.id)
@@ -961,30 +1187,30 @@ export default function Pipeline() {
                   }
                 >
                   <div
-                    className={`rounded-2xl border ${style.border} ${style.bg} p-3 transition ${
+                    className={`rounded-2xl border ${style.border} ${style.bg} p-3 shadow-sm transition duration-200 ${
                       isDropTarget
-                        ? 'ring-2 ring-ink-900/15'
+                        ? 'scale-[1.01] ring-2 ring-gold-500/30'
                         : ''
                     }`}
                   >
                     {/* Stage header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
                         <span
-                          className={`h-2.5 w-2.5 rounded-full ${style.dot}`}
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`}
                         />
 
-                        <h3 className="font-bold text-sm text-ink-950">
+                        <h3 className="truncate text-sm font-bold text-ink-950">
                           {stage.name}
                         </h3>
                       </div>
 
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-ink-900/50 shadow-sm">
+                      <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-bold text-ink-900/50 shadow-sm">
                         {stageDeals.length}
                       </span>
                     </div>
 
-                    <div className="mt-2 text-xs font-medium text-ink-900/45">
+                    <div className="mt-2 text-xs font-semibold text-ink-900/40">
                       {formatMoney(total)}
                     </div>
 
@@ -1007,92 +1233,109 @@ export default function Pipeline() {
                             setDraggedDealId(null)
                             setDragOverStageId(null)
                           }}
-                          className={`group cursor-grab rounded-2xl border border-sand-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-ink-900/20 hover:shadow-md active:cursor-grabbing ${
+                          className={`group cursor-grab rounded-2xl border border-sand-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ink-900/15 hover:shadow-lg active:cursor-grabbing ${
                             draggedDealId === deal.id
-                              ? 'opacity-50'
+                              ? 'scale-[0.98] opacity-50'
                               : ''
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <Link
-                              to={`/pipeline/deal/${deal.id}`}
-                              className="min-w-0 flex-1"
-                            >
-                              <h4 className="truncate text-sm font-bold text-ink-950">
-                                {deal.title}
-                              </h4>
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-sand-50 text-ink-900/30 transition group-hover:bg-sand-100 group-hover:text-ink-900/50">
+                              <IconGrip className="h-4 w-4" />
+                            </div>
 
-                              <div className="mt-1 truncate text-xs text-ink-900/50">
-                                {deal.customers?.name ||
-                                  'بدون عميل'}
-                              </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <Link
+                                  to={`/pipeline/deal/${deal.id}`}
+                                  className="min-w-0 flex-1"
+                                >
+                                  <h4 className="truncate text-sm font-bold text-ink-950 transition group-hover:text-ink-700">
+                                    {deal.title}
+                                  </h4>
 
-                              {deal.customers?.company && (
-                                <div className="mt-0.5 truncate text-[11px] text-ink-900/35">
-                                  {deal.customers.company}
-                                </div>
-                              )}
-                            </Link>
+                                  <div className="mt-1 truncate text-xs font-medium text-ink-900/50">
+                                    {deal.customers?.name ||
+                                      'بدون عميل'}
+                                  </div>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openEditForm(deal)
-                              }
-                              className="rounded-lg p-1.5 text-ink-900/35 opacity-0 transition hover:bg-sand-100 hover:text-ink-900 group-hover:opacity-100"
-                              title="تعديل"
-                            >
-                              ⋮
-                            </button>
-                          </div>
-
-                          <div className="mt-4 flex items-center justify-between gap-2">
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${style.badge}`}
-                            >
-                              {formatMoney(deal.value)}
-                            </span>
-
-                            {deal.source && (
-                              <span className="max-w-[110px] truncate text-[11px] text-ink-900/40">
-                                {deal.source}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="mt-3 border-t border-sand-100 pt-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-900 text-[10px] font-bold text-white">
-                                  {(
-                                    deal.users?.full_name ||
-                                    deal.customers?.name ||
-                                    '?'
-                                  )
-                                    .trim()
-                                    .charAt(0)}
-                                </div>
-
-                                <span className="truncate text-[11px] text-ink-900/50">
-                                  {deal.users?.full_name ||
-                                    'غير معين'}
-                                </span>
-                              </div>
-
-                              {deal.follow_up_at && (
-                                <span className="shrink-0 text-[10px] text-ink-900/45">
-                                  {formatDate(
-                                    deal.follow_up_at
+                                  {deal.customers?.company && (
+                                    <div className="mt-0.5 truncate text-[11px] text-ink-900/35">
+                                      {deal.customers.company}
+                                    </div>
                                   )}
+                                </Link>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openEditForm(deal)
+                                  }
+                                  aria-label={`تعديل الصفقة ${deal.title}`}
+                                  title="تعديل"
+                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm text-ink-900/30 opacity-100 transition hover:bg-sand-100 hover:text-ink-900 sm:opacity-0 sm:group-hover:opacity-100"
+                                >
+                                  ⋮
+                                </button>
+                              </div>
+
+                              <div className="mt-4 flex items-center justify-between gap-2">
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${style.badge}`}
+                                >
+                                  {formatMoney(deal.value)}
                                 </span>
-                              )}
+
+                                {deal.source && (
+                                  <span className="max-w-[110px] truncate text-[11px] text-ink-900/40">
+                                    {deal.source}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="mt-3 border-t border-sand-100 pt-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-900 text-[10px] font-bold text-white">
+                                      {(
+                                        deal.users?.full_name ||
+                                        deal.customers?.name ||
+                                        '?'
+                                      )
+                                        .trim()
+                                        .charAt(0)}
+                                    </div>
+
+                                    <span className="truncate text-[11px] font-medium text-ink-900/50">
+                                      {deal.users?.full_name ||
+                                        'غير معين'}
+                                    </span>
+                                  </div>
+
+                                  {deal.follow_up_at && (
+                                    <span
+                                      className="flex max-w-[120px] shrink-0 items-center gap-1 truncate text-[10px] font-medium text-ink-900/40"
+                                      title={formatDate(
+                                        deal.follow_up_at
+                                      )}
+                                    >
+                                      <IconCalendar className="h-3 w-3" />
+                                      <span className="truncate">
+                                        {formatDate(
+                                          deal.follow_up_at
+                                        )}
+                                      </span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
                       ))}
 
                       {stageDeals.length === 0 && (
-                        <div className="rounded-xl border border-dashed border-sand-300 bg-white/50 px-4 py-10 text-center text-xs text-ink-900/30">
+                        <div className="rounded-xl border border-dashed border-sand-300 bg-white/40 px-4 py-10 text-center text-xs font-medium text-ink-900/30">
                           اسحب صفقة هنا
                         </div>
                       )}
@@ -1107,14 +1350,32 @@ export default function Pipeline() {
 
       {/* Create/Edit Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/40 p-4 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !saving) {
+              resetForm()
+            }
+          }}
+        >
           <div
-            className="w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl"
+            className="w-full overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-w-2xl sm:rounded-3xl"
             dir="rtl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipeline-deal-dialog-title"
           >
-            <div className="flex items-center justify-between border-b border-sand-200 px-5 py-4 sm:px-6">
-              <div>
-                <h2 className="font-bold text-lg text-ink-950">
+            <div className="flex items-center justify-between border-b border-sand-200 bg-white px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <div className="mb-1 inline-flex rounded-full bg-gold-50 px-2.5 py-1 text-[10px] font-bold text-gold-700">
+                  {editingDeal ? 'تعديل' : 'صفقة جديدة'}
+                </div>
+
+                <h2
+                  id="pipeline-deal-dialog-title"
+                  className="truncate text-lg font-extrabold text-ink-950"
+                >
                   {editingDeal
                     ? 'تعديل الصفقة'
                     : 'إضافة صفقة جديدة'}
@@ -1128,24 +1389,27 @@ export default function Pipeline() {
               <button
                 type="button"
                 onClick={resetForm}
-                className="rounded-xl px-3 py-2 text-sm text-ink-900/45 hover:bg-sand-100 hover:text-ink-900"
+                disabled={saving}
+                aria-label="إغلاق"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-ink-900/40 transition hover:bg-sand-100 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                إغلاق
+                <IconClose className="h-5 w-5" />
               </button>
             </div>
 
             <form
               onSubmit={saveDeal}
-              className="max-h-[75vh] overflow-y-auto p-5 sm:p-6"
+              className="max-h-[78vh] overflow-y-auto p-5 sm:p-6"
             >
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="sm:col-span-2">
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     عنوان الصفقة *
                   </span>
 
                   <input
                     required
+                    autoFocus
                     value={form.title}
                     onChange={(event) =>
                       setForm({
@@ -1154,12 +1418,12 @@ export default function Pipeline() {
                       })
                     }
                     placeholder="مثال: إدارة صفحات شركة ABC"
-                    className="w-full rounded-xl border border-sand-200 px-4 py-3 text-sm outline-none focus:border-ink-700"
+                    className="w-full rounded-xl border border-sand-200 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
                   />
                 </label>
 
                 <label>
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     قيمة الصفقة
                   </span>
 
@@ -1175,12 +1439,12 @@ export default function Pipeline() {
                       })
                     }
                     placeholder="0"
-                    className="w-full rounded-xl border border-sand-200 px-4 py-3 text-sm outline-none focus:border-ink-700"
+                    className="w-full rounded-xl border border-sand-200 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
                   />
                 </label>
 
                 <label>
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     العميل
                   </span>
 
@@ -1192,11 +1456,9 @@ export default function Pipeline() {
                         customerId: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm outline-none focus:border-ink-700"
+                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
-                    <option value="">
-                      بدون عميل
-                    </option>
+                    <option value="">بدون عميل</option>
 
                     {customers.map((customer) => (
                       <option
@@ -1213,7 +1475,7 @@ export default function Pipeline() {
                 </label>
 
                 <label>
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     المرحلة
                   </span>
 
@@ -1225,7 +1487,7 @@ export default function Pipeline() {
                         stageId: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm outline-none focus:border-ink-700"
+                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
                     {stages.map((stage) => (
                       <option
@@ -1239,7 +1501,7 @@ export default function Pipeline() {
                 </label>
 
                 <label>
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     المسؤول
                   </span>
 
@@ -1251,16 +1513,13 @@ export default function Pipeline() {
                         ownerId: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm outline-none focus:border-ink-700"
+                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
-                    <option value="">
-                      غير معين
-                    </option>
+                    <option value="">غير معين</option>
 
                     {users
                       .filter(
-                        (user) =>
-                          user.active !== false
+                        (user) => user.active !== false
                       )
                       .map((user) => (
                         <option
@@ -1274,7 +1533,7 @@ export default function Pipeline() {
                 </label>
 
                 <label>
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     مصدر الصفقة
                   </span>
 
@@ -1286,11 +1545,9 @@ export default function Pipeline() {
                         source: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm outline-none focus:border-ink-700"
+                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
-                    <option value="">
-                      اختر المصدر
-                    </option>
+                    <option value="">اختر المصدر</option>
 
                     {SOURCES.map((source) => (
                       <option
@@ -1304,26 +1561,29 @@ export default function Pipeline() {
                 </label>
 
                 <label>
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     موعد المتابعة
                   </span>
 
-                  <input
-                    type="datetime-local"
-                    value={form.followUpAt}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        followUpAt:
-                          event.target.value,
-                      })
-                    }
-                    className="w-full rounded-xl border border-sand-200 px-4 py-3 text-sm outline-none focus:border-ink-700"
-                  />
+                  <div className="relative">
+                    <IconCalendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-900/30" />
+
+                    <input
+                      type="datetime-local"
+                      value={form.followUpAt}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          followUpAt: event.target.value,
+                        })
+                      }
+                      className="w-full rounded-xl border border-sand-200 bg-sand-50/20 py-3 pe-10 ps-4 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
+                    />
+                  </div>
                 </label>
 
                 <label className="sm:col-span-2">
-                  <span className="mb-1.5 block text-xs font-semibold text-ink-900/60">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-900/60">
                     ملاحظات
                   </span>
 
@@ -1337,13 +1597,16 @@ export default function Pipeline() {
                       })
                     }
                     placeholder="أضف أي ملاحظات خاصة بالصفقة..."
-                    className="w-full resize-none rounded-xl border border-sand-200 px-4 py-3 text-sm outline-none focus:border-ink-700"
+                    className="w-full resize-none rounded-xl border border-sand-200 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
                   />
                 </label>
               </div>
 
               {error && (
-                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div
+                  role="alert"
+                  className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+                >
                   {error}
                 </div>
               )}
@@ -1352,7 +1615,8 @@ export default function Pipeline() {
                 <Button
                   type="submit"
                   disabled={saving}
-                  className="min-w-[130px]"
+                  className="min-w-[140px]"
+                  aria-busy={saving}
                 >
                   {saving
                     ? 'جاري الحفظ...'
