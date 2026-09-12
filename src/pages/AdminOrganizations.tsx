@@ -55,6 +55,48 @@ interface Organization {
   plan_name: string | null
 }
 
+interface UsageMetric {
+  used: number
+  limit: number
+  remaining: number
+  percent: number
+}
+
+interface RyanUsageMetric {
+  used: number
+  base_limit: number
+  purchased: number
+  total_limit: number
+  remaining: number
+  percent: number
+  feature_enabled: boolean
+}
+
+interface OrganizationUsage {
+  organization_id: string
+  organization_name: string
+  suspended: boolean
+  plan_id: string | null
+  plan_name: string | null
+  subscription_status: string | null
+  renewal_date: string | null
+  users: UsageMetric
+  customers: UsageMetric
+  ai_messages: RyanUsageMetric
+}
+
+interface UsageTotals {
+  users: UsageMetric
+  customers: UsageMetric
+  ai_messages: RyanUsageMetric
+}
+
+interface UsageDashboard {
+  month_start: string
+  organizations: OrganizationUsage[]
+  totals: UsageTotals
+}
+
 type FormState = {
   name: string
   businessType: string
@@ -107,12 +149,195 @@ const formatMoney = (
   )} ${currency === 'EGP' ? 'ج.م' : currency}`
 }
 
+const clampPercent = (
+  value: number,
+) => {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      value,
+    ),
+  )
+}
+
+const getUsagePercent = (
+  used: number,
+  limit: number,
+) => {
+  if (
+    !Number.isFinite(limit) ||
+    limit <= 0
+  ) {
+    return used > 0 ? 100 : 0
+  }
+
+  return clampPercent(
+    (used / limit) * 100,
+  )
+}
+
+const getUsageTone = (
+  percent: number,
+) => {
+  if (percent >= 90) {
+    return {
+      bar: 'bg-red-500',
+      text: 'text-red-600',
+      background: 'bg-red-50',
+      border: 'border-red-100',
+    }
+  }
+
+  if (percent >= 80) {
+    return {
+      bar: 'bg-amber-500',
+      text: 'text-amber-600',
+      background: 'bg-amber-50',
+      border: 'border-amber-100',
+    }
+  }
+
+  return {
+    bar: 'bg-emerald-500',
+    text: 'text-emerald-600',
+    background: 'bg-emerald-50',
+    border: 'border-emerald-100',
+  }
+}
+
+function UsageBar({
+  label,
+  used,
+  limit,
+  percent,
+  purchased,
+}: {
+  label: string
+  used: number
+  limit: number
+  percent?: number
+  purchased?: number
+}) {
+  const safeUsed = Math.max(
+    0,
+    Number(used || 0),
+  )
+
+  const safeLimit = Math.max(
+    0,
+    Number(limit || 0),
+  )
+
+  const calculatedPercent =
+    getUsagePercent(
+      safeUsed,
+      safeLimit,
+    )
+
+  const displayPercent =
+    clampPercent(
+      Number.isFinite(
+        percent ?? NaN,
+      )
+        ? Number(percent)
+        : calculatedPercent,
+    )
+
+  const tone =
+    getUsageTone(
+      displayPercent,
+    )
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-ink-900/60">
+          {label}
+        </span>
+
+        <span
+          className={`text-xs font-bold ${tone.text}`}
+        >
+          {Math.round(
+            displayPercent,
+          )}
+          %
+        </span>
+      </div>
+
+      <div className="h-2 rounded-full bg-sand-100 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${tone.bar}`}
+          style={{
+            width: `${displayPercent}%`,
+          }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2 text-[11px] text-ink-900/45">
+        <span>
+          {safeUsed.toLocaleString(
+            'ar-EG',
+          )}{' '}
+          /{' '}
+          {safeLimit.toLocaleString(
+            'ar-EG',
+          )}
+        </span>
+
+        {typeof purchased ===
+          'number' &&
+          purchased > 0 && (
+            <span className="text-amber-600 font-semibold">
+              +{purchased.toLocaleString(
+                'ar-EG',
+              )}{' '}
+              مشتراة
+            </span>
+          )}
+      </div>
+    </div>
+  )
+}
+
+function UsageWarning({
+  percent,
+}: {
+  percent: number
+}) {
+  if (percent < 80) {
+    return null
+  }
+
+  return (
+    <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-2.5 py-1.5 text-[11px] font-semibold text-amber-700">
+      {percent >= 90
+        ? 'الاستخدام اقترب من الحد الأقصى'
+        : 'الاستخدام تجاوز 80% من الحد'}
+    </div>
+  )
+}
+
 export default function AdminOrganizations() {
   const [organizations, setOrganizations] =
     useState<Organization[]>([])
 
   const [plans, setPlans] =
     useState<Plan[]>([])
+
+  const [usageByOrganization, setUsageByOrganization] =
+    useState<Record<
+      string,
+      OrganizationUsage
+    >>({})
+
+  const [usageTotals, setUsageTotals] =
+    useState<UsageTotals | null>(null)
 
   const [loading, setLoading] =
     useState(true)
@@ -178,6 +403,7 @@ export default function AdminOrganizations() {
       const [
         organizationsRes,
         plansRes,
+        usageRes,
       ] = await Promise.all([
         fetch(
           '/api/admin/organizations',
@@ -210,6 +436,10 @@ export default function AdminOrganizations() {
               ascending: true,
             },
           ),
+
+        supabase.rpc(
+          'get_admin_usage_dashboard',
+        ),
       ])
 
       const json =
@@ -224,11 +454,6 @@ export default function AdminOrganizations() {
         )
       }
 
-      setOrganizations(
-        json.organizations ??
-          [],
-      )
-
       if (
         plansRes.error
       ) {
@@ -237,9 +462,59 @@ export default function AdminOrganizations() {
         )
       }
 
+      if (
+        usageRes.error
+      ) {
+        throw new Error(
+          `تعذر تحميل بيانات الاستخدام: ${usageRes.error.message}`,
+        )
+      }
+
+      const dashboard =
+        (usageRes.data ||
+          null) as UsageDashboard | null
+
+      const usageRows =
+        Array.isArray(
+          dashboard?.organizations,
+        )
+          ? dashboard.organizations
+          : []
+
+      const usageMap: Record<
+        string,
+        OrganizationUsage
+      > = {}
+
+      usageRows.forEach(
+        usage => {
+          if (
+            usage?.organization_id
+          ) {
+            usageMap[
+              usage.organization_id
+            ] = usage
+          }
+        },
+      )
+
+      setOrganizations(
+        json.organizations ??
+          [],
+      )
+
       setPlans(
         (plansRes.data ??
           []) as Plan[],
+      )
+
+      setUsageByOrganization(
+        usageMap,
+      )
+
+      setUsageTotals(
+        dashboard?.totals ||
+          null,
       )
     } catch (
       err: any
@@ -350,6 +625,97 @@ export default function AdminOrganizations() {
       }
     }, [
       organizations,
+    ])
+
+  const usageSummary =
+    useMemo(() => {
+      if (!usageTotals) {
+        return {
+          users: {
+            used: 0,
+            limit: 0,
+            percent: 0,
+          },
+          customers: {
+            used: 0,
+            limit: 0,
+            percent: 0,
+          },
+          ai: {
+            used: 0,
+            limit: 0,
+            percent: 0,
+            purchased: 0,
+          },
+        }
+      }
+
+      return {
+        users: {
+          used:
+            Number(
+              usageTotals.users?.used ||
+                0,
+            ),
+          limit:
+            Number(
+              usageTotals.users?.limit ||
+                0,
+            ),
+          percent:
+            Number(
+              usageTotals.users?.percent ||
+                0,
+            ),
+        },
+
+        customers: {
+          used:
+            Number(
+              usageTotals.customers?.used ||
+                0,
+            ),
+          limit:
+            Number(
+              usageTotals.customers?.limit ||
+                0,
+            ),
+          percent:
+            Number(
+              usageTotals.customers?.percent ||
+                0,
+            ),
+        },
+
+        ai: {
+          used:
+            Number(
+              usageTotals.ai_messages
+                ?.used ||
+                0,
+            ),
+          limit:
+            Number(
+              usageTotals.ai_messages
+                ?.total_limit ||
+                0,
+            ),
+          percent:
+            Number(
+              usageTotals.ai_messages
+                ?.percent ||
+                0,
+            ),
+          purchased:
+            Number(
+              usageTotals.ai_messages
+                ?.purchased ||
+                0,
+            ),
+        },
+      }
+    }, [
+      usageTotals,
     ])
 
   const openCreate = () => {
@@ -629,6 +995,8 @@ export default function AdminOrganizations() {
             ? `تم تعليق شركة "${org.name}"`
             : `تم تفعيل شركة "${org.name}"`,
         )
+
+        await loadData()
       } catch (
         err: any
       ) {
@@ -716,6 +1084,18 @@ export default function AdminOrganizations() {
         setToast(
           `تم حذف شركة "${org.name}"`,
         )
+
+        setUsageByOrganization(
+          previous => {
+            const next = {
+              ...previous,
+            }
+
+            delete next[org.id]
+
+            return next
+          },
+        )
       } catch (
         err: any
       ) {
@@ -740,6 +1120,8 @@ export default function AdminOrganizations() {
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
         </div>
+
+        <Skeleton className="h-32" />
 
         <Skeleton className="h-96" />
       </div>
@@ -808,7 +1190,7 @@ export default function AdminOrganizations() {
         </Button>
       </div>
 
-      {/* Stats */}
+      {/* Main Stats */}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -843,6 +1225,123 @@ export default function AdminOrganizations() {
           accent="gold"
         />
       </div>
+
+      {/* Platform Usage */}
+
+      <Card className="p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-5">
+          <div>
+            <h2 className="text-lg font-bold text-ink-950">
+              استخدام المنصة
+            </h2>
+
+            <p className="text-xs text-ink-900/45 mt-1">
+              البيانات الحالية محسوبة مباشرة من قاعدة البيانات حسب حدود الباقات.
+            </p>
+          </div>
+
+          <Badge tone="success">
+            بيانات حقيقية
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-sand-200 bg-white p-4">
+            <UsageBar
+              label="المستخدمون"
+              used={
+                usageSummary.users
+                  .used
+              }
+              limit={
+                usageSummary.users
+                  .limit
+              }
+              percent={
+                usageSummary.users
+                  .percent
+              }
+            />
+
+            <UsageWarning
+              percent={
+                usageSummary.users
+                  .percent
+              }
+            />
+          </div>
+
+          <div className="rounded-2xl border border-sand-200 bg-white p-4">
+            <UsageBar
+              label="العملاء"
+              used={
+                usageSummary
+                  .customers
+                  .used
+              }
+              limit={
+                usageSummary
+                  .customers
+                  .limit
+              }
+              percent={
+                usageSummary
+                  .customers
+                  .percent
+              }
+            />
+
+            <UsageWarning
+              percent={
+                usageSummary
+                  .customers
+                  .percent
+              }
+            />
+          </div>
+
+          <div className="rounded-2xl border border-sand-200 bg-white p-4">
+            <UsageBar
+              label="رسائل Ryan AI"
+              used={
+                usageSummary.ai
+                  .used
+              }
+              limit={
+                usageSummary.ai
+                  .limit
+              }
+              percent={
+                usageSummary.ai
+                  .percent
+              }
+              purchased={
+                usageSummary.ai
+                  .purchased
+              }
+            />
+
+            {usageSummary.ai
+              .purchased >
+              0 && (
+              <div className="mt-2 text-[11px] text-amber-600 font-semibold">
+                تشمل{' '}
+                {usageSummary.ai.purchased.toLocaleString(
+                  'ar-EG',
+                )}{' '}
+                Credits مشتراة
+              </div>
+            )}
+
+            <UsageWarning
+              percent={
+                usageSummary.ai
+                  .percent
+              }
+            />
+          </div>
+        </div>
+      </Card>
 
       {/* Filters */}
 
@@ -910,8 +1409,8 @@ export default function AdminOrganizations() {
                   الباقة
                 </th>
 
-                <th className="text-right p-4 font-semibold">
-                  البيانات
+                <th className="text-right p-4 font-semibold min-w-[270px]">
+                  الاستخدام
                 </th>
 
                 <th className="text-right p-4 font-semibold">
@@ -926,150 +1425,218 @@ export default function AdminOrganizations() {
 
             <tbody className="divide-y divide-sand-100">
               {filteredOrganizations.map(
-                org => (
-                  <tr
-                    key={org.id}
-                    className="hover:bg-sand-50/70"
-                  >
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        {org.logo_url ? (
-                          <img
-                            src={
-                              org.logo_url
-                            }
-                            alt=""
-                            className="w-11 h-11 rounded-xl object-cover border border-sand-200"
-                          />
-                        ) : (
-                          <div className="w-11 h-11 rounded-xl bg-ink-950 text-gold-400 flex items-center justify-center font-bold">
-                            {org.name
-                              .charAt(
-                                0,
-                              )
-                              .toUpperCase()}
+                org => {
+                  const usage =
+                    usageByOrganization[
+                      org.id
+                    ]
+
+                  return (
+                    <tr
+                      key={org.id}
+                      className="hover:bg-sand-50/70"
+                    >
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          {org.logo_url ? (
+                            <img
+                              src={
+                                org.logo_url
+                              }
+                              alt=""
+                              className="w-11 h-11 rounded-xl object-cover border border-sand-200"
+                            />
+                          ) : (
+                            <div className="w-11 h-11 rounded-xl bg-ink-950 text-gold-400 flex items-center justify-center font-bold">
+                              {org.name
+                                .charAt(
+                                  0,
+                                )
+                                .toUpperCase()}
+                            </div>
+                          )}
+
+                          <div>
+                            <div className="font-bold text-ink-950">
+                              {org.name}
+                            </div>
+
+                            <div className="text-xs text-ink-900/45 mt-1">
+                              {org.business_type ||
+                                'نشاط غير محدد'}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-4">
+                        <div className="font-semibold">
+                          {org.admin_name ||
+                            org.manager_name ||
+                            '—'}
+                        </div>
+
+                        <div className="text-xs text-ink-900/45 mt-1">
+                          {org.admin_email ||
+                            org.email ||
+                            '—'}
+                        </div>
+                      </td>
+
+                      <td className="p-4">
+                        <div className="font-semibold">
+                          {org.plan_name ||
+                            'بدون باقة'}
+                        </div>
+
+                        {org.active_subscription && (
+                          <div className="text-xs text-emerald-600 mt-1">
+                            حتى{' '}
+                            {formatDate(
+                              org.renewal_date,
+                            )}
                           </div>
                         )}
+                      </td>
 
-                        <div>
-                          <div className="font-bold text-ink-950">
-                            {org.name}
+                      <td className="p-4">
+                        {usage ? (
+                          <div className="space-y-3">
+                            <UsageBar
+                              label="Users"
+                              used={
+                                usage.users
+                                  .used
+                              }
+                              limit={
+                                usage.users
+                                  .limit
+                              }
+                              percent={
+                                usage.users
+                                  .percent
+                              }
+                            />
+
+                            <UsageBar
+                              label="Customers"
+                              used={
+                                usage.customers
+                                  .used
+                              }
+                              limit={
+                                usage.customers
+                                  .limit
+                              }
+                              percent={
+                                usage.customers
+                                  .percent
+                              }
+                            />
+
+                            <UsageBar
+                              label="Ryan AI"
+                              used={
+                                usage.ai_messages
+                                  .used
+                              }
+                              limit={
+                                usage.ai_messages
+                                  .total_limit
+                              }
+                              percent={
+                                usage.ai_messages
+                                  .percent
+                              }
+                              purchased={
+                                usage.ai_messages
+                                  .purchased
+                              }
+                            />
+
+                            {!usage.ai_messages
+                              .feature_enabled && (
+                              <div className="text-[11px] text-ink-900/40">
+                                Ryan غير مفعّل في الباقة الحالية
+                              </div>
+                            )}
+
+                            <UsageWarning
+                              percent={Math.max(
+                                usage.users
+                                  .percent,
+                                usage.customers
+                                  .percent,
+                                usage.ai_messages
+                                  .percent,
+                              )}
+                            />
                           </div>
-
-                          <div className="text-xs text-ink-900/45 mt-1">
-                            {org.business_type ||
-                              'نشاط غير محدد'}
+                        ) : (
+                          <div className="text-xs text-ink-900/40">
+                            لا توجد بيانات استخدام
                           </div>
+                        )}
+                      </td>
+
+                      <td className="p-4">
+                        {org.suspended ? (
+                          <Badge tone="danger">
+                            معلقة
+                          </Badge>
+                        ) : org.active_subscription ? (
+                          <Badge tone="success">
+                            نشطة
+                          </Badge>
+                        ) : (
+                          <Badge tone="warning">
+                            بدون اشتراك نشط
+                          </Badge>
+                        )}
+                      </td>
+
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="secondary"
+                            onClick={() =>
+                              openEdit(
+                                org,
+                              )
+                            }
+                          >
+                            تعديل
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            onClick={() =>
+                              toggleSuspension(
+                                org,
+                              )
+                            }
+                          >
+                            {org.suspended
+                              ? 'تفعيل'
+                              : 'تعليق'}
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            className="text-red-600 hover:bg-red-50"
+                            onClick={() =>
+                              deleteOrganization(
+                                org,
+                              )
+                            }
+                          >
+                            حذف
+                          </Button>
                         </div>
-                      </div>
-                    </td>
-
-                    <td className="p-4">
-                      <div className="font-semibold">
-                        {org.admin_name ||
-                          org.manager_name ||
-                          '—'}
-                      </div>
-
-                      <div className="text-xs text-ink-900/45 mt-1">
-                        {org.admin_email ||
-                          org.email ||
-                          '—'}
-                      </div>
-                    </td>
-
-                    <td className="p-4">
-                      <div className="font-semibold">
-                        {org.plan_name ||
-                          'بدون باقة'}
-                      </div>
-
-                      {org.active_subscription && (
-                        <div className="text-xs text-emerald-600 mt-1">
-                          حتى{' '}
-                          {formatDate(
-                            org.renewal_date,
-                          )}
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="p-4">
-                      <div className="text-xs text-ink-900/60 space-y-1">
-                        <div>
-                          المستخدمون:{' '}
-                          {org.users_count}
-                        </div>
-
-                        <div>
-                          العملاء:{' '}
-                          {org.customers_count}
-                        </div>
-
-                        <div>
-                          Leads:{' '}
-                          {org.leads_count}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="p-4">
-                      {org.suspended ? (
-                        <Badge tone="danger">
-                          معلقة
-                        </Badge>
-                      ) : org.active_subscription ? (
-                        <Badge tone="success">
-                          نشطة
-                        </Badge>
-                      ) : (
-                        <Badge tone="warning">
-                          بدون اشتراك نشط
-                        </Badge>
-                      )}
-                    </td>
-
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="secondary"
-                          onClick={() =>
-                            openEdit(
-                              org,
-                            )
-                          }
-                        >
-                          تعديل
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          onClick={() =>
-                            toggleSuspension(
-                              org,
-                            )
-                          }
-                        >
-                          {org.suspended
-                            ? 'تفعيل'
-                            : 'تعليق'}
-                        </Button>
-
-                        <Button
-                          variant="ghost"
-                          className="text-red-600 hover:bg-red-50"
-                          onClick={() =>
-                            deleteOrganization(
-                              org,
-                            )
-                          }
-                        >
-                          حذف
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ),
+                      </td>
+                    </tr>
+                  )
+                },
               )}
             </tbody>
           </table>
@@ -1086,137 +1653,251 @@ export default function AdminOrganizations() {
 
       <div className="lg:hidden space-y-3">
         {filteredOrganizations.map(
-          org => (
-            <Card
-              key={org.id}
-              className="p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  {org.logo_url ? (
-                    <img
-                      src={
-                        org.logo_url
-                      }
-                      alt=""
-                      className="w-12 h-12 rounded-xl object-cover"
-                    />
+          org => {
+            const usage =
+              usageByOrganization[
+                org.id
+              ]
+
+            return (
+              <Card
+                key={org.id}
+                className="p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {org.logo_url ? (
+                      <img
+                        src={
+                          org.logo_url
+                        }
+                        alt=""
+                        className="w-12 h-12 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-ink-950 text-gold-400 flex items-center justify-center font-bold">
+                        {org.name.charAt(
+                          0,
+                        )}
+                      </div>
+                    )}
+
+                    <div className="min-w-0">
+                      <div className="font-bold truncate">
+                        {org.name}
+                      </div>
+
+                      <div className="text-xs text-ink-900/45 mt-1 truncate">
+                        {org.admin_email ||
+                          org.email ||
+                          '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {org.suspended ? (
+                    <Badge tone="danger">
+                      معلقة
+                    </Badge>
+                  ) : org.active_subscription ? (
+                    <Badge tone="success">
+                      نشطة
+                    </Badge>
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-ink-950 text-gold-400 flex items-center justify-center font-bold">
-                      {org.name.charAt(
-                        0,
-                      )}
-                    </div>
+                    <Badge tone="warning">
+                      بدون اشتراك
+                    </Badge>
                   )}
+                </div>
 
-                  <div className="min-w-0">
-                    <div className="font-bold truncate">
-                      {org.name}
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div className="rounded-xl bg-sand-50 p-3">
+                    <div className="text-xs text-ink-900/45">
+                      الباقة
                     </div>
 
-                    <div className="text-xs text-ink-900/45 mt-1 truncate">
-                      {org.admin_email ||
-                        org.email ||
-                        '—'}
+                    <div className="font-semibold mt-1">
+                      {org.plan_name ||
+                        'بدون باقة'}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-sand-50 p-3">
+                    <div className="text-xs text-ink-900/45">
+                      المستخدمون
+                    </div>
+
+                    <div className="font-semibold mt-1">
+                      {org.users_count}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-sand-50 p-3">
+                    <div className="text-xs text-ink-900/45">
+                      العملاء
+                    </div>
+
+                    <div className="font-semibold mt-1">
+                      {org.customers_count}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-sand-50 p-3">
+                    <div className="text-xs text-ink-900/45">
+                      Leads
+                    </div>
+
+                    <div className="font-semibold mt-1">
+                      {org.leads_count}
                     </div>
                   </div>
                 </div>
 
-                {org.suspended ? (
-                  <Badge tone="danger">
-                    معلقة
-                  </Badge>
-                ) : (
-                  <Badge tone="success">
-                    نشطة
-                  </Badge>
+                {usage && (
+                  <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="font-bold text-sm text-ink-950">
+                        الاستخدام
+                      </div>
+
+                      <span className="text-[11px] text-ink-900/40">
+                        الشهر الحالي
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <UsageBar
+                          label="المستخدمون"
+                          used={
+                            usage.users
+                              .used
+                          }
+                          limit={
+                            usage.users
+                              .limit
+                          }
+                          percent={
+                            usage.users
+                              .percent
+                          }
+                        />
+
+                        <UsageWarning
+                          percent={
+                            usage.users
+                              .percent
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <UsageBar
+                          label="العملاء"
+                          used={
+                            usage.customers
+                              .used
+                          }
+                          limit={
+                            usage.customers
+                              .limit
+                          }
+                          percent={
+                            usage.customers
+                              .percent
+                          }
+                        />
+
+                        <UsageWarning
+                          percent={
+                            usage.customers
+                              .percent
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <UsageBar
+                          label="Ryan AI"
+                          used={
+                            usage.ai_messages
+                              .used
+                          }
+                          limit={
+                            usage.ai_messages
+                              .total_limit
+                          }
+                          percent={
+                            usage.ai_messages
+                              .percent
+                          }
+                          purchased={
+                            usage.ai_messages
+                              .purchased
+                          }
+                        />
+
+                        {usage.ai_messages
+                          .feature_enabled ===
+                          false && (
+                          <div className="text-[11px] text-ink-900/40 mt-1">
+                            Ryan غير مفعّل في الباقة الحالية
+                          </div>
+                        )}
+
+                        <UsageWarning
+                          percent={
+                            usage.ai_messages
+                              .percent
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <div className="rounded-xl bg-sand-50 p-3">
-                  <div className="text-xs text-ink-900/45">
-                    الباقة
-                  </div>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() =>
+                      openEdit(
+                        org,
+                      )
+                    }
+                  >
+                    تعديل
+                  </Button>
 
-                  <div className="font-semibold mt-1">
-                    {org.plan_name ||
-                      'بدون باقة'}
-                  </div>
+                  <Button
+                    variant="ghost"
+                    className="flex-1"
+                    onClick={() =>
+                      toggleSuspension(
+                        org,
+                      )
+                    }
+                  >
+                    {org.suspended
+                      ? 'تفعيل'
+                      : 'تعليق'}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    className="text-red-600"
+                    onClick={() =>
+                      deleteOrganization(
+                        org,
+                      )
+                    }
+                  >
+                    حذف
+                  </Button>
                 </div>
-
-                <div className="rounded-xl bg-sand-50 p-3">
-                  <div className="text-xs text-ink-900/45">
-                    المستخدمون
-                  </div>
-
-                  <div className="font-semibold mt-1">
-                    {org.users_count}
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-sand-50 p-3">
-                  <div className="text-xs text-ink-900/45">
-                    العملاء
-                  </div>
-
-                  <div className="font-semibold mt-1">
-                    {org.customers_count}
-                  </div>
-                </div>
-
-                <div className="rounded-xl bg-sand-50 p-3">
-                  <div className="text-xs text-ink-900/45">
-                    Leads
-                  </div>
-
-                  <div className="font-semibold mt-1">
-                    {org.leads_count}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() =>
-                    openEdit(
-                      org,
-                    )
-                  }
-                >
-                  تعديل
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="flex-1"
-                  onClick={() =>
-                    toggleSuspension(
-                      org,
-                    )
-                  }
-                >
-                  {org.suspended
-                    ? 'تفعيل'
-                    : 'تعليق'}
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  className="text-red-600"
-                  onClick={() =>
-                    deleteOrganization(
-                      org,
-                    )
-                  }
-                >
-                  حذف
-                </Button>
-              </div>
-            </Card>
-          ),
+              </Card>
+            )
+          },
         )}
 
         {!filteredOrganizations.length && (
