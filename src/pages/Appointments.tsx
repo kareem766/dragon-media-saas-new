@@ -281,27 +281,24 @@ return (
             >
               العميل
             </label>
-            <div className="relative">
-              <select
-                id="appointment-customer"
-                value={form.customerId}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    customerId: e.target.value,
-                  })
-                }
-                className="w-full appearance-none rounded-xl border border-sand-200 bg-white px-3.5 py-3 pr-10 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
-              >
-                <option value="">اختر العميل</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
-              <UserIcon />
-            </div>
+            <select
+              id="appointment-customer"
+              value={form.customerId}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  customerId: e.target.value,
+                })
+              }
+              className="w-full appearance-none rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+            >
+              <option value="">اختر العميل</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label
@@ -310,27 +307,24 @@ return (
             >
               الخدمة
             </label>
-            <div className="relative">
-              <select
-                id="appointment-service"
-                value={form.serviceId}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    serviceId: e.target.value,
-                  })
-                }
-                className="w-full appearance-none rounded-xl border border-sand-200 bg-white px-3.5 py-3 pr-10 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
-              >
-                <option value="">اختر الخدمة</option>
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
-              <ServiceIcon />
-            </div>
+            <select
+              id="appointment-service"
+              value={form.serviceId}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  serviceId: e.target.value,
+                })
+              }
+              className="w-full appearance-none rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-950/5"
+            >
+              <option value="">اختر الخدمة</option>
+              {services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label
