@@ -33,10 +33,71 @@ const limitKeys = [
   { key: 'ai_messages', label: 'حد رسائل الذكاء الاصطناعي' },
 ]
 
-const emptyPlan = {
-  name: '', tagline: '', price: '0', yearlyPrice: '', currency: 'EGP', trial_days: '7', isPopular: false,
-  features: Object.fromEntries(featureKeys.map(f => [f.key, false])) as Record<string, boolean>,
-  limits: Object.fromEntries(limitKeys.map(l => [l.key, '0'])) as Record<string, string>,
+const createEmptyPlan = () => ({
+  name: '',
+  tagline: '',
+  price: '0',
+  yearlyPrice: '',
+  currency: 'EGP',
+  trial_days: '7',
+  isPopular: false,
+  features: Object.fromEntries(
+    featureKeys.map((feature) => [feature.key, false])
+  ) as Record<string, boolean>,
+  limits: Object.fromEntries(
+    limitKeys.map((limit) => [limit.key, '0'])
+  ) as Record<string, string>,
+})
+
+type PlanForm = ReturnType<typeof createEmptyPlan>
+
+function SkeletonCard() {
+  return (
+    <div className="animate-pulse rounded-2xl border border-ink-900/8 bg-white p-5">
+      <div className="h-5 w-28 rounded bg-ink-900/8" />
+      <div className="mt-4 h-8 w-36 rounded bg-ink-900/6" />
+      <div className="mt-5 space-y-2">
+        <div className="h-3 w-full rounded bg-ink-900/5" />
+        <div className="h-3 w-4/5 rounded bg-ink-900/5" />
+        <div className="h-3 w-3/5 rounded bg-ink-900/5" />
+      </div>
+      <div className="mt-6 h-10 w-full rounded-xl bg-ink-900/6" />
+    </div>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  placeholder,
+  min,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+  placeholder?: string
+  min?: string
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-semibold text-ink-950">
+        {label}
+      </label>
+
+      <input
+        type={type}
+        value={value}
+        min={min}
+        placeholder={placeholder}
+        dir={type === 'number' ? 'ltr' : 'rtl'}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-h-11 w-full rounded-xl border border-sand-200 bg-white px-3.5 py-2.5 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:ring-2 focus:ring-ink-950/5"
+      />
+    </div>
+  )
 }
 
 export default function AdminPlans() {
@@ -44,182 +105,683 @@ export default function AdminPlans() {
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState<any>(emptyPlan)
+  const [form, setForm] = useState<PlanForm>(createEmptyPlan())
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   const load = async () => {
-    if (!supabase) return
+    if (!supabase) {
+      setError('تعذر الاتصال بقاعدة البيانات.')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
-    const { data } = await supabase.from('plans').select('*').order('sort_order', { ascending: true })
-    if (data) setPlans(data as DBPlan[])
-    setLoading(false)
+    setError(null)
+
+    try {
+      const { data, error: loadError } = await supabase
+        .from('plans')
+        .select('*')
+        .order('sort_order', { ascending: true })
+
+      if (loadError) {
+        throw loadError
+      }
+
+      setPlans((data ?? []) as DBPlan[])
+    } catch (err) {
+      console.error(err)
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر تحميل الباقات.'
+      )
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    void load()
+  }, [])
 
-  const startEdit = (p: DBPlan) => {
-    setEditingId(p.id)
+  const startEdit = (plan: DBPlan) => {
+    setError(null)
+    setSuccess(null)
+    setEditingId(plan.id)
     setCreating(false)
+
     setForm({
-      name: p.name,
-      tagline: p.tagline || '',
-      price: String(p.price),
-      yearlyPrice: p.yearly_price ? String(p.yearly_price) : '',
-      currency: p.currency,
-      trial_days: String(p.trial_days),
-      isPopular: p.is_popular,
-      features: { ...Object.fromEntries(featureKeys.map(f => [f.key, false])), ...p.features },
-      limits: Object.fromEntries(limitKeys.map(l => [l.key, String(p.limits?.[l.key] ?? 0)])),
+      name: plan.name,
+      tagline: plan.tagline || '',
+      price: String(plan.price),
+      yearlyPrice:
+        plan.yearly_price !== null && plan.yearly_price !== undefined
+          ? String(plan.yearly_price)
+          : '',
+      currency: plan.currency,
+      trial_days: String(plan.trial_days),
+      isPopular: plan.is_popular,
+      features: {
+        ...Object.fromEntries(
+          featureKeys.map((feature) => [feature.key, false])
+        ),
+        ...(plan.features || {}),
+      },
+      limits: Object.fromEntries(
+        limitKeys.map((limit) => [
+          limit.key,
+          String(plan.limits?.[limit.key] ?? 0),
+        ])
+      ),
     })
   }
 
   const startCreate = () => {
+    setError(null)
+    setSuccess(null)
     setCreating(true)
     setEditingId(null)
-    setForm(emptyPlan)
+    setForm(createEmptyPlan())
   }
 
   const cancel = () => {
     setEditingId(null)
     setCreating(false)
+    setForm(createEmptyPlan())
   }
 
   const buildPayload = () => ({
-    name: form.name,
-    tagline: form.tagline || null,
+    name: form.name.trim(),
+    tagline: form.tagline.trim() || null,
     price: Number(form.price),
-    yearly_price: form.yearlyPrice ? Number(form.yearlyPrice) : null,
-    currency: form.currency,
+    yearly_price: form.yearlyPrice.trim()
+      ? Number(form.yearlyPrice)
+      : null,
+    currency: form.currency.trim() || 'EGP',
     billing_cycle: 'monthly',
     trial_days: Number(form.trial_days),
     is_popular: form.isPopular,
     features: form.features,
-    limits: Object.fromEntries(limitKeys.map(l => [l.key, Number(form.limits[l.key])])),
+    limits: Object.fromEntries(
+      limitKeys.map((limit) => [
+        limit.key,
+        Number(form.limits[limit.key]),
+      ])
+    ),
   })
 
-  const handleSave = async () => {
-    if (!supabase) return
-    setSaving(true)
-    if (editingId) {
-      await supabase.from('plans').update(buildPayload()).eq('id', editingId)
-    } else {
-      const maxOrder = plans.reduce((m, p) => Math.max(m, p.sort_order), 0)
-      await supabase.from('plans').insert({ ...buildPayload(), status: 'active', sort_order: maxOrder + 1 })
+  const validateForm = () => {
+    if (!form.name.trim()) {
+      return 'اسم الباقة مطلوب.'
     }
-    setSaving(false)
-    cancel()
-    load()
+
+    if (!Number.isFinite(Number(form.price)) || Number(form.price) < 0) {
+      return 'السعر الشهري يجب أن يكون رقمًا صحيحًا أو صفرًا.'
+    }
+
+    if (
+      form.yearlyPrice.trim() &&
+      (!Number.isFinite(Number(form.yearlyPrice)) ||
+        Number(form.yearlyPrice) < 0)
+    ) {
+      return 'السعر السنوي يجب أن يكون رقمًا صحيحًا أو صفرًا.'
+    }
+
+    if (
+      !Number.isFinite(Number(form.trial_days)) ||
+      Number(form.trial_days) < 0
+    ) {
+      return 'أيام التجربة يجب أن تكون رقمًا صحيحًا أو صفرًا.'
+    }
+
+    for (const limit of limitKeys) {
+      const value = Number(form.limits[limit.key])
+
+      if (!Number.isFinite(value) || value < 0) {
+        return `${limit.label} يجب أن يكون صفرًا أو رقمًا موجبًا.`
+      }
+    }
+
+    return null
   }
 
-  const toggleStatus = async (p: DBPlan) => {
+  const handleSave = async () => {
+    if (!supabase || saving) return
+
+    setError(null)
+    setSuccess(null)
+
+    const validationError = validateForm()
+
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const payload = buildPayload()
+
+      if (editingId) {
+        const { error: updateError } = await supabase
+          .from('plans')
+          .update(payload)
+          .eq('id', editingId)
+
+        if (updateError) {
+          throw updateError
+        }
+
+        setSuccess('تم تحديث الباقة بنجاح.')
+      } else {
+        const maxOrder = plans.reduce(
+          (max, plan) => Math.max(max, plan.sort_order),
+          0
+        )
+
+        const { error: insertError } = await supabase
+          .from('plans')
+          .insert({
+            ...payload,
+            status: 'active',
+            sort_order: maxOrder + 1,
+          })
+
+        if (insertError) {
+          throw insertError
+        }
+
+        setSuccess('تم إنشاء الباقة بنجاح.')
+      }
+
+      cancel()
+      await load()
+    } catch (err) {
+      console.error(err)
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'حدث خطأ أثناء حفظ الباقة.'
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleStatus = async (plan: DBPlan) => {
     if (!supabase) return
-    await supabase.from('plans').update({ status: p.status === 'active' ? 'disabled' : 'active' }).eq('id', p.id)
-    load()
-  }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 border-4 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
-      </div>
-    )
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const nextStatus =
+        plan.status === 'active' ? 'disabled' : 'active'
+
+      const { error: updateError } = await supabase
+        .from('plans')
+        .update({ status: nextStatus })
+        .eq('id', plan.id)
+
+      if (updateError) {
+        throw updateError
+      }
+
+      setSuccess(
+        nextStatus === 'active'
+          ? `تم تفعيل باقة ${plan.name}.`
+          : `تم إيقاف باقة ${plan.name}.`
+      )
+
+      await load()
+    } catch (err) {
+      console.error(err)
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'تعذر تغيير حالة الباقة.'
+      )
+    }
   }
 
   const isEditing = editingId !== null || creating
 
+  if (loading) {
+    return (
+      <div
+        dir="rtl"
+        className="space-y-6 p-1 sm:p-2"
+        aria-busy="true"
+      >
+        <div className="animate-pulse space-y-2">
+          <div className="h-7 w-36 rounded-lg bg-ink-900/8" />
+          <div className="h-4 w-72 max-w-full rounded-lg bg-ink-900/6" />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <SkeletonCard key={index} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-xl font-bold text-ink-950">إدارة الباقات</h2>
+    <div dir="rtl" className="space-y-6 p-1 sm:p-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-ink-950 sm:text-2xl">
+            إدارة الباقات
+          </h2>
+
+          <p className="mt-1 text-sm leading-6 text-ink-900/50">
+            إدارة الأسعار والمميزات والحدود التي تعتمد عليها اشتراكات العملاء.
+          </p>
+        </div>
+
         {!isEditing && (
           <Button onClick={startCreate}>
-            <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> باقة جديدة</span>
+            <span className="inline-flex items-center gap-2">
+              <IconPlus className="h-4 w-4" />
+              باقة جديدة
+            </span>
           </Button>
         )}
       </div>
 
+      {error && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-500/15 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{error}</span>
+
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="w-fit font-semibold underline underline-offset-4"
+            >
+              إعادة المحاولة
+            </button>
+          </div>
+        </div>
+      )}
+
+      {success && (
+        <div
+          role="status"
+          className="rounded-2xl border border-emerald-500/15 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
+        >
+          {success}
+        </div>
+      )}
+
       {isEditing && (
-        <Card className="p-6">
-          <h3 className="font-bold text-ink-950 mb-4">{editingId ? 'تعديل الباقة' : 'باقة جديدة'}</h3>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-ink-900/50">اسم الباقة</label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
+        <Card className="overflow-hidden border border-ink-900/8 p-0 shadow-sm">
+          <div className="border-b border-ink-900/8 bg-white px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-lg font-bold text-ink-950">
+                {editingId ? 'تعديل الباقة' : 'إنشاء باقة جديدة'}
+              </h3>
+
+              <p className="text-sm text-ink-900/50">
+                أدخل بيانات الباقة وحدد المميزات والحدود المسموحة لها.
+              </p>
             </div>
-            <div>
-              <label className="text-xs text-ink-900/50">وصف مختصر (Tagline)</label>
-              <input value={form.tagline} onChange={e => setForm({ ...form, tagline: e.target.value })} placeholder="مثال: الأنسب للشركات الصغيرة" className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
-            </div>
-            <div>
-              <label className="text-xs text-ink-900/50">السعر الشهري (ج.م)</label>
-              <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
-            </div>
-            <div>
-              <label className="text-xs text-ink-900/50">السعر السنوي الإجمالي (ج.م) — اختياري</label>
-              <input type="number" value={form.yearlyPrice} onChange={e => setForm({ ...form, yearlyPrice: e.target.value })} placeholder="مثلًا 9600 بدل 12x800" className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
-            </div>
-            <div>
-              <label className="text-xs text-ink-900/50">أيام التجربة المجانية</label>
-              <input type="number" value={form.trial_days} onChange={e => setForm({ ...form, trial_days: e.target.value })} className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
-            </div>
-            <label className="flex items-center gap-2 mt-6">
-              <input type="checkbox" checked={form.isPopular} onChange={e => setForm({ ...form, isPopular: e.target.checked })} className="w-4 h-4 accent-ink-900" />
-              <span className="text-sm text-ink-900">الباقة الأكثر شعبية</span>
-            </label>
           </div>
 
-          <div className="mt-5">
-            <div className="text-xs text-ink-900/50 mb-2">المميزات المتاحة</div>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {featureKeys.map(f => (
-                <label key={f.key} className="flex items-center justify-between border border-sand-200 rounded-lg px-3.5 py-2.5">
-                  <span className="text-sm text-ink-900">{f.label}</span>
-                  <input type="checkbox" checked={Boolean(form.features[f.key])} onChange={e => setForm({ ...form, features: { ...form.features, [f.key]: e.target.checked } })} className="w-4 h-4 accent-ink-900" />
+          <div className="space-y-7 bg-sand-50/40 p-5 sm:p-6">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label="اسم الباقة"
+                value={form.name}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    name: value,
+                  }))
+                }
+                placeholder="مثال: Professional"
+              />
+
+              <Field
+                label="وصف مختصر"
+                value={form.tagline}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    tagline: value,
+                  }))
+                }
+                placeholder="الأنسب للشركات الصغيرة والمتوسطة"
+              />
+
+              <Field
+                label="السعر الشهري (ج.م)"
+                value={form.price}
+                type="number"
+                min="0"
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    price: value,
+                  }))
+                }
+              />
+
+              <Field
+                label="السعر السنوي الإجمالي (ج.م) - اختياري"
+                value={form.yearlyPrice}
+                type="number"
+                min="0"
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    yearlyPrice: value,
+                  }))
+                }
+                placeholder="مثال: 9600"
+              />
+
+              <Field
+                label="أيام التجربة المجانية"
+                value={form.trial_days}
+                type="number"
+                min="0"
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    trial_days: value,
+                  }))
+                }
+              />
+
+              <div className="flex items-end">
+                <label className="flex min-h-11 w-full cursor-pointer items-center justify-between rounded-xl border border-sand-200 bg-white px-4 py-2.5 transition hover:border-ink-900/20">
+                  <span className="text-sm font-semibold text-ink-900">
+                    الباقة الأكثر شعبية
+                  </span>
+
+                  <input
+                    type="checkbox"
+                    checked={form.isPopular}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        isPopular: event.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 accent-ink-950"
+                  />
                 </label>
-              ))}
+              </div>
             </div>
-          </div>
 
-          <div className="mt-5">
-            <div className="text-xs text-ink-900/50 mb-2">الحدود</div>
-            <div className="grid sm:grid-cols-3 gap-3">
-              {limitKeys.map(l => (
-                <div key={l.key}>
-                  <label className="text-xs text-ink-900/50">{l.label}</label>
-                  <input type="number" value={form.limits[l.key]} onChange={e => setForm({ ...form, limits: { ...form.limits, [l.key]: e.target.value } })} className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
-                </div>
-              ))}
+            <div>
+              <div className="mb-3">
+                <h4 className="text-sm font-bold text-ink-950">
+                  المميزات المتاحة
+                </h4>
+
+                <p className="mt-1 text-xs text-ink-900/45">
+                  حدد المميزات التي سيحصل عليها العميل ضمن هذه الباقة.
+                </p>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                {featureKeys.map((feature) => (
+                  <label
+                    key={feature.key}
+                    className="flex cursor-pointer items-center justify-between rounded-xl border border-sand-200 bg-white px-4 py-3 transition hover:border-ink-900/15"
+                  >
+                    <span className="text-sm text-ink-900">
+                      {feature.label}
+                    </span>
+
+                    <input
+                      type="checkbox"
+                      checked={Boolean(form.features[feature.key])}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          features: {
+                            ...current.features,
+                            [feature.key]: event.target.checked,
+                          },
+                        }))
+                      }
+                      className="h-4 w-4 accent-ink-950"
+                    />
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="flex gap-2 mt-6">
-            <Button onClick={handleSave} disabled={saving}>{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
-            <Button variant="secondary" onClick={cancel}>إلغاء</Button>
+            <div>
+              <div className="mb-3">
+                <h4 className="text-sm font-bold text-ink-950">
+                  الحدود
+                </h4>
+
+                <p className="mt-1 text-xs text-ink-900/45">
+                  حدد الحد الأقصى لكل مورد داخل الباقة.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                {limitKeys.map((limit) => (
+                  <Field
+                    key={limit.key}
+                    label={limit.label}
+                    value={form.limits[limit.key]}
+                    type="number"
+                    min="0"
+                    onChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        limits: {
+                          ...current.limits,
+                          [limit.key]: value,
+                        },
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-ink-900/8 pt-5 sm:flex-row sm:justify-end">
+              <Button
+                variant="secondary"
+                onClick={cancel}
+                disabled={saving}
+              >
+                إلغاء
+              </Button>
+
+              <Button
+                onClick={() => void handleSave()}
+                disabled={saving}
+              >
+                {saving ? 'جاري الحفظ...' : 'حفظ الباقة'}
+              </Button>
+            </div>
           </div>
         </Card>
       )}
 
-      {!isEditing && (
-        <div className="grid sm:grid-cols-3 gap-4">
-          {plans.map(p => (
-            <Card key={p.id} className="p-5 flex flex-col">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-ink-950">{p.name}</h3>
-                <div className="flex gap-1.5">
-                  {p.is_popular && <Badge tone="gold">مميزة</Badge>}
-                  <Badge tone={p.status === 'active' ? 'success' : 'default'}>{p.status === 'active' ? 'مفعّلة' : 'موقوفة'}</Badge>
+      {!isEditing && plans.length === 0 && (
+        <Card className="border border-dashed border-ink-900/15 p-8 text-center sm:p-12">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sand-100 text-ink-900/55">
+            <IconPlus className="h-5 w-5" />
+          </div>
+
+          <h3 className="mt-4 text-base font-bold text-ink-950">
+            لا توجد باقات بعد
+          </h3>
+
+          <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-ink-900/50">
+            أنشئ أول باقة لتحديد الأسعار والمميزات والحدود الخاصة بالاشتراكات.
+          </p>
+
+          <div className="mt-5">
+            <Button onClick={startCreate}>
+              إنشاء أول باقة
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {!isEditing && plans.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {plans.map((plan) => (
+            <Card
+              key={plan.id}
+              className="flex flex-col overflow-hidden border border-ink-900/8 p-0 transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="border-b border-ink-900/8 bg-white p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-bold text-ink-950">
+                      {plan.name}
+                    </h3>
+
+                    {plan.tagline && (
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-900/50">
+                        {plan.tagline}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                    {plan.is_popular && (
+                      <Badge tone="gold">مميزة</Badge>
+                    )}
+
+                    <Badge
+                      tone={
+                        plan.status === 'active'
+                          ? 'success'
+                          : 'default'
+                      }
+                    >
+                      {plan.status === 'active'
+                        ? 'مفعّلة'
+                        : 'موقوفة'}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-bold tracking-tight text-ink-950">
+                      {Number(plan.price).toLocaleString('ar-EG')}
+                    </span>
+
+                    <span className="text-xs font-medium text-ink-900/50">
+                      {plan.currency} / شهريًا
+                    </span>
+                  </div>
+
+                  {plan.yearly_price !== null &&
+                    plan.yearly_price !== undefined && (
+                      <p className="mt-1 text-xs text-ink-900/45">
+                        سنويًا:{' '}
+                        {Number(plan.yearly_price).toLocaleString(
+                          'ar-EG'
+                        )}{' '}
+                        {plan.currency}
+                      </p>
+                    )}
                 </div>
               </div>
-              <div className="text-xl font-bold text-ink-950 mt-2">{p.price.toLocaleString('ar-EG')} {p.currency}</div>
-              {p.yearly_price && <div className="text-xs text-ink-900/45">سنويًا: {p.yearly_price.toLocaleString('ar-EG')} {p.currency}</div>}
-              <ul className="text-xs text-ink-900/55 mt-3 space-y-1 flex-1">
-                {Object.entries(p.features).filter(([, v]) => v).map(([k]) => (
-                  <li key={k}>✓ {featureKeys.find(f => f.key === k)?.label ?? k}</li>
-                ))}
-              </ul>
-              <div className="flex gap-2 mt-4">
-                <Button variant="secondary" onClick={() => startEdit(p)}>تعديل</Button>
-                <Button variant="secondary" onClick={() => toggleStatus(p)}>{p.status === 'active' ? 'إيقاف' : 'تفعيل'}</Button>
+
+              <div className="flex flex-1 flex-col bg-sand-50/40 p-5">
+                <div>
+                  <h4 className="text-xs font-bold text-ink-900/55">
+                    المميزات
+                  </h4>
+
+                  <ul className="mt-3 space-y-2">
+                    {Object.entries(plan.features || {})
+                      .filter(([, enabled]) => Boolean(enabled))
+                      .map(([key]) => (
+                        <li
+                          key={key}
+                          className="flex items-start gap-2 text-xs leading-5 text-ink-900/65"
+                        >
+                          <span className="mt-0.5 font-bold text-emerald-600">
+                            ✓
+                          </span>
+
+                          <span>
+                            {featureKeys.find(
+                              (feature) => feature.key === key
+                            )?.label ?? key}
+                          </span>
+                        </li>
+                      ))}
+
+                    {!Object.values(plan.features || {}).some(
+                      Boolean
+                    ) && (
+                      <li className="text-xs text-ink-900/40">
+                        لا توجد مميزات محددة
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                <div className="mt-5 border-t border-ink-900/8 pt-4">
+                  <h4 className="text-xs font-bold text-ink-900/55">
+                    الحدود
+                  </h4>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {limitKeys.map((limit) => (
+                      <div
+                        key={limit.key}
+                        className="rounded-xl border border-ink-900/6 bg-white px-3 py-2"
+                      >
+                        <div className="truncate text-[10px] text-ink-900/45">
+                          {limit.label}
+                        </div>
+
+                        <div className="mt-0.5 text-sm font-bold text-ink-950">
+                          {Number(
+                            plan.limits?.[limit.key] ?? 0
+                          ).toLocaleString('ar-EG')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => startEdit(plan)}
+                  >
+                    تعديل
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    onClick={() => void toggleStatus(plan)}
+                  >
+                    {plan.status === 'active'
+                      ? 'إيقاف'
+                      : 'تفعيل'}
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
