@@ -49,6 +49,8 @@ import Billing from './pages/Billing'
 import Reports from './pages/Reports'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 export default function App() {
   return (
@@ -68,6 +70,16 @@ export default function App() {
               element={<Login />}
             />
 
+            <Route
+              path="/forgot-password"
+              element={<ForgotPassword />}
+            />
+
+            <Route
+              path="/reset-password"
+              element={<ResetPassword />}
+            />
+            
             {/* Legal / support */}
             <Route
               path="/privacy"
