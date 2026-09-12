@@ -5,6 +5,7 @@ import { ToastProvider } from './lib/ToastContext'
 
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
+import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
 
 import Login from './pages/Login'
@@ -67,49 +68,186 @@ export default function App() {
               }
             >
               <Route path="/" element={<Dashboard />} />
-              <Route path="/crm" element={<CRM />} />
+
+              <Route
+                path="/crm"
+                element={
+                  <FeatureRoute
+                    feature="crm"
+                    featureName="إدارة العملاء CRM"
+                  >
+                    <CRM />
+                  </FeatureRoute>
+                }
+              />
+
               <Route
                 path="/crm/customer/:id"
-                element={<CustomerDetail />}
+                element={
+                  <FeatureRoute
+                    feature="crm"
+                    featureName="إدارة العملاء CRM"
+                  >
+                    <CustomerDetail />
+                  </FeatureRoute>
+                }
               />
-              <Route path="/pipeline" element={<Pipeline />} />
+
+              <Route
+                path="/pipeline"
+                element={
+                  <FeatureRoute
+                    feature="crm"
+                    featureName="إدارة العملاء CRM"
+                  >
+                    <Pipeline />
+                  </FeatureRoute>
+                }
+              />
+
               <Route
                 path="/pipeline/deal/:id"
-                element={<DealDetail />}
+                element={
+                  <FeatureRoute
+                    feature="crm"
+                    featureName="إدارة العملاء CRM"
+                  >
+                    <DealDetail />
+                  </FeatureRoute>
+                }
               />
-              <Route path="/services" element={<Services />} />
-              <Route path="/campaigns" element={<Campaigns />} />
-              <Route path="/inbox" element={<Inbox />} />
-              <Route path="/ryan" element={<Ryan />} />
+
+              <Route
+                path="/services"
+                element={<Services />}
+              />
+
+              <Route
+                path="/campaigns"
+                element={
+                  <FeatureRoute
+                    feature="campaigns"
+                    featureName="الحملات التسويقية"
+                  >
+                    <Campaigns />
+                  </FeatureRoute>
+                }
+              />
+
+              <Route
+                path="/inbox"
+                element={<Inbox />}
+              />
+
+              <Route
+                path="/ryan"
+                element={
+                  <FeatureRoute
+                    feature="ryan"
+                    featureName="Ryan الذكي"
+                  >
+                    <Ryan />
+                  </FeatureRoute>
+                }
+              />
+
               <Route
                 path="/ryan/knowledge"
-                element={<KnowledgeBase />}
+                element={
+                  <FeatureRoute
+                    feature="ryan"
+                    featureName="Ryan الذكي"
+                  >
+                    <KnowledgeBase />
+                  </FeatureRoute>
+                }
               />
+
               <Route
                 path="/ryan/handoff"
-                element={<HandoffRequests />}
+                element={
+                  <FeatureRoute
+                    feature="ryan"
+                    featureName="Ryan الذكي"
+                  >
+                    <HandoffRequests />
+                  </FeatureRoute>
+                }
               />
+
               <Route
                 path="/automations"
-                element={<Automations />}
+                element={
+                  <FeatureRoute
+                    feature="automations"
+                    featureName="الأتمتة"
+                  >
+                    <Automations />
+                  </FeatureRoute>
+                }
               />
-              <Route path="/tickets" element={<Tickets />} />
-              <Route path="/search" element={<Search />} />
-              <Route path="/plans" element={<Plans />} />
+
+              <Route
+                path="/tickets"
+                element={<Tickets />}
+              />
+
+              <Route
+                path="/search"
+                element={<Search />}
+              />
+
+              <Route
+                path="/plans"
+                element={<Plans />}
+              />
+
               <Route
                 path="/billing/pay"
                 element={<PaymentRequest />}
               />
-              <Route path="/tasks" element={<Tasks />} />
+
+              <Route
+                path="/tasks"
+                element={<Tasks />}
+              />
+
               <Route
                 path="/appointments"
                 element={<Appointments />}
               />
-              <Route path="/billing" element={<Billing />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="/account" element={<Account />} />
-              <Route path="/settings" element={<Settings />} />
+
+              <Route
+                path="/billing"
+                element={<Billing />}
+              />
+
+              <Route
+                path="/reports"
+                element={
+                  <FeatureRoute
+                    feature="advanced_reports"
+                    featureName="التقارير المتقدمة"
+                  >
+                    <Reports />
+                  </FeatureRoute>
+                }
+              />
+
+              <Route
+                path="/users"
+                element={<Users />}
+              />
+
+              <Route
+                path="/account"
+                element={<Account />}
+              />
+
+              <Route
+                path="/settings"
+                element={<Settings />}
+              />
 
               <Route
                 path="/admin"
