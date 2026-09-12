@@ -172,12 +172,12 @@ function NotificationSkeleton() {
           key={item}
           className="flex gap-3 border-b border-ink-50 px-4 py-4 last:border-b-0"
         >
-          <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-ink-100 mt-1.5 animate-pulse" />
+          <div className="mt-1.5 h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-ink-100" />
 
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-3.5 w-2/3 rounded bg-ink-100 animate-pulse" />
-            <div className="h-3 w-full rounded bg-ink-50 animate-pulse" />
-            <div className="h-3 w-1/3 rounded bg-ink-50 animate-pulse" />
+            <div className="h-3.5 w-2/3 animate-pulse rounded bg-ink-100" />
+            <div className="h-3 w-full animate-pulse rounded bg-ink-50" />
+            <div className="h-3 w-1/3 animate-pulse rounded bg-ink-50" />
           </div>
         </div>
       ))}
@@ -304,9 +304,11 @@ export default function Topbar({
         'Failed to load notifications:',
         error
       )
+
       setNotificationsError(
         'تعذر تحميل الإشعارات'
       )
+
       setNotifications([])
     } else {
       setNotifications(
@@ -426,6 +428,7 @@ export default function Topbar({
       'mousedown',
       handleOutsideClick
     )
+
     document.addEventListener(
       'keydown',
       handleEscape
@@ -436,6 +439,7 @@ export default function Topbar({
         'mousedown',
         handleOutsideClick
       )
+
       document.removeEventListener(
         'keydown',
         handleEscape
@@ -551,6 +555,7 @@ export default function Topbar({
 
     try {
       await signOut()
+
       navigate('/login', {
         replace: true,
       })
@@ -610,22 +615,22 @@ export default function Topbar({
         'supports-[backdrop-filter]:bg-sand-50/80',
       ].join(' ')}
     >
-      <div className="mx-auto flex min-h-[68px] sm:min-h-[76px] w-full max-w-[1600px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-[68px] w-full max-w-[1600px] items-center justify-between gap-3 px-4 py-3 sm:min-h-[76px] sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           {onMenuClick && (
             <button
               type="button"
               onClick={onMenuClick}
               className={[
-                'inline-flex h-10 w-10 sm:h-11 sm:w-11',
-                'shrink-0 items-center justify-center',
+                'inline-flex h-10 w-10 shrink-0',
+                'items-center justify-center',
                 'rounded-xl',
                 'border border-ink-100',
                 'bg-white',
                 'text-ink-700',
                 'shadow-sm',
                 'transition-all duration-200',
-                'hover:bg-ink-50 hover:border-ink-200',
+                'hover:border-ink-200 hover:bg-ink-50',
                 'active:scale-[0.97]',
                 'lg:hidden',
               ].join(' ')}
@@ -649,7 +654,7 @@ export default function Topbar({
         <div className="flex shrink-0 items-center gap-2">
           <div
             ref={notificationsRef}
-            className="relative"
+            className="relative z-40"
           >
             <button
               type="button"
@@ -666,7 +671,7 @@ export default function Topbar({
                 'active:scale-[0.97]',
                 notificationsOpen
                   ? 'border-gold-300 bg-gold-50 text-gold-700'
-                  : 'border-ink-100 text-ink-700 hover:bg-ink-50 hover:border-ink-200',
+                  : 'border-ink-100 text-ink-700 hover:border-ink-200 hover:bg-ink-50',
               ].join(' ')}
               aria-label="الإشعارات"
               aria-expanded={notificationsOpen}
@@ -692,9 +697,15 @@ export default function Topbar({
             {notificationsOpen && (
               <div
                 className={[
-                  'absolute right-0 sm:left-0 sm:right-auto mt-3',
-                  'w-[calc(100vw-16px)] max-w-[390px]',
-                  'sm:w-[min(390px,calc(100vw-24px))]',
+                  /*
+                   * Mobile:
+                   * Use fixed positioning so the notification panel
+                   * can never overflow outside the viewport.
+                   */
+                  'fixed left-3 right-3 top-[76px]',
+                  'w-auto max-w-none',
+                  'sm:absolute sm:left-0 sm:right-auto sm:top-auto sm:mt-3',
+                  'sm:w-[min(390px,calc(100vw-24px))] sm:max-w-[390px]',
                   'overflow-hidden rounded-2xl',
                   'border border-ink-100',
                   'bg-white',
@@ -835,7 +846,7 @@ export default function Topbar({
                                 </div>
 
                                 {notificationText && (
-                                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-500 break-words">
+                                  <p className="mt-1 line-clamp-2 break-words text-xs leading-5 text-ink-500">
                                     {notificationText}
                                   </p>
                                 )}
@@ -851,7 +862,10 @@ export default function Topbar({
             )}
           </div>
 
-          <div ref={accountRef} className="relative">
+          <div
+            ref={accountRef}
+            className="relative z-40"
+          >
             <button
               type="button"
               onClick={toggleAccount}
@@ -862,7 +876,7 @@ export default function Topbar({
                 'px-1.5 py-1.5 sm:px-2.5',
                 'shadow-sm',
                 'transition-all duration-200',
-                'hover:bg-ink-50 hover:border-ink-200',
+                'hover:border-ink-200 hover:bg-ink-50',
                 'active:scale-[0.99]',
               ].join(' ')}
               aria-expanded={accountOpen}
@@ -873,10 +887,10 @@ export default function Topbar({
                 <img
                   src={avatarUrl}
                   alt={displayName}
-                  className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover ring-2 ring-white"
+                  className="h-8 w-8 rounded-full object-cover ring-2 ring-white sm:h-9 sm:w-9"
                 />
               ) : (
-                <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-gradient-to-br from-gold-100 to-gold-50 text-sm font-bold text-gold-700 ring-1 ring-gold-200/70">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-gold-100 to-gold-50 text-sm font-bold text-gold-700 ring-1 ring-gold-200/70 sm:h-9 sm:w-9">
                   {initial}
                 </div>
               )}
@@ -910,13 +924,13 @@ export default function Topbar({
                 role="menu"
                 aria-label="قائمة الحساب"
               >
-                <div className="bg-gradient-to-br from-ink-50/80 to-white border-b border-ink-100 px-4 py-4">
+                <div className="border-b border-ink-100 bg-gradient-to-br from-ink-50/80 to-white px-4 py-4">
                   <div className="flex items-center gap-3">
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
                         alt={displayName}
-                        className="h-11 w-11 rounded-full object-cover ring-2 ring-white shadow-sm"
+                        className="h-11 w-11 rounded-full object-cover shadow-sm ring-2 ring-white"
                       />
                     ) : (
                       <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-100 to-gold-50 font-bold text-gold-700 ring-1 ring-gold-200/70">
