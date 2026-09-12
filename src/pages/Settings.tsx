@@ -115,7 +115,7 @@ export default function Settings() {
     error: orgError,
   } = useOrganization()
 
-  const [active, setActive] = useState(tabs[0])
+  const [active, setActive] = useState('إعدادات واتساب')
 
   const [org, setOrg] =
     useState<OrgData>(initialOrg)
