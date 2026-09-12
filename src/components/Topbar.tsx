@@ -611,7 +611,6 @@ export default function Topbar({
       ].join(' ')}
     >
       <div className="mx-auto flex min-h-[68px] sm:min-h-[76px] w-full max-w-[1600px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        {/* Page title */}
         <div className="flex min-w-0 items-center gap-3">
           {onMenuClick && (
             <button
@@ -647,9 +646,7 @@ export default function Topbar({
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex shrink-0 items-center gap-2">
-          {/* Notifications */}
           <div
             ref={notificationsRef}
             className="relative"
@@ -695,8 +692,9 @@ export default function Topbar({
             {notificationsOpen && (
               <div
                 className={[
-                  'absolute left-0 mt-3',
-                  'w-[min(390px,calc(100vw-24px))]',
+                  'absolute right-0 sm:left-0 sm:right-auto mt-3',
+                  'w-[calc(100vw-16px)] max-w-[390px]',
+                  'sm:w-[min(390px,calc(100vw-24px))]',
                   'overflow-hidden rounded-2xl',
                   'border border-ink-100',
                   'bg-white',
@@ -706,9 +704,9 @@ export default function Topbar({
                 role="dialog"
                 aria-label="الإشعارات"
               >
-                <div className="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3.5">
+                <div className="flex flex-col gap-3 border-b border-ink-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold text-ink-950">
                         الإشعارات
                       </h3>
@@ -721,7 +719,7 @@ export default function Topbar({
                     </div>
 
                     {unreadCount > 0 && (
-                      <p className="mt-1 text-[11px] text-ink-500">
+                      <p className="mt-1 text-[11px] leading-5 text-ink-500">
                         لديك إشعارات تحتاج إلى مراجعة
                       </p>
                     )}
@@ -731,14 +729,14 @@ export default function Topbar({
                     <button
                       type="button"
                       onClick={markAllAsRead}
-                      className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-gold-600 transition-colors hover:bg-gold-50 hover:text-gold-700"
+                      className="inline-flex min-h-9 w-full shrink-0 items-center justify-center rounded-lg bg-gold-50 px-3 py-2 text-[11px] font-semibold text-gold-700 transition-colors hover:bg-gold-100 sm:w-auto"
                     >
                       تحديد الكل كمقروء
                     </button>
                   )}
                 </div>
 
-                <div className="max-h-[min(430px,65vh)] overflow-y-auto">
+                <div className="max-h-[min(430px,65vh)] overflow-y-auto overscroll-contain">
                   {notificationsLoading ? (
                     <NotificationSkeleton />
                   ) : notificationsError ? (
@@ -816,10 +814,11 @@ export default function Topbar({
                               />
 
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-2">
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
                                   <p
                                     className={[
-                                      'min-w-0 truncate text-sm',
+                                      'min-w-0 text-sm leading-5',
+                                      'break-words',
                                       notification.is_read
                                         ? 'font-medium text-ink-700'
                                         : 'font-bold text-ink-950',
@@ -828,7 +827,7 @@ export default function Topbar({
                                     {notification.title}
                                   </p>
 
-                                  <span className="shrink-0 text-[10px] text-ink-400">
+                                  <span className="shrink-0 text-[10px] leading-4 text-ink-400">
                                     {formatNotificationDate(
                                       notification.created_at
                                     )}
@@ -836,7 +835,7 @@ export default function Topbar({
                                 </div>
 
                                 {notificationText && (
-                                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-500">
+                                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-500 break-words">
                                     {notificationText}
                                   </p>
                                 )}
@@ -852,7 +851,6 @@ export default function Topbar({
             )}
           </div>
 
-          {/* Account */}
           <div ref={accountRef} className="relative">
             <button
               type="button"
