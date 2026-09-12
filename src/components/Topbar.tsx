@@ -26,26 +26,194 @@ interface UserProfile {
   is_platform_admin: boolean | null
 }
 
-export default function Topbar({ title, onMenuClick }: TopbarProps) {
+function MenuIcon() {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </svg>
+  )
+}
+
+function BellIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+
+function UserIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  )
+}
+
+function SettingsIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.6v-.1a2 2 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H4v-2.6h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9-.3l-.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1v2.6h-.1a1.7 1.7 0 0 0-1.6 1Z" />
+    </svg>
+  )
+}
+
+function LogoutIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+    </svg>
+  )
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={[
+        'transition-transform duration-200',
+        open ? 'rotate-180' : '',
+      ].join(' ')}
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
+
+function NotificationEmptyState() {
+  return (
+    <div className="px-5 py-10 text-center">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-ink-50 text-ink-400">
+        <BellIcon />
+      </div>
+
+      <p className="text-sm font-semibold text-ink-700">
+        لا توجد إشعارات
+      </p>
+
+      <p className="mt-1 text-xs leading-5 text-ink-400">
+        ستظهر الإشعارات الجديدة هنا
+      </p>
+    </div>
+  )
+}
+
+function NotificationSkeleton() {
+  return (
+    <div className="space-y-0">
+      {[1, 2, 3].map((item) => (
+        <div
+          key={item}
+          className="flex gap-3 border-b border-ink-50 px-4 py-4 last:border-b-0"
+        >
+          <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-ink-100 mt-1.5 animate-pulse" />
+
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3.5 w-2/3 rounded bg-ink-100 animate-pulse" />
+            <div className="h-3 w-full rounded bg-ink-50 animate-pulse" />
+            <div className="h-3 w-1/3 rounded bg-ink-50 animate-pulse" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function Topbar({
+  title,
+  onMenuClick,
+}: TopbarProps) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
   const [accountOpen, setAccountOpen] = useState(false)
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] =
+    useState(false)
 
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [notificationsLoading, setNotificationsLoading] = useState(false)
-  const [notificationsError, setNotificationsError] = useState<string | null>(
-    null
-  )
+  const [notifications, setNotifications] = useState<
+    NotificationItem[]
+  >([])
+  const [notificationsLoading, setNotificationsLoading] =
+    useState(false)
+  const [notificationsError, setNotificationsError] =
+    useState<string | null>(null)
 
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [profileLoading, setProfileLoading] = useState(false)
+  const [profile, setProfile] =
+    useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] =
+    useState(false)
 
   const [loggingOut, setLoggingOut] = useState(false)
 
   const accountRef = useRef<HTMLDivElement | null>(null)
-  const notificationsRef = useRef<HTMLDivElement | null>(null)
+  const notificationsRef =
+    useRef<HTMLDivElement | null>(null)
 
   const authDisplayName =
     user?.user_metadata?.full_name ||
@@ -53,9 +221,11 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
     user?.email?.split('@')[0] ||
     'المستخدم'
 
-  const displayName = profile?.full_name?.trim() || authDisplayName
+  const displayName =
+    profile?.full_name?.trim() || authDisplayName
 
-  const email = profile?.email?.trim() || user?.email || ''
+  const email =
+    profile?.email?.trim() || user?.email || ''
 
   const rawRole = profile?.role || ''
 
@@ -87,15 +257,22 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
 
     const { data, error } = await supabase
       .from('users')
-      .select('full_name, email, role, is_platform_admin')
+      .select(
+        'full_name, email, role, is_platform_admin'
+      )
       .eq('id', user.id)
       .maybeSingle()
 
     if (error) {
-      console.error('Failed to load user profile:', error)
+      console.error(
+        'Failed to load user profile:',
+        error
+      )
       setProfile(null)
     } else {
-      setProfile((data || null) as UserProfile | null)
+      setProfile(
+        (data || null) as UserProfile | null
+      )
     }
 
     setProfileLoading(false)
@@ -117,15 +294,24 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
         'id, title, message, body, link, type, is_read, created_at'
       )
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('created_at', {
+        ascending: false,
+      })
       .limit(20)
 
     if (error) {
-      console.error('Failed to load notifications:', error)
-      setNotificationsError('تعذر تحميل الإشعارات')
+      console.error(
+        'Failed to load notifications:',
+        error
+      )
+      setNotificationsError(
+        'تعذر تحميل الإشعارات'
+      )
       setNotifications([])
     } else {
-      setNotifications((data || []) as NotificationItem[])
+      setNotifications(
+        (data || []) as NotificationItem[]
+      )
     }
 
     setNotificationsLoading(false)
@@ -154,18 +340,23 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          const notification = payload.new as NotificationItem
+          const notification =
+            payload.new as NotificationItem
 
           setNotifications((current) => {
             const exists = current.some(
-              (item) => item.id === notification.id
+              (item) =>
+                item.id === notification.id
             )
 
             if (exists) {
               return current
             }
 
-            return [notification, ...current].slice(0, 20)
+            return [
+              notification,
+              ...current,
+            ].slice(0, 20)
           })
         }
       )
@@ -178,11 +369,13 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          const updatedNotification = payload.new as NotificationItem
+          const updatedNotification =
+            payload.new as NotificationItem
 
           setNotifications((current) =>
             current.map((item) =>
-              item.id === updatedNotification.id
+              item.id ===
+              updatedNotification.id
                 ? {
                     ...item,
                     ...updatedNotification,
@@ -200,7 +393,9 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
   }, [user?.id])
 
   useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
+    const handleOutsideClick = (
+      event: MouseEvent
+    ) => {
       const target = event.target as Node
 
       if (
@@ -218,24 +413,44 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
       }
     }
 
-    const handleEscape = (event: KeyboardEvent) => {
+    const handleEscape = (
+      event: KeyboardEvent
+    ) => {
       if (event.key === 'Escape') {
         setAccountOpen(false)
         setNotificationsOpen(false)
       }
     }
 
-    document.addEventListener('mousedown', handleOutsideClick)
-    document.addEventListener('keydown', handleEscape)
+    document.addEventListener(
+      'mousedown',
+      handleOutsideClick
+    )
+    document.addEventListener(
+      'keydown',
+      handleEscape
+    )
 
     return () => {
-      document.removeEventListener('mousedown', handleOutsideClick)
-      document.removeEventListener('keydown', handleEscape)
+      document.removeEventListener(
+        'mousedown',
+        handleOutsideClick
+      )
+      document.removeEventListener(
+        'keydown',
+        handleEscape
+      )
     }
   }, [])
 
-  const markAsRead = async (notification: NotificationItem) => {
-    if (!supabase || !user?.id || notification.is_read) {
+  const markAsRead = async (
+    notification: NotificationItem
+  ) => {
+    if (
+      !supabase ||
+      !user?.id ||
+      notification.is_read
+    ) {
       return
     }
 
@@ -260,7 +475,10 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
       .eq('user_id', user.id)
 
     if (error) {
-      console.error('Failed to mark notification as read:', error)
+      console.error(
+        'Failed to mark notification as read:',
+        error
+      )
 
       setNotifications((current) =>
         current.map((item) =>
@@ -276,7 +494,11 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
   }
 
   const markAllAsRead = async () => {
-    if (!supabase || !user?.id || unreadCount === 0) {
+    if (
+      !supabase ||
+      !user?.id ||
+      unreadCount === 0
+    ) {
       return
     }
 
@@ -299,7 +521,11 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
       .eq('is_read', false)
 
     if (error) {
-      console.error('Failed to mark all notifications as read:', error)
+      console.error(
+        'Failed to mark all notifications as read:',
+        error
+      )
+
       await loadNotifications()
     }
   }
@@ -325,7 +551,9 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
 
     try {
       await signOut()
-      navigate('/login', { replace: true })
+      navigate('/login', {
+        replace: true,
+      })
     } finally {
       setLoggingOut(false)
       setAccountOpen(false)
@@ -354,7 +582,9 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
     }
   }
 
-  const formatNotificationDate = (date: string) => {
+  const formatNotificationDate = (
+    date: string
+  ) => {
     try {
       return new Intl.DateTimeFormat('ar-EG', {
         day: 'numeric',
@@ -367,87 +597,132 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
     }
   }
 
-  const initial = displayName.trim().charAt(0) || 'م'
+  const initial =
+    displayName.trim().charAt(0) || 'م'
 
   return (
-    <header className="sticky top-0 z-30 border-b border-ink-100 bg-sand-50/95 backdrop-blur">
-      <div className="flex min-h-[76px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+    <header
+      dir="rtl"
+      className={[
+        'sticky top-0 z-30 shrink-0',
+        'border-b border-ink-100/80',
+        'bg-sand-50/90 backdrop-blur-xl',
+        'supports-[backdrop-filter]:bg-sand-50/80',
+      ].join(' ')}
+    >
+      <div className="mx-auto flex min-h-[68px] sm:min-h-[76px] w-full max-w-[1600px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
+        {/* Page title */}
         <div className="flex min-w-0 items-center gap-3">
           {onMenuClick && (
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-ink-100 bg-white text-ink-700 transition hover:bg-ink-50 lg:hidden"
+              className={[
+                'inline-flex h-10 w-10 sm:h-11 sm:w-11',
+                'shrink-0 items-center justify-center',
+                'rounded-xl',
+                'border border-ink-100',
+                'bg-white',
+                'text-ink-700',
+                'shadow-sm',
+                'transition-all duration-200',
+                'hover:bg-ink-50 hover:border-ink-200',
+                'active:scale-[0.97]',
+                'lg:hidden',
+              ].join(' ')}
               aria-label="فتح القائمة"
             >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4 6h16" />
-                <path d="M4 12h16" />
-                <path d="M4 18h16" />
-              </svg>
+              <MenuIcon />
             </button>
           )}
 
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold text-ink-950 sm:text-xl">
+            <h1 className="truncate text-[17px] font-bold leading-6 text-ink-950 sm:text-xl">
               {title}
             </h1>
+
             <p className="hidden text-xs text-ink-500 sm:block">
               إدارة أعمالك من مكان واحد
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div ref={notificationsRef} className="relative">
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Notifications */}
+          <div
+            ref={notificationsRef}
+            className="relative"
+          >
             <button
               type="button"
               onClick={toggleNotifications}
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-ink-100 bg-white text-ink-700 transition hover:bg-ink-50"
+              className={[
+                'relative inline-flex',
+                'h-10 w-10 sm:h-11 sm:w-11',
+                'items-center justify-center',
+                'rounded-xl',
+                'border',
+                'bg-white',
+                'shadow-sm',
+                'transition-all duration-200',
+                'active:scale-[0.97]',
+                notificationsOpen
+                  ? 'border-gold-300 bg-gold-50 text-gold-700'
+                  : 'border-ink-100 text-ink-700 hover:bg-ink-50 hover:border-ink-200',
+              ].join(' ')}
               aria-label="الإشعارات"
               aria-expanded={notificationsOpen}
+              aria-haspopup="dialog"
             >
-              <svg
-                width="21"
-                height="21"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
+              <BellIcon
+                className={
+                  unreadCount > 0
+                    ? 'animate-[pulse_2.2s_ease-in-out_infinite]'
+                    : ''
+                }
+              />
 
               {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex min-h-[20px] min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
+                <span className="absolute -right-1 -top-1 flex min-h-[19px] min-w-[19px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-sand-50">
+                  {unreadCount > 99
+                    ? '99+'
+                    : unreadCount}
                 </span>
               )}
             </button>
 
             {notificationsOpen && (
-              <div className="absolute left-0 mt-3 w-[min(380px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-xl">
-                <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-                  <div>
-                    <h3 className="font-bold text-ink-950">
-                      الإشعارات
-                    </h3>
+              <div
+                className={[
+                  'absolute left-0 mt-3',
+                  'w-[min(390px,calc(100vw-24px))]',
+                  'overflow-hidden rounded-2xl',
+                  'border border-ink-100',
+                  'bg-white',
+                  'shadow-[0_18px_50px_rgba(0,0,0,0.12)]',
+                  'animate-[fadeIn_160ms_ease-out]',
+                ].join(' ')}
+                role="dialog"
+                aria-label="الإشعارات"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-ink-100 px-4 py-3.5">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-ink-950">
+                        الإشعارات
+                      </h3>
+
+                      {unreadCount > 0 && (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                          {unreadCount} جديد
+                        </span>
+                      )}
+                    </div>
 
                     {unreadCount > 0 && (
-                      <p className="mt-0.5 text-xs text-ink-500">
-                        لديك {unreadCount} إشعار غير مقروء
+                      <p className="mt-1 text-[11px] text-ink-500">
+                        لديك إشعارات تحتاج إلى مراجعة
                       </p>
                     )}
                   </div>
@@ -456,138 +731,154 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                     <button
                       type="button"
                       onClick={markAllAsRead}
-                      className="text-xs font-semibold text-gold-600 hover:underline"
+                      className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-gold-600 transition-colors hover:bg-gold-50 hover:text-gold-700"
                     >
                       تحديد الكل كمقروء
                     </button>
                   )}
                 </div>
 
-                <div className="max-h-[420px] overflow-y-auto">
+                <div className="max-h-[min(430px,65vh)] overflow-y-auto">
                   {notificationsLoading ? (
-                    <div className="flex items-center justify-center px-4 py-10 text-sm text-ink-500">
-                      جاري تحميل الإشعارات...
-                    </div>
+                    <NotificationSkeleton />
                   ) : notificationsError ? (
                     <div className="px-4 py-10 text-center">
-                      <p className="text-sm text-red-600">
-                        {notificationsError}
-                      </p>
-
-                      <button
-                        type="button"
-                        onClick={loadNotifications}
-                        className="mt-2 text-xs font-semibold text-gold-600 hover:underline"
-                      >
-                        إعادة المحاولة
-                      </button>
-                    </div>
-                  ) : notifications.length === 0 ? (
-                    <div className="px-4 py-10 text-center">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-ink-50 text-ink-400">
+                      <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-500">
                         <svg
-                          width="22"
-                          height="22"
+                          width="21"
+                          height="21"
                           viewBox="0 0 24 24"
                           fill="none"
                           stroke="currentColor"
                           strokeWidth="1.8"
                           strokeLinecap="round"
                           strokeLinejoin="round"
+                          aria-hidden="true"
                         >
-                          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                          <path d="M12 8v4" />
+                          <path d="M12 16h.01" />
+                          <path d="M10.3 3.9 2.7 17a2 2 0 0 0 1.73 3h15.14a2 2 0 0 0 1.73-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
                         </svg>
                       </div>
 
-                      <p className="text-sm font-medium text-ink-700">
-                        لا توجد إشعارات
+                      <p className="text-sm font-semibold text-red-600">
+                        {notificationsError}
                       </p>
 
-                      <p className="mt-1 text-xs text-ink-400">
-                        ستظهر الإشعارات الجديدة هنا
-                      </p>
+                      <button
+                        type="button"
+                        onClick={loadNotifications}
+                        className="mt-3 rounded-lg bg-ink-50 px-3 py-2 text-xs font-semibold text-ink-700 transition-colors hover:bg-ink-100"
+                      >
+                        إعادة المحاولة
+                      </button>
                     </div>
+                  ) : notifications.length === 0 ? (
+                    <NotificationEmptyState />
                   ) : (
-                    notifications.map((notification) => {
-                      const notificationText =
-                        notification.message ||
-                        notification.body ||
-                        ''
+                    notifications.map(
+                      (notification) => {
+                        const notificationText =
+                          notification.message ||
+                          notification.body ||
+                          ''
 
-                      return (
-                        <button
-                          key={notification.id}
-                          type="button"
-                          onClick={() =>
-                            handleNotificationClick(notification)
-                          }
-                          className={`block w-full border-b border-ink-50 px-4 py-3 text-right transition last:border-b-0 hover:bg-ink-50 ${
-                            !notification.is_read
-                              ? 'bg-gold-50/40'
-                              : 'bg-white'
-                          }`}
-                        >
-                          <div className="flex gap-3">
-                            <div
-                              className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-                                notification.is_read
-                                  ? 'bg-transparent'
-                                  : 'bg-gold-500'
-                              }`}
-                            />
+                        return (
+                          <button
+                            key={notification.id}
+                            type="button"
+                            onClick={() =>
+                              handleNotificationClick(
+                                notification
+                              )
+                            }
+                            className={[
+                              'group block w-full',
+                              'border-b border-ink-50',
+                              'px-4 py-3.5',
+                              'text-right',
+                              'transition-colors duration-150',
+                              'last:border-b-0',
+                              notification.is_read
+                                ? 'bg-white hover:bg-ink-50'
+                                : 'bg-gold-50/50 hover:bg-gold-50',
+                            ].join(' ')}
+                          >
+                            <div className="flex gap-3">
+                              <span
+                                className={[
+                                  'mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full',
+                                  notification.is_read
+                                    ? 'bg-transparent'
+                                    : 'bg-gold-500 shadow-[0_0_0_3px_rgba(245,158,11,0.10)]',
+                                ].join(' ')}
+                                aria-hidden="true"
+                              />
 
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-2">
-                                <p
-                                  className={`text-sm ${
-                                    notification.is_read
-                                      ? 'font-medium text-ink-700'
-                                      : 'font-bold text-ink-950'
-                                  }`}
-                                >
-                                  {notification.title}
-                                </p>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p
+                                    className={[
+                                      'min-w-0 truncate text-sm',
+                                      notification.is_read
+                                        ? 'font-medium text-ink-700'
+                                        : 'font-bold text-ink-950',
+                                    ].join(' ')}
+                                  >
+                                    {notification.title}
+                                  </p>
 
-                                <span className="shrink-0 text-[10px] text-ink-400">
-                                  {formatNotificationDate(
-                                    notification.created_at
-                                  )}
-                                </span>
+                                  <span className="shrink-0 text-[10px] text-ink-400">
+                                    {formatNotificationDate(
+                                      notification.created_at
+                                    )}
+                                  </span>
+                                </div>
+
+                                {notificationText && (
+                                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-500">
+                                    {notificationText}
+                                  </p>
+                                )}
                               </div>
-
-                              {notificationText && (
-                                <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-500">
-                                  {notificationText}
-                                </p>
-                              )}
                             </div>
-                          </div>
-                        </button>
-                      )
-                    })
+                          </button>
+                        )
+                      }
+                    )
                   )}
                 </div>
               </div>
             )}
           </div>
 
+          {/* Account */}
           <div ref={accountRef} className="relative">
             <button
               type="button"
               onClick={toggleAccount}
-              className="flex items-center gap-2 rounded-xl border border-ink-100 bg-white px-2 py-1.5 transition hover:bg-ink-50 sm:px-3"
+              className={[
+                'group flex items-center gap-2',
+                'rounded-xl border border-ink-100',
+                'bg-white',
+                'px-1.5 py-1.5 sm:px-2.5',
+                'shadow-sm',
+                'transition-all duration-200',
+                'hover:bg-ink-50 hover:border-ink-200',
+                'active:scale-[0.99]',
+              ].join(' ')}
               aria-expanded={accountOpen}
               aria-haspopup="menu"
+              aria-label="قائمة الحساب"
             >
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt={displayName}
-                  className="h-9 w-9 rounded-full object-cover"
+                  className="h-8 w-8 sm:h-9 sm:w-9 rounded-full object-cover ring-2 ring-white"
                 />
               ) : (
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold-100 text-sm font-bold text-gold-700">
+                <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-gradient-to-br from-gold-100 to-gold-50 text-sm font-bold text-gold-700 ring-1 ring-gold-200/70">
                   {initial}
                 </div>
               )}
@@ -602,41 +893,40 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                 </p>
               </div>
 
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="hidden text-ink-400 sm:block"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+              <span className="hidden text-ink-400 sm:block">
+                <ChevronIcon open={accountOpen} />
+              </span>
             </button>
 
             {accountOpen && (
               <div
-                className="absolute left-0 mt-3 w-72 overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-xl"
+                className={[
+                  'absolute left-0 mt-3',
+                  'w-[min(310px,calc(100vw-24px))]',
+                  'overflow-hidden rounded-2xl',
+                  'border border-ink-100',
+                  'bg-white',
+                  'shadow-[0_18px_50px_rgba(0,0,0,0.12)]',
+                  'animate-[fadeIn_160ms_ease-out]',
+                ].join(' ')}
                 role="menu"
+                aria-label="قائمة الحساب"
               >
-                <div className="border-b border-ink-100 px-4 py-4">
+                <div className="bg-gradient-to-br from-ink-50/80 to-white border-b border-ink-100 px-4 py-4">
                   <div className="flex items-center gap-3">
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
                         alt={displayName}
-                        className="h-11 w-11 rounded-full object-cover"
+                        className="h-11 w-11 rounded-full object-cover ring-2 ring-white shadow-sm"
                       />
                     ) : (
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gold-100 font-bold text-gold-700">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-100 to-gold-50 font-bold text-gold-700 ring-1 ring-gold-200/70">
                         {initial}
                       </div>
                     )}
 
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate font-bold text-ink-950">
                         {profileLoading
                           ? 'جاري تحميل الحساب...'
@@ -647,9 +937,9 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                         {email}
                       </p>
 
-                      <p className="mt-1 text-xs font-semibold text-gold-600">
+                      <div className="mt-1.5 inline-flex rounded-full bg-gold-50 px-2 py-0.5 text-[10px] font-bold text-gold-700">
                         {role}
-                      </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -657,80 +947,48 @@ export default function Topbar({ title, onMenuClick }: TopbarProps) {
                 <div className="p-2">
                   <Link
                     to="/account"
-                    onClick={() => setAccountOpen(false)}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink-700 transition hover:bg-ink-50"
+                    onClick={() =>
+                      setAccountOpen(false)
+                    }
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950"
                     role="menuitem"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M4 21a8 8 0 0 1 16 0" />
-                    </svg>
-
+                    <UserIcon />
                     <span>حسابي</span>
                   </Link>
 
                   <Link
                     to="/settings"
-                    onClick={() => setAccountOpen(false)}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink-700 transition hover:bg-ink-50"
+                    onClick={() =>
+                      setAccountOpen(false)
+                    }
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950"
                     role="menuitem"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V20h-2.6v-.1a2 2 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H4v-2.6h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1.9-.3l-.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1v2.6h-.1a1.7 1.7 0 0 0-1.6 1Z"
-                      />
-                    </svg>
-
+                    <SettingsIcon />
                     <span>الإعدادات</span>
                   </Link>
 
-                  <div className="my-1 border-t border-ink-100" />
+                  <div className="my-1.5 border-t border-ink-100" />
 
                   <button
                     type="button"
                     onClick={handleLogout}
                     disabled={loggingOut}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                     role="menuitem"
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M10 17l5-5-5-5" />
-                      <path d="M15 12H3" />
-                      <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
-                    </svg>
+                    <LogoutIcon />
 
                     <span>
                       {loggingOut
                         ? 'جاري تسجيل الخروج...'
                         : 'تسجيل الخروج'}
                     </span>
+
+                    {loggingOut && (
+                      <span className="mr-auto h-4 w-4 animate-spin rounded-full border-2 border-red-200 border-t-red-600" />
+                    )}
                   </button>
                 </div>
               </div>
