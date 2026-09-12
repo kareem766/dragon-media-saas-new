@@ -171,21 +171,30 @@ export function useSubscription() {
     subscription?.status ?? 'no_subscription'
 
   /*
-   * تاريخ انتهاء الاشتراك الحقيقي.
-   *
-   * نستخدم expires_at أولاً لأنه تاريخ الانتهاء
-   * الموجود فعليًا على subscription.
-   *
-   * renewal_date موجود كـ fallback للتوافق
-   * مع البيانات القديمة.
+   * expires_at هو المصدر الأساسي.
+   * renewal_date يظل fallback للبيانات القديمة.
    */
   const effectiveExpiryDate =
     subscription?.expires_at ??
     subscription?.renewal_date ??
     null
 
+  /*
+   * expires_at قد يأتي من Supabase كتاريخ فقط:
+   * 2026-10-12
+   *
+   * أو كتوقيت:
+   * 2026-10-12T21:30:00+00:00
+   *
+   * نستخدم أول 10 أحرف للحصول على تاريخ التقويم
+   * بدون التأثر بالـ timezone.
+   */
+  const expiryDateOnly = effectiveExpiryDate
+    ? effectiveExpiryDate.slice(0, 10)
+    : null
+
   const daysRemaining = (() => {
-    if (!effectiveExpiryDate) {
+    if (!expiryDateOnly) {
       return null
     }
 
@@ -198,9 +207,7 @@ export function useSubscription() {
     )
 
     const [year, month, day] =
-      effectiveExpiryDate
-        .split('-')
-        .map(Number)
+      expiryDateOnly.split('-').map(Number)
 
     if (!year || !month || !day) {
       return null
@@ -222,13 +229,13 @@ export function useSubscription() {
   })()
 
   /*
-   * انتهاء الاشتراك يحدث فقط بعد تاريخ الانتهاء.
+   * الاشتراك يعتبر منتهيًا فقط إذا مر تاريخ الانتهاء.
    *
-   * إذا كان expires_at = اليوم:
-   * الاشتراك ما زال فعالاً حتى نهاية اليوم.
+   * إذا كان تاريخ الانتهاء هو اليوم،
+   * يظل الاشتراك فعالًا خلال اليوم الحالي.
    */
   const isDateExpired = (() => {
-    if (!effectiveExpiryDate) {
+    if (!expiryDateOnly) {
       return false
     }
 
@@ -241,9 +248,7 @@ export function useSubscription() {
     )
 
     const [year, month, day] =
-      effectiveExpiryDate
-        .split('-')
-        .map(Number)
+      expiryDateOnly.split('-').map(Number)
 
     if (!year || !month || !day) {
       return false
@@ -274,16 +279,26 @@ export function useSubscription() {
     isSubscriptionStatusActive &&
     !isDateExpired
 
+  /*
+   * cancelled لا يعني expired.
+   * no_subscription لا يعني expired.
+   * نحتفظ بالحالات بشكل منفصل حتى تستخدمها الواجهة
+   * والـ ProtectedRoute بشكل صحيح.
+   */
   const isExpired =
     rawStatus === 'expired' ||
-    isCancelled ||
-    rawStatus === 'no_subscription' ||
-    (isSubscriptionStatusActive &&
-      isDateExpired)
+    (
+      isSubscriptionStatusActive &&
+      isDateExpired
+    )
 
   let accessState: SubscriptionAccessState = 'unknown'
 
-  if (isExpired) {
+  if (rawStatus === 'no_subscription') {
+    accessState = 'no_subscription'
+  } else if (isCancelled) {
+    accessState = 'cancelled'
+  } else if (isExpired) {
     accessState = 'expired'
   } else if (isPendingPayment) {
     accessState = 'pending_payment'
@@ -303,30 +318,24 @@ export function useSubscription() {
   }
 
   /*
-   * تاريخ انتهاء الاشتراك الحقيقي بصيغة عربية.
+   * تاريخ انتهاء الاشتراك بصيغة عربية.
    */
-  const formattedRenewalDate =
-    effectiveExpiryDate
-      ? new Intl.DateTimeFormat(
-          'ar-EG',
-          {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          }
-        ).format(
-          new Date(
-            `${effectiveExpiryDate}T00:00:00`
-          )
+  const formattedRenewalDate = expiryDateOnly
+    ? new Intl.DateTimeFormat('ar-EG', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }).format(
+        new Date(
+          `${expiryDateOnly}T00:00:00`
         )
-      : null
+      )
+    : null
 
   /*
-   * صلاحية Feature حسب الباقة الحالية.
+   * التحقق من Features حسب الباقة الحالية.
    */
-  const hasFeature = (
-    key: string
-  ) => {
+  const hasFeature = (key: string) => {
     if (!isActive) {
       return false
     }
@@ -339,9 +348,7 @@ export function useSubscription() {
   /*
    * الحصول على Limit من الباقة.
    */
-  const getLimit = (
-    key: string
-  ) => {
+  const getLimit = (key: string) => {
     if (!isActive) {
       return 0
     }
@@ -369,7 +376,7 @@ export function useSubscription() {
     daysRemaining,
 
     /*
-     * البيانات الحقيقية للاشتراك.
+     * بيانات الاشتراك الحقيقية.
      */
     billingCycle:
       subscription?.billing_cycle ?? null,
