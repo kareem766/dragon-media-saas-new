@@ -66,30 +66,45 @@ const integrationProviders = [
     name: 'واتساب بيزنس',
     description:
       'ربط WhatsApp Business واستقبال وإرسال الرسائل.',
+    actionLabel: 'ربط WhatsApp',
+    connectedActionLabel: 'إدارة WhatsApp',
+    meta: true,
   },
   {
     provider: 'facebook',
     name: 'فيسبوك ماسنجر',
     description:
       'ربط صفحات Facebook وإدارة محادثات Messenger.',
+    actionLabel: 'ربط Facebook',
+    connectedActionLabel: 'إدارة Facebook',
+    meta: true,
   },
   {
     provider: 'instagram',
     name: 'إنستجرام',
     description:
       'ربط حساب Instagram وإدارة الرسائل.',
+    actionLabel: 'ربط Instagram',
+    connectedActionLabel: 'إدارة Instagram',
+    meta: true,
   },
   {
     provider: 'telegram',
     name: 'تليجرام',
     description:
       'ربط Telegram Bot وإدارة المحادثات.',
+    actionLabel: 'إعداد Telegram',
+    connectedActionLabel: 'إدارة Telegram',
+    meta: false,
   },
   {
     provider: 'paymob',
     name: 'بوابة الدفع',
     description:
       'حالة تكامل بوابة الدفع والعمليات المالية.',
+    actionLabel: 'إعداد Paymob',
+    connectedActionLabel: 'إدارة Paymob',
+    meta: false,
   },
 ]
 
@@ -1351,37 +1366,20 @@ function IntegrationsSection({
         title="التكاملات"
         description="حالة التكاملات الخاصة بمؤسستك مأخوذة مباشرة من Supabase."
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onMetaConnect}
-              disabled={metaConnecting}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {metaConnecting && (
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              )}
+          <button
+            type="button"
+            onClick={loadIntegrations}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-sand-300 bg-white px-4 py-2.5 text-xs font-bold text-ink-900 transition hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading && (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-900/20 border-t-ink-900" />
+            )}
 
-              {metaConnecting
-                ? 'جاري ربط Meta...'
-                : 'ربط Meta'}
-            </button>
-
-            <button
-              type="button"
-              onClick={loadIntegrations}
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-sand-300 bg-white px-4 py-2.5 text-xs font-bold text-ink-900 transition hover:bg-sand-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading && (
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-ink-900/20 border-t-ink-900" />
-              )}
-
-              {loading
-                ? 'جاري التحديث...'
-                : 'تحديث الحالة'}
-            </button>
-          </div>
+            {loading
+              ? 'جاري التحديث...'
+              : 'تحديث الحالة'}
+          </button>
         }
       />
 
@@ -1447,6 +1445,9 @@ function IntegrationsSection({
               const connected =
                 status.label === 'متصل'
 
+              const isMetaProvider =
+                item.meta
+
               return (
                 <div
                   key={item.provider}
@@ -1490,8 +1491,62 @@ function IntegrationsSection({
                     />
                   </div>
 
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-sand-200/70 pt-4">
+                    <div className="text-xs text-ink-900/40">
+                      {connected
+                        ? 'الاتصال مفعل'
+                        : isMetaProvider
+                          ? 'يتطلب اتصال Meta الرسمي'
+                          : 'إعداد التكامل من لوحة الإدارة'}
+                    </div>
+
+                    {isMetaProvider ? (
+                      <button
+                        type="button"
+                        onClick={
+                          onMetaConnect
+                        }
+                        disabled={
+                          metaConnecting
+                        }
+                        className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                          connected
+                            ? 'border border-sand-300 bg-white text-ink-900 hover:bg-sand-50'
+                            : 'bg-ink-950 text-white hover:bg-ink-900'
+                        }`}
+                      >
+                        {metaConnecting && (
+                          <span
+                            className={`h-3.5 w-3.5 animate-spin rounded-full border-2 ${
+                              connected
+                                ? 'border-ink-900/20 border-t-ink-900'
+                                : 'border-white/30 border-t-white'
+                            }`}
+                          />
+                        )}
+
+                        {metaConnecting
+                          ? 'جاري الربط...'
+                          : connected
+                            ? item.connectedActionLabel
+                            : item.actionLabel}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        title="سيتم تفعيل تدفق الربط الخاص بهذا التكامل بعد اكتمال الـAPI الخاص به."
+                        className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50 px-4 py-2.5 text-xs font-bold text-ink-900/40"
+                      >
+                        {connected
+                          ? item.connectedActionLabel
+                          : item.actionLabel}
+                      </button>
+                    )}
+                  </div>
+
                   {integration?.connected_at && (
-                    <div className="mt-5 border-t border-sand-200/70 pt-4">
+                    <div className="mt-4">
                       <div className="text-[11px] font-semibold text-ink-900/40">
                         تاريخ الاتصال
                       </div>
@@ -1645,23 +1700,22 @@ function WhatsAppSection({
                 tone={status.tone}
               />
 
-              {status.label !==
-                'متصل' && (
-                <button
-                  type="button"
-                  onClick={onMetaConnect}
-                  disabled={metaConnecting}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {metaConnecting && (
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  )}
+              <button
+                type="button"
+                onClick={onMetaConnect}
+                disabled={metaConnecting}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {metaConnecting && (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                )}
 
-                  {metaConnecting
-                    ? 'جاري الربط...'
-                    : 'ربط Meta'}
-                </button>
-              )}
+                {metaConnecting
+                  ? 'جاري الربط...'
+                  : status.label === 'متصل'
+                    ? 'إدارة WhatsApp'
+                    : 'ربط WhatsApp'}
+              </button>
             </div>
           </div>
 
