@@ -18,11 +18,17 @@ function env(name: string): string {
   return value
 }
 
+function normalizePhone(
+  value: string | null | undefined,
+): string {
+  return String(value || '').replace(/\D/g, '')
+}
+
 function verifySignature(
   rawBody: string,
   signature: string,
   appSecret: string,
-) {
+): boolean {
   if (!signature.startsWith('sha256=')) {
     return false
   }
@@ -38,15 +44,9 @@ function verifySignature(
   }
 
   return timingSafeEqual(
-    Buffer.from(received, 'utf8'),
-    Buffer.from(expected, 'utf8'),
+    Buffer.from(received),
+    Buffer.from(expected),
   )
-}
-
-function normalizePhone(
-  value: string | null | undefined,
-) {
-  return String(value || '').replace(/\D/g, '')
 }
 
 async function getRawBody(
@@ -65,11 +65,27 @@ async function getRawBody(
   return Buffer.concat(chunks).toString('utf8')
 }
 
+function getSupabase() {
+  return createClient(
+    env('VITE_SUPABASE_URL'),
+    env('SUPABASE_SECRET_KEY'),
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  )
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader(
+    'Cache-Control',
+    'no-store',
+  )
 
   const verifyToken =
     env('META_WHATSAPP_VERIFY_TOKEN')
@@ -107,7 +123,7 @@ export default async function handler(
 
   /*
    * ---------------------------------------------------------
-   * ONLY POST IS ACCEPTED AFTER VERIFICATION
+   * ONLY POST IS ACCEPTED
    * ---------------------------------------------------------
    */
 
@@ -122,7 +138,7 @@ export default async function handler(
   try {
     /*
      * -------------------------------------------------------
-     * READ THE EXACT RAW BODY SENT BY META
+     * RAW BODY
      * -------------------------------------------------------
      */
 
@@ -131,7 +147,7 @@ export default async function handler(
 
     /*
      * -------------------------------------------------------
-     * VERIFY META SIGNATURE
+     * META SIGNATURE
      * -------------------------------------------------------
      */
 
@@ -142,14 +158,13 @@ export default async function handler(
         ] || '',
       )
 
-    const validSignature =
-      verifySignature(
+    if (
+      !verifySignature(
         rawBody,
         signature,
         env('META_APP_SECRET'),
       )
-
-    if (!validSignature) {
+    ) {
       console.error(
         'WhatsApp webhook: invalid Meta signature',
       )
@@ -187,12 +202,6 @@ export default async function handler(
         })
     }
 
-    /*
-     * -------------------------------------------------------
-     * IGNORE NON-WHATSAPP PAYLOADS
-     * -------------------------------------------------------
-     */
-
     if (
       payload?.object !==
       'whatsapp_business_account'
@@ -205,51 +214,31 @@ export default async function handler(
         })
     }
 
-    /*
-     * -------------------------------------------------------
-     * SERVER-SIDE SUPABASE CLIENT
-     * -------------------------------------------------------
-     */
-
     const supabase =
-      createClient(
-        env('VITE_SUPABASE_URL'),
-        env('SUPABASE_SECRET_KEY'),
-        {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-          },
-        },
-      )
+      getSupabase()
 
     /*
      * -------------------------------------------------------
-     * PROCESS META ENTRIES
+     * PROCESS ENTRIES
      * -------------------------------------------------------
      */
 
     for (
       const entry of
-        payload?.entry || []
-    ) {
-      const changes =
         Array.isArray(
-          entry?.changes,
+          payload?.entry,
         )
-          ? entry.changes
+          ? payload.entry
           : []
-
+    ) {
       for (
-        const change of changes
+        const change of
+          Array.isArray(
+            entry?.changes,
+          )
+            ? entry.changes
+            : []
       ) {
-        /*
-         * Only process WhatsApp messages.
-         *
-         * Other events such as statuses/read/delivery
-         * should still receive a 200 acknowledgement.
-         */
-
         if (
           change?.field !==
           'messages'
@@ -268,16 +257,12 @@ export default async function handler(
           )
 
         if (!phoneNumberId) {
-          console.warn(
-            'WhatsApp webhook: missing phone_number_id',
-          )
-
           continue
         }
 
         /*
          * ---------------------------------------------------
-         * FIND CONNECTED DRAGON MEDIA WHATSAPP
+         * FIND WHATSAPP CONNECTION
          * ---------------------------------------------------
          */
 
@@ -314,16 +299,158 @@ export default async function handler(
         }
 
         if (
-          !connection
-            ?.organization_id
+          !connection?.organization_id
         ) {
           console.warn(
-            'WhatsApp webhook: no Dragon Media connection found for phone number',
+            'WhatsApp webhook: no connection found',
             phoneNumberId,
           )
 
           continue
         }
+
+        /*
+         * ===================================================
+         * DELIVERY / READ / FAILED STATUSES
+         * ===================================================
+         */
+
+        const statuses =
+          Array.isArray(
+            value?.statuses,
+          )
+            ? value.statuses
+            : []
+
+        for (
+          const status of statuses
+        ) {
+          const externalId =
+            String(
+              status?.id || '',
+            )
+
+          const deliveryStatus =
+            String(
+              status?.status || '',
+            ).toLowerCase()
+
+          if (
+            !externalId ||
+            !deliveryStatus
+          ) {
+            continue
+          }
+
+          const statusMetadata = {
+            whatsapp_delivery_status:
+              deliveryStatus,
+
+            whatsapp_status_timestamp:
+              status?.timestamp ||
+              null,
+
+            whatsapp_recipient_id:
+              status?.recipient_id ||
+              null,
+
+            ...(deliveryStatus ===
+            'failed'
+              ? {
+                  whatsapp_delivery_errors:
+                    Array.isArray(
+                      status?.errors,
+                    )
+                      ? status.errors
+                      : [],
+                }
+              : {}),
+          }
+
+          /*
+           * Find the outbound Dragon Media
+           * message using Meta's wamid.
+           */
+
+          const {
+            data: matchedMessage,
+            error:
+              statusLookupError,
+          } = await supabase
+            .from('messages')
+            .select(
+              'id, metadata',
+            )
+            .eq(
+              'external_id',
+              externalId,
+            )
+            .maybeSingle()
+
+          if (statusLookupError) {
+            console.error(
+              'WhatsApp webhook: status message lookup failed',
+              statusLookupError,
+            )
+
+            continue
+          }
+
+          if (
+            !matchedMessage?.id
+          ) {
+            console.warn(
+              'WhatsApp webhook: no message found for status',
+              {
+                externalId,
+                deliveryStatus,
+              },
+            )
+
+            continue
+          }
+
+          const {
+            error:
+              statusUpdateError,
+          } = await supabase
+            .from('messages')
+            .update({
+              metadata: {
+                ...(matchedMessage
+                  .metadata || {}),
+
+                ...statusMetadata,
+              },
+            })
+            .eq(
+              'id',
+              matchedMessage.id,
+            )
+
+          if (statusUpdateError) {
+            console.error(
+              'WhatsApp webhook: status update failed',
+              statusUpdateError,
+            )
+          } else {
+            console.log(
+              'WhatsApp webhook: status saved',
+              {
+                externalId,
+                deliveryStatus,
+                messageId:
+                  matchedMessage.id,
+              },
+            )
+          }
+        }
+
+        /*
+         * ===================================================
+         * INCOMING CUSTOMER MESSAGES
+         * ===================================================
+         */
 
         const contacts =
           Array.isArray(
@@ -339,12 +466,6 @@ export default async function handler(
             ? value.messages
             : []
 
-        /*
-         * ---------------------------------------------------
-         * PROCESS INCOMING MESSAGES
-         * ---------------------------------------------------
-         */
-
         for (
           const message of messages
         ) {
@@ -357,10 +478,6 @@ export default async function handler(
             )
 
           if (!waId) {
-            console.warn(
-              'WhatsApp webhook: message without sender wa_id',
-            )
-
             continue
           }
 
@@ -373,9 +490,7 @@ export default async function handler(
               : null
 
           /*
-           * -----------------------------------------------
-           * EXTRACT MESSAGE CONTENT
-           * -----------------------------------------------
+           * MESSAGE CONTENT
            */
 
           let content = ''
@@ -425,9 +540,7 @@ export default async function handler(
           }
 
           /*
-           * -----------------------------------------------
-           * FIND OR CREATE CUSTOMER
-           * -----------------------------------------------
+           * CUSTOMER
            */
 
           const normalizedPhone =
@@ -442,8 +555,6 @@ export default async function handler(
           const {
             data:
               existingCustomer,
-            error:
-              customerLookupError,
           } = await supabase
             .from('customers')
             .select('id')
@@ -458,13 +569,6 @@ export default async function handler(
             )
             .maybeSingle()
 
-          if (customerLookupError) {
-            console.error(
-              'WhatsApp webhook: customer lookup failed',
-              customerLookupError,
-            )
-          }
-
           if (
             existingCustomer?.id
           ) {
@@ -476,8 +580,6 @@ export default async function handler(
             const {
               data:
                 phoneCustomer,
-              error:
-                phoneLookupError,
             } = await supabase
               .from('customers')
               .select('id')
@@ -492,27 +594,16 @@ export default async function handler(
               )
               .maybeSingle()
 
-            if (phoneLookupError) {
-              console.error(
-                'WhatsApp webhook: normalized phone lookup failed',
-                phoneLookupError,
-              )
-            }
-
-            if (
-              phoneCustomer?.id
-            ) {
-              customerId =
-                phoneCustomer.id
-            }
+            customerId =
+              phoneCustomer?.id ||
+              null
           }
 
           if (!customerId) {
             const {
               data:
                 createdCustomer,
-              error:
-                customerInsertError,
+              error,
             } = await supabase
               .from('customers')
               .insert({
@@ -533,18 +624,18 @@ export default async function handler(
               .select('id')
               .single()
 
-            if (customerInsertError) {
+            if (error) {
               console.error(
                 'WhatsApp webhook: customer insert failed',
-                customerInsertError,
+                error,
               )
 
               continue
             }
 
             customerId =
-              createdCustomer
-                ?.id || null
+              createdCustomer?.id ||
+              null
           }
 
           if (!customerId) {
@@ -552,9 +643,7 @@ export default async function handler(
           }
 
           /*
-           * -----------------------------------------------
            * MESSAGE METADATA
-           * -----------------------------------------------
            */
 
           const metadata = {
@@ -580,9 +669,7 @@ export default async function handler(
           }
 
           /*
-           * -----------------------------------------------
-           * FIND OR CREATE CONVERSATION
-           * -----------------------------------------------
+           * CONVERSATION
            */
 
           let conversationId:
@@ -592,8 +679,6 @@ export default async function handler(
           const {
             data:
               existingConversation,
-            error:
-              conversationLookupError,
           } = await supabase
             .from(
               'conversations',
@@ -616,23 +701,13 @@ export default async function handler(
             )
             .maybeSingle()
 
-          if (conversationLookupError) {
-            console.error(
-              'WhatsApp webhook: conversation lookup failed',
-              conversationLookupError,
-            )
-          }
-
           if (
             existingConversation?.id
           ) {
             conversationId =
               existingConversation.id
 
-            const {
-              error:
-                conversationUpdateError,
-            } = await supabase
+            await supabase
               .from(
                 'conversations',
               )
@@ -658,19 +733,11 @@ export default async function handler(
                 'id',
                 conversationId,
               )
-
-            if (conversationUpdateError) {
-              console.error(
-                'WhatsApp webhook: conversation update failed',
-                conversationUpdateError,
-              )
-            }
           } else {
             const {
               data:
                 createdConversation,
-              error:
-                conversationInsertError,
+              error,
             } = await supabase
               .from(
                 'conversations',
@@ -708,10 +775,10 @@ export default async function handler(
               .select('id')
               .single()
 
-            if (conversationInsertError) {
+            if (error) {
               console.error(
                 'WhatsApp webhook: conversation insert failed',
-                conversationInsertError,
+                error,
               )
 
               continue
@@ -719,7 +786,8 @@ export default async function handler(
 
             conversationId =
               createdConversation
-                ?.id || null
+                ?.id ||
+              null
           }
 
           if (!conversationId) {
@@ -727,9 +795,7 @@ export default async function handler(
           }
 
           /*
-           * -----------------------------------------------
-           * PREVENT DUPLICATE META MESSAGES
-           * -----------------------------------------------
+           * DUPLICATE PROTECTION
            */
 
           const externalId =
@@ -740,8 +806,6 @@ export default async function handler(
           if (externalId) {
             const {
               data: duplicate,
-              error:
-                duplicateLookupError,
             } = await supabase
               .from('messages')
               .select('id')
@@ -751,22 +815,13 @@ export default async function handler(
               )
               .maybeSingle()
 
-            if (duplicateLookupError) {
-              console.error(
-                'WhatsApp webhook: duplicate lookup failed',
-                duplicateLookupError,
-              )
-            }
-
             if (duplicate?.id) {
               continue
             }
           }
 
           /*
-           * -----------------------------------------------
-           * SAVE MESSAGE
-           * -----------------------------------------------
+           * SAVE INBOUND MESSAGE
            */
 
           const {
@@ -794,35 +849,27 @@ export default async function handler(
               'WhatsApp webhook: message insert failed',
               messageInsertError,
             )
+          } else {
+            console.log(
+              'WhatsApp webhook: message saved',
+              {
+                organizationId:
+                  connection
+                    .organization_id,
 
-            continue
+                conversationId,
+
+                customerId,
+
+                phoneNumberId,
+
+                externalId,
+              },
+            )
           }
-
-          console.log(
-            'WhatsApp webhook: message saved',
-            {
-              organizationId:
-                connection
-                  .organization_id,
-
-              conversationId,
-
-              customerId,
-
-              phoneNumberId,
-
-              externalId,
-            },
-          )
         }
       }
     }
-
-    /*
-     * -------------------------------------------------------
-     * ACKNOWLEDGE META
-     * -------------------------------------------------------
-     */
 
     return res
       .status(200)
@@ -836,8 +883,8 @@ export default async function handler(
     )
 
     /*
-     * Meta should receive an acknowledgement
-     * to avoid unnecessary webhook retries.
+     * Meta should always receive
+     * an acknowledgement.
      */
 
     return res
