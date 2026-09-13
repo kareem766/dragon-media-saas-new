@@ -1,4 +1,10 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/**/*.ts": {
+      "runtime": "nodejs24.x"
+    }
+  },
   "crons": [
     {
       "path": "/api/automation-run",
