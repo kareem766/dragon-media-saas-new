@@ -1,8 +1,3 @@
-import type {
-  VercelRequest,
-  VercelResponse,
-} from '@vercel/node'
-
 const getErrorMessage = (error: unknown) => {
   if (typeof error === 'string') {
     return error
@@ -28,10 +23,7 @@ const getErrorMessage = (error: unknown) => {
     try {
       const serialized = JSON.stringify(error)
 
-      if (
-        serialized &&
-        serialized !== '{}'
-      ) {
+      if (serialized && serialized !== '{}') {
         return serialized
       }
     } catch {
@@ -42,21 +34,10 @@ const getErrorMessage = (error: unknown) => {
   return 'تعذر تحميل بيانات لوحة الإدارة.'
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-) {
+export default async function handler(req: any, res: any) {
   try {
-    /*
-     * Dynamic import is intentional.
-     *
-     * It prevents module-loading errors inside the
-     * admin handler from causing an unhandled
-     * FUNCTION_INVOCATION_FAILED before this wrapper
-     * can return a useful JSON error.
-     */
     const module = await import(
-      '../../src/server/admin/overview'
+      '../../src/server/admin/overview.ts'
     )
 
     const overview = module.default
