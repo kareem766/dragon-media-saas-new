@@ -666,17 +666,13 @@ export default function Settings() {
       if (
         contentType.includes('application/json')
       ) {
-        data = await response.json().catch(
-          () => null,
-        )
+        data = await response.json().catch(() => null)
       } else {
         const text = await response
           .text()
           .catch(() => '')
 
-        data = text
-          ? { error: text }
-          : null
+        data = text ? { error: text } : null
       }
 
       if (!response.ok) {
@@ -1052,8 +1048,12 @@ export default function Settings() {
                 metaConnectionError
               }
               metaSyncing={metaSyncing}
-              metaSyncMessage={metaSyncMessage}
-              onMetaSync={syncMetaProvider}
+              metaSyncMessage={
+                metaSyncMessage
+              }
+              onMetaSync={
+                syncMetaProvider
+              }
             />
           )}
 
@@ -1073,6 +1073,13 @@ export default function Settings() {
               }
               metaConnectionError={
                 metaConnectionError
+              }
+              metaSyncing={metaSyncing}
+              metaSyncMessage={
+                metaSyncMessage
+              }
+              onMetaSync={
+                syncMetaProvider
               }
             />
           )}
@@ -1426,7 +1433,7 @@ function NotificationsSection({
                 preferences.overdue_tasks
               }
               onChange={(value) =>
-                updateNotificationPreference(
+                updatePreference(
                   'overdue_tasks',
                   value,
                 )
@@ -1740,7 +1747,7 @@ function IntegrationsSection({
                                 metaSyncing !== null ||
                                 metaConnecting !== null
                               }
-                              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[128px]"
                             >
                               {isSyncing && (
                                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-700/20 border-t-blue-700" />
@@ -1834,6 +1841,9 @@ function WhatsAppSection({
   onMetaConnect,
   metaConnecting,
   metaConnectionError,
+  metaSyncing,
+  metaSyncMessage,
+  onMetaSync,
 }: {
   integration?: Integration
   status: {
@@ -1845,9 +1855,17 @@ function WhatsAppSection({
   ) => void
   metaConnecting: MetaProvider | null
   metaConnectionError: string
+  metaSyncing: MetaProvider | null
+  metaSyncMessage: string
+  onMetaSync: (
+    provider: MetaProvider,
+  ) => void
 }) {
   const isConnecting =
     metaConnecting === 'whatsapp'
+
+  const isSyncing =
+    metaSyncing === 'whatsapp'
 
   return (
     <section>
@@ -1863,6 +1881,15 @@ function WhatsAppSection({
             <MessageBox
               type="error"
               message={metaConnectionError}
+            />
+          </div>
+        )}
+
+        {metaSyncMessage && (
+          <div className="mb-5">
+            <MessageBox
+              type="success"
+              message={metaSyncMessage}
             />
           </div>
         )}
@@ -1898,32 +1925,56 @@ function WhatsAppSection({
                 tone={status.tone}
               />
 
-              <button
-                type="button"
-                aria-label={
-                  status.label === 'متصل'
-                    ? 'إدارة WhatsApp'
-                    : 'ربط WhatsApp'
-                }
-                onClick={() =>
-                  onMetaConnect('whatsapp')
-                }
-                disabled={
-                  metaConnecting !== null ||
-                  metaSyncing !== null
-                }
-                className="inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
-              >
-                {isConnecting && (
-                  <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                )}
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <button
+                  type="button"
+                  aria-label={
+                    status.label === 'متصل'
+                      ? 'إدارة WhatsApp'
+                      : 'ربط WhatsApp'
+                  }
+                  onClick={() =>
+                    onMetaConnect('whatsapp')
+                  }
+                  disabled={
+                    metaConnecting !== null ||
+                    metaSyncing !== null
+                  }
+                  className="inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
+                >
+                  {isConnecting && (
+                    <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  )}
 
-                {isConnecting
-                  ? 'جاري الربط...'
-                  : status.label === 'متصل'
-                    ? 'إدارة WhatsApp'
-                    : 'ربط WhatsApp'}
-              </button>
+                  {isConnecting
+                    ? 'جاري الربط...'
+                    : status.label === 'متصل'
+                      ? 'إدارة WhatsApp'
+                      : 'ربط WhatsApp'}
+                </button>
+
+                {status.label === 'متصل' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onMetaSync('whatsapp')
+                    }
+                    disabled={
+                      metaSyncing !== null ||
+                      metaConnecting !== null
+                    }
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
+                  >
+                    {isSyncing && (
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-700/20 border-t-blue-700" />
+                    )}
+
+                    {isSyncing
+                      ? 'جاري المزامنة...'
+                      : 'مزامنة الأصول'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
