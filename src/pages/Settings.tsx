@@ -1699,29 +1699,33 @@ function IntegrationsSection({
                           type="button"
                           aria-label={
                             connected
-                              ? item.connectedActionLabel
+                              ? 'مزامنة أصول Meta'
                               : item.actionLabel
                           }
                           onClick={() =>
-                            onMetaConnect(
-                              itemProvider as MetaProvider,
-                            )
+                            connected && itemProvider
+                              ? onMetaSync(
+                                  itemProvider,
+                                )
+                              : onMetaConnect(
+                                  itemProvider as MetaProvider,
+                                )
                           }
                           disabled={
                             metaConnecting !== null ||
                             metaSyncing !== null
                           }
-                          className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[128px] ${
+                          className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px] ${
                             connected
-                              ? 'border border-sand-300 bg-white text-ink-900 hover:border-sand-400 hover:bg-sand-50'
+                              ? 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
                               : 'bg-ink-950 text-white hover:bg-ink-900'
                           }`}
                         >
-                          {isConnecting && (
+                          {(isConnecting || isSyncing) && (
                             <span
                               className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
                                 connected
-                                  ? 'border-ink-900/20 border-t-ink-900'
+                                  ? 'border-blue-700/20 border-t-blue-700'
                                   : 'border-white/30 border-t-white'
                               }`}
                             />
@@ -1729,35 +1733,12 @@ function IntegrationsSection({
 
                           {isConnecting
                             ? 'جاري الربط...'
-                            : connected
-                              ? item.connectedActionLabel
-                              : item.actionLabel}
+                            : isSyncing
+                              ? 'جاري مزامنة الأصول...'
+                              : connected
+                                ? 'مزامنة الأصول'
+                                : item.actionLabel}
                         </button>
-
-                        {connected &&
-                          itemProvider && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onMetaSync(
-                                  itemProvider,
-                                )
-                              }
-                              disabled={
-                                metaSyncing !== null ||
-                                metaConnecting !== null
-                              }
-                              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[128px]"
-                            >
-                              {isSyncing && (
-                                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-700/20 border-t-blue-700" />
-                              )}
-
-                              {isSyncing
-                                ? 'جاري مزامنة الأصول...'
-                                : 'مزامنة الأصول'}
-                            </button>
-                          )}
                       </div>
                     ) : (
                       <button
@@ -1867,6 +1848,9 @@ function WhatsAppSection({
   const isSyncing =
     metaSyncing === 'whatsapp'
 
+  const connected =
+    status.label === 'متصل'
+
   return (
     <section>
       <SectionHeader
@@ -1896,7 +1880,7 @@ function WhatsAppSection({
 
         <div
           className={`rounded-2xl border p-4 sm:rounded-3xl sm:p-6 ${
-            status.label === 'متصل'
+            connected
               ? 'border-emerald-200 bg-emerald-50/40'
               : 'border-sand-200 bg-sand-50/50'
           }`}
@@ -1925,55 +1909,47 @@ function WhatsAppSection({
                 tone={status.tone}
               />
 
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <div className="flex w-full flex-col gap-2 sm:w-auto">
                 <button
                   type="button"
                   aria-label={
-                    status.label === 'متصل'
-                      ? 'إدارة WhatsApp'
+                    connected
+                      ? 'مزامنة أصول WhatsApp'
                       : 'ربط WhatsApp'
                   }
                   onClick={() =>
-                    onMetaConnect('whatsapp')
+                    connected
+                      ? onMetaSync('whatsapp')
+                      : onMetaConnect('whatsapp')
                   }
                   disabled={
                     metaConnecting !== null ||
                     metaSyncing !== null
                   }
-                  className="inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
+                  className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[160px] ${
+                    connected
+                      ? 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      : 'bg-ink-950 text-white hover:bg-ink-900'
+                  }`}
                 >
-                  {isConnecting && (
-                    <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  {(isConnecting || isSyncing) && (
+                    <span
+                      className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
+                        connected
+                          ? 'border-blue-700/20 border-t-blue-700'
+                          : 'border-white/30 border-t-white'
+                      }`}
+                    />
                   )}
 
                   {isConnecting
                     ? 'جاري الربط...'
-                    : status.label === 'متصل'
-                      ? 'إدارة WhatsApp'
-                      : 'ربط WhatsApp'}
+                    : isSyncing
+                      ? 'جاري مزامنة الأصول...'
+                      : connected
+                        ? 'مزامنة الأصول'
+                        : 'ربط WhatsApp'}
                 </button>
-
-                {status.label === 'متصل' && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onMetaSync('whatsapp')
-                    }
-                    disabled={
-                      metaSyncing !== null ||
-                      metaConnecting !== null
-                    }
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
-                  >
-                    {isSyncing && (
-                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-700/20 border-t-blue-700" />
-                    )}
-
-                    {isSyncing
-                      ? 'جاري المزامنة...'
-                      : 'مزامنة الأصول'}
-                  </button>
-                )}
               </div>
             </div>
           </div>
