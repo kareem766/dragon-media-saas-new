@@ -1,0 +1,2 @@
+Temporary deployment trigger test for Vercel ↔ GitHub integration.
+This file is intentionally harmless and does not affect the application.
