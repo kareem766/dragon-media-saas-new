@@ -231,9 +231,96 @@ async function discoverInstagramData(
 /* WhatsApp                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Embedded Signup / Login for Business can expose the WhatsApp Business
+ * Account IDs granted to the user token through granular_scopes.
+ *
+ * This avoids relying on:
+ *
+ *   /{metaUserId}/businesses
+ *
+ * which can fail with:
+ *
+ *   (#100) Missing Permission
+ *
+ * even when the WhatsApp Business permissions themselves are correctly
+ * granted to the configuration.
+ */
+async function discoverWhatsAppWabaIds(
+  accessToken: string
+) {
+  const appId =
+    env('META_APP_ID')
+
+  const appSecret =
+    env('META_APP_SECRET')
+
+  const appAccessToken =
+    `${appId}|${appSecret}`
+
+  const {
+    response,
+    data,
+  } = await graphRequest(
+    `/debug_token?input_token=${encodeURIComponent(
+      accessToken
+    )}`,
+    appAccessToken
+  )
+
+  if (!response.ok) {
+    throw new Error(
+      `debug_token: ${errorMessage(
+        data,
+        'Unable to validate WhatsApp access token'
+      )}`
+    )
+  }
+
+  const granularScopes =
+    Array.isArray(
+      data?.data?.granular_scopes
+    )
+      ? data.data.granular_scopes
+      : []
+
+  const whatsappScope =
+    granularScopes.find(
+      (item: any) =>
+        item?.scope ===
+        'whatsapp_business_management'
+    )
+
+  const targetIds =
+    Array.isArray(
+      whatsappScope?.target_ids
+    )
+      ? whatsappScope.target_ids
+      : []
+
+  const wabaIds =
+    targetIds
+      .filter(
+        (id: unknown) =>
+          typeof id === 'string' ||
+          typeof id === 'number'
+      )
+      .map(
+        (id: string | number) =>
+          String(id)
+      )
+      .filter(Boolean)
+
+  return {
+    wabaIds,
+    granularScopes,
+    debugData:
+      data?.data || null,
+  }
+}
+
 async function discoverWhatsAppData(
-  accessToken: string,
-  metaUserId: string
+  accessToken: string
 ) {
   let businessId:
     | string
@@ -265,99 +352,102 @@ async function discoverWhatsAppData(
 
   const discoveryErrors: string[] = []
 
-  /* ------------------------------- Business ------------------------------ */
+  /* --------------------------- Discover WABA IDs -------------------------- */
 
   try {
     const {
-      response,
-      data,
-    } = await graphRequest(
-      `/${encodeURIComponent(
-        metaUserId
-      )}/businesses?fields=id,name`,
-      accessToken
-    )
-
-    if (!response.ok) {
-      discoveryErrors.push(
-        `businesses: ${errorMessage(
-          data,
-          'request failed'
-        )}`
+      wabaIds,
+    } =
+      await discoverWhatsAppWabaIds(
+        accessToken
       )
-    } else if (
-      Array.isArray(data?.data) &&
-      data.data.length > 0
-    ) {
-      const business =
-        data.data[0]
 
-      if (business?.id) {
-        businessId =
-          String(business.id)
-      }
-
-      if (
-        typeof business?.name ===
-        'string'
-      ) {
-        businessName =
-          business.name
-      }
+    if (wabaIds.length > 0) {
+      wabaId =
+        wabaIds[0]
+    } else {
+      discoveryErrors.push(
+        'waba: No WhatsApp Business Account was returned by the authorized Meta token'
+      )
     }
-  } catch {
+  } catch (error) {
     discoveryErrors.push(
-      'businesses: request exception'
+      `waba_token: ${
+        error instanceof Error
+          ? error.message
+          : 'Unable to discover WhatsApp Business Account'
+      }`
     )
   }
 
-  /* -------------------------------- WABA --------------------------------- */
+  /* --------------------------- WABA information --------------------------- */
 
-  if (businessId) {
+  if (wabaId) {
     try {
       const {
         response,
         data,
       } = await graphRequest(
         `/${encodeURIComponent(
-          businessId
-        )}/owned_whatsapp_business_accounts?fields=id,name`,
+          wabaId
+        )}?fields=id,name,owner_business_info`,
         accessToken
       )
 
       if (!response.ok) {
         discoveryErrors.push(
-          `waba: ${errorMessage(
+          `waba_info: ${errorMessage(
             data,
             'request failed'
           )}`
         )
-      } else if (
-        Array.isArray(data?.data) &&
-        data.data.length > 0
-      ) {
-        const waba =
-          data.data[0]
-
-        if (waba?.id) {
-          wabaId =
-            String(waba.id)
-        }
-
+      } else {
         if (
-          typeof waba?.name ===
+          typeof data?.name ===
           'string'
         ) {
           wabaName =
-            waba.name
+            data.name
+        }
+
+        const ownerBusiness =
+          data?.owner_business_info
+
+        if (
+          ownerBusiness?.id
+        ) {
+          businessId =
+            String(
+              ownerBusiness.id
+            )
+        }
+
+        if (
+          typeof ownerBusiness?.name ===
+          'string'
+        ) {
+          businessName =
+            ownerBusiness.name
         }
       }
     } catch {
       discoveryErrors.push(
-        'waba: request exception'
+        'waba_info: request exception'
       )
     }
   }
+
+  /* ---------------------- Business fallback information ------------------- */
+
+  /**
+   * If the WABA does not expose owner_business_info,
+   * do not call /{metaUserId}/businesses again.
+   *
+   * That endpoint was the source of the Missing Permission error.
+   *
+   * We keep businessId/businessName nullable because WABA + phone number
+   * are the resources actually required for WhatsApp messaging.
+   */
 
   /* ----------------------------- Phone number ----------------------------- */
 
@@ -407,6 +497,10 @@ async function discoverWhatsAppData(
           verifiedName =
             phone.verified_name
         }
+      } else {
+        discoveryErrors.push(
+          'phone_numbers: No WhatsApp phone number was returned for the WABA'
+        )
       }
     } catch {
       discoveryErrors.push(
@@ -751,8 +845,7 @@ export default async function handler(
     if (provider === 'whatsapp') {
       discovery =
         await discoverWhatsAppData(
-          token,
-          metaUserId
+          token
         )
     }
 
