@@ -529,7 +529,7 @@ export default async function handler(
 
     const serviceKey =
       getEnv(
-        'SUPABASE_SERVICE_KEY'
+        'SUPABASE_SECRET_KEY'
       )
 
     /*
