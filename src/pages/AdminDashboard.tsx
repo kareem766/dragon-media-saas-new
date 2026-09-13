@@ -1,5 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Card, StatCard, Badge, Button } from '../components/ui'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+import {
+  Card,
+  StatCard,
+  Badge,
+  Button,
+} from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 
 interface OrgRow {
@@ -91,10 +101,16 @@ const methodLabels: Record<string, string> = {
   paymob: 'Paymob',
 }
 
-const formatMoney = (value: number | null | undefined) =>
-  `${Number(value || 0).toLocaleString('ar-EG')} ج.م`
+const formatMoney = (
+  value: number | null | undefined
+) =>
+  `${Number(value || 0).toLocaleString(
+    'ar-EG'
+  )} ج.م`
 
-const formatDate = (value: string | null | undefined) => {
+const formatDate = (
+  value: string | null | undefined
+) => {
   if (!value) return '—'
 
   const date = new Date(value)
@@ -110,7 +126,9 @@ const formatDate = (value: string | null | undefined) => {
   })
 }
 
-const formatDateTime = (value: string | null | undefined) => {
+const formatDateTime = (
+  value: string | null | undefined
+) => {
   if (!value) return '—'
 
   const date = new Date(value)
@@ -128,10 +146,153 @@ const formatDateTime = (value: string | null | undefined) => {
   })
 }
 
-const formatPercent = (value: number | null | undefined) => {
+const formatPercent = (
+  value: number | null | undefined
+) => {
   const number = Number(value || 0)
 
-  return `${number >= 0 ? '+' : ''}${number.toFixed(1)}%`
+  return `${number >= 0 ? '+' : ''}${number.toFixed(
+    1
+  )}%`
+}
+
+/**
+ * Converts any unknown API/runtime error into a safe
+ * human-readable string.
+ *
+ * This prevents React from rendering objects as:
+ * [object Object]
+ */
+const getErrorMessage = (
+  error: unknown,
+  fallback: string
+): string => {
+  if (
+    typeof error === 'string' &&
+    error.trim()
+  ) {
+    return error
+  }
+
+  if (
+    error instanceof Error &&
+    typeof error.message === 'string' &&
+    error.message.trim()
+  ) {
+    return error.message
+  }
+
+  if (
+    error &&
+    typeof error === 'object'
+  ) {
+    const value =
+      error as Record<string, unknown>
+
+    if (
+      typeof value.message === 'string' &&
+      value.message.trim()
+    ) {
+      return value.message
+    }
+
+    if (
+      typeof value.error === 'string' &&
+      value.error.trim()
+    ) {
+      return value.error
+    }
+
+    if (
+      value.error &&
+      typeof value.error === 'object'
+    ) {
+      const nestedError =
+        value.error as Record<
+          string,
+          unknown
+        >
+
+      if (
+        typeof nestedError.message ===
+          'string' &&
+        nestedError.message.trim()
+      ) {
+        return nestedError.message
+      }
+
+      try {
+        const serialized =
+          JSON.stringify(value.error)
+
+        if (
+          serialized &&
+          serialized !== '{}'
+        ) {
+          return serialized
+        }
+      } catch {
+        // Keep fallback.
+      }
+    }
+
+    try {
+      const serialized =
+        JSON.stringify(error)
+
+      if (
+        serialized &&
+        serialized !== '{}'
+      ) {
+        return serialized
+      }
+    } catch {
+      // Keep fallback.
+    }
+  }
+
+  return fallback
+}
+
+/**
+ * Safely extracts an API error from a Response.
+ *
+ * We intentionally read the response as text first instead
+ * of calling response.json() directly. This handles:
+ * - JSON responses
+ * - plain text responses
+ * - empty responses
+ * - malformed JSON
+ * - object-shaped error payloads
+ */
+const getApiErrorMessage = async (
+  response: Response,
+  fallback: string
+): Promise<string> => {
+  let responseText = ''
+
+  try {
+    responseText = await response.text()
+  } catch {
+    return fallback
+  }
+
+  if (!responseText.trim()) {
+    return fallback
+  }
+
+  let json: unknown = null
+
+  try {
+    json = JSON.parse(responseText)
+  } catch {
+    return responseText.trim()
+  }
+
+  return getErrorMessage(
+    json,
+    fallback
+  )
 }
 
 function DashboardSkeleton() {
@@ -147,17 +308,19 @@ function DashboardSkeleton() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <div
-              key={index}
-              className="rounded-2xl border border-sand-200 bg-white p-5"
-            >
-              <div className="animate-pulse space-y-3">
-                <div className="h-3 w-24 rounded bg-sand-100" />
-                <div className="h-7 w-20 rounded-lg bg-sand-200" />
+          {Array.from({ length: 5 }).map(
+            (_, index) => (
+              <div
+                key={index}
+                className="rounded-2xl border border-sand-200 bg-white p-5"
+              >
+                <div className="animate-pulse space-y-3">
+                  <div className="h-3 w-24 rounded bg-sand-100" />
+                  <div className="h-7 w-20 rounded-lg bg-sand-200" />
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          )}
         </div>
 
         <div className="rounded-2xl border border-sand-200 bg-white p-5">
@@ -178,12 +341,14 @@ function DashboardSkeleton() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-28 rounded-2xl bg-sand-100"
-                />
-              ))}
+              {Array.from({ length: 4 }).map(
+                (_, index) => (
+                  <div
+                    key={index}
+                    className="h-28 rounded-2xl bg-sand-100"
+                  />
+                )
+              )}
             </div>
           </div>
         </div>
@@ -192,12 +357,14 @@ function DashboardSkeleton() {
           <div className="animate-pulse space-y-4">
             <div className="h-5 w-64 rounded-lg bg-sand-200" />
 
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div
-                key={index}
-                className="h-14 rounded-xl bg-sand-100"
-              />
-            ))}
+            {Array.from({ length: 4 }).map(
+              (_, index) => (
+                <div
+                  key={index}
+                  className="h-14 rounded-xl bg-sand-100"
+                />
+              )
+            )}
           </div>
         </div>
       </div>
@@ -264,17 +431,20 @@ function SectionTitle({
 }
 
 export default function AdminDashboard() {
-  const [data, setData] = useState<Overview | null>(null)
+  const [data, setData] =
+    useState<Overview | null>(null)
 
   const [financial, setFinancial] =
     useState<FinancialData | null>(null)
 
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] =
+    useState<string | null>(null)
 
   const [financialError, setFinancialError] =
     useState<string | null>(null)
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] =
+    useState(true)
 
   const [financialLoading, setFinancialLoading] =
     useState(true)
@@ -282,420 +452,511 @@ export default function AdminDashboard() {
   const [actingId, setActingId] =
     useState<string | null>(null)
 
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] =
+    useState<string | null>(null)
 
   const [paymentMethod, setPaymentMethod] =
     useState('all')
 
-  const [fromDate, setFromDate] = useState('')
+  const [fromDate, setFromDate] =
+    useState('')
 
-  const [toDate, setToDate] = useState('')
+  const [toDate, setToDate] =
+    useState('')
 
-  const getAccessToken = useCallback(async () => {
-    if (!supabase) {
-      throw new Error('تعذر الاتصال بخدمة البيانات.')
-    }
+  const getAccessToken =
+    useCallback(async () => {
+      if (!supabase) {
+        throw new Error(
+          'تعذر الاتصال بخدمة البيانات.'
+        )
+      }
 
-    const {
-      data: sessionData,
-      error: sessionError,
-    } = await supabase.auth.getSession()
+      const {
+        data: sessionData,
+        error: sessionError,
+      } =
+        await supabase.auth.getSession()
 
-    if (sessionError) {
-      console.error(
-        'Admin dashboard session error:',
-        sessionError
-      )
+      if (sessionError) {
+        console.error(
+          'Admin dashboard session error:',
+          sessionError
+        )
 
-      throw new Error('تعذر التحقق من جلسة الدخول.')
-    }
+        throw new Error(
+          'تعذر التحقق من جلسة الدخول.'
+        )
+      }
 
-    const token =
-      sessionData.session?.access_token
+      const token =
+        sessionData.session?.access_token
 
-    if (!token) {
-      throw new Error(
-        'انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.'
-      )
-    }
+      if (!token) {
+        throw new Error(
+          'انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.'
+        )
+      }
 
-    return token
-  }, [])
+      return token
+    }, [])
 
-  const loadOverview = useCallback(async () => {
-    if (!supabase) {
-      setError('تعذر الاتصال بخدمة البيانات.')
-      setLoading(false)
-      return
-    }
+  const loadOverview =
+    useCallback(async () => {
+      if (!supabase) {
+        setError(
+          'تعذر الاتصال بخدمة البيانات.'
+        )
+        setLoading(false)
+        return
+      }
 
-    setLoading(true)
-    setError(null)
+      setLoading(true)
+      setError(null)
 
-    try {
-      const token = await getAccessToken()
+      try {
+        const token =
+          await getAccessToken()
 
-      const overviewRes = await fetch(
-        '/api/admin/overview',
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
+        const overviewRes =
+          await fetch(
+            '/api/admin/overview',
+            {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept:
+                  'application/json',
+              },
+            }
+          )
+
+        const responseText =
+          await overviewRes.text()
+
+        let json: any = {}
+
+        if (responseText.trim()) {
+          try {
+            json =
+              JSON.parse(responseText)
+          } catch {
+            json = {}
+          }
         }
-      )
 
-      const json =
-        await overviewRes.json().catch(() => ({}))
+        if (!overviewRes.ok) {
+          const serverError =
+            getErrorMessage(
+              json,
+              responseText.trim() ||
+                `تعذر تحميل بيانات لوحة الإدارة. HTTP ${overviewRes.status}`
+            )
 
-      if (!overviewRes.ok) {
-        throw new Error(
-          json?.error ||
-            'تعذر تحميل بيانات لوحة الإدارة.'
-        )
-      }
+          throw new Error(
+            serverError
+          )
+        }
 
-      if (
-        !json ||
-        typeof json !== 'object'
-      ) {
-        throw new Error(
-          'استجابة لوحة الإدارة غير صالحة.'
-        )
-      }
+        if (
+          !json ||
+          typeof json !== 'object' ||
+          Array.isArray(json)
+        ) {
+          throw new Error(
+            'استجابة لوحة الإدارة غير صالحة.'
+          )
+        }
 
-      const organizations = Array.isArray(
-        json.organizations
-      )
-        ? json.organizations
-        : []
+        const organizations =
+          Array.isArray(
+            json.organizations
+          )
+            ? json.organizations
+            : []
 
-      const totals = {
-        organizations: Number(
-          json?.totals?.organizations || 0
-        ),
-        users: Number(
-          json?.totals?.users || 0
-        ),
-        leads: Number(
-          json?.totals?.leads || 0
-        ),
-        customers: Number(
-          json?.totals?.customers || 0
-        ),
-        dealsValue: Number(
-          json?.totals?.dealsValue || 0
-        ),
-      }
-
-      const normalizedOrganizations: OrgRow[] =
-        organizations.map((organization: any) => ({
-          id: String(
-            organization?.id || ''
+        const totals = {
+          organizations: Number(
+            json?.totals
+              ?.organizations || 0
           ),
-          name: String(
-            organization?.name || 'بدون اسم'
+          users: Number(
+            json?.totals?.users || 0
           ),
-          business_type:
-            organization?.business_type ??
-            null,
-          plan:
-            organization?.plan ??
-            null,
-          created_at:
-            organization?.created_at ||
-            '',
-          usersCount: Number(
-            organization?.usersCount || 0
+          leads: Number(
+            json?.totals?.leads || 0
           ),
-          leadsCount: Number(
-            organization?.leadsCount || 0
-          ),
-          customersCount: Number(
-            organization?.customersCount || 0
+          customers: Number(
+            json?.totals?.customers || 0
           ),
           dealsValue: Number(
-            organization?.dealsValue || 0
+            json?.totals?.dealsValue ||
+              0
           ),
-          suspended: Boolean(
-            organization?.suspended
-          ),
-        }))
-
-      setData({
-        totals,
-        organizations:
-          normalizedOrganizations,
-      })
-    } catch (err: any) {
-      console.error(
-        'admin dashboard overview:',
-        err
-      )
-
-      setError(
-        err?.message ||
-          'حدث خطأ أثناء تحميل لوحة الإدارة.'
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [getAccessToken])
-
-  const loadFinancial = useCallback(async () => {
-    if (!supabase) {
-      setFinancialError(
-        'تعذر الاتصال بخدمة البيانات.'
-      )
-      setFinancialLoading(false)
-      return
-    }
-
-    setFinancialLoading(true)
-    setFinancialError(null)
-
-    try {
-      const token = await getAccessToken()
-
-      const params = new URLSearchParams()
-
-      if (paymentMethod !== 'all') {
-        params.set(
-          'method',
-          paymentMethod
-        )
-      }
-
-      if (fromDate) {
-        params.set(
-          'from',
-          fromDate
-        )
-      }
-
-      if (toDate) {
-        params.set(
-          'to',
-          toDate
-        )
-      }
-
-      const queryString =
-        params.toString()
-
-      const response = await fetch(
-        `/api/admin/financial${
-          queryString
-            ? `?${queryString}`
-            : ''
-        }`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
         }
-      )
 
-      const json =
-        await response.json().catch(() => ({}))
+        const normalizedOrganizations: OrgRow[] =
+          organizations.map(
+            (organization: any) => ({
+              id: String(
+                organization?.id || ''
+              ),
+              name: String(
+                organization?.name ||
+                  'بدون اسم'
+              ),
+              business_type:
+                organization?.business_type ??
+                null,
+              plan:
+                organization?.plan ??
+                null,
+              created_at:
+                organization?.created_at ||
+                '',
+              usersCount: Number(
+                organization?.usersCount ||
+                  0
+              ),
+              leadsCount: Number(
+                organization?.leadsCount ||
+                  0
+              ),
+              customersCount: Number(
+                organization?.customersCount ||
+                  0
+              ),
+              dealsValue: Number(
+                organization?.dealsValue ||
+                  0
+              ),
+              suspended: Boolean(
+                organization?.suspended
+              ),
+            })
+          )
 
-      if (!response.ok) {
-        throw new Error(
-          json?.error ||
-            'تعذر تحميل البيانات المالية.'
+        setData({
+          totals,
+          organizations:
+            normalizedOrganizations,
+        })
+      } catch (err: unknown) {
+        console.error(
+          'admin dashboard overview:',
+          err
         )
+
+        setError(
+          getErrorMessage(
+            err,
+            'حدث خطأ أثناء تحميل لوحة الإدارة.'
+          )
+        )
+      } finally {
+        setLoading(false)
+      }
+    }, [getAccessToken])
+
+  const loadFinancial =
+    useCallback(async () => {
+      if (!supabase) {
+        setFinancialError(
+          'تعذر الاتصال بخدمة البيانات.'
+        )
+        setFinancialLoading(false)
+        return
       }
 
-      if (
-        !json ||
-        typeof json !== 'object'
-      ) {
-        throw new Error(
-          'استجابة البيانات المالية غير صالحة.'
-        )
-      }
+      setFinancialLoading(true)
+      setFinancialError(null)
 
-      const normalizedFinancial: FinancialData =
-        {
-          summary: {
-            totalRevenue: Number(
-              json?.summary?.totalRevenue ||
-                0
-            ),
-            transactionCount: Number(
-              json?.summary?.transactionCount ||
-                0
-            ),
-            averageTransaction: Number(
-              json?.summary
-                ?.averageTransaction || 0
-            ),
-            monthRevenue: Number(
-              json?.summary?.monthRevenue ||
-                0
-            ),
-            previousMonthRevenue: Number(
-              json?.summary
-                ?.previousMonthRevenue || 0
-            ),
-            yearRevenue: Number(
-              json?.summary?.yearRevenue ||
-                0
-            ),
-            currentMonthCount: Number(
-              json?.summary
-                ?.currentMonthCount || 0
-            ),
-            previousMonthCount: Number(
-              json?.summary
-                ?.previousMonthCount || 0
-            ),
-            revenueChangePercent: Number(
-              json?.summary
-                ?.revenueChangePercent || 0
-            ),
-          },
+      try {
+        const token =
+          await getAccessToken()
 
-          lifecycle: {
-            activeSubscriptions: Number(
-              json?.lifecycle
-                ?.activeSubscriptions || 0
-            ),
-            expiringSubscriptions: Number(
-              json?.lifecycle
-                ?.expiringSubscriptions || 0
-            ),
-            expiredSubscriptions: Number(
-              json?.lifecycle
-                ?.expiredSubscriptions || 0
-            ),
-            invoices: {
-              total: Number(
-                json?.lifecycle?.invoices
-                  ?.total || 0
+        const params =
+          new URLSearchParams()
+
+        if (paymentMethod !== 'all') {
+          params.set(
+            'method',
+            paymentMethod
+          )
+        }
+
+        if (fromDate) {
+          params.set(
+            'from',
+            fromDate
+          )
+        }
+
+        if (toDate) {
+          params.set(
+            'to',
+            toDate
+          )
+        }
+
+        const queryString =
+          params.toString()
+
+        const response =
+          await fetch(
+            `/api/admin/financial${
+              queryString
+                ? `?${queryString}`
+                : ''
+            }`,
+            {
+              method: 'GET',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept:
+                  'application/json',
+              },
+            }
+          )
+
+        const responseText =
+          await response.text()
+
+        let json: any = {}
+
+        if (responseText.trim()) {
+          try {
+            json =
+              JSON.parse(responseText)
+          } catch {
+            json = {}
+          }
+        }
+
+        if (!response.ok) {
+          const serverError =
+            getErrorMessage(
+              json,
+              responseText.trim() ||
+                `تعذر تحميل البيانات المالية. HTTP ${response.status}`
+            )
+
+          throw new Error(
+            serverError
+          )
+        }
+
+        if (
+          !json ||
+          typeof json !== 'object' ||
+          Array.isArray(json)
+        ) {
+          throw new Error(
+            'استجابة البيانات المالية غير صالحة.'
+          )
+        }
+
+        const normalizedFinancial: FinancialData =
+          {
+            summary: {
+              totalRevenue: Number(
+                json?.summary
+                  ?.totalRevenue || 0
               ),
-              paid: Number(
-                json?.lifecycle?.invoices
-                  ?.paid || 0
+              transactionCount: Number(
+                json?.summary
+                  ?.transactionCount || 0
               ),
-              pending: Number(
-                json?.lifecycle?.invoices
-                  ?.pending || 0
+              averageTransaction:
+                Number(
+                  json?.summary
+                    ?.averageTransaction ||
+                    0
+                ),
+              monthRevenue: Number(
+                json?.summary
+                  ?.monthRevenue || 0
               ),
+              previousMonthRevenue:
+                Number(
+                  json?.summary
+                    ?.previousMonthRevenue ||
+                    0
+                ),
+              yearRevenue: Number(
+                json?.summary
+                  ?.yearRevenue || 0
+              ),
+              currentMonthCount:
+                Number(
+                  json?.summary
+                    ?.currentMonthCount ||
+                    0
+                ),
+              previousMonthCount:
+                Number(
+                  json?.summary
+                    ?.previousMonthCount ||
+                    0
+                ),
+              revenueChangePercent:
+                Number(
+                  json?.summary
+                    ?.revenueChangePercent ||
+                    0
+                ),
             },
-          },
 
-          byMethod: Array.isArray(
-            json?.byMethod
-          )
-            ? json.byMethod.map(
-                (item: any) => ({
-                  method: String(
-                    item?.method || ''
-                  ),
-                  count: Number(
-                    item?.count || 0
-                  ),
-                  revenue: Number(
-                    item?.revenue || 0
-                  ),
-                })
-              )
-            : [],
+            lifecycle: {
+              activeSubscriptions:
+                Number(
+                  json?.lifecycle
+                    ?.activeSubscriptions ||
+                    0
+                ),
+              expiringSubscriptions:
+                Number(
+                  json?.lifecycle
+                    ?.expiringSubscriptions ||
+                    0
+                ),
+              expiredSubscriptions:
+                Number(
+                  json?.lifecycle
+                    ?.expiredSubscriptions ||
+                    0
+                ),
+              invoices: {
+                total: Number(
+                  json?.lifecycle
+                    ?.invoices?.total ||
+                    0
+                ),
+                paid: Number(
+                  json?.lifecycle
+                    ?.invoices?.paid ||
+                    0
+                ),
+                pending: Number(
+                  json?.lifecycle
+                    ?.invoices?.pending ||
+                    0
+                ),
+              },
+            },
 
-          byPlan: Array.isArray(
-            json?.byPlan
-          )
-            ? json.byPlan.map(
-                (item: any) => ({
-                  plan_id:
-                    item?.plan_id ??
-                    null,
-                  plan_name: String(
-                    item?.plan_name ||
-                      'باقة غير محددة'
-                  ),
-                  count: Number(
-                    item?.count || 0
-                  ),
-                  revenue: Number(
-                    item?.revenue || 0
-                  ),
-                })
-              )
-            : [],
+            byMethod: Array.isArray(
+              json?.byMethod
+            )
+              ? json.byMethod.map(
+                  (item: any) => ({
+                    method: String(
+                      item?.method || ''
+                    ),
+                    count: Number(
+                      item?.count || 0
+                    ),
+                    revenue: Number(
+                      item?.revenue || 0
+                    ),
+                  })
+                )
+              : [],
 
-          transactions: Array.isArray(
-            json?.transactions
-          )
-            ? json.transactions.map(
-                (item: any) => ({
-                  payment_id: String(
-                    item?.payment_id || ''
-                  ),
-                  amount: Number(
-                    item?.amount || 0
-                  ),
-                  method: String(
-                    item?.method || ''
-                  ),
-                  paid_at:
-                    item?.paid_at || '',
-                  invoice_id: String(
-                    item?.invoice_id || ''
-                  ),
-                  organization_id:
-                    String(
-                      item?.organization_id ||
+            byPlan: Array.isArray(
+              json?.byPlan
+            )
+              ? json.byPlan.map(
+                  (item: any) => ({
+                    plan_id:
+                      item?.plan_id ??
+                      null,
+                    plan_name: String(
+                      item?.plan_name ||
+                        'باقة غير محددة'
+                    ),
+                    count: Number(
+                      item?.count || 0
+                    ),
+                    revenue: Number(
+                      item?.revenue || 0
+                    ),
+                  })
+                )
+              : [],
+
+            transactions: Array.isArray(
+              json?.transactions
+            )
+              ? json.transactions.map(
+                  (item: any) => ({
+                    payment_id: String(
+                      item?.payment_id ||
                         ''
                     ),
-                  subscription_id:
-                    String(
-                      item?.subscription_id ||
+                    amount: Number(
+                      item?.amount || 0
+                    ),
+                    method: String(
+                      item?.method || ''
+                    ),
+                    paid_at:
+                      item?.paid_at || '',
+                    invoice_id: String(
+                      item?.invoice_id ||
                         ''
                     ),
-                  organization_name:
-                    String(
-                      item?.organization_name ||
-                        'بدون اسم'
-                    ),
-                  invoice_status:
-                    item?.invoice_status,
-                  plan_id:
-                    item?.plan_id ??
-                    null,
-                  plan_name:
-                    item?.plan_name,
-                })
-              )
-            : [],
-        }
+                    organization_id:
+                      String(
+                        item?.organization_id ||
+                          ''
+                      ),
+                    subscription_id:
+                      String(
+                        item?.subscription_id ||
+                          ''
+                      ),
+                    organization_name:
+                      String(
+                        item?.organization_name ||
+                          'بدون اسم'
+                      ),
+                    invoice_status:
+                      item?.invoice_status,
+                    plan_id:
+                      item?.plan_id ??
+                      null,
+                    plan_name:
+                      item?.plan_name,
+                  })
+                )
+              : [],
+          }
 
-      setFinancial(
-        normalizedFinancial
-      )
-    } catch (err: any) {
-      console.error(
-        'admin dashboard financial:',
-        err
-      )
+        setFinancial(
+          normalizedFinancial
+        )
+      } catch (err: unknown) {
+        console.error(
+          'admin dashboard financial:',
+          err
+        )
 
-      setFinancialError(
-        err?.message ||
-          'حدث خطأ أثناء تحميل البيانات المالية.'
-      )
-    } finally {
-      setFinancialLoading(false)
-    }
-  }, [
-    getAccessToken,
-    paymentMethod,
-    fromDate,
-    toDate,
-  ])
+        setFinancialError(
+          getErrorMessage(
+            err,
+            'حدث خطأ أثناء تحميل البيانات المالية.'
+          )
+        )
+      } finally {
+        setFinancialLoading(false)
+      }
+    }, [
+      getAccessToken,
+      paymentMethod,
+      fromDate,
+      toDate,
+    ])
 
   useEffect(() => {
     void loadOverview()
@@ -708,10 +969,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!toast) return
 
-    const timer = window.setTimeout(
-      () => setToast(null),
-      3000
-    )
+    const timer =
+      window.setTimeout(
+        () => setToast(null),
+        3000
+      )
 
     return () =>
       window.clearTimeout(timer)
@@ -765,13 +1027,27 @@ export default function AdminDashboard() {
         }
       )
 
-      const json =
-        await res.json().catch(() => ({}))
+      const responseText =
+        await res.text()
+
+      let json: unknown = {}
+
+      if (responseText.trim()) {
+        try {
+          json =
+            JSON.parse(responseText)
+        } catch {
+          json = {}
+        }
+      }
 
       if (!res.ok) {
         throw new Error(
-          json?.error ||
-            'حدث خطأ أثناء تنفيذ العملية.'
+          getErrorMessage(
+            json,
+            responseText.trim() ||
+              'حدث خطأ أثناء تنفيذ العملية.'
+          )
         )
       }
 
@@ -800,15 +1076,17 @@ export default function AdminDashboard() {
           ? `تم تعليق شركة "${org.name}" بنجاح`
           : `تم تفعيل شركة "${org.name}" بنجاح`
       )
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(
         'admin organization action:',
         err
       )
 
       setToast(
-        err?.message ||
+        getErrorMessage(
+          err,
           'حدث خطأ أثناء تنفيذ العملية.'
+        )
       )
     } finally {
       setActingId(null)
@@ -917,13 +1195,34 @@ export default function AdminDashboard() {
               className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:flex xl:max-w-4xl xl:flex-wrap xl:justify-end"
             >
               {[
-                ['#/admin/payments', 'طلبات الدفع'],
-                ['#/admin/audit-logs', 'سجل النشاط'],
-                ['#/admin/settings', 'إعدادات المنصة'],
-                ['#/admin/branding', 'هوية المنصة'],
-                ['#/admin/plans', 'إدارة الباقات'],
-                ['#/admin/roles', 'الأدوار والصلاحيات'],
-                ['#/admin/tickets', 'تذاكر الدعم'],
+                [
+                  '#/admin/payments',
+                  'طلبات الدفع',
+                ],
+                [
+                  '#/admin/audit-logs',
+                  'سجل النشاط',
+                ],
+                [
+                  '#/admin/settings',
+                  'إعدادات المنصة',
+                ],
+                [
+                  '#/admin/branding',
+                  'هوية المنصة',
+                ],
+                [
+                  '#/admin/plans',
+                  'إدارة الباقات',
+                ],
+                [
+                  '#/admin/roles',
+                  'الأدوار والصلاحيات',
+                ],
+                [
+                  '#/admin/tickets',
+                  'تذاكر الدعم',
+                ],
               ].map(([href, label]) => (
                 <a
                   key={href}
@@ -1808,7 +2107,8 @@ export default function AdminDashboard() {
                 </thead>
 
                 <tbody className="divide-y divide-sand-100">
-                  {data.organizations.length === 0 ? (
+                  {data.organizations.length ===
+                  0 ? (
                     <tr>
                       <td
                         colSpan={8}
