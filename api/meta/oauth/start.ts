@@ -15,7 +15,7 @@ function env(name: string) {
 
   if (!value) {
     throw new Error(
-      `Missing environment variable: ${name}`
+      `Missing environment variable: ${name}`,
     )
   }
 
@@ -28,7 +28,7 @@ function base64Url(value: string) {
 
 function signState(
   payload: string,
-  secret: string
+  secret: string,
 ) {
   return createHmac('sha256', secret)
     .update(payload)
@@ -36,7 +36,7 @@ function signState(
 }
 
 function getProvider(
-  value: unknown
+  value: unknown,
 ): MetaProvider {
   if (
     value === 'facebook' ||
@@ -49,9 +49,24 @@ function getProvider(
   return 'whatsapp'
 }
 
+function getProviderConfigEnv(
+  provider: MetaProvider,
+) {
+  switch (provider) {
+    case 'facebook':
+      return 'META_FACEBOOK_LOGIN_CONFIG_ID'
+
+    case 'instagram':
+      return 'META_INSTAGRAM_LOGIN_CONFIG_ID'
+
+    case 'whatsapp':
+      return 'META_WHATSAPP_LOGIN_CONFIG_ID'
+  }
+}
+
 function getErrorMessage(
   error: unknown,
-  fallback: string
+  fallback: string,
 ) {
   if (
     typeof error === 'string' &&
@@ -96,11 +111,11 @@ function getErrorMessage(
 
 export default async function handler(
   req: VercelRequest,
-  res: VercelResponse
+  res: VercelResponse,
 ) {
   res.setHeader(
     'Cache-Control',
-    'no-store'
+    'no-store',
   )
 
   if (req.method !== 'GET') {
@@ -118,7 +133,7 @@ export default async function handler(
     const accessToken =
       authorization.startsWith('Bearer ')
         ? authorization.slice(
-            'Bearer '.length
+            'Bearer '.length,
           )
         : ''
 
@@ -131,14 +146,14 @@ export default async function handler(
         })
     }
 
-    const provider = getProvider(
-      req.query.provider
-    )
+    const provider =
+      getProvider(
+        req.query.provider,
+      )
 
     /*
-     * Public Supabase client:
-     * used only to validate the user's
-     * Supabase access token.
+     * Validate the user's Supabase session
+     * using the public/publishable side.
      */
     const authSupabase =
       createClient(
@@ -149,7 +164,7 @@ export default async function handler(
             persistSession: false,
             autoRefreshToken: false,
           },
-        }
+        },
       )
 
     const {
@@ -157,7 +172,7 @@ export default async function handler(
       error: authError,
     } =
       await authSupabase.auth.getUser(
-        accessToken
+        accessToken,
       )
 
     if (
@@ -173,11 +188,9 @@ export default async function handler(
     }
 
     /*
-     * Server-only Supabase client.
+     * Server-only client.
      *
-     * SUPABASE_SECRET_KEY must exist only
-     * in Vercel server environment variables.
-     * It must NEVER be exposed to the browser.
+     * Secret key must NEVER reach the browser.
      */
     const adminSupabase =
       createClient(
@@ -188,7 +201,7 @@ export default async function handler(
             persistSession: false,
             autoRefreshToken: false,
           },
-        }
+        },
       )
 
     const {
@@ -198,11 +211,11 @@ export default async function handler(
       await adminSupabase
         .from('users')
         .select(
-          'organization_id'
+          'organization_id',
         )
         .eq(
           'id',
-          authData.user.id
+          authData.user.id,
         )
         .maybeSingle()
 
@@ -211,7 +224,7 @@ export default async function handler(
     ) {
       console.error(
         'Meta OAuth membership lookup error:',
-        membershipError
+        membershipError,
       )
 
       return res
@@ -235,18 +248,45 @@ export default async function handler(
         })
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * Each provider now uses its own
+     * Facebook Login for Business configuration.
+     */
+    const configEnv =
+      getProviderConfigEnv(
+        provider,
+      )
+
+    const configId =
+      process.env[configEnv]
+
+    if (!configId) {
+      return res
+        .status(500)
+        .json({
+          error:
+            `Meta ${provider} connection is not configured yet. Missing ${configEnv}.`,
+          code:
+            'META_PROVIDER_CONFIG_MISSING',
+          provider,
+        })
+    }
+
     const redirectUri =
       env('META_REDIRECT_URI')
 
     const appId =
       env('META_APP_ID')
 
-    const configId =
-      env('META_LOGIN_CONFIG_ID')
-
     const stateSecret =
       env('META_STATE_SECRET')
 
+    /*
+     * Provider is part of the signed state.
+     * The callback will trust only this value.
+     */
     const payload =
       JSON.stringify({
         user_id:
@@ -259,7 +299,7 @@ export default async function handler(
 
         nonce:
           randomBytes(16).toString(
-            'hex'
+            'hex',
           ),
 
         issued_at:
@@ -272,7 +312,7 @@ export default async function handler(
     const signature =
       signState(
         encodedPayload,
-        stateSecret
+        stateSecret,
       )
 
     const state =
@@ -280,11 +320,19 @@ export default async function handler(
 
     const params =
       new URLSearchParams({
-        client_id: appId,
-        redirect_uri: redirectUri,
-        response_type: 'code',
+        client_id:
+          appId,
+
+        redirect_uri:
+          redirectUri,
+
+        response_type:
+          'code',
+
         state,
-        config_id: configId,
+
+        config_id:
+          configId,
       })
 
     const authUrl =
@@ -294,19 +342,24 @@ export default async function handler(
     return res
       .status(200)
       .json({
-        auth_url: authUrl,
+        auth_url:
+          authUrl,
+
         provider,
+
+        config_id:
+          configId,
       })
   } catch (error) {
     const message =
       getErrorMessage(
         error,
-        'Unable to start Meta connection'
+        'Unable to start Meta connection',
       )
 
     console.error(
       'Meta OAuth start error:',
-      error
+      error,
     )
 
     return res
