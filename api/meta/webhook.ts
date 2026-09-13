@@ -1,5 +1,11 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import type {
+  VercelRequest,
+  VercelResponse,
+} from '@vercel/node'
+import {
+  createHmac,
+  timingSafeEqual,
+} from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
 export const config = {
@@ -12,7 +18,9 @@ function env(name: string): string {
   const value = process.env[name]
 
   if (!value) {
-    throw new Error(`Missing environment variable: ${name}`)
+    throw new Error(
+      `Missing environment variable: ${name}`,
+    )
   }
 
   return value
@@ -33,13 +41,20 @@ function verifySignature(
     return false
   }
 
-  const expected = createHmac('sha256', appSecret)
+  const expected = createHmac(
+    'sha256',
+    appSecret,
+  )
     .update(rawBody, 'utf8')
     .digest('hex')
 
-  const received = signature.slice('sha256='.length)
+  const received =
+    signature.slice('sha256='.length)
 
-  if (received.length !== expected.length) {
+  if (
+    received.length !==
+    expected.length
+  ) {
     return false
   }
 
@@ -62,7 +77,9 @@ async function getRawBody(
     )
   }
 
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks).toString(
+    'utf8',
+  )
 }
 
 function getSupabase() {
@@ -78,6 +95,110 @@ function getSupabase() {
   )
 }
 
+async function sleep(
+  milliseconds: number,
+): Promise<void> {
+  await new Promise((resolve) =>
+    setTimeout(resolve, milliseconds),
+  )
+}
+
+async function findOutboundMessage(
+  supabase: ReturnType<typeof getSupabase>,
+  externalId: string,
+  organizationId: string,
+) {
+  const delays = [0, 250, 750, 1500]
+
+  for (const delay of delays) {
+    if (delay > 0) {
+      await sleep(delay)
+    }
+
+    const {
+      data: message,
+      error: messageError,
+    } = await supabase
+      .from('messages')
+      .select(
+        `
+          id,
+          conversation_id,
+          metadata,
+          delivered_at,
+          read_at
+        `,
+      )
+      .eq(
+        'external_id',
+        externalId,
+      )
+      .maybeSingle()
+
+    if (messageError) {
+      console.error(
+        'WhatsApp webhook: outbound message lookup failed',
+        messageError,
+      )
+
+      continue
+    }
+
+    if (!message) {
+      continue
+    }
+
+    const {
+      data: conversation,
+      error:
+        conversationError,
+    } = await supabase
+      .from('conversations')
+      .select(
+        'id, organization_id, channel',
+      )
+      .eq(
+        'id',
+        message.conversation_id,
+      )
+      .maybeSingle()
+
+    if (conversationError) {
+      console.error(
+        'WhatsApp webhook: conversation ownership lookup failed',
+        conversationError,
+      )
+
+      continue
+    }
+
+    if (
+      !conversation ||
+      conversation.organization_id !==
+        organizationId ||
+      conversation.channel !==
+        'whatsapp'
+    ) {
+      console.warn(
+        'WhatsApp webhook: message organization mismatch',
+        {
+          externalId,
+          organizationId,
+          conversationOrganizationId:
+            conversation?.organization_id ||
+            null,
+        },
+      )
+
+      return null
+    }
+
+    return message
+  }
+
+  return null
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -91,9 +212,9 @@ export default async function handler(
     env('META_WHATSAPP_VERIFY_TOKEN')
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * META WEBHOOK VERIFICATION
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
   if (req.method === 'GET') {
@@ -122,9 +243,9 @@ export default async function handler(
   }
 
   /*
-   * ---------------------------------------------------------
+   * =========================================================
    * ONLY POST IS ACCEPTED
-   * ---------------------------------------------------------
+   * =========================================================
    */
 
   if (req.method !== 'POST') {
@@ -137,26 +258,25 @@ export default async function handler(
 
   try {
     /*
-     * -------------------------------------------------------
+     * =======================================================
      * RAW BODY
-     * -------------------------------------------------------
+     * =======================================================
      */
 
     const rawBody =
       await getRawBody(req)
 
     /*
-     * -------------------------------------------------------
+     * =======================================================
      * META SIGNATURE
-     * -------------------------------------------------------
+     * =======================================================
      */
 
-    const signature =
-      String(
-        req.headers[
-          'x-hub-signature-256'
-        ] || '',
-      )
+    const signature = String(
+      req.headers[
+        'x-hub-signature-256'
+      ] || '',
+    )
 
     if (
       !verifySignature(
@@ -178,9 +298,9 @@ export default async function handler(
     }
 
     /*
-     * -------------------------------------------------------
+     * =======================================================
      * PARSE PAYLOAD
-     * -------------------------------------------------------
+     * =======================================================
      */
 
     let payload: any
@@ -218,9 +338,9 @@ export default async function handler(
       getSupabase()
 
     /*
-     * -------------------------------------------------------
+     * =======================================================
      * PROCESS ENTRIES
-     * -------------------------------------------------------
+     * =======================================================
      */
 
     for (
@@ -261,16 +381,19 @@ export default async function handler(
         }
 
         /*
-         * ---------------------------------------------------
+         * ===================================================
          * FIND WHATSAPP CONNECTION
-         * ---------------------------------------------------
+         * ===================================================
          */
 
         const {
           data: connection,
-          error: connectionError,
+          error:
+            connectionError,
         } = await supabase
-          .from('meta_connections')
+          .from(
+            'meta_connections',
+          )
           .select(
             `
               id,
@@ -342,7 +465,48 @@ export default async function handler(
             continue
           }
 
+          const timestamp =
+            status?.timestamp
+              ? new Date(
+                  Number(
+                    status.timestamp,
+                  ) * 1000,
+                ).toISOString()
+              : null
+
+          const matchedMessage =
+            await findOutboundMessage(
+              supabase,
+              externalId,
+              connection.organization_id,
+            )
+
+          if (
+            !matchedMessage?.id
+          ) {
+            console.warn(
+              'WhatsApp webhook: no outbound message found for status',
+              {
+                externalId,
+                deliveryStatus,
+                organizationId:
+                  connection.organization_id,
+              },
+            )
+
+            continue
+          }
+
+          const existingMetadata =
+            matchedMessage.metadata &&
+            typeof matchedMessage.metadata ===
+              'object'
+              ? matchedMessage.metadata
+              : {}
+
           const statusMetadata = {
+            ...existingMetadata,
+
             whatsapp_delivery_status:
               deliveryStatus,
 
@@ -367,47 +531,36 @@ export default async function handler(
               : {}),
           }
 
+          const updateData: Record<
+            string,
+            unknown
+          > = {
+            metadata:
+              statusMetadata,
+          }
+
           /*
-           * Find the outbound Dragon Media
-           * message using Meta's wamid.
+           * Keep the dedicated timestamp columns
+           * synchronized with Meta status.
            */
 
-          const {
-            data: matchedMessage,
-            error:
-              statusLookupError,
-          } = await supabase
-            .from('messages')
-            .select(
-              'id, metadata',
-            )
-            .eq(
-              'external_id',
-              externalId,
-            )
-            .maybeSingle()
-
-          if (statusLookupError) {
-            console.error(
-              'WhatsApp webhook: status message lookup failed',
-              statusLookupError,
-            )
-
-            continue
+          if (
+            deliveryStatus ===
+              'delivered' &&
+            !matchedMessage.delivered_at
+          ) {
+            updateData.delivered_at =
+              timestamp ||
+              new Date().toISOString()
           }
 
           if (
-            !matchedMessage?.id
+            deliveryStatus === 'read' &&
+            !matchedMessage.read_at
           ) {
-            console.warn(
-              'WhatsApp webhook: no message found for status',
-              {
-                externalId,
-                deliveryStatus,
-              },
-            )
-
-            continue
+            updateData.read_at =
+              timestamp ||
+              new Date().toISOString()
           }
 
           const {
@@ -415,14 +568,7 @@ export default async function handler(
               statusUpdateError,
           } = await supabase
             .from('messages')
-            .update({
-              metadata: {
-                ...(matchedMessage
-                  .metadata || {}),
-
-                ...statusMetadata,
-              },
-            })
+            .update(updateData)
             .eq(
               'id',
               matchedMessage.id,
@@ -490,7 +636,9 @@ export default async function handler(
               : null
 
           /*
+           * =================================================
            * MESSAGE CONTENT
+           * =================================================
            */
 
           let content = ''
@@ -499,36 +647,33 @@ export default async function handler(
             message?.type ===
             'text'
           ) {
-            content =
-              String(
-                message?.text
-                  ?.body || '',
-              )
+            content = String(
+              message?.text
+                ?.body || '',
+            )
           } else if (
             message?.type ===
             'button'
           ) {
-            content =
-              String(
-                message?.button
-                  ?.text || '',
-              )
+            content = String(
+              message?.button
+                ?.text || '',
+            )
           } else if (
             message?.type ===
             'interactive'
           ) {
-            content =
-              String(
+            content = String(
+              message
+                ?.interactive
+                ?.button_reply
+                ?.title ||
                 message
                   ?.interactive
-                  ?.button_reply
+                  ?.list_reply
                   ?.title ||
-                  message
-                    ?.interactive
-                    ?.list_reply
-                    ?.title ||
-                  '',
-              )
+                '',
+            )
           }
 
           if (!content) {
@@ -540,13 +685,13 @@ export default async function handler(
           }
 
           /*
+           * =================================================
            * CUSTOMER
+           * =================================================
            */
 
           const normalizedPhone =
-            normalizePhone(
-              waId,
-            )
+            normalizePhone(waId)
 
           let customerId:
             | string
@@ -560,8 +705,7 @@ export default async function handler(
             .select('id')
             .eq(
               'organization_id',
-              connection
-                .organization_id,
+              connection.organization_id,
             )
             .eq(
               'phone',
@@ -585,8 +729,7 @@ export default async function handler(
               .select('id')
               .eq(
                 'organization_id',
-                connection
-                  .organization_id,
+                connection.organization_id,
               )
               .eq(
                 'phone',
@@ -608,8 +751,7 @@ export default async function handler(
               .from('customers')
               .insert({
                 organization_id:
-                  connection
-                    .organization_id,
+                  connection.organization_id,
 
                 name:
                   profileName ||
@@ -643,10 +785,12 @@ export default async function handler(
           }
 
           /*
-           * MESSAGE METADATA
+           * =================================================
+           * CONVERSATION METADATA
+           * =================================================
            */
 
-          const metadata = {
+          const incomingMetadata = {
             provider:
               'whatsapp',
 
@@ -669,7 +813,9 @@ export default async function handler(
           }
 
           /*
+           * =================================================
            * CONVERSATION
+           * =================================================
            */
 
           let conversationId:
@@ -684,12 +830,15 @@ export default async function handler(
               'conversations',
             )
             .select(
-              'id, unread_count',
+              `
+                id,
+                unread_count,
+                metadata
+              `,
             )
             .eq(
               'organization_id',
-              connection
-                .organization_id,
+              connection.organization_id,
             )
             .eq(
               'channel',
@@ -706,6 +855,13 @@ export default async function handler(
           ) {
             conversationId =
               existingConversation.id
+
+            const existingConversationMetadata =
+              existingConversation.metadata &&
+              typeof existingConversation.metadata ===
+                'object'
+                ? existingConversation.metadata
+                : {}
 
             await supabase
               .from(
@@ -727,7 +883,10 @@ export default async function handler(
                       0,
                   ) + 1,
 
-                metadata,
+                metadata: {
+                  ...existingConversationMetadata,
+                  ...incomingMetadata,
+                },
               })
               .eq(
                 'id',
@@ -744,8 +903,7 @@ export default async function handler(
               )
               .insert({
                 organization_id:
-                  connection
-                    .organization_id,
+                  connection.organization_id,
 
                 customer_id:
                   customerId,
@@ -770,7 +928,8 @@ export default async function handler(
                 unread_count:
                   1,
 
-                metadata,
+                metadata:
+                  incomingMetadata,
               })
               .select('id')
               .single()
@@ -785,8 +944,7 @@ export default async function handler(
             }
 
             conversationId =
-              createdConversation
-                ?.id ||
+              createdConversation?.id ||
               null
           }
 
@@ -795,7 +953,9 @@ export default async function handler(
           }
 
           /*
+           * =================================================
            * DUPLICATE PROTECTION
+           * =================================================
            */
 
           const externalId =
@@ -816,12 +976,21 @@ export default async function handler(
               .maybeSingle()
 
             if (duplicate?.id) {
+              console.log(
+                'WhatsApp webhook: duplicate message ignored',
+                {
+                  externalId,
+                },
+              )
+
               continue
             }
           }
 
           /*
-           * SAVE INBOUND MESSAGE
+           * =================================================
+           * INSERT CUSTOMER MESSAGE
+           * =================================================
            */
 
           const {
@@ -841,35 +1010,66 @@ export default async function handler(
               external_id:
                 externalId,
 
-              metadata,
+              metadata: {
+                ...incomingMetadata,
+
+                source:
+                  'whatsapp_webhook',
+
+                received_at:
+                  new Date()
+                    .toISOString(),
+              },
             })
 
           if (messageInsertError) {
-            console.error(
-              'WhatsApp webhook: message insert failed',
-              messageInsertError,
-            )
-          } else {
-            console.log(
-              'WhatsApp webhook: message saved',
-              {
-                organizationId:
-                  connection
-                    .organization_id,
+            /*
+             * A duplicate external_id is harmless.
+             * Meta can retry webhook deliveries.
+             */
+            if (
+              messageInsertError.code ===
+              '23505'
+            ) {
+              console.log(
+                'WhatsApp webhook: duplicate external_id ignored',
+                {
+                  externalId,
+                },
+              )
+            } else {
+              console.error(
+                'WhatsApp webhook: message insert failed',
+                messageInsertError,
+              )
+            }
 
-                conversationId,
-
-                customerId,
-
-                phoneNumberId,
-
-                externalId,
-              },
-            )
+            continue
           }
+
+          console.log(
+            'WhatsApp webhook: incoming message saved',
+            {
+              organizationId:
+                connection.organization_id,
+
+              conversationId,
+
+              customerId,
+
+              externalId,
+            },
+          )
         }
       }
     }
+
+    /*
+     * Always acknowledge Meta successfully
+     * after processing the payload.
+     *
+     * This prevents unnecessary Meta retries.
+     */
 
     return res
       .status(200)
@@ -878,15 +1078,14 @@ export default async function handler(
       })
   } catch (error) {
     console.error(
-      'WhatsApp webhook fatal error:',
+      'WhatsApp webhook: fatal error',
       error,
     )
 
     /*
-     * Meta should always receive
-     * an acknowledgement.
+     * Do not expose internal errors or secrets.
+     * Return 200 to avoid an endless Meta retry loop.
      */
-
     return res
       .status(200)
       .json({
