@@ -135,7 +135,12 @@ export default async function handler(
       req.query.provider
     )
 
-    const supabase =
+    /*
+     * Public Supabase client:
+     * used only to validate the user's
+     * Supabase access token.
+     */
+    const authSupabase =
       createClient(
         env('VITE_SUPABASE_URL'),
         env('VITE_SUPABASE_ANON_KEY'),
@@ -151,7 +156,7 @@ export default async function handler(
       data: authData,
       error: authError,
     } =
-      await supabase.auth.getUser(
+      await authSupabase.auth.getUser(
         accessToken
       )
 
@@ -167,11 +172,30 @@ export default async function handler(
         })
     }
 
+    /*
+     * Server-only Supabase client.
+     *
+     * SUPABASE_SECRET_KEY must exist only
+     * in Vercel server environment variables.
+     * It must NEVER be exposed to the browser.
+     */
+    const adminSupabase =
+      createClient(
+        env('VITE_SUPABASE_URL'),
+        env('SUPABASE_SECRET_KEY'),
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        }
+      )
+
     const {
       data: membership,
       error: membershipError,
     } =
-      await supabase
+      await adminSupabase
         .from('users')
         .select(
           'organization_id'
@@ -183,7 +207,24 @@ export default async function handler(
         .maybeSingle()
 
     if (
-      membershipError ||
+      membershipError
+    ) {
+      console.error(
+        'Meta OAuth membership lookup error:',
+        membershipError
+      )
+
+      return res
+        .status(500)
+        .json({
+          error:
+            'Unable to verify organization membership',
+          code:
+            'META_MEMBERSHIP_LOOKUP_FAILED',
+        })
+    }
+
+    if (
       !membership?.organization_id
     ) {
       return res
