@@ -3,7 +3,10 @@ import type {
   VercelResponse,
 } from '@vercel/node'
 
-import overview from '../../src/server/admin/overview'
+const overviewModule = require('../../src/server/admin/overview')
+
+const overview =
+  overviewModule?.default ?? overviewModule
 
 export default async function handler(
   req: VercelRequest,
