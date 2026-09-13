@@ -126,9 +126,13 @@ const formatDate = (
 ) => {
   if (!value) return '—'
 
-  return new Date(
-    value,
-  ).toLocaleDateString(
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+
+  return date.toLocaleDateString(
     'ar-EG',
     {
       year: 'numeric',
@@ -513,35 +517,46 @@ export default function AdminOrganizations() {
     try {
       const {
         data: sessionData,
+        error: sessionError,
       } =
         await supabase.auth.getSession()
+
+      if (sessionError) {
+        throw new Error(
+          'تعذر التحقق من جلسة الدخول',
+        )
+      }
 
       const token =
         sessionData.session
           ?.access_token
 
       if (!token) {
-        setError(
+        throw new Error(
           'جلسة الدخول غير صالحة',
         )
-        setLoading(false)
-        return
       }
 
-      const [
-        organizationsRes,
-        plansRes,
-        usageRes,
-      ] = await Promise.all([
+      /*
+       * الشركات هي البيانات الأساسية للصفحة.
+       * Plans و Usage بيانات مساعدة ولا يجب أن تمنع
+       * الصفحة من الظهور إذا حدثت مشكلة فيها.
+       */
+      const organizationsPromise =
         fetch(
           '/api/admin/organizations',
           {
+            method: 'GET',
             headers: {
-              Authorization: `Bearer ${token}`,
+              Authorization:
+                `Bearer ${token}`,
+              Accept:
+                'application/json',
             },
           },
-        ),
+        )
 
+      const plansPromise =
         supabase
           .from('plans')
           .select(
@@ -563,44 +578,147 @@ export default function AdminOrganizations() {
             {
               ascending: true,
             },
-          ),
+          )
 
+      /*
+       * الـRPC اختياري.
+       * إذا كان غير موجود أو به مشكلة لن تسقط الصفحة.
+       */
+      const usagePromise =
         supabase.rpc(
           'get_admin_usage_dashboard',
-        ),
-      ])
+        )
 
-      const json =
-        await organizationsRes.json()
+      const [
+        organizationsRes,
+        plansRes,
+        usageRes,
+      ] =
+        await Promise.allSettled([
+          organizationsPromise,
+          plansPromise,
+          usagePromise,
+        ])
+
+      /* =========================
+         Organizations
+         ========================= */
 
       if (
-        !organizationsRes.ok
+        organizationsRes.status ===
+        'rejected'
       ) {
         throw new Error(
-          json.error ||
-            'تعذر تحميل الشركات',
+          organizationsRes.reason
+            ?.message ||
+            'تعذر الاتصال بخدمة الشركات',
         )
       }
 
-      if (
-        plansRes.error
-      ) {
-        throw new Error(
-          plansRes.error.message,
-        )
+      const organizationsResponse =
+        organizationsRes.value
+
+      let organizationsJson: any =
+        {}
+
+      try {
+        organizationsJson =
+          await organizationsResponse.json()
+      } catch {
+        organizationsJson = {}
       }
 
       if (
-        usageRes.error
+        !organizationsResponse.ok
       ) {
         throw new Error(
-          `تعذر تحميل بيانات الاستخدام: ${usageRes.error.message}`,
+          organizationsJson?.error ||
+            'تعذر تحميل بيانات الشركات',
         )
       }
 
-      const dashboard =
-        (usageRes.data ||
-          null) as UsageDashboard | null
+      const organizationRows =
+        Array.isArray(
+          organizationsJson?.organizations,
+        )
+          ? organizationsJson.organizations
+          : []
+
+      setOrganizations(
+        organizationRows as Organization[],
+      )
+
+      /* =========================
+         Plans
+         ========================= */
+
+      if (
+        plansRes.status ===
+        'fulfilled'
+      ) {
+        if (
+          plansRes.value.error
+        ) {
+          console.warn(
+            'Admin organizations: plans unavailable:',
+            plansRes.value.error.message,
+          )
+
+          /*
+           * خطأ الباقات لا يمنع الصفحة
+           * من الظهور.
+           */
+          setPlans([])
+        } else {
+          setPlans(
+            (plansRes.value.data ||
+              []) as Plan[],
+          )
+        }
+      } else {
+        console.warn(
+          'Admin organizations: plans request failed:',
+          plansRes.reason,
+        )
+
+        setPlans([])
+      }
+
+      /* =========================
+         Usage
+         ========================= */
+
+      let dashboard:
+        | UsageDashboard
+        | null = null
+
+      if (
+        usageRes.status ===
+        'fulfilled'
+      ) {
+        if (
+          usageRes.value.error
+        ) {
+          /*
+           * مهم:
+           * لا نرمي Error هنا.
+           * عدم وجود الـRPC لا يمنع إدارة الشركات.
+           */
+          console.warn(
+            'Admin organizations: usage dashboard unavailable:',
+            usageRes.value.error.message,
+          )
+        } else {
+          dashboard =
+            (usageRes.value.data ||
+              null) as UsageDashboard | null
+        }
+      } else {
+        console.warn(
+          'Admin organizations: usage request failed:',
+          usageRes.reason,
+        )
+      }
 
       const usageRows =
         Array.isArray(
@@ -615,7 +733,9 @@ export default function AdminOrganizations() {
       > = {}
 
       usageRows.forEach(
-        usage => {
+        (
+          usage: OrganizationUsage,
+        ) => {
           if (
             usage?.organization_id
           ) {
@@ -624,16 +744,6 @@ export default function AdminOrganizations() {
             ] = usage
           }
         },
-      )
-
-      setOrganizations(
-        json.organizations ??
-          [],
-      )
-
-      setPlans(
-        (plansRes.data ??
-          []) as Plan[],
       )
 
       setUsageByOrganization(
@@ -647,9 +757,14 @@ export default function AdminOrganizations() {
     } catch (
       err: any
     ) {
+      console.error(
+        'AdminOrganizations loadData error:',
+        err,
+      )
+
       setError(
         err?.message ||
-          'حدث خطأ أثناء تحميل البيانات',
+          'حدث خطأ أثناء تحميل بيانات الشركات',
       )
     } finally {
       setLoading(false)
@@ -657,7 +772,7 @@ export default function AdminOrganizations() {
   }
 
   useEffect(() => {
-    loadData()
+    void loadData()
   }, [])
 
   useEffect(() => {
@@ -1008,8 +1123,14 @@ export default function AdminOrganizations() {
           },
         )
 
-      const json =
-        await response.json()
+      let json: any = {}
+
+      try {
+        json =
+          await response.json()
+      } catch {
+        json = {}
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -1025,10 +1146,16 @@ export default function AdminOrganizations() {
       )
 
       closeModal()
+
       await loadData()
     } catch (
       err: any
     ) {
+      console.error(
+        'AdminOrganizations save error:',
+        err,
+      )
+
       setToast(
         err?.message ||
           'حدث خطأ أثناء الحفظ',
@@ -1099,8 +1226,14 @@ export default function AdminOrganizations() {
             },
           )
 
-        const json =
-          await response.json()
+        let json: any = {}
+
+        try {
+          json =
+            await response.json()
+        } catch {
+          json = {}
+        }
 
         if (!response.ok) {
           throw new Error(
@@ -1134,6 +1267,11 @@ export default function AdminOrganizations() {
       } catch (
         err: any
       ) {
+        console.error(
+          'AdminOrganizations suspension error:',
+          err,
+        )
+
         setToast(
           err?.message ||
             'حدث خطأ أثناء العملية',
@@ -1202,8 +1340,14 @@ export default function AdminOrganizations() {
             },
           )
 
-        const json =
-          await response.json()
+        let json: any = {}
+
+        try {
+          json =
+            await response.json()
+        } catch {
+          json = {}
+        }
 
         if (!response.ok) {
           throw new Error(
@@ -1239,6 +1383,11 @@ export default function AdminOrganizations() {
       } catch (
         err: any
       ) {
+        console.error(
+          'AdminOrganizations delete error:',
+          err,
+        )
+
         setToast(
           err?.message ||
             'حدث خطأ أثناء الحذف',
@@ -1318,7 +1467,9 @@ export default function AdminOrganizations() {
 
           <Button
             className="mt-5"
-            onClick={loadData}
+            onClick={() =>
+              void loadData()
+            }
           >
             <span className="inline-flex items-center gap-2">
               <RefreshIcon />
@@ -1432,7 +1583,7 @@ export default function AdminOrganizations() {
           </div>
 
           <Badge tone="success">
-            محدث من قاعدة البيانات
+            بيانات الشركات محدثة
           </Badge>
         </div>
 
