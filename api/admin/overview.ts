@@ -3,8 +3,6 @@ import type {
   VercelResponse,
 } from '@vercel/node'
 
-import overview from '../../src/server/admin/overview'
-
 const getErrorMessage = (error: unknown) => {
   if (typeof error === 'string') {
     return error
@@ -49,6 +47,26 @@ export default async function handler(
   res: VercelResponse,
 ) {
   try {
+    /*
+     * Dynamic import is intentional.
+     *
+     * It prevents module-loading errors inside the
+     * admin handler from causing an unhandled
+     * FUNCTION_INVOCATION_FAILED before this wrapper
+     * can return a useful JSON error.
+     */
+    const module = await import(
+      '../../src/server/admin/overview'
+    )
+
+    const overview = module.default
+
+    if (typeof overview !== 'function') {
+      throw new Error(
+        'ملف لوحة الإدارة لا يحتوي على handler صالح.'
+      )
+    }
+
     return await overview(req, res)
   } catch (error) {
     console.error(
