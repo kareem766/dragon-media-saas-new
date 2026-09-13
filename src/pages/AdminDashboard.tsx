@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card, StatCard, Badge, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 
@@ -6,7 +6,7 @@ interface OrgRow {
   id: string
   name: string
   business_type: string | null
-  plan: string
+  plan: string | null
   created_at: string
   usersCount: number
   leadsCount: number
@@ -88,25 +88,38 @@ const methodLabels: Record<string, string> = {
   vodafone_cash: 'فودافون كاش',
   instapay: 'InstaPay',
   bank_transfer: 'تحويل بنكي',
+  paymob: 'Paymob',
 }
 
-const formatMoney = (value: number) =>
+const formatMoney = (value: number | null | undefined) =>
   `${Number(value || 0).toLocaleString('ar-EG')} ج.م`
 
-const formatDate = (value: string) => {
+const formatDate = (value: string | null | undefined) => {
   if (!value) return '—'
 
-  return new Date(value).toLocaleDateString('ar-EG', {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+
+  return date.toLocaleDateString('ar-EG', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   })
 }
 
-const formatDateTime = (value: string) => {
+const formatDateTime = (value: string | null | undefined) => {
   if (!value) return '—'
 
-  return new Date(value).toLocaleString('ar-EG', {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+
+  return date.toLocaleString('ar-EG', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -115,7 +128,7 @@ const formatDateTime = (value: string) => {
   })
 }
 
-const formatPercent = (value: number) => {
+const formatPercent = (value: number | null | undefined) => {
   const number = Number(value || 0)
 
   return `${number >= 0 ? '+' : ''}${number.toFixed(1)}%`
@@ -278,40 +291,77 @@ export default function AdminDashboard() {
 
   const [toDate, setToDate] = useState('')
 
-  const loadOverview = async () => {
+  const getAccessToken = useCallback(async () => {
+    if (!supabase) {
+      throw new Error('تعذر الاتصال بخدمة البيانات.')
+    }
+
+    const {
+      data: sessionData,
+      error: sessionError,
+    } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      console.error(
+        'Admin dashboard session error:',
+        sessionError
+      )
+
+      throw new Error('تعذر التحقق من جلسة الدخول.')
+    }
+
+    const token =
+      sessionData.session?.access_token
+
+    if (!token) {
+      throw new Error(
+        'انتهت جلسة الدخول. يرجى تسجيل الدخول مرة أخرى.'
+      )
+    }
+
+    return token
+  }, [])
+
+  const loadOverview = useCallback(async () => {
     if (!supabase) {
       setError('تعذر الاتصال بخدمة البيانات.')
       setLoading(false)
       return
     }
 
+    setLoading(true)
     setError(null)
 
     try {
-      const { data: sessionData } =
-        await supabase.auth.getSession()
+      const token = await getAccessToken()
 
-      const token =
-        sessionData.session?.access_token
+      const overviewRes = await fetch(
+        '/api/admin/overview',
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+        }
+      )
 
-      const [overviewRes, orgsRes] =
-        await Promise.all([
-          fetch('/api/admin/overview', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }),
-
-          supabase
-            .from('organizations')
-            .select('id, suspended'),
-        ])
-
-      const json = await overviewRes.json().catch(() => ({}))
+      const json =
+        await overviewRes.json().catch(() => ({}))
 
       if (!overviewRes.ok) {
         throw new Error(
-          json.error || 'تعذر تحميل بيانات لوحة الإدارة.'
+          json?.error ||
+            'تعذر تحميل بيانات لوحة الإدارة.'
+        )
+      }
+
+      if (
+        !json ||
+        typeof json !== 'object'
+      ) {
+        throw new Error(
+          'استجابة لوحة الإدارة غير صالحة.'
         )
       }
 
@@ -321,22 +371,69 @@ export default function AdminDashboard() {
         ? json.organizations
         : []
 
-      const suspendedMap = new Map(
-        (orgsRes.data ?? []).map((o: any) => [
-          o.id,
-          o.suspended,
-        ])
-      )
+      const totals = {
+        organizations: Number(
+          json?.totals?.organizations || 0
+        ),
+        users: Number(
+          json?.totals?.users || 0
+        ),
+        leads: Number(
+          json?.totals?.leads || 0
+        ),
+        customers: Number(
+          json?.totals?.customers || 0
+        ),
+        dealsValue: Number(
+          json?.totals?.dealsValue || 0
+        ),
+      }
 
-      json.organizations = organizations.map(
-        (o: OrgRow) => ({
-          ...o,
-          suspended: suspendedMap.get(o.id),
-        })
-      )
+      const normalizedOrganizations: OrgRow[] =
+        organizations.map((organization: any) => ({
+          id: String(
+            organization?.id || ''
+          ),
+          name: String(
+            organization?.name || 'بدون اسم'
+          ),
+          business_type:
+            organization?.business_type ??
+            null,
+          plan:
+            organization?.plan ??
+            null,
+          created_at:
+            organization?.created_at ||
+            '',
+          usersCount: Number(
+            organization?.usersCount || 0
+          ),
+          leadsCount: Number(
+            organization?.leadsCount || 0
+          ),
+          customersCount: Number(
+            organization?.customersCount || 0
+          ),
+          dealsValue: Number(
+            organization?.dealsValue || 0
+          ),
+          suspended: Boolean(
+            organization?.suspended
+          ),
+        }))
 
-      setData(json)
+      setData({
+        totals,
+        organizations:
+          normalizedOrganizations,
+      })
     } catch (err: any) {
+      console.error(
+        'admin dashboard overview:',
+        err
+      )
+
       setError(
         err?.message ||
           'حدث خطأ أثناء تحميل لوحة الإدارة.'
@@ -344,9 +441,9 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [getAccessToken])
 
-  const loadFinancial = async () => {
+  const loadFinancial = useCallback(async () => {
     if (!supabase) {
       setFinancialError(
         'تعذر الاتصال بخدمة البيانات.'
@@ -359,50 +456,233 @@ export default function AdminDashboard() {
     setFinancialError(null)
 
     try {
-      const { data: sessionData } =
-        await supabase.auth.getSession()
-
-      const token =
-        sessionData.session?.access_token
+      const token = await getAccessToken()
 
       const params = new URLSearchParams()
 
       if (paymentMethod !== 'all') {
-        params.set('method', paymentMethod)
+        params.set(
+          'method',
+          paymentMethod
+        )
       }
 
       if (fromDate) {
-        params.set('from', fromDate)
+        params.set(
+          'from',
+          fromDate
+        )
       }
 
       if (toDate) {
-        params.set('to', toDate)
+        params.set(
+          'to',
+          toDate
+        )
       }
 
-      const queryString = params.toString()
+      const queryString =
+        params.toString()
 
       const response = await fetch(
         `/api/admin/financial${
-          queryString ? `?${queryString}` : ''
+          queryString
+            ? `?${queryString}`
+            : ''
         }`,
         {
+          method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
           },
         }
       )
 
-      const json = await response.json().catch(() => ({}))
+      const json =
+        await response.json().catch(() => ({}))
 
       if (!response.ok) {
         throw new Error(
-          json.error ||
+          json?.error ||
             'تعذر تحميل البيانات المالية.'
         )
       }
 
-      setFinancial(json)
+      if (
+        !json ||
+        typeof json !== 'object'
+      ) {
+        throw new Error(
+          'استجابة البيانات المالية غير صالحة.'
+        )
+      }
+
+      const normalizedFinancial: FinancialData =
+        {
+          summary: {
+            totalRevenue: Number(
+              json?.summary?.totalRevenue ||
+                0
+            ),
+            transactionCount: Number(
+              json?.summary?.transactionCount ||
+                0
+            ),
+            averageTransaction: Number(
+              json?.summary
+                ?.averageTransaction || 0
+            ),
+            monthRevenue: Number(
+              json?.summary?.monthRevenue ||
+                0
+            ),
+            previousMonthRevenue: Number(
+              json?.summary
+                ?.previousMonthRevenue || 0
+            ),
+            yearRevenue: Number(
+              json?.summary?.yearRevenue ||
+                0
+            ),
+            currentMonthCount: Number(
+              json?.summary
+                ?.currentMonthCount || 0
+            ),
+            previousMonthCount: Number(
+              json?.summary
+                ?.previousMonthCount || 0
+            ),
+            revenueChangePercent: Number(
+              json?.summary
+                ?.revenueChangePercent || 0
+            ),
+          },
+
+          lifecycle: {
+            activeSubscriptions: Number(
+              json?.lifecycle
+                ?.activeSubscriptions || 0
+            ),
+            expiringSubscriptions: Number(
+              json?.lifecycle
+                ?.expiringSubscriptions || 0
+            ),
+            expiredSubscriptions: Number(
+              json?.lifecycle
+                ?.expiredSubscriptions || 0
+            ),
+            invoices: {
+              total: Number(
+                json?.lifecycle?.invoices
+                  ?.total || 0
+              ),
+              paid: Number(
+                json?.lifecycle?.invoices
+                  ?.paid || 0
+              ),
+              pending: Number(
+                json?.lifecycle?.invoices
+                  ?.pending || 0
+              ),
+            },
+          },
+
+          byMethod: Array.isArray(
+            json?.byMethod
+          )
+            ? json.byMethod.map(
+                (item: any) => ({
+                  method: String(
+                    item?.method || ''
+                  ),
+                  count: Number(
+                    item?.count || 0
+                  ),
+                  revenue: Number(
+                    item?.revenue || 0
+                  ),
+                })
+              )
+            : [],
+
+          byPlan: Array.isArray(
+            json?.byPlan
+          )
+            ? json.byPlan.map(
+                (item: any) => ({
+                  plan_id:
+                    item?.plan_id ??
+                    null,
+                  plan_name: String(
+                    item?.plan_name ||
+                      'باقة غير محددة'
+                  ),
+                  count: Number(
+                    item?.count || 0
+                  ),
+                  revenue: Number(
+                    item?.revenue || 0
+                  ),
+                })
+              )
+            : [],
+
+          transactions: Array.isArray(
+            json?.transactions
+          )
+            ? json.transactions.map(
+                (item: any) => ({
+                  payment_id: String(
+                    item?.payment_id || ''
+                  ),
+                  amount: Number(
+                    item?.amount || 0
+                  ),
+                  method: String(
+                    item?.method || ''
+                  ),
+                  paid_at:
+                    item?.paid_at || '',
+                  invoice_id: String(
+                    item?.invoice_id || ''
+                  ),
+                  organization_id:
+                    String(
+                      item?.organization_id ||
+                        ''
+                    ),
+                  subscription_id:
+                    String(
+                      item?.subscription_id ||
+                        ''
+                    ),
+                  organization_name:
+                    String(
+                      item?.organization_name ||
+                        'بدون اسم'
+                    ),
+                  invoice_status:
+                    item?.invoice_status,
+                  plan_id:
+                    item?.plan_id ??
+                    null,
+                  plan_name:
+                    item?.plan_name,
+                })
+              )
+            : [],
+        }
+
+      setFinancial(
+        normalizedFinancial
+      )
     } catch (err: any) {
+      console.error(
+        'admin dashboard financial:',
+        err
+      )
+
       setFinancialError(
         err?.message ||
           'حدث خطأ أثناء تحميل البيانات المالية.'
@@ -410,55 +690,70 @@ export default function AdminDashboard() {
     } finally {
       setFinancialLoading(false)
     }
-  }
+  }, [
+    getAccessToken,
+    paymentMethod,
+    fromDate,
+    toDate,
+  ])
 
   useEffect(() => {
-    loadOverview()
-  }, [])
+    void loadOverview()
+  }, [loadOverview])
 
   useEffect(() => {
-    loadFinancial()
-  }, [paymentMethod, fromDate, toDate])
+    void loadFinancial()
+  }, [loadFinancial])
 
   useEffect(() => {
     if (!toast) return
 
-    const timer = setTimeout(
+    const timer = window.setTimeout(
       () => setToast(null),
       3000
     )
 
-    return () => clearTimeout(timer)
+    return () =>
+      window.clearTimeout(timer)
   }, [toast])
 
-  const handleAction = async (org: OrgRow) => {
-    const willSuspend = !org.suspended
+  const handleAction = async (
+    org: OrgRow
+  ) => {
+    const willSuspend =
+      !Boolean(org.suspended)
 
-    const confirmed = window.confirm(
-      willSuspend
-        ? 'هل أنت متأكد من تعليق هذه الشركة؟'
-        : 'هل أنت متأكد من تفعيل هذه الشركة؟'
-    )
+    const confirmed =
+      window.confirm(
+        willSuspend
+          ? 'هل أنت متأكد من تعليق هذه الشركة؟'
+          : 'هل أنت متأكد من تفعيل هذه الشركة؟'
+      )
 
     if (!confirmed) return
 
-    if (!supabase) return
+    if (!supabase) {
+      setToast(
+        'تعذر الاتصال بخدمة البيانات.'
+      )
+      return
+    }
 
     setActingId(org.id)
 
     try {
-      const { data: sessionData } =
-        await supabase.auth.getSession()
-
       const token =
-        sessionData.session?.access_token
+        await getAccessToken()
 
       const res = await fetch(
         '/api/admin/organizations',
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            'Content-Type':
+              'application/json',
+            Accept:
+              'application/json',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
@@ -470,11 +765,12 @@ export default function AdminDashboard() {
         }
       )
 
-      const json = await res.json().catch(() => ({}))
+      const json =
+        await res.json().catch(() => ({}))
 
       if (!res.ok) {
         throw new Error(
-          json.error ||
+          json?.error ||
             'حدث خطأ أثناء تنفيذ العملية.'
         )
       }
@@ -484,13 +780,16 @@ export default function AdminDashboard() {
           ? {
               ...prev,
               organizations:
-                prev.organizations.map(o =>
-                  o.id === org.id
-                    ? {
-                        ...o,
-                        suspended: willSuspend,
-                      }
-                    : o
+                prev.organizations.map(
+                  organization =>
+                    organization.id ===
+                    org.id
+                      ? {
+                          ...organization,
+                          suspended:
+                            willSuspend,
+                        }
+                      : organization
                 ),
             }
           : prev
@@ -502,6 +801,11 @@ export default function AdminDashboard() {
           : `تم تفعيل شركة "${org.name}" بنجاح`
       )
     } catch (err: any) {
+      console.error(
+        'admin organization action:',
+        err
+      )
+
       setToast(
         err?.message ||
           'حدث خطأ أثناء تنفيذ العملية.'
@@ -514,8 +818,11 @@ export default function AdminDashboard() {
   const maxPlanRevenue = useMemo(
     () =>
       Math.max(
-        ...(financial?.byPlan ?? []).map(item =>
-          Number(item.revenue || 0)
+        ...(financial?.byPlan ?? []).map(
+          item =>
+            Number(
+              item.revenue || 0
+            )
         ),
         1
       ),
@@ -525,8 +832,11 @@ export default function AdminDashboard() {
   const maxMethodRevenue = useMemo(
     () =>
       Math.max(
-        ...(financial?.byMethod ?? []).map(item =>
-          Number(item.revenue || 0)
+        ...(financial?.byMethod ?? []).map(
+          item =>
+            Number(
+              item.revenue || 0
+            )
         ),
         1
       ),
@@ -535,12 +845,14 @@ export default function AdminDashboard() {
 
   const revenueChange = financial
     ? Number(
-        financial.summary.revenueChangePercent || 0
+        financial.summary
+          .revenueChangePercent || 0
       )
     : 0
 
   const totalDisplayedRevenue =
-    financial?.summary.totalRevenue ?? 0
+    financial?.summary.totalRevenue ??
+    0
 
   if (loading) {
     return <DashboardSkeleton />
@@ -559,8 +871,7 @@ export default function AdminDashboard() {
               'تعذر تحميل بيانات لوحة الإدارة.'
             }
             onRetry={() => {
-              setLoading(true)
-              loadOverview()
+              void loadOverview()
             }}
           />
         </div>
@@ -584,7 +895,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Header */}
         <header className="rounded-2xl border border-sand-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
@@ -627,7 +937,6 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        {/* Platform statistics */}
         <section aria-label="إحصائيات المنصة">
           <div className="mb-3">
             <SectionTitle
@@ -647,12 +956,16 @@ export default function AdminDashboard() {
 
             <StatCard
               label="إجمالي المستخدمين"
-              value={String(data.totals.users)}
+              value={String(
+                data.totals.users
+              )}
             />
 
             <StatCard
               label="العملاء المحتملون"
-              value={String(data.totals.leads)}
+              value={String(
+                data.totals.leads
+              )}
             />
 
             <StatCard
@@ -667,12 +980,13 @@ export default function AdminDashboard() {
               label="قيمة الصفقات"
               value={`${Number(
                 data.totals.dealsValue || 0
-              ).toLocaleString('ar-EG')} ج.م`}
+              ).toLocaleString(
+                'ar-EG'
+              )} ج.م`}
             />
           </div>
         </section>
 
-        {/* Financial dashboard */}
         <section>
           <Card className="overflow-hidden">
             <div className="border-b border-sand-200 bg-white p-4 sm:p-6">
@@ -684,8 +998,12 @@ export default function AdminDashboard() {
 
                 <Button
                   variant="secondary"
-                  onClick={loadFinancial}
-                  disabled={financialLoading}
+                  onClick={() =>
+                    void loadFinancial()
+                  }
+                  disabled={
+                    financialLoading
+                  }
                 >
                   {financialLoading
                     ? 'جاري التحديث...'
@@ -695,7 +1013,6 @@ export default function AdminDashboard() {
             </div>
 
             <div className="bg-sand-50/40 p-4 sm:p-6">
-              {/* Filters */}
               <div className="mb-6 rounded-2xl border border-sand-200 bg-white p-4">
                 <div className="mb-3 text-xs font-bold text-ink-950">
                   فلاتر التقارير
@@ -711,7 +1028,9 @@ export default function AdminDashboard() {
                       type="date"
                       value={fromDate}
                       onChange={e =>
-                        setFromDate(e.target.value)
+                        setFromDate(
+                          e.target.value
+                        )
                       }
                       className="w-full rounded-xl border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-950 outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-500/10"
                     />
@@ -726,7 +1045,9 @@ export default function AdminDashboard() {
                       type="date"
                       value={toDate}
                       onChange={e =>
-                        setToDate(e.target.value)
+                        setToDate(
+                          e.target.value
+                        )
                       }
                       className="w-full rounded-xl border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-950 outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-500/10"
                     />
@@ -761,6 +1082,10 @@ export default function AdminDashboard() {
                       <option value="bank_transfer">
                         تحويل بنكي
                       </option>
+
+                      <option value="paymob">
+                        Paymob
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -783,7 +1108,9 @@ export default function AdminDashboard() {
 
                   <button
                     type="button"
-                    onClick={loadFinancial}
+                    onClick={() =>
+                      void loadFinancial()
+                    }
                     className="shrink-0 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-ink-800"
                   >
                     إعادة المحاولة
@@ -793,26 +1120,26 @@ export default function AdminDashboard() {
 
               {financialLoading ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {Array.from({ length: 8 }).map(
-                    (_, index) => (
-                      <div
-                        key={index}
-                        className="animate-pulse rounded-2xl border border-sand-200 bg-white p-5"
-                      >
-                        <div className="h-3 w-28 rounded bg-sand-100" />
-                        <div className="mt-4 h-7 w-32 rounded-lg bg-sand-200" />
-                      </div>
-                    )
-                  )}
+                  {Array.from({
+                    length: 8,
+                  }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="animate-pulse rounded-2xl border border-sand-200 bg-white p-5"
+                    >
+                      <div className="h-3 w-28 rounded bg-sand-100" />
+                      <div className="mt-4 h-7 w-32 rounded-lg bg-sand-200" />
+                    </div>
+                  ))}
                 </div>
               ) : financial ? (
                 <>
-                  {/* Main financial stats */}
                   <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <StatCard
                       label="إجمالي الإيرادات"
                       value={formatMoney(
-                        financial.summary.totalRevenue
+                        financial.summary
+                          .totalRevenue
                       )}
                       accent="gold"
                     />
@@ -820,14 +1147,16 @@ export default function AdminDashboard() {
                     <StatCard
                       label="إيرادات الشهر الحالي"
                       value={formatMoney(
-                        financial.summary.monthRevenue
+                        financial.summary
+                          .monthRevenue
                       )}
                     />
 
                     <StatCard
                       label="إيرادات السنة الحالية"
                       value={formatMoney(
-                        financial.summary.yearRevenue
+                        financial.summary
+                          .yearRevenue
                       )}
                     />
 
@@ -844,7 +1173,6 @@ export default function AdminDashboard() {
                     />
                   </div>
 
-                  {/* Secondary financial stats */}
                   <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <StatCard
                       label="إيرادات الشهر السابق"
@@ -879,7 +1207,6 @@ export default function AdminDashboard() {
                     />
                   </div>
 
-                  {/* Subscription lifecycle */}
                   <div className="mb-6">
                     <div className="mb-3">
                       <SectionTitle title="دورة الاشتراكات" />
@@ -914,7 +1241,6 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Invoice lifecycle */}
                   <div className="mb-6">
                     <div className="mb-3">
                       <SectionTitle title="ملخص الفواتير" />
@@ -962,9 +1288,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  {/* Revenue analysis */}
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    {/* Payment methods */}
                     <Card className="border-sand-200 p-4 sm:p-5">
                       <SectionTitle
                         title="الإيرادات حسب طريقة الدفع"
@@ -1005,14 +1329,17 @@ export default function AdminDashboard() {
 
                                 const barWidth =
                                   (Number(
-                                    item.revenue || 0
+                                    item.revenue ||
+                                      0
                                   ) /
                                     maxMethodRevenue) *
                                   100
 
                                 return (
                                   <div
-                                    key={item.method}
+                                    key={
+                                      item.method
+                                    }
                                     className="space-y-2.5"
                                   >
                                     <div className="flex items-center justify-between gap-3 text-sm">
@@ -1044,7 +1371,9 @@ export default function AdminDashboard() {
 
                                     <div className="flex justify-between text-[11px] text-ink-900/45">
                                       <span>
-                                        {item.count}{' '}
+                                        {
+                                          item.count
+                                        }{' '}
                                         معاملة
                                       </span>
 
@@ -1064,7 +1393,6 @@ export default function AdminDashboard() {
                       </div>
                     </Card>
 
-                    {/* Plans */}
                     <Card className="border-sand-200 p-4 sm:p-5">
                       <SectionTitle
                         title="الإيرادات حسب الباقة"
@@ -1105,7 +1433,8 @@ export default function AdminDashboard() {
 
                                 const barWidth =
                                   (Number(
-                                    item.revenue || 0
+                                    item.revenue ||
+                                      0
                                   ) /
                                     maxPlanRevenue) *
                                   100
@@ -1120,7 +1449,9 @@ export default function AdminDashboard() {
                                   >
                                     <div className="flex items-center justify-between gap-3 text-sm">
                                       <span className="min-w-0 truncate font-semibold text-ink-950">
-                                        {item.plan_name}
+                                        {
+                                          item.plan_name
+                                        }
                                       </span>
 
                                       <span className="shrink-0 font-semibold text-ink-900/65">
@@ -1144,7 +1475,9 @@ export default function AdminDashboard() {
 
                                     <div className="flex justify-between text-[11px] text-ink-900/45">
                                       <span>
-                                        {item.count}{' '}
+                                        {
+                                          item.count
+                                        }{' '}
                                         معاملة
                                       </span>
 
@@ -1165,7 +1498,6 @@ export default function AdminDashboard() {
                     </Card>
                   </div>
 
-                  {/* Latest transactions */}
                   <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <Card className="border-sand-200 p-4 sm:p-5">
                       <SectionTitle title="أحدث المعاملات" />
@@ -1191,62 +1523,63 @@ export default function AdminDashboard() {
                           <div className="space-y-2.5">
                             {financial.transactions
                               .slice(0, 5)
-                              .map(transaction => (
-                                <div
-                                  key={
-                                    transaction.payment_id
-                                  }
-                                  className="flex items-center justify-between gap-3 rounded-2xl border border-sand-100 bg-sand-50/50 p-3 transition hover:border-sand-200 hover:bg-sand-50"
-                                >
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-bold text-ink-950">
-                                      {
-                                        transaction.organization_name
-                                      }
+                              .map(
+                                transaction => (
+                                  <div
+                                    key={
+                                      transaction.payment_id
+                                    }
+                                    className="flex items-center justify-between gap-3 rounded-2xl border border-sand-100 bg-sand-50/50 p-3 transition hover:border-sand-200 hover:bg-sand-50"
+                                  >
+                                    <div className="min-w-0">
+                                      <div className="truncate text-sm font-bold text-ink-950">
+                                        {
+                                          transaction.organization_name
+                                        }
+                                      </div>
+
+                                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-900/45">
+                                        <span>
+                                          {transaction.plan_name ||
+                                            'باقة غير محددة'}
+                                        </span>
+
+                                        <span>
+                                          •
+                                        </span>
+
+                                        <span>
+                                          {methodLabels[
+                                            transaction.method
+                                          ] ||
+                                            transaction.method}
+                                        </span>
+
+                                        <span>
+                                          •
+                                        </span>
+
+                                        <span>
+                                          {formatDate(
+                                            transaction.paid_at
+                                          )}
+                                        </span>
+                                      </div>
                                     </div>
 
-                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-900/45">
-                                      <span>
-                                        {transaction.plan_name ||
-                                          'باقة غير محددة'}
-                                      </span>
-
-                                      <span>
-                                        •
-                                      </span>
-
-                                      <span>
-                                        {methodLabels[
-                                          transaction.method
-                                        ] ||
-                                          transaction.method}
-                                      </span>
-
-                                      <span>
-                                        •
-                                      </span>
-
-                                      <span>
-                                        {formatDate(
-                                          transaction.paid_at
-                                        )}
-                                      </span>
+                                    <div className="shrink-0 text-sm font-bold text-ink-950">
+                                      {formatMoney(
+                                        transaction.amount
+                                      )}
                                     </div>
                                   </div>
-
-                                  <div className="shrink-0 text-sm font-bold text-ink-950">
-                                    {formatMoney(
-                                      transaction.amount
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
+                                )
+                              )}
                           </div>
                         )}
                       </div>
                     </Card>
 
-                    {/* Quick summary */}
                     <Card className="border-sand-200 p-4 sm:p-5">
                       <SectionTitle title="ملخص الأداء المالي" />
 
@@ -1306,7 +1639,6 @@ export default function AdminDashboard() {
                     </Card>
                   </div>
 
-                  {/* Full transactions */}
                   <div className="mt-6">
                     <div className="mb-3">
                       <SectionTitle
@@ -1394,11 +1726,12 @@ export default function AdminDashboard() {
                                   </td>
 
                                   <td className="px-4 py-3 font-mono text-xs text-ink-900/50">
-                                    {transaction.payment_id.slice(
-                                      0,
-                                      8
-                                    )}
-                                    ...
+                                    {transaction.payment_id
+                                      ? `${transaction.payment_id.slice(
+                                          0,
+                                          8
+                                        )}...`
+                                      : '—'}
                                   </td>
 
                                   <td className="px-4 py-3">
@@ -1427,7 +1760,6 @@ export default function AdminDashboard() {
           </Card>
         </section>
 
-        {/* Organizations */}
         <section>
           <Card className="overflow-hidden">
             <div className="border-b border-sand-200 bg-white p-4 sm:p-5">
@@ -1497,73 +1829,90 @@ export default function AdminDashboard() {
                       </td>
                     </tr>
                   ) : (
-                    data.organizations.map(o => (
-                      <tr
-                        key={o.id}
-                        className="transition hover:bg-sand-50/70"
-                      >
-                        <td className="px-4 py-3 font-semibold text-ink-950">
-                          {o.name}
-                        </td>
+                    data.organizations.map(
+                      organization => (
+                        <tr
+                          key={
+                            organization.id
+                          }
+                          className="transition hover:bg-sand-50/70"
+                        >
+                          <td className="px-4 py-3 font-semibold text-ink-950">
+                            {organization.name}
+                          </td>
 
-                        <td className="px-4 py-3 text-ink-900/70">
-                          {o.business_type ?? '—'}
-                        </td>
+                          <td className="px-4 py-3 text-ink-900/70">
+                            {organization.business_type ??
+                              '—'}
+                          </td>
 
-                        <td className="px-4 py-3">
-                          <Badge tone="gold">
-                            {o.plan}
-                          </Badge>
-                        </td>
+                          <td className="px-4 py-3">
+                            <Badge tone="gold">
+                              {organization.plan ||
+                                'غير محددة'}
+                            </Badge>
+                          </td>
 
-                        <td className="px-4 py-3 text-ink-900/70">
-                          {o.usersCount}
-                        </td>
-
-                        <td className="px-4 py-3 text-ink-900/70">
-                          {o.customersCount}
-                        </td>
-
-                        <td className="whitespace-nowrap px-4 py-3 text-ink-900/70">
-                          {Number(
-                            o.dealsValue || 0
-                          ).toLocaleString('ar-EG')}{' '}
-                          ج.م
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <Badge
-                            tone={
-                              o.suspended
-                                ? 'danger'
-                                : 'success'
+                          <td className="px-4 py-3 text-ink-900/70">
+                            {
+                              organization.usersCount
                             }
-                          >
-                            {o.suspended
-                              ? 'موقوفة'
-                              : 'نشطة'}
-                          </Badge>
-                        </td>
+                          </td>
 
-                        <td className="px-4 py-3">
-                          <Button
-                            variant="secondary"
-                            onClick={() =>
-                              handleAction(o)
+                          <td className="px-4 py-3 text-ink-900/70">
+                            {
+                              organization.customersCount
                             }
-                            disabled={
-                              actingId === o.id
-                            }
-                          >
-                            {actingId === o.id
-                              ? 'جاري التنفيذ...'
-                              : o.suspended
-                              ? 'تفعيل'
-                              : 'تعليق'}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+
+                          <td className="whitespace-nowrap px-4 py-3 text-ink-900/70">
+                            {Number(
+                              organization.dealsValue ||
+                                0
+                            ).toLocaleString(
+                              'ar-EG'
+                            )}{' '}
+                            ج.م
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <Badge
+                              tone={
+                                organization.suspended
+                                  ? 'danger'
+                                  : 'success'
+                              }
+                            >
+                              {organization.suspended
+                                ? 'موقوفة'
+                                : 'نشطة'}
+                            </Badge>
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <Button
+                              variant="secondary"
+                              onClick={() =>
+                                void handleAction(
+                                  organization
+                                )
+                              }
+                              disabled={
+                                actingId ===
+                                organization.id
+                              }
+                            >
+                              {actingId ===
+                              organization.id
+                                ? 'جاري التنفيذ...'
+                                : organization.suspended
+                                  ? 'تفعيل'
+                                  : 'تعليق'}
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    )
                   )}
                 </tbody>
               </table>
