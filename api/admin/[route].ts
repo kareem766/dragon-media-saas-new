@@ -3,12 +3,12 @@ import type {
   VercelResponse,
 } from '@vercel/node'
 
-import auditLogs from '../_server/admin/audit-logs'
-import financial from '../_server/admin/financial'
-import organizations from '../_server/admin/organizations'
-import overview from '../_server/admin/overview'
-import payments from '../_server/admin/payments'
-import tickets from '../_server/admin/tickets'
+import auditLogs from '../_server/admin/audit-logs.js'
+import financial from '../_server/admin/financial.js'
+import organizations from '../_server/admin/organizations.js'
+import overview from '../_server/admin/overview.js'
+import payments from '../_server/admin/payments.js'
+import tickets from '../_server/admin/tickets.js'
 
 type Handler = (
   req: VercelRequest,
