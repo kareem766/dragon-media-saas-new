@@ -187,12 +187,16 @@ export default function Settings() {
   const [integrationsError, setIntegrationsError] =
     useState('')
 
-  // Tracks the exact Meta provider currently connecting.
-  // This keeps Facebook, Instagram and WhatsApp loading states independent.
   const [metaConnecting, setMetaConnecting] =
     useState<MetaProvider | null>(null)
 
   const [metaConnectionError, setMetaConnectionError] =
+    useState('')
+
+  const [metaSyncing, setMetaSyncing] =
+    useState<MetaProvider | null>(null)
+
+  const [metaSyncMessage, setMetaSyncMessage] =
     useState('')
 
   const updateOrg = (
@@ -489,14 +493,13 @@ export default function Settings() {
       return
     }
 
-    // Prevent starting a second Meta OAuth flow while one is active.
     if (metaConnecting !== null) {
       return
     }
 
-    // Store the exact provider being connected.
     setMetaConnecting(provider)
     setMetaConnectionError('')
+    setMetaSyncMessage('')
 
     try {
       const {
@@ -599,6 +602,129 @@ export default function Settings() {
       )
 
       setMetaConnecting(null)
+    }
+  }
+
+  const syncMetaProvider = async (
+    provider: MetaProvider,
+  ) => {
+    if (!supabase) {
+      setMetaSyncMessage(
+        'تعذر الاتصال بخدمة المصادقة.',
+      )
+      return
+    }
+
+    if (metaSyncing !== null) {
+      return
+    }
+
+    setMetaSyncing(provider)
+    setMetaSyncMessage('')
+    setMetaConnectionError('')
+
+    try {
+      const {
+        data: sessionData,
+        error: sessionError,
+      } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        throw sessionError
+      }
+
+      const accessToken =
+        sessionData.session?.access_token
+
+      if (!accessToken) {
+        throw new Error(
+          'يرجى تسجيل الدخول مرة أخرى ثم محاولة المزامنة.',
+        )
+      }
+
+      const response = await fetch(
+        '/api/meta/sync',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          cache: 'no-store',
+          body: JSON.stringify({
+            provider,
+          }),
+        },
+      )
+
+      const contentType =
+        response.headers.get('content-type') || ''
+
+      let data: unknown = null
+
+      if (
+        contentType.includes('application/json')
+      ) {
+        data = await response.json().catch(
+          () => null,
+        )
+      } else {
+        const text = await response
+          .text()
+          .catch(() => '')
+
+        data = text
+          ? { error: text }
+          : null
+      }
+
+      if (!response.ok) {
+        const serverError =
+          getMetaErrorMessage(
+            data &&
+              typeof data === 'object'
+              ? (
+                  data as Record<
+                    string,
+                    unknown
+                  >
+                ).error
+              : data,
+            `تعذر مزامنة ${provider}. رمز الخطأ: ${response.status}.`,
+          )
+
+        throw new Error(serverError)
+      }
+
+      const responseMessage =
+        data &&
+        typeof data === 'object'
+          ? (
+              data as Record<
+                string,
+                unknown
+              >
+            ).message
+          : null
+
+      setMetaSyncMessage(
+        typeof responseMessage === 'string' &&
+          responseMessage.trim()
+          ? responseMessage
+          : `تمت مزامنة ${provider} بنجاح.`,
+      )
+
+      await loadIntegrations()
+    } catch (err: unknown) {
+      setMetaSyncMessage(
+        getMetaErrorMessage(
+          err,
+          `تعذر مزامنة ${provider}. حاول مرة أخرى.`,
+        ),
+      )
+    } finally {
+      setMetaSyncing(null)
     }
   }
 
@@ -925,6 +1051,9 @@ export default function Settings() {
               metaConnectionError={
                 metaConnectionError
               }
+              metaSyncing={metaSyncing}
+              metaSyncMessage={metaSyncMessage}
+              onMetaSync={syncMetaProvider}
             />
           )}
 
@@ -1297,7 +1426,7 @@ function NotificationsSection({
                 preferences.overdue_tasks
               }
               onChange={(value) =>
-                updatePreference(
+                updateNotificationPreference(
                   'overdue_tasks',
                   value,
                 )
@@ -1365,6 +1494,9 @@ function IntegrationsSection({
   onMetaConnect,
   metaConnecting,
   metaConnectionError,
+  metaSyncing,
+  metaSyncMessage,
+  onMetaSync,
 }: {
   integrations: Integration[]
   loading: boolean
@@ -1384,6 +1516,11 @@ function IntegrationsSection({
   ) => void
   metaConnecting: MetaProvider | null
   metaConnectionError: string
+  metaSyncing: MetaProvider | null
+  metaSyncMessage: string
+  onMetaSync: (
+    provider: MetaProvider,
+  ) => void
 }) {
   return (
     <section>
@@ -1415,6 +1552,15 @@ function IntegrationsSection({
             <MessageBox
               type="error"
               message={metaConnectionError}
+            />
+          </div>
+        )}
+
+        {metaSyncMessage && (
+          <div className="mb-5">
+            <MessageBox
+              type="success"
+              message={metaSyncMessage}
             />
           </div>
         )}
@@ -1484,6 +1630,10 @@ function IntegrationsSection({
                 itemProvider !== null &&
                 metaConnecting === itemProvider
 
+              const isSyncing =
+                itemProvider !== null &&
+                metaSyncing === itemProvider
+
               return (
                 <div
                   key={item.provider}
@@ -1537,43 +1687,71 @@ function IntegrationsSection({
                     </div>
 
                     {item.meta ? (
-                      <button
-                        type="button"
-                        aria-label={
-                          connected
-                            ? item.connectedActionLabel
-                            : item.actionLabel
-                        }
-                        onClick={() =>
-                          onMetaConnect(
-                            itemProvider as MetaProvider,
-                          )
-                        }
-                        disabled={
-                          metaConnecting !== null
-                        }
-                        className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[128px] sm:self-end ${
-                          connected
-                            ? 'border border-sand-300 bg-white text-ink-900 hover:border-sand-400 hover:bg-sand-50'
-                            : 'bg-ink-950 text-white hover:bg-ink-900'
-                        }`}
-                      >
-                        {isConnecting && (
-                          <span
-                            className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
-                              connected
-                                ? 'border-ink-900/20 border-t-ink-900'
-                                : 'border-white/30 border-t-white'
-                            }`}
-                          />
-                        )}
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:self-end">
+                        <button
+                          type="button"
+                          aria-label={
+                            connected
+                              ? item.connectedActionLabel
+                              : item.actionLabel
+                          }
+                          onClick={() =>
+                            onMetaConnect(
+                              itemProvider as MetaProvider,
+                            )
+                          }
+                          disabled={
+                            metaConnecting !== null ||
+                            metaSyncing !== null
+                          }
+                          className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[128px] ${
+                            connected
+                              ? 'border border-sand-300 bg-white text-ink-900 hover:border-sand-400 hover:bg-sand-50'
+                              : 'bg-ink-950 text-white hover:bg-ink-900'
+                          }`}
+                        >
+                          {isConnecting && (
+                            <span
+                              className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
+                                connected
+                                  ? 'border-ink-900/20 border-t-ink-900'
+                                  : 'border-white/30 border-t-white'
+                              }`}
+                            />
+                          )}
 
-                        {isConnecting
-                          ? 'جاري الربط...'
-                          : connected
-                            ? item.connectedActionLabel
-                            : item.actionLabel}
-                      </button>
+                          {isConnecting
+                            ? 'جاري الربط...'
+                            : connected
+                              ? item.connectedActionLabel
+                              : item.actionLabel}
+                        </button>
+
+                        {connected &&
+                          itemProvider && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onMetaSync(
+                                  itemProvider,
+                                )
+                              }
+                              disabled={
+                                metaSyncing !== null ||
+                                metaConnecting !== null
+                              }
+                              className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isSyncing && (
+                                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-700/20 border-t-blue-700" />
+                              )}
+
+                              {isSyncing
+                                ? 'جاري مزامنة الأصول...'
+                                : 'مزامنة الأصول'}
+                            </button>
+                          )}
+                      </div>
                     ) : (
                       <button
                         type="button"
@@ -1643,31 +1821,6 @@ function IntegrationsSection({
                 </div>
               )
             })}
-
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 sm:p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-[11px] font-black text-emerald-700 sm:h-11 sm:w-11">
-                    SB
-                  </div>
-
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-ink-950">
-                      Supabase
-                    </h3>
-
-                    <p className="mt-1 text-xs leading-5 text-ink-900/50">
-                      قاعدة البيانات والمصادقة الخاصة بالمنصة.
-                    </p>
-                  </div>
-                </div>
-
-                <StatusBadge
-                  label="متصل"
-                  tone="success"
-                />
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -1756,7 +1909,8 @@ function WhatsAppSection({
                   onMetaConnect('whatsapp')
                 }
                 disabled={
-                  metaConnecting !== null
+                  metaConnecting !== null ||
+                  metaSyncing !== null
                 }
                 className="inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
               >
