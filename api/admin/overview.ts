@@ -12,7 +12,10 @@ export default async function handler(
   try {
     return await overview(req, res)
   } catch (error: unknown) {
-    console.error('Admin overview API error:', error)
+    console.error(
+      'Admin overview API error:',
+      error
+    )
 
     if (!res.headersSent) {
       const message =
