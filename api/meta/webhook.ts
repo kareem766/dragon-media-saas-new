@@ -882,9 +882,6 @@ export default async function handler(
            * =================================================
            */
 
-          const normalizedPhone =
-            normalizePhone(waId)
-
           const customer =
             await findCustomer(
               supabase,
@@ -990,12 +987,15 @@ export default async function handler(
           if (
             existingConversation?.id
           ) {
-            conversationId =
+            const existingConversationId =
               existingConversation.id
+
+            conversationId =
+              existingConversationId
 
             await updateConversation(
               supabase,
-              conversationId,
+              existingConversationId,
               existingConversation.metadata,
               Number(
                 existingConversation
@@ -1072,12 +1072,15 @@ export default async function handler(
                 if (
                   concurrent?.id
                 ) {
-                  conversationId =
+                  const concurrentConversationId =
                     concurrent.id
+
+                  conversationId =
+                    concurrentConversationId
 
                   await updateConversation(
                     supabase,
-                    conversationId,
+                    concurrentConversationId,
                     concurrent.metadata,
                     Number(
                       concurrent
