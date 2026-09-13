@@ -2,6 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+}
+
 function env(name: string): string {
   const value = process.env[name]
 
@@ -32,8 +38,8 @@ function verifySignature(
   }
 
   return timingSafeEqual(
-    Buffer.from(received),
-    Buffer.from(expected),
+    Buffer.from(received, 'utf8'),
+    Buffer.from(expected, 'utf8'),
   )
 }
 
@@ -43,12 +49,20 @@ function normalizePhone(
   return String(value || '').replace(/\D/g, '')
 }
 
-function getRawBody(req: VercelRequest) {
-  if (typeof req.body === 'string') {
-    return req.body
+async function getRawBody(
+  req: VercelRequest,
+): Promise<string> {
+  const chunks: Buffer[] = []
+
+  for await (const chunk of req) {
+    chunks.push(
+      Buffer.isBuffer(chunk)
+        ? chunk
+        : Buffer.from(chunk),
+    )
   }
 
-  return JSON.stringify(req.body ?? {})
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 export default async function handler(
@@ -57,14 +71,14 @@ export default async function handler(
 ) {
   res.setHeader('Cache-Control', 'no-store')
 
+  const verifyToken =
+    env('META_WHATSAPP_VERIFY_TOKEN')
+
   /*
    * ---------------------------------------------------------
    * META WEBHOOK VERIFICATION
    * ---------------------------------------------------------
    */
-
-  const verifyToken =
-    env('META_WHATSAPP_VERIFY_TOKEN')
 
   if (req.method === 'GET') {
     const mode =
@@ -108,12 +122,18 @@ export default async function handler(
   try {
     /*
      * -------------------------------------------------------
-     * VERIFY META SIGNATURE
+     * READ THE EXACT RAW BODY SENT BY META
      * -------------------------------------------------------
      */
 
     const rawBody =
-      getRawBody(req)
+      await getRawBody(req)
+
+    /*
+     * -------------------------------------------------------
+     * VERIFY META SIGNATURE
+     * -------------------------------------------------------
+     */
 
     const signature =
       String(
@@ -130,6 +150,10 @@ export default async function handler(
       )
 
     if (!validSignature) {
+      console.error(
+        'WhatsApp webhook: invalid Meta signature',
+      )
+
       return res
         .status(401)
         .json({
@@ -144,10 +168,30 @@ export default async function handler(
      * -------------------------------------------------------
      */
 
-    const payload =
-      typeof req.body === 'string'
-        ? JSON.parse(req.body)
-        : req.body
+    let payload: any
+
+    try {
+      payload =
+        JSON.parse(rawBody)
+    } catch (error) {
+      console.error(
+        'WhatsApp webhook: invalid JSON payload',
+        error,
+      )
+
+      return res
+        .status(400)
+        .json({
+          error:
+            'Invalid JSON payload',
+        })
+    }
+
+    /*
+     * -------------------------------------------------------
+     * IGNORE NON-WHATSAPP PAYLOADS
+     * -------------------------------------------------------
+     */
 
     if (
       payload?.object !==
@@ -199,6 +243,13 @@ export default async function handler(
       for (
         const change of changes
       ) {
+        /*
+         * Only process WhatsApp messages.
+         *
+         * Other events such as statuses/read/delivery
+         * should still receive a 200 acknowledgement.
+         */
+
         if (
           change?.field !==
           'messages'
@@ -217,6 +268,10 @@ export default async function handler(
           )
 
         if (!phoneNumberId) {
+          console.warn(
+            'WhatsApp webhook: missing phone_number_id',
+          )
+
           continue
         }
 
@@ -228,6 +283,7 @@ export default async function handler(
 
         const {
           data: connection,
+          error: connectionError,
         } = await supabase
           .from('meta_connections')
           .select(
@@ -247,6 +303,15 @@ export default async function handler(
             phoneNumberId,
           )
           .maybeSingle()
+
+        if (connectionError) {
+          console.error(
+            'WhatsApp webhook: connection lookup failed',
+            connectionError,
+          )
+
+          continue
+        }
 
         if (
           !connection
@@ -292,6 +357,10 @@ export default async function handler(
             )
 
           if (!waId) {
+            console.warn(
+              'WhatsApp webhook: message without sender wa_id',
+            )
+
             continue
           }
 
@@ -373,6 +442,8 @@ export default async function handler(
           const {
             data:
               existingCustomer,
+            error:
+              customerLookupError,
           } = await supabase
             .from('customers')
             .select('id')
@@ -387,6 +458,13 @@ export default async function handler(
             )
             .maybeSingle()
 
+          if (customerLookupError) {
+            console.error(
+              'WhatsApp webhook: customer lookup failed',
+              customerLookupError,
+            )
+          }
+
           if (
             existingCustomer?.id
           ) {
@@ -398,6 +476,8 @@ export default async function handler(
             const {
               data:
                 phoneCustomer,
+              error:
+                phoneLookupError,
             } = await supabase
               .from('customers')
               .select('id')
@@ -412,6 +492,13 @@ export default async function handler(
               )
               .maybeSingle()
 
+            if (phoneLookupError) {
+              console.error(
+                'WhatsApp webhook: normalized phone lookup failed',
+                phoneLookupError,
+              )
+            }
+
             if (
               phoneCustomer?.id
             ) {
@@ -424,6 +511,8 @@ export default async function handler(
             const {
               data:
                 createdCustomer,
+              error:
+                customerInsertError,
             } = await supabase
               .from('customers')
               .insert({
@@ -443,6 +532,15 @@ export default async function handler(
               })
               .select('id')
               .single()
+
+            if (customerInsertError) {
+              console.error(
+                'WhatsApp webhook: customer insert failed',
+                customerInsertError,
+              )
+
+              continue
+            }
 
             customerId =
               createdCustomer
@@ -494,6 +592,8 @@ export default async function handler(
           const {
             data:
               existingConversation,
+            error:
+              conversationLookupError,
           } = await supabase
             .from(
               'conversations',
@@ -516,13 +616,23 @@ export default async function handler(
             )
             .maybeSingle()
 
+          if (conversationLookupError) {
+            console.error(
+              'WhatsApp webhook: conversation lookup failed',
+              conversationLookupError,
+            )
+          }
+
           if (
             existingConversation?.id
           ) {
             conversationId =
               existingConversation.id
 
-            await supabase
+            const {
+              error:
+                conversationUpdateError,
+            } = await supabase
               .from(
                 'conversations',
               )
@@ -548,10 +658,19 @@ export default async function handler(
                 'id',
                 conversationId,
               )
+
+            if (conversationUpdateError) {
+              console.error(
+                'WhatsApp webhook: conversation update failed',
+                conversationUpdateError,
+              )
+            }
           } else {
             const {
               data:
                 createdConversation,
+              error:
+                conversationInsertError,
             } = await supabase
               .from(
                 'conversations',
@@ -589,6 +708,15 @@ export default async function handler(
               .select('id')
               .single()
 
+            if (conversationInsertError) {
+              console.error(
+                'WhatsApp webhook: conversation insert failed',
+                conversationInsertError,
+              )
+
+              continue
+            }
+
             conversationId =
               createdConversation
                 ?.id || null
@@ -612,6 +740,8 @@ export default async function handler(
           if (externalId) {
             const {
               data: duplicate,
+              error:
+                duplicateLookupError,
             } = await supabase
               .from('messages')
               .select('id')
@@ -620,6 +750,13 @@ export default async function handler(
                 externalId,
               )
               .maybeSingle()
+
+            if (duplicateLookupError) {
+              console.error(
+                'WhatsApp webhook: duplicate lookup failed',
+                duplicateLookupError,
+              )
+            }
 
             if (duplicate?.id) {
               continue
@@ -632,7 +769,10 @@ export default async function handler(
            * -----------------------------------------------
            */
 
-          await supabase
+          const {
+            error:
+              messageInsertError,
+          } = await supabase
             .from('messages')
             .insert({
               conversation_id:
@@ -648,6 +788,32 @@ export default async function handler(
 
               metadata,
             })
+
+          if (messageInsertError) {
+            console.error(
+              'WhatsApp webhook: message insert failed',
+              messageInsertError,
+            )
+
+            continue
+          }
+
+          console.log(
+            'WhatsApp webhook: message saved',
+            {
+              organizationId:
+                connection
+                  .organization_id,
+
+              conversationId,
+
+              customerId,
+
+              phoneNumberId,
+
+              externalId,
+            },
+          )
         }
       }
     }
@@ -665,7 +831,7 @@ export default async function handler(
       })
   } catch (error) {
     console.error(
-      'WhatsApp webhook error:',
+      'WhatsApp webhook fatal error:',
       error,
     )
 
