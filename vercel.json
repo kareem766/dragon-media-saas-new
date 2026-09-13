@@ -1,4 +1,5 @@
 {
+  "runtime": "nodejs20.x",
   "crons": [
     { "path": "/api/automation-run", "schedule": "0 0 * * *" }
   ]
