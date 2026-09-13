@@ -3,29 +3,16 @@ import type {
   VercelResponse,
 } from '@vercel/node'
 
-const overviewModule = require('../../src/server/admin/overview')
-
-const overview =
-  overviewModule?.default ?? overviewModule
+import overview from '../../src/server/admin/overview.ts'
 
 export default async function handler(
   req: VercelRequest,
-  res: VercelResponse
+  res: VercelResponse,
 ) {
   try {
-    if (typeof overview !== 'function') {
-      return res.status(500).json({
-        error:
-          'ملف لوحة الإدارة لا يحتوي على handler صالح.',
-      })
-    }
-
     return await overview(req, res)
   } catch (error: unknown) {
-    console.error(
-      'Admin overview API error:',
-      error
-    )
+    console.error('Admin overview API error:', error)
 
     if (!res.headersSent) {
       const message =
