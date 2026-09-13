@@ -49,6 +49,51 @@ function getProvider(
   return 'whatsapp'
 }
 
+function getErrorMessage(
+  error: unknown,
+  fallback: string
+) {
+  if (
+    typeof error === 'string' &&
+    error.trim()
+  ) {
+    return error.trim()
+  }
+
+  if (
+    error instanceof Error &&
+    error.message.trim()
+  ) {
+    return error.message.trim()
+  }
+
+  if (
+    error &&
+    typeof error === 'object'
+  ) {
+    const value =
+      error as Record<string, unknown>
+
+    for (const key of [
+      'message',
+      'error',
+      'error_description',
+      'details',
+    ]) {
+      const candidate = value[key]
+
+      if (
+        typeof candidate === 'string' &&
+        candidate.trim()
+      ) {
+        return candidate.trim()
+      }
+    }
+  }
+
+  return fallback
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
@@ -161,11 +206,6 @@ export default async function handler(
     const stateSecret =
       env('META_STATE_SECRET')
 
-    /*
-     * The provider is included inside the
-     * signed state so it cannot be changed
-     * by the browser during the OAuth flow.
-     */
     const payload =
       JSON.stringify({
         user_id:
@@ -217,6 +257,12 @@ export default async function handler(
         provider,
       })
   } catch (error) {
+    const message =
+      getErrorMessage(
+        error,
+        'Unable to start Meta connection'
+      )
+
     console.error(
       'Meta OAuth start error:',
       error
@@ -225,8 +271,9 @@ export default async function handler(
     return res
       .status(500)
       .json({
-        error:
-          'Unable to start Meta connection',
+        error: message,
+        code:
+          'META_OAUTH_START_FAILED',
       })
   }
 }
