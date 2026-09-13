@@ -1,5 +1,5 @@
-import start from '../../_server/meta/oauth/_start'
-import callback from '../../_server/meta/oauth/_callback'
+import start from '../../../src/server/meta/oauth/start'
+import callback from '../../../src/server/meta/oauth/callback'
 
 const handlers: Record<string, any> = {
   start,
