@@ -619,10 +619,12 @@ export default function Inbox() {
   ])
 
   useEffect(() => {
-    if (!supabase || !organizationId) return
+    const client = supabase
+
+    if (!client || !organizationId) return
 
     const conversationsChannel =
-      supabase
+      client
         .channel(
           `inbox-conversations-${organizationId}`
         )
@@ -730,18 +732,20 @@ export default function Inbox() {
         .subscribe()
 
     return () => {
-      supabase.removeChannel(
+      client.removeChannel(
         conversationsChannel
       )
     }
   }, [organizationId])
 
   useEffect(() => {
-    if (!supabase || !organizationId)
+    const client = supabase
+
+    if (!client || !organizationId)
       return
 
     const messagesChannel =
-      supabase
+      client
         .channel(
           `inbox-messages-${organizationId}`
         )
@@ -822,7 +826,7 @@ export default function Inbox() {
         .subscribe()
 
     return () => {
-      supabase.removeChannel(
+      client.removeChannel(
         messagesChannel
       )
     }
