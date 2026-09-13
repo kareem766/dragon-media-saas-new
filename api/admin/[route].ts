@@ -3,12 +3,30 @@ import type {
   VercelResponse,
 } from '@vercel/node'
 
-import auditLogs from '../../src/server/admin/audit-logs'
-import financial from '../../src/server/admin/financial'
-import organizations from '../../src/server/admin/organizations'
-import overview from '../../src/server/admin/overview'
-import payments from '../../src/server/admin/payments'
-import tickets from '../../src/server/admin/tickets'
+const auditLogsModule = require('../../src/server/admin/audit-logs')
+const financialModule = require('../../src/server/admin/financial')
+const organizationsModule = require('../../src/server/admin/organizations')
+const overviewModule = require('../../src/server/admin/overview')
+const paymentsModule = require('../../src/server/admin/payments')
+const ticketsModule = require('../../src/server/admin/tickets')
+
+const auditLogs =
+  auditLogsModule?.default ?? auditLogsModule
+
+const financial =
+  financialModule?.default ?? financialModule
+
+const organizations =
+  organizationsModule?.default ?? organizationsModule
+
+const overview =
+  overviewModule?.default ?? overviewModule
+
+const payments =
+  paymentsModule?.default ?? paymentsModule
+
+const tickets =
+  ticketsModule?.default ?? ticketsModule
 
 const handlers: Record<
   string,
