@@ -60,7 +60,8 @@ function getProviderConfigEnv(
       return 'META_INSTAGRAM_LOGIN_CONFIG_ID'
 
     case 'whatsapp':
-      return 'META_WHATSAPP_LOGIN_CONFIG_ID'
+      // WhatsApp must use a dedicated Embedded Signup v4 configuration.
+      return 'META_WHATSAPP_EMBEDDED_CONFIG_ID'
   }
 }
 
@@ -151,10 +152,6 @@ export default async function handler(
         req.query.provider,
       )
 
-    /*
-     * Validate the user's Supabase session
-     * using the public/publishable side.
-     */
     const authSupabase =
       createClient(
         env('VITE_SUPABASE_URL'),
@@ -187,11 +184,6 @@ export default async function handler(
         })
     }
 
-    /*
-     * Server-only client.
-     *
-     * Secret key must NEVER reach the browser.
-     */
     const adminSupabase =
       createClient(
         env('VITE_SUPABASE_URL'),
@@ -248,12 +240,6 @@ export default async function handler(
         })
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * Each provider now uses its own
-     * Facebook Login for Business configuration.
-     */
     const configEnv =
       getProviderConfigEnv(
         provider,
@@ -283,10 +269,6 @@ export default async function handler(
     const stateSecret =
       env('META_STATE_SECRET')
 
-    /*
-     * Provider is part of the signed state.
-     * The callback will trust only this value.
-     */
     const payload =
       JSON.stringify({
         user_id:
@@ -318,6 +300,17 @@ export default async function handler(
     const state =
       `${encodedPayload}.${signature}`
 
+    /*
+     * WhatsApp uses a dedicated Embedded Signup v4
+     * Login for Business configuration.
+     *
+     * The v4 configuration controls the WhatsApp
+     * products, assets and permissions. We intentionally
+     * do not send a scope list from the application.
+     *
+     * Facebook and Instagram keep their existing
+     * Login for Business configurations.
+     */
     const params =
       new URLSearchParams({
         client_id:
