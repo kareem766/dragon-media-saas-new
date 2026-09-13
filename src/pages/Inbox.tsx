@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useState,
 } from 'react'
+
 import { Card, Badge } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -86,12 +87,9 @@ function normalizeCustomer(
     | undefined
 ) {
   if (!customer) return null
-
-  if (Array.isArray(customer)) {
-    return customer[0] ?? null
-  }
-
-  return customer
+  return Array.isArray(customer)
+    ? customer[0] ?? null
+    : customer
 }
 
 function normalizeConversation(row: any): Conversation {
@@ -100,7 +98,7 @@ function normalizeConversation(row: any): Conversation {
     organization_id: row.organization_id,
     customer_id: row.customer_id ?? null,
     channel: row.channel,
-    handled_by: row.handled_by,
+    handled_by: row.handled_by === 'human' ? 'human' : 'ai',
     assigned_user_id: row.assigned_user_id ?? null,
     last_message_at: row.last_message_at ?? null,
     created_at: row.created_at,
@@ -115,9 +113,7 @@ function normalizeConversation(row: any): Conversation {
 
 function formatTime(value: string | null | undefined) {
   if (!value) return ''
-
   const date = new Date(value)
-
   if (Number.isNaN(date.getTime())) return ''
 
   return date.toLocaleTimeString('ar-EG', {
@@ -128,9 +124,7 @@ function formatTime(value: string | null | undefined) {
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return ''
-
   const date = new Date(value)
-
   if (Number.isNaN(date.getTime())) return ''
 
   return date.toLocaleString('ar-EG', {
@@ -147,13 +141,8 @@ function getConversationName(conversation: Conversation) {
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
-
-  if (parts.length === 0) return '؟'
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2)
-  }
-
+  if (!parts.length) return '؟'
+  if (parts.length === 1) return parts[0].slice(0, 2)
   return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`
 }
 
@@ -164,114 +153,21 @@ function ChannelIcon({
   channel: Channel
   className?: string
 }) {
-  if (channel === 'whatsapp') {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className={className}
-        aria-hidden="true"
-      >
-        <path
-          d="M20.1 3.9A9.9 9.9 0 0 0 12.05 1C6.6 1 2.17 5.42 2.17 10.87c0 1.73.45 3.42 1.31 4.91L2 22l6.36-1.66a9.87 9.87 0 0 0 3.69.72h.01c5.45 0 9.87-4.43 9.87-9.88a9.82 9.82 0 0 0-1.83-5.28Z"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M8.55 7.35c.18-.4.38-.41.69-.42h.58c.18 0 .39.07.5.34l.76 1.83c.09.22.06.4-.08.58l-.47.61c-.14.18-.28.31-.12.58.17.28.73 1.2 1.58 1.95.95.84 1.75 1.1 2.02 1.22.28.12.44.1.61-.08l.68-.79c.17-.2.34-.16.58-.09l1.74.82c.24.12.4.18.46.29.06.11.06.65-.15 1.25-.21.6-1.03 1.16-1.43 1.23-.37.07-.84.1-1.36-.07-.31-.1-.7-.23-1.21-.45-.5-.22-2.96-1.23-4.92-3.91-1.52-2.08-1.75-3.63-1.75-4.02 0-.39.13-.78.27-1.07Z"
-          fill="currentColor"
-        />
-      </svg>
-    )
-  }
-
-  if (channel === 'instagram') {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className={className}
-        aria-hidden="true"
-      >
-        <rect
-          x="3"
-          y="3"
-          width="18"
-          height="18"
-          rx="5"
-          stroke="currentColor"
-          strokeWidth="1.7"
-        />
-        <circle
-          cx="12"
-          cy="12"
-          r="4"
-          stroke="currentColor"
-          strokeWidth="1.7"
-        />
-        <circle cx="17.4" cy="6.7" r="1" fill="currentColor" />
-      </svg>
-    )
-  }
-
-  if (channel === 'messenger') {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className={className}
-        aria-hidden="true"
-      >
-        <path
-          d="M12 3.2c-5.3 0-9.2 3.76-9.2 8.56 0 2.7 1.24 5.08 3.25 6.67v3.15l3-1.65c.92.25 1.9.39 2.95.39 5.3 0 9.2-3.76 9.2-8.56S17.3 3.2 12 3.2Z"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinejoin="round"
-        />
-        <path
-          d="m7.55 13.05 2.9-3.08 2.13 1.64 3.91-2.1-2.9 3.08-2.13-1.64-3.91 2.1Z"
-          fill="currentColor"
-        />
-      </svg>
-    )
-  }
-
-  if (channel === 'telegram') {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        className={className}
-        aria-hidden="true"
-      >
-        <path
-          d="m21 4-3.1 15.1c-.23 1.07-.86 1.34-1.75.84l-4.84-3.57-2.34 2.25c-.26.26-.48.48-.99.48l.35-4.94 8.99-8.12c.39-.35-.09-.54-.6-.19L5.6 12.85.84 11.36c-1.04-.32-1.06-1.04.22-1.54L19.67 2.7C20.56 2.38 21.33 2.91 21 4Z"
-          fill="currentColor"
-        />
-      </svg>
-    )
-  }
-
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
+    <span
       className={className}
       aria-hidden="true"
     >
-      <path
-        d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M7 7h10M7 11h7M7 15h5"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
+      {channel === 'whatsapp'
+        ? '◉'
+        : channel === 'instagram'
+          ? '◎'
+          : channel === 'messenger'
+            ? '◈'
+            : channel === 'telegram'
+              ? '➤'
+              : '▣'}
+    </span>
   )
 }
 
@@ -357,53 +253,72 @@ export default function Inbox() {
     error: organizationError,
   } = useOrganization()
 
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [messages, setMessages] = useState<Message[]>([])
+  const [conversations, setConversations] =
+    useState<Conversation[]>([])
+  const [messages, setMessages] =
+    useState<Message[]>([])
   const [activeConversationId, setActiveConversationId] =
     useState<string | null>(null)
 
-  const [filter, setFilter] = useState<'all' | Channel>('all')
+  const [filter, setFilter] =
+    useState<'all' | Channel>('all')
   const [search, setSearch] = useState('')
 
-  const [loadingConversations, setLoadingConversations] = useState(true)
-  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [loadingConversations, setLoadingConversations] =
+    useState(true)
+  const [loadingMessages, setLoadingMessages] =
+    useState(false)
   const [sending, setSending] = useState(false)
+  const [changingHandler, setChangingHandler] =
+    useState(false)
 
-  const [error, setError] = useState<string | null>(null)
-  const [messageError, setMessageError] = useState<string | null>(null)
+  const [error, setError] =
+    useState<string | null>(null)
+  const [messageError, setMessageError] =
+    useState<string | null>(null)
 
   const [reply, setReply] = useState('')
 
   const activeConversation = useMemo(
     () =>
       conversations.find(
-        conversation => conversation.id === activeConversationId
+        conversation =>
+          conversation.id === activeConversationId
       ) ?? null,
     [conversations, activeConversationId]
   )
 
   const filteredConversations = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase()
+    const normalizedSearch =
+      search.trim().toLowerCase()
 
     return conversations.filter(conversation => {
-      const matchesChannel =
-        filter === 'all' || conversation.channel === filter
-
-      if (!matchesChannel) return false
+      if (
+        filter !== 'all' &&
+        conversation.channel !== filter
+      ) {
+        return false
+      }
 
       if (!normalizedSearch) return true
 
       const customerName =
-        getConversationName(conversation).toLowerCase()
+        getConversationName(
+          conversation
+        ).toLowerCase()
       const company =
-        conversation.customer?.company?.toLowerCase() ?? ''
+        conversation.customer?.company?.toLowerCase() ??
+        ''
       const phone =
-        conversation.customer?.phone?.toLowerCase() ?? ''
+        conversation.customer?.phone?.toLowerCase() ??
+        ''
       const subject =
         conversation.subject?.toLowerCase() ?? ''
 
       return (
-        customerName.includes(normalizedSearch) ||
+        customerName.includes(
+          normalizedSearch
+        ) ||
         company.includes(normalizedSearch) ||
         phone.includes(normalizedSearch) ||
         subject.includes(normalizedSearch)
@@ -415,7 +330,11 @@ export default function Inbox() {
     () =>
       conversations.reduce(
         (total, conversation) =>
-          total + Math.max(0, conversation.unread_count),
+          total +
+          Math.max(
+            0,
+            conversation.unread_count
+          ),
         0
       ),
     [conversations]
@@ -424,7 +343,8 @@ export default function Inbox() {
   const openTotal = useMemo(
     () =>
       conversations.filter(
-        conversation => conversation.status === 'open'
+        conversation =>
+          conversation.status === 'open'
       ).length,
     [conversations]
   )
@@ -432,170 +352,253 @@ export default function Inbox() {
   const aiTotal = useMemo(
     () =>
       conversations.filter(
-        conversation => conversation.handled_by === 'ai'
+        conversation =>
+          conversation.handled_by === 'ai'
       ).length,
     [conversations]
   )
 
-  const loadConversations = useCallback(async () => {
-    const client = supabase
-
-    if (!client || !organizationId) {
-      setConversations([])
-      setLoadingConversations(false)
-      return
-    }
-
-    setLoadingConversations(true)
-    setError(null)
-
-    const { data, error: queryError } = await client
-      .from('conversations')
-      .select(`
-        id,
-        organization_id,
-        customer_id,
-        channel,
-        handled_by,
-        assigned_user_id,
-        last_message_at,
-        created_at,
-        status,
-        subject,
-        unread_count,
-        metadata,
-        updated_at,
-        customer:customers(
-          id,
-          name,
-          company,
-          phone,
-          email
-        )
-      `)
-      .eq('organization_id', organizationId)
-      .order('last_message_at', {
-        ascending: false,
-        nullsFirst: false,
-      })
-
-    if (queryError) {
-      setError(queryError.message)
-      setConversations([])
-      setLoadingConversations(false)
-      return
-    }
-
-    const normalized = (data ?? []).map(normalizeConversation)
-
-    setConversations(normalized)
-
-    setActiveConversationId(current => {
-      if (
-        current &&
-        normalized.some(item => item.id === current)
-      ) {
-        return current
-      }
-
-      return normalized[0]?.id ?? null
-    })
-
-    setLoadingConversations(false)
-  }, [organizationId])
-
-  const loadMessages = useCallback(
-    async (conversationId: string) => {
-      const client = supabase
-
-      if (!client) return
-
-      setLoadingMessages(true)
-      setMessageError(null)
-
-      const { data, error: queryError } = await client
-        .from('messages')
-        .select(`
-          id,
-          conversation_id,
-          sender_type,
-          content,
-          created_at,
-          metadata,
-          read_at,
-          delivered_at,
-          external_id
-        `)
-        .eq('conversation_id', conversationId)
-        .order('created_at', {
-          ascending: true,
-        })
-
-      if (queryError) {
-        setMessageError(queryError.message)
-        setMessages([])
-        setLoadingMessages(false)
+  const loadConversations =
+    useCallback(async () => {
+      if (!supabase || !organizationId) {
+        setConversations([])
+        setLoadingConversations(false)
         return
       }
 
-      setMessages((data ?? []) as Message[])
-      setLoadingMessages(false)
-    },
-    []
-  )
+      setLoadingConversations(true)
+      setError(null)
 
-  const markConversationRead = useCallback(
-    async (conversationId: string) => {
-      const client = supabase
+      const { data, error: queryError } =
+        await supabase
+          .from('conversations')
+          .select(`
+            id,
+            organization_id,
+            customer_id,
+            channel,
+            handled_by,
+            assigned_user_id,
+            last_message_at,
+            created_at,
+            status,
+            subject,
+            unread_count,
+            metadata,
+            updated_at,
+            customer:customers(
+              id,
+              name,
+              company,
+              phone,
+              email
+            )
+          `)
+          .eq(
+            'organization_id',
+            organizationId
+          )
+          .order('last_message_at', {
+            ascending: false,
+            nullsFirst: false,
+          })
 
-      if (!client) return
+      if (queryError) {
+        setError(queryError.message)
+        setConversations([])
+        setLoadingConversations(false)
+        return
+      }
 
-      const { error: rpcError } = await client.rpc(
-        'mark_conversation_read',
-        {
-          p_conversation_id: conversationId,
+      const normalized =
+        (data ?? []).map(
+          normalizeConversation
+        )
+
+      setConversations(normalized)
+
+      setActiveConversationId(
+        current => {
+          if (
+            current &&
+            normalized.some(
+              item => item.id === current
+            )
+          ) {
+            return current
+          }
+
+          return normalized[0]?.id ?? null
         }
       )
 
-      if (rpcError) {
-        console.error(
-          'mark_conversation_read failed:',
-          rpcError
-        )
-        return
-      }
+      setLoadingConversations(false)
+    }, [organizationId])
 
-      setConversations(current =>
-        current.map(conversation =>
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                unread_count: 0,
-              }
-            : conversation
-        )
-      )
+  const loadMessages =
+    useCallback(
+      async (
+        conversationId: string
+      ) => {
+        if (!supabase) return
 
-      setMessages(current =>
-        current.map(message =>
-          message.sender_type === 'customer' &&
-          !message.read_at
-            ? {
-                ...message,
-                read_at: new Date().toISOString(),
-              }
-            : message
+        setLoadingMessages(true)
+        setMessageError(null)
+
+        const {
+          data,
+          error: queryError,
+        } = await supabase
+          .from('messages')
+          .select(`
+            id,
+            conversation_id,
+            sender_type,
+            content,
+            created_at,
+            metadata,
+            read_at,
+            delivered_at,
+            external_id
+          `)
+          .eq(
+            'conversation_id',
+            conversationId
+          )
+          .order('created_at', {
+            ascending: true,
+          })
+
+        if (queryError) {
+          setMessageError(
+            queryError.message
+          )
+          setMessages([])
+          setLoadingMessages(false)
+          return
+        }
+
+        setMessages(
+          (data ?? []) as Message[]
         )
-      )
-    },
-    []
-  )
+        setLoadingMessages(false)
+      },
+      []
+    )
+
+  const markConversationRead =
+    useCallback(
+      async (
+        conversationId: string
+      ) => {
+        if (!supabase) return
+
+        const { error: rpcError } =
+          await supabase.rpc(
+            'mark_conversation_read',
+            {
+              p_conversation_id:
+                conversationId,
+            }
+          )
+
+        if (rpcError) {
+          console.error(
+            'mark_conversation_read failed:',
+            rpcError
+          )
+          return
+        }
+
+        setConversations(current =>
+          current.map(conversation =>
+            conversation.id ===
+            conversationId
+              ? {
+                  ...conversation,
+                  unread_count: 0,
+                }
+              : conversation
+          )
+        )
+
+        setMessages(current =>
+          current.map(message =>
+            message.sender_type ===
+              'customer' &&
+            !message.read_at
+              ? {
+                  ...message,
+                  read_at:
+                    new Date().toISOString(),
+                }
+              : message
+          )
+        )
+      },
+      []
+    )
+
+  const setRyanState =
+    useCallback(
+      async (
+        conversation: Conversation,
+        handledBy: 'ai' | 'human'
+      ) => {
+        if (!supabase) return
+
+        setChangingHandler(true)
+        setMessageError(null)
+
+        const { error: updateError } =
+          await supabase
+            .from('conversations')
+            .update({
+              handled_by: handledBy,
+              updated_at:
+                new Date().toISOString(),
+            })
+            .eq(
+              'id',
+              conversation.id
+            )
+            .eq(
+              'organization_id',
+              organizationId
+            )
+
+        if (updateError) {
+          setMessageError(
+            `تعذر ${handledBy === 'human' ? 'إيقاف' : 'تشغيل'} Ryan: ${updateError.message}`
+          )
+          setChangingHandler(false)
+          return
+        }
+
+        setConversations(current =>
+          current.map(item =>
+            item.id === conversation.id
+              ? {
+                  ...item,
+                  handled_by:
+                    handledBy,
+                }
+              : item
+          )
+        )
+
+        setChangingHandler(false)
+      },
+      [organizationId]
+    )
 
   useEffect(() => {
     if (!organizationId) return
-
-    loadConversations()
-  }, [organizationId, loadConversations])
+    void loadConversations()
+  }, [
+    organizationId,
+    loadConversations,
+  ])
 
   useEffect(() => {
     if (!activeConversationId) {
@@ -603,8 +606,12 @@ export default function Inbox() {
       return
     }
 
-    loadMessages(activeConversationId)
-    markConversationRead(activeConversationId)
+    void loadMessages(
+      activeConversationId
+    )
+    void markConversationRead(
+      activeConversationId
+    )
   }, [
     activeConversationId,
     loadMessages,
@@ -612,154 +619,212 @@ export default function Inbox() {
   ])
 
   useEffect(() => {
-    const client = supabase
+    if (!supabase || !organizationId) return
 
-    if (!client || !organizationId) return
+    const conversationsChannel =
+      supabase
+        .channel(
+          `inbox-conversations-${organizationId}`
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'conversations',
+            filter:
+              `organization_id=eq.${organizationId}`,
+          },
+          payload => {
+            if (
+              payload.eventType ===
+              'DELETE'
+            ) {
+              const deletedId =
+                String(
+                  payload.old?.id ?? ''
+                )
 
-    const conversationsChannel = client
-      .channel(`inbox-conversations-${organizationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'conversations',
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        payload => {
-          if (payload.eventType === 'DELETE') {
-            const deletedId = String(payload.old?.id ?? '')
-
-            setConversations(current =>
-              current.filter(
-                conversation =>
-                  conversation.id !== deletedId
+              setConversations(
+                current =>
+                  current.filter(
+                    conversation =>
+                      conversation.id !==
+                      deletedId
+                  )
               )
-            )
 
-            setActiveConversationId(current =>
-              current === deletedId ? null : current
-            )
+              setActiveConversationId(
+                current =>
+                  current ===
+                  deletedId
+                    ? null
+                    : current
+              )
 
-            return
+              return
+            }
+
+            const normalized =
+              normalizeConversation(
+                payload.new
+              )
+
+            setConversations(
+              current => {
+                const existingIndex =
+                  current.findIndex(
+                    conversation =>
+                      conversation.id ===
+                      normalized.id
+                  )
+
+                if (
+                  existingIndex ===
+                  -1
+                ) {
+                  return [
+                    normalized,
+                    ...current,
+                  ]
+                }
+
+                const next = [
+                  ...current,
+                ]
+
+                next[
+                  existingIndex
+                ] = {
+                  ...next[
+                    existingIndex
+                  ],
+                  ...normalized,
+                }
+
+                return next.sort(
+                  (a, b) => {
+                    const aTime =
+                      a.last_message_at
+                        ? new Date(
+                            a.last_message_at
+                          ).getTime()
+                        : 0
+
+                    const bTime =
+                      b.last_message_at
+                        ? new Date(
+                            b.last_message_at
+                          ).getTime()
+                        : 0
+
+                    return (
+                      bTime - aTime
+                    )
+                  }
+                )
+              }
+            )
           }
-
-          const normalized = normalizeConversation(
-            payload.new
-          )
-
-          setConversations(current => {
-            const existingIndex = current.findIndex(
-              conversation =>
-                conversation.id === normalized.id
-            )
-
-            if (existingIndex === -1) {
-              return [normalized, ...current]
-            }
-
-            const next = [...current]
-
-            next[existingIndex] = {
-              ...next[existingIndex],
-              ...normalized,
-            }
-
-            return next.sort((a, b) => {
-              const aTime = a.last_message_at
-                ? new Date(a.last_message_at).getTime()
-                : 0
-
-              const bTime = b.last_message_at
-                ? new Date(b.last_message_at).getTime()
-                : 0
-
-              return bTime - aTime
-            })
-          })
-        }
-      )
-      .subscribe()
+        )
+        .subscribe()
 
     return () => {
-      client.removeChannel(conversationsChannel)
+      supabase.removeChannel(
+        conversationsChannel
+      )
     }
   }, [organizationId])
 
   useEffect(() => {
-    const client = supabase
+    if (!supabase || !organizationId)
+      return
 
-    if (!client || !organizationId) return
+    const messagesChannel =
+      supabase
+        .channel(
+          `inbox-messages-${organizationId}`
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+          },
+          payload => {
+            const newMessage =
+              payload.new as Message
 
-    const messagesChannel = client
-      .channel(`inbox-messages-${organizationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-        },
-        payload => {
-          const newMessage = payload.new as Message
+            if (
+              newMessage.conversation_id ===
+              activeConversationId
+            ) {
+              setMessages(current => {
+                if (
+                  current.some(
+                    message =>
+                      message.id ===
+                      newMessage.id
+                  )
+                ) {
+                  return current
+                }
 
-          if (
-            newMessage.conversation_id ===
-            activeConversationId
-          ) {
-            setMessages(current => {
+                return [
+                  ...current,
+                  newMessage,
+                ]
+              })
+
               if (
-                current.some(
-                  message => message.id === newMessage.id
-                )
+                newMessage.sender_type ===
+                'customer'
               ) {
-                return current
+                void markConversationRead(
+                  newMessage.conversation_id
+                )
               }
-
-              return [...current, newMessage]
-            })
-
-            if (newMessage.sender_type === 'customer') {
-              markConversationRead(
-                newMessage.conversation_id
-              )
             }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'messages',
-        },
-        payload => {
-          const updatedMessage = payload.new as Message
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages',
+          },
+          payload => {
+            const updatedMessage =
+              payload.new as Message
 
-          if (
-            updatedMessage.conversation_id !==
-            activeConversationId
-          ) {
-            return
-          }
+            if (
+              updatedMessage.conversation_id !==
+              activeConversationId
+            ) {
+              return
+            }
 
-          setMessages(current =>
-            current.map(message =>
-              message.id === updatedMessage.id
-                ? {
-                    ...message,
-                    ...updatedMessage,
-                  }
-                : message
+            setMessages(current =>
+              current.map(message =>
+                message.id ===
+                updatedMessage.id
+                  ? {
+                      ...message,
+                      ...updatedMessage,
+                    }
+                  : message
+              )
             )
-          )
-        }
-      )
-      .subscribe()
+          }
+        )
+        .subscribe()
 
     return () => {
-      client.removeChannel(messagesChannel)
+      supabase.removeChannel(
+        messagesChannel
+      )
     }
   }, [
     organizationId,
@@ -767,15 +832,18 @@ export default function Inbox() {
     markConversationRead,
   ])
 
-  const handleSelectConversation = (
-    conversationId: string
-  ) => {
-    setActiveConversationId(conversationId)
-    setMessageError(null)
-    setReply('')
-  }
+  const handleSelectConversation =
+    (conversationId: string) => {
+      setActiveConversationId(
+        conversationId
+      )
+      setMessageError(null)
+      setReply('')
+    }
 
-  const handleSend = async (event: FormEvent) => {
+  const handleSend = async (
+    event: FormEvent
+  ) => {
     event.preventDefault()
 
     const content = reply.trim()
@@ -799,12 +867,44 @@ export default function Inbox() {
     setSending(true)
     setMessageError(null)
 
-    const client = supabase
+    /*
+     * A human agent reply is an explicit takeover.
+     * Ryan will stop responding to this conversation.
+     */
+    const {
+      error: handlerError,
+    } = await supabase
+      .from('conversations')
+      .update({
+        handled_by: 'human',
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        'id',
+        activeConversationId
+      )
+      .eq(
+        'organization_id',
+        organizationId
+      )
 
-    const { data, error: insertError } = await client
+    if (handlerError) {
+      setMessageError(
+        `تعذر تحويل المحادثة للموظف: ${handlerError.message}`
+      )
+      setSending(false)
+      return
+    }
+
+    const {
+      data,
+      error: insertError,
+    } = await supabase
       .from('messages')
       .insert({
-        conversation_id: activeConversationId,
+        conversation_id:
+          activeConversationId,
         sender_type: 'agent',
         content,
         metadata: {
@@ -826,7 +926,9 @@ export default function Inbox() {
       .single()
 
     if (insertError) {
-      setMessageError(insertError.message)
+      setMessageError(
+        insertError.message
+      )
       setSending(false)
       return
     }
@@ -834,28 +936,52 @@ export default function Inbox() {
     if (data) {
       setMessages(current => {
         if (
-          current.some(message => message.id === data.id)
+          current.some(
+            message =>
+              message.id === data.id
+          )
         ) {
           return current
         }
 
-        return [...current, data as Message]
+        return [
+          ...current,
+          data as Message,
+        ]
       })
     }
+
+    setConversations(current =>
+      current.map(conversation =>
+        conversation.id ===
+        activeConversationId
+          ? {
+              ...conversation,
+              handled_by: 'human',
+            }
+          : conversation
+      )
+    )
 
     setReply('')
     setSending(false)
 
-    await loadConversations()
+    void loadConversations()
   }
 
   const handleKeyDown = (
     event: React.KeyboardEvent<HTMLTextAreaElement>
   ) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (
+      event.key === 'Enter' &&
+      !event.shiftKey
+    ) {
       event.preventDefault()
 
-      if (!sending && reply.trim()) {
+      if (
+        !sending &&
+        reply.trim()
+      ) {
         event.currentTarget.form?.requestSubmit()
       }
     }
@@ -863,19 +989,21 @@ export default function Inbox() {
 
   if (organizationLoading) {
     return (
-      <div className="space-y-5">
-        <div className="h-8 w-40 rounded-xl bg-sand-100 animate-pulse" />
+      <div
+        dir="rtl"
+        className="min-h-screen space-y-5 bg-sand-50 p-4 sm:p-6"
+      >
+        <div className="h-8 w-40 animate-pulse rounded-xl bg-sand-100" />
         <Card className="h-[calc(100vh-180px)] min-h-[560px] overflow-hidden">
           <div className="grid h-full grid-cols-1 md:grid-cols-[320px_1fr]">
-            <div className="border-e border-sand-100 p-4 space-y-4">
-              <div className="h-11 rounded-xl bg-sand-100 animate-pulse" />
-              <div className="h-8 rounded-xl bg-sand-100 animate-pulse" />
-              <div className="h-20 rounded-2xl bg-sand-100 animate-pulse" />
-              <div className="h-20 rounded-2xl bg-sand-100 animate-pulse" />
-              <div className="h-20 rounded-2xl bg-sand-100 animate-pulse" />
+            <div className="space-y-4 border-e border-sand-100 p-4">
+              <div className="h-11 animate-pulse rounded-xl bg-sand-100" />
+              <div className="h-8 animate-pulse rounded-xl bg-sand-100" />
+              <div className="h-20 animate-pulse rounded-2xl bg-sand-100" />
+              <div className="h-20 animate-pulse rounded-2xl bg-sand-100" />
             </div>
-            <div className="hidden md:flex items-center justify-center bg-sand-50/50">
-              <div className="h-24 w-52 rounded-2xl bg-sand-100 animate-pulse" />
+            <div className="hidden items-center justify-center bg-sand-50/50 md:flex">
+              <div className="h-24 w-52 animate-pulse rounded-2xl bg-sand-100" />
             </div>
           </div>
         </Card>
@@ -885,39 +1013,18 @@ export default function Inbox() {
 
   if (organizationError) {
     return (
-      <Card className="min-h-[500px] flex items-center justify-center p-6">
+      <Card className="flex min-h-[500px] items-center justify-center p-6">
         <div
-          className="text-center max-w-md"
+          className="max-w-md text-center"
           role="alert"
         >
-          <div className="mx-auto mb-4 w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="w-6 h-6"
-              aria-hidden="true"
-            >
-              <path
-                d="M12 8v5M12 16.5v.1"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-              <circle
-                cx="12"
-                cy="12"
-                r="9"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              />
-            </svg>
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+            !
           </div>
-
           <div className="font-bold text-ink-950">
             تعذر تحميل صندوق الوارد
           </div>
-
-          <div className="text-sm text-red-600 mt-2">
+          <div className="mt-2 text-sm text-red-600">
             {organizationError}
           </div>
         </div>
@@ -927,17 +1034,15 @@ export default function Inbox() {
 
   if (!organizationId) {
     return (
-      <Card className="min-h-[500px] flex items-center justify-center p-6">
+      <Card className="flex min-h-[500px] items-center justify-center p-6">
         <div className="text-center">
-          <div className="mx-auto mb-4 w-12 h-12 rounded-2xl bg-sand-100 text-ink-700 flex items-center justify-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-sand-100 text-ink-700">
             <MessageSquareIcon />
           </div>
-
           <div className="font-bold text-ink-950">
             لا توجد شركة مرتبطة بهذا الحساب
           </div>
-
-          <div className="text-sm text-ink-900/50 mt-1">
+          <div className="mt-1 text-sm text-ink-900/50">
             أكمل إعداد الشركة أولًا للوصول إلى صندوق الوارد.
           </div>
         </div>
@@ -946,19 +1051,21 @@ export default function Inbox() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+    <div
+      dir="rtl"
+      className="space-y-5"
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-ink-950 text-sand-50 flex items-center justify-center shadow-sm">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink-950 text-sand-50 shadow-sm">
               <MessageSquareIcon />
             </div>
-
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-ink-950">
+              <h1 className="text-2xl font-bold tracking-tight text-ink-950 md:text-3xl">
                 صندوق الوارد
               </h1>
-              <p className="text-sm text-ink-900/50 mt-1">
+              <p className="mt-1 text-sm text-ink-900/50">
                 إدارة محادثات العملاء من مكان واحد.
               </p>
             </div>
@@ -966,29 +1073,27 @@ export default function Inbox() {
         </div>
 
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <div className="rounded-2xl border border-sand-200 bg-white px-3 py-2.5 min-w-[86px]">
+          <div className="min-w-[86px] rounded-2xl border border-sand-200 bg-white px-3 py-2.5">
             <div className="text-[11px] text-ink-900/45">
               المحادثات
             </div>
-            <div className="text-lg font-bold text-ink-950 mt-0.5">
+            <div className="mt-0.5 text-lg font-bold text-ink-950">
               {conversations.length}
             </div>
           </div>
-
-          <div className="rounded-2xl border border-sand-200 bg-white px-3 py-2.5 min-w-[86px]">
+          <div className="min-w-[86px] rounded-2xl border border-sand-200 bg-white px-3 py-2.5">
             <div className="text-[11px] text-ink-900/45">
               غير مقروء
             </div>
-            <div className="text-lg font-bold text-ink-950 mt-0.5">
+            <div className="mt-0.5 text-lg font-bold text-ink-950">
               {unreadTotal > 99 ? '99+' : unreadTotal}
             </div>
           </div>
-
-          <div className="rounded-2xl border border-sand-200 bg-white px-3 py-2.5 min-w-[86px]">
+          <div className="min-w-[86px] rounded-2xl border border-sand-200 bg-white px-3 py-2.5">
             <div className="text-[11px] text-ink-900/45">
               Ryan AI
             </div>
-            <div className="text-lg font-bold text-ink-950 mt-0.5">
+            <div className="mt-0.5 text-lg font-bold text-ink-950">
               {aiTotal}
             </div>
           </div>
@@ -996,14 +1101,13 @@ export default function Inbox() {
       </div>
 
       <Card className="overflow-hidden border-sand-200 shadow-sm">
-        <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] h-[calc(100vh-255px)] min-h-[610px]">
-          <aside className="border-b lg:border-b-0 lg:border-e border-sand-100 flex flex-col min-h-0 bg-white">
-            <div className="p-4 border-b border-sand-100 space-y-3">
+        <div className="grid h-[calc(100vh-255px)] min-h-[610px] grid-cols-1 lg:grid-cols-[350px_1fr]">
+          <aside className="flex min-h-0 flex-col border-b border-sand-100 bg-white lg:border-b-0 lg:border-e">
+            <div className="space-y-3 border-b border-sand-100 p-4">
               <div className="relative">
-                <div className="absolute inset-y-0 right-3 flex items-center text-ink-900/35 pointer-events-none">
+                <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-ink-900/35">
                   <SearchIcon />
                 </div>
-
                 <input
                   value={search}
                   onChange={event =>
@@ -1011,11 +1115,11 @@ export default function Inbox() {
                   }
                   placeholder="ابحث في المحادثات..."
                   aria-label="البحث في المحادثات"
-                  className="w-full border border-sand-200 rounded-xl bg-sand-50/60 pr-10 pl-4 py-2.5 text-sm text-ink-950 placeholder:text-ink-900/35 outline-none transition focus:bg-white focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5"
+                  className="w-full rounded-xl border border-sand-200 bg-sand-50/60 py-2.5 pl-4 pr-10 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:bg-white focus:ring-2 focus:ring-ink-900/5"
                 />
               </div>
 
-              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
                 {channelFilters.map(channel => (
                   <button
                     key={channel.value}
@@ -1023,7 +1127,7 @@ export default function Inbox() {
                     onClick={() =>
                       setFilter(channel.value)
                     }
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                    className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                       filter === channel.value
                         ? 'bg-ink-950 text-sand-50 shadow-sm'
                         : 'bg-sand-100 text-ink-900/60 hover:bg-sand-200 hover:text-ink-950'
@@ -1038,7 +1142,6 @@ export default function Inbox() {
                 <span className="text-xs text-ink-900/40">
                   {filteredConversations.length} محادثة
                 </span>
-
                 <span className="text-xs text-ink-900/40">
                   {openTotal} مفتوحة
                 </span>
@@ -1047,76 +1150,54 @@ export default function Inbox() {
 
             <div className="flex-1 overflow-y-auto">
               {loadingConversations ? (
-                <div className="p-4 space-y-3">
+                <div className="space-y-3 p-4">
                   {[1, 2, 3, 4, 5].map(item => (
                     <div
                       key={item}
-                      className="flex gap-3 p-3 rounded-2xl"
+                      className="flex gap-3 rounded-2xl p-3"
                     >
-                      <div className="w-10 h-10 rounded-full bg-sand-100 animate-pulse shrink-0" />
+                      <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-sand-100" />
                       <div className="flex-1 space-y-2">
-                        <div className="h-3.5 w-2/3 bg-sand-100 rounded animate-pulse" />
-                        <div className="h-3 w-full bg-sand-100 rounded animate-pulse" />
-                        <div className="h-3 w-1/2 bg-sand-100 rounded animate-pulse" />
+                        <div className="h-3.5 w-2/3 animate-pulse rounded bg-sand-100" />
+                        <div className="h-3 w-full animate-pulse rounded bg-sand-100" />
+                        <div className="h-3 w-1/2 animate-pulse rounded bg-sand-100" />
                       </div>
                     </div>
                   ))}
                 </div>
               ) : error ? (
                 <div className="p-8 text-center">
-                  <div className="mx-auto mb-3 w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="w-5 h-5"
-                      aria-hidden="true"
-                    >
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="9"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                      />
-                      <path
-                        d="M12 8v5M12 16.5v.1"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                    </svg>
+                  <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                    !
                   </div>
-
                   <div
                     className="text-sm font-semibold text-ink-950"
                     role="alert"
                   >
                     تعذر تحميل المحادثات
                   </div>
-
-                  <div className="text-xs text-red-600 mt-1 break-words">
+                  <div className="mt-1 break-words text-xs text-red-600">
                     {error}
                   </div>
-
                   <button
                     type="button"
-                    onClick={loadConversations}
-                    className="mt-4 px-4 py-2 rounded-xl bg-ink-950 text-sand-50 text-xs font-semibold hover:bg-ink-800 transition"
+                    onClick={() =>
+                      void loadConversations()
+                    }
+                    className="mt-4 rounded-xl bg-ink-950 px-4 py-2 text-xs font-semibold text-sand-50 transition hover:bg-ink-800"
                   >
                     إعادة المحاولة
                   </button>
                 </div>
               ) : filteredConversations.length === 0 ? (
                 <div className="p-8 text-center">
-                  <div className="mx-auto mb-4 w-12 h-12 rounded-2xl bg-sand-100 text-ink-700 flex items-center justify-center">
+                  <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-sand-100 text-ink-700">
                     <MessageSquareIcon />
                   </div>
-
-                  <div className="font-bold text-sm text-ink-950">
+                  <div className="text-sm font-bold text-ink-950">
                     لا توجد محادثات
                   </div>
-
-                  <div className="text-xs text-ink-900/45 mt-1 leading-5">
+                  <div className="mt-1 text-xs leading-5 text-ink-900/45">
                     ستظهر المحادثات هنا عند وصولها.
                   </div>
                 </div>
@@ -1124,9 +1205,9 @@ export default function Inbox() {
                 filteredConversations.map(conversation => {
                   const name =
                     getConversationName(conversation)
-
                   const active =
-                    activeConversationId === conversation.id
+                    activeConversationId ===
+                    conversation.id
 
                   return (
                     <button
@@ -1137,7 +1218,7 @@ export default function Inbox() {
                           conversation.id
                         )
                       }
-                      className={`w-full text-right p-4 border-b border-sand-100 transition-all ${
+                      className={`w-full border-b border-sand-100 p-4 text-right transition ${
                         active
                           ? 'bg-sand-100/80'
                           : 'hover:bg-sand-50'
@@ -1145,26 +1226,24 @@ export default function Inbox() {
                     >
                       <div className="flex items-start gap-3">
                         <div
-                          className={`relative w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xs font-bold ${
+                          className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-xs font-bold ${
                             active
                               ? 'bg-ink-950 text-sand-50'
                               : 'bg-sand-100 text-ink-800'
                           }`}
                         >
                           {getInitials(name)}
-
                           {conversation.unread_count > 0 && (
-                            <span className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-white" />
+                            <span className="absolute -left-1 -top-1 h-4 w-4 rounded-full border-2 border-white bg-amber-500" />
                           )}
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-sm text-ink-950 truncate">
+                            <span className="truncate text-sm font-bold text-ink-950">
                               {name}
                             </span>
-
-                            <span className="text-[10px] text-ink-900/40 shrink-0">
+                            <span className="shrink-0 text-[10px] text-ink-900/40">
                               {formatTime(
                                 conversation.last_message_at
                               )}
@@ -1172,53 +1251,46 @@ export default function Inbox() {
                           </div>
 
                           {conversation.customer?.company && (
-                            <div className="text-[11px] text-ink-900/40 mt-0.5 truncate">
+                            <div className="mt-0.5 truncate text-[11px] text-ink-900/40">
                               {conversation.customer.company}
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between gap-2 mt-1.5">
-                            <span className="text-xs text-ink-900/50 truncate">
-                              {conversation.subject ||
-                                'محادثة'}
+                          <div className="mt-1.5 flex items-center justify-between gap-2">
+                            <span className="truncate text-xs text-ink-900/50">
+                              {conversation.subject || 'محادثة'}
                             </span>
 
                             {conversation.unread_count > 0 && (
-                              <span className="min-w-5 h-5 px-1.5 rounded-full bg-ink-950 text-sand-50 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                {conversation.unread_count >
-                                99
+                              <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-ink-950 px-1.5 text-[10px] font-bold text-sand-50">
+                                {conversation.unread_count > 99
                                   ? '99+'
                                   : conversation.unread_count}
                               </span>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sand-100 text-[10px] font-semibold text-ink-900/60">
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-sand-100 px-2 py-1 text-[10px] font-semibold text-ink-900/60">
                               <ChannelIcon
                                 channel={conversation.channel}
                                 className="w-3 h-3"
                               />
-                              {
-                                channelLabels[
-                                  conversation.channel
-                                ]
-                              }
+                              {channelLabels[conversation.channel]}
                             </span>
 
-                            {conversation.handled_by ===
-                              'ai' && (
+                            {conversation.handled_by === 'ai' ? (
                               <Badge tone="gold">
                                 RYAN AI
+                              </Badge>
+                            ) : (
+                              <Badge tone="success">
+                                موظف
                               </Badge>
                             )}
 
                             <Badge>
-                              {
-                                statusLabels[
-                                  conversation.status
-                                ]
-                              }
+                              {statusLabels[conversation.status]}
                             </Badge>
                           </div>
                         </div>
@@ -1230,29 +1302,26 @@ export default function Inbox() {
             </div>
           </aside>
 
-          <section className="flex flex-col min-w-0 min-h-0 bg-sand-50/40">
+          <section className="flex min-h-0 min-w-0 flex-col bg-sand-50/40">
             {!activeConversation ? (
-              <div className="flex-1 flex items-center justify-center p-6">
-                <div className="text-center max-w-sm">
-                  <div className="mx-auto mb-4 w-16 h-16 rounded-3xl bg-white border border-sand-200 text-ink-700 flex items-center justify-center shadow-sm">
+              <div className="flex flex-1 items-center justify-center p-6">
+                <div className="max-w-sm text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl border border-sand-200 bg-white text-ink-700 shadow-sm">
                     <MessageSquareIcon />
                   </div>
-
                   <div className="font-bold text-ink-950">
                     صندوق المحادثات
                   </div>
-
-                  <div className="text-sm text-ink-900/45 mt-1.5 leading-6">
-                    اختر محادثة من القائمة لعرض الرسائل
-                    والرد على العميل.
+                  <div className="mt-1.5 text-sm leading-6 text-ink-900/45">
+                    اختر محادثة من القائمة لعرض الرسائل والرد على العميل.
                   </div>
                 </div>
               </div>
             ) : (
               <>
-                <header className="p-4 md:px-5 border-b border-sand-100 bg-white flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-11 h-11 shrink-0 rounded-2xl bg-ink-950 text-sand-50 flex items-center justify-center text-xs font-bold">
+                <header className="flex items-center justify-between gap-3 border-b border-sand-100 bg-white p-4 md:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-ink-950 text-xs font-bold text-sand-50">
                       {getInitials(
                         getConversationName(
                           activeConversation
@@ -1261,13 +1330,12 @@ export default function Inbox() {
                     </div>
 
                     <div className="min-w-0">
-                      <div className="font-bold text-ink-950 truncate">
+                      <div className="truncate font-bold text-ink-950">
                         {getConversationName(
                           activeConversation
                         )}
                       </div>
-
-                      <div className="flex items-center gap-1.5 text-xs text-ink-900/45 mt-1">
+                      <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-900/45">
                         <ChannelIcon
                           channel={
                             activeConversation.channel
@@ -1283,8 +1351,7 @@ export default function Inbox() {
                         </span>
                         <span>·</span>
                         <span>
-                          {activeConversation.handled_by ===
-                          'ai'
+                          {activeConversation.handled_by === 'ai'
                             ? 'RYAN AI'
                             : 'موظف'}
                         </span>
@@ -1292,93 +1359,111 @@ export default function Inbox() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex shrink-0 items-center gap-2">
                     <Badge>
-                      {
-                        statusLabels[
-                          activeConversation.status
-                        ]
-                      }
+                      {statusLabels[
+                        activeConversation.status
+                      ]}
                     </Badge>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void setRyanState(
+                          activeConversation,
+                          activeConversation.handled_by ===
+                            'ai'
+                            ? 'human'
+                            : 'ai'
+                        )
+                      }
+                      disabled={changingHandler}
+                      className={`min-h-10 rounded-xl px-3 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-gold-500/20 disabled:cursor-not-allowed disabled:opacity-60 ${
+                        activeConversation.handled_by === 'ai'
+                          ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                          : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                      }`}
+                      title={
+                        activeConversation.handled_by === 'ai'
+                          ? 'إيقاف Ryan عن الرد على هذه المحادثة'
+                          : 'إعادة Ryan للرد على هذه المحادثة'
+                      }
+                    >
+                      {changingHandler
+                        ? 'جاري...'
+                        : activeConversation.handled_by === 'ai'
+                          ? 'إيقاف Ryan'
+                          : 'تشغيل Ryan'}
+                    </button>
                   </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
+                {activeConversation.handled_by === 'human' && (
+                  <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 md:px-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-sm font-bold text-amber-900">
+                          Ryan متوقف عن الرد
+                        </div>
+                        <div className="mt-0.5 text-xs leading-5 text-amber-800/70">
+                          المحادثة الآن تحت متابعة الموظف، ويمكن إعادة Ryan في أي وقت.
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-amber-800">
+                        تحكم يدوي
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex-1 space-y-3 overflow-y-auto p-4 md:p-6">
                   {loadingMessages ? (
-                    <div className="max-w-md mx-auto w-full pt-8 space-y-4">
+                    <div className="mx-auto w-full max-w-md space-y-4 pt-8">
                       <div className="flex justify-start">
-                        <div className="w-48 h-16 rounded-2xl bg-white border border-sand-200 animate-pulse" />
+                        <div className="h-16 w-48 animate-pulse rounded-2xl border border-sand-200 bg-white" />
                       </div>
                       <div className="flex justify-end">
-                        <div className="w-64 h-20 rounded-2xl bg-ink-900/10 animate-pulse" />
+                        <div className="h-20 w-64 animate-pulse rounded-2xl bg-ink-900/10" />
                       </div>
                       <div className="flex justify-start">
-                        <div className="w-56 h-16 rounded-2xl bg-white border border-sand-200 animate-pulse" />
+                        <div className="h-16 w-56 animate-pulse rounded-2xl border border-sand-200 bg-white" />
                       </div>
                     </div>
-                  ) : messageError &&
-                    messages.length === 0 ? (
-                    <div className="h-full flex items-center justify-center">
-                      <div
-                        className="text-center max-w-sm"
-                        role="alert"
-                      >
-                        <div className="mx-auto mb-3 w-11 h-11 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            className="w-5 h-5"
-                            aria-hidden="true"
-                          >
-                            <circle
-                              cx="12"
-                              cy="12"
-                              r="9"
-                              stroke="currentColor"
-                              strokeWidth="1.7"
-                            />
-                            <path
-                              d="M12 8v5M12 16.5v.1"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                            />
-                          </svg>
+                  ) : messageError && messages.length === 0 ? (
+                    <div className="flex h-full items-center justify-center">
+                      <div className="max-w-sm text-center" role="alert">
+                        <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                          !
                         </div>
-
-                        <div className="font-semibold text-sm text-ink-950">
+                        <div className="text-sm font-semibold text-ink-950">
                           تعذر تحميل الرسائل
                         </div>
-
-                        <div className="text-xs text-red-600 mt-1 break-words">
+                        <div className="mt-1 break-words text-xs text-red-600">
                           {messageError}
                         </div>
-
                         <button
                           type="button"
                           onClick={() =>
-                            loadMessages(
+                            void loadMessages(
                               activeConversation.id
                             )
                           }
-                          className="mt-4 px-4 py-2 rounded-xl bg-ink-950 text-sand-50 text-xs font-semibold hover:bg-ink-800 transition"
+                          className="mt-4 rounded-xl bg-ink-950 px-4 py-2 text-xs font-semibold text-sand-50 hover:bg-ink-800"
                         >
                           إعادة المحاولة
                         </button>
                       </div>
                     </div>
                   ) : messages.length === 0 ? (
-                    <div className="h-full flex items-center justify-center">
-                      <div className="text-center max-w-sm">
-                        <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-white border border-sand-200 text-ink-700 flex items-center justify-center">
+                    <div className="flex h-full items-center justify-center">
+                      <div className="max-w-sm text-center">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-sand-200 bg-white text-ink-700">
                           <MessageSquareIcon />
                         </div>
-
-                        <div className="font-bold text-sm text-ink-950">
+                        <div className="text-sm font-bold text-ink-950">
                           لا توجد رسائل بعد
                         </div>
-
-                        <div className="text-xs text-ink-900/45 mt-1.5">
+                        <div className="mt-1.5 text-xs text-ink-900/45">
                           ابدأ المحادثة من مربع الرد بالأسفل.
                         </div>
                       </div>
@@ -1386,9 +1471,7 @@ export default function Inbox() {
                   ) : (
                     messages.map(message => {
                       const isCustomer =
-                        message.sender_type ===
-                        'customer'
-
+                        message.sender_type === 'customer'
                       const isAI =
                         message.sender_type === 'ai'
 
@@ -1404,15 +1487,15 @@ export default function Inbox() {
                           <div
                             className={`max-w-[88%] md:max-w-lg ${
                               isCustomer
-                                ? 'bg-white border border-sand-200 text-ink-900 rounded-2xl rounded-tr-sm shadow-sm'
+                                ? 'rounded-2xl rounded-tr-sm border border-sand-200 bg-white text-ink-900 shadow-sm'
                                 : isAI
-                                  ? 'bg-amber-50 border border-amber-200 text-ink-900 rounded-2xl rounded-tl-sm'
-                                  : 'bg-ink-950 text-sand-50 rounded-2xl rounded-tl-sm shadow-sm'
+                                  ? 'rounded-2xl rounded-tl-sm border border-amber-200 bg-amber-50 text-ink-900'
+                                  : 'rounded-2xl rounded-tl-sm bg-ink-950 text-sand-50 shadow-sm'
                             } p-3.5 md:p-4`}
                           >
                             {!isCustomer && (
                               <div
-                                className={`text-[10px] font-bold mb-1.5 ${
+                                className={`mb-1.5 text-[10px] font-bold ${
                                   isAI
                                     ? 'text-amber-700'
                                     : 'text-sand-50/55'
@@ -1424,12 +1507,12 @@ export default function Inbox() {
                               </div>
                             )}
 
-                            <div className="text-sm whitespace-pre-wrap break-words leading-6">
+                            <div className="whitespace-pre-wrap break-words text-sm leading-6">
                               {message.content}
                             </div>
 
                             <div
-                              className={`text-[10px] mt-2 ${
+                              className={`mt-2 text-[10px] ${
                                 isCustomer
                                   ? 'text-ink-900/35'
                                   : isAI
@@ -1460,40 +1543,52 @@ export default function Inbox() {
 
                 <form
                   onSubmit={handleSend}
-                  className="p-3 md:p-4 border-t border-sand-100 bg-white"
+                  className="border-t border-sand-100 bg-white p-3 md:p-4"
                 >
                   <div className="flex items-end gap-2">
                     <textarea
                       value={reply}
                       onChange={event =>
-                        setReply(event.target.value)
+                        setReply(
+                          event.target.value
+                        )
                       }
                       onKeyDown={handleKeyDown}
-                      disabled={sending}
+                      disabled={
+                        sending ||
+                        activeConversation.handled_by ===
+                          'human'
+                      }
                       rows={1}
-                      placeholder="اكتب ردك هنا..."
+                      placeholder={
+                        activeConversation.handled_by ===
+                        'human'
+                          ? 'Ryan متوقف — اكتب رد الموظف هنا...'
+                          : 'اكتب ردك هنا...'
+                      }
                       aria-label="اكتب ردك هنا"
-                      className="flex-1 resize-none border border-sand-200 rounded-2xl bg-sand-50/60 px-4 py-3 text-sm text-ink-950 placeholder:text-ink-900/35 outline-none transition focus:bg-white focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5 disabled:opacity-60 min-h-[48px] max-h-32"
+                      className="min-h-[48px] max-h-32 flex-1 resize-none rounded-2xl border border-sand-200 bg-sand-50/60 px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:bg-white focus:ring-2 focus:ring-ink-900/5 disabled:cursor-not-allowed disabled:opacity-60"
                     />
 
                     <button
                       type="submit"
                       disabled={
-                        sending || !reply.trim()
+                        sending ||
+                        !reply.trim() ||
+                        activeConversation.handled_by ===
+                          'human'
                       }
-                      className="h-12 min-w-[94px] px-4 rounded-2xl bg-ink-950 text-sand-50 text-sm font-bold inline-flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-ink-800 transition-all shadow-sm"
+                      className="inline-flex h-12 min-w-[94px] shrink-0 items-center justify-center gap-2 rounded-2xl bg-ink-950 px-4 text-sm font-bold text-sand-50 shadow-sm transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <SendIcon />
-                      <span>
-                        {sending
-                          ? 'جاري الإرسال...'
-                          : 'إرسال'}
-                      </span>
+                      {sending
+                        ? 'جاري الإرسال...'
+                        : 'إرسال'}
                     </button>
                   </div>
 
-                  <div className="text-[10px] text-ink-900/35 mt-2 px-1">
-                    Enter للإرسال · Shift + Enter لسطر جديد
+                  <div className="mt-2 px-1 text-[10px] text-ink-900/35">
+                    إيقاف Ryan يحول التحكم للموظف. عند إعادة تشغيله يعود للرد تلقائيًا.
                   </div>
                 </form>
               </>
