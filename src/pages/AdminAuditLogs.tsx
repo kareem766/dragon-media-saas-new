@@ -154,54 +154,51 @@ export default function AdminAuditLogs() {
         throw sessionError
       }
 
-      if (!sessionData.session) {
-        throw new Error('انتهت جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.')
-      }
+      const session = sessionData.session
 
-      const {
-        data,
-        error: queryError,
-      } = await supabase
-        .from('audit_logs')
-        .select(
-          `
-            id,
-            action,
-            entity_type,
-            entity_id,
-            created_at,
-            actor_id,
-            organization_id,
-            metadata,
-            actor:actor_id (
-              full_name
-            ),
-            organizations (
-              name
-            )
-          `,
+      if (!session?.access_token) {
+        throw new Error(
+          'انتهت جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى.',
         )
-        .order('created_at', {
-          ascending: false,
-        })
-        .limit(200)
-
-      if (queryError) {
-        throw queryError
       }
 
-      setLogs(
-        Array.isArray(data)
-          ? (data as unknown as AuditLog[])
-          : [],
-      )
+      const response = await fetch('/api/admin/audit-logs', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          Accept: 'application/json',
+        },
+        credentials: 'include',
+      })
+
+      const contentType = response.headers.get('content-type') ?? ''
+
+      if (!contentType.includes('application/json')) {
+        throw new Error('تعذر قراءة استجابة الخادم.')
+      }
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          typeof payload?.error === 'string'
+            ? payload.error
+            : 'تعذر تحميل سجل النشاط.',
+        )
+      }
+
+      const nextLogs = Array.isArray(payload?.logs)
+        ? payload.logs
+        : []
+
+      setLogs(nextLogs as AuditLog[])
     } catch (err) {
       setLogs([])
 
       setError(
         err instanceof Error
           ? err.message
-          : 'حدث خطأ أثناء قراءة سجل النشاط.',
+          : 'حدث خطأ أثناء تحميل سجل النشاط.',
       )
     } finally {
       setLoading(false)
@@ -286,11 +283,9 @@ export default function AdminAuditLogs() {
                     className="border-b border-ink-900/6 last:border-b-0 hover:bg-ink-950/[0.015]"
                   >
                     <td className="px-4 py-4 sm:px-5">
-                      <div className="flex items-center gap-2">
-                        <Badge tone="default">
-                          {getActionLabel(log.action)}
-                        </Badge>
-                      </div>
+                      <Badge tone="default">
+                        {getActionLabel(log.action)}
+                      </Badge>
                     </td>
 
                     <td className="px-4 py-4 font-medium text-ink-900">
@@ -306,7 +301,7 @@ export default function AdminAuditLogs() {
                     </td>
 
                     <td
-                      className="px-4 py-4 whitespace-nowrap text-ink-900/55"
+                      className="whitespace-nowrap px-4 py-4 text-ink-900/55"
                       dir="ltr"
                     >
                       {formatDate(log.created_at)}
