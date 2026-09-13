@@ -1,9 +1,9 @@
-import auditLogs from '../_server/admin/_audit-logs.ts'
-import financial from '../_server/admin/_financial.ts'
-import organizations from '../_server/admin/_organizations.ts'
-import overview from '../_server/admin/_overview.ts'
-import payments from '../_server/admin/_payments.ts'
-import tickets from '../_server/admin/_tickets.ts'
+import auditLogs from '../_server/admin/_audit-logs'
+import financial from '../_server/admin/_financial'
+import organizations from '../_server/admin/_organizations'
+import overview from '../_server/admin/_overview'
+import payments from '../_server/admin/_payments'
+import tickets from '../_server/admin/_tickets'
 
 const handlers: Record<string, any> = {
   'audit-logs': auditLogs,
