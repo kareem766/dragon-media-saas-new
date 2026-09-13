@@ -187,7 +187,11 @@ export default function Settings() {
   const [integrationsError, setIntegrationsError] =
     useState('')
 
-  const [metaConnecting, setMetaConnecting] = useState(false)
+  // Tracks the exact Meta provider currently connecting.
+  // This keeps Facebook, Instagram and WhatsApp loading states independent.
+  const [metaConnecting, setMetaConnecting] =
+    useState<MetaProvider | null>(null)
+
   const [metaConnectionError, setMetaConnectionError] =
     useState('')
 
@@ -485,11 +489,13 @@ export default function Settings() {
       return
     }
 
-    if (metaConnecting) {
+    // Prevent starting a second Meta OAuth flow while one is active.
+    if (metaConnecting !== null) {
       return
     }
 
-    setMetaConnecting(true)
+    // Store the exact provider being connected.
+    setMetaConnecting(provider)
     setMetaConnectionError('')
 
     try {
@@ -592,7 +598,7 @@ export default function Settings() {
         ),
       )
 
-      setMetaConnecting(false)
+      setMetaConnecting(null)
     }
   }
 
@@ -1376,7 +1382,7 @@ function IntegrationsSection({
   onMetaConnect: (
     provider: MetaProvider,
   ) => void
-  metaConnecting: boolean
+  metaConnecting: MetaProvider | null
   metaConnectionError: string
 }) {
   return (
@@ -1467,6 +1473,17 @@ function IntegrationsSection({
               const connected =
                 status.label === 'متصل'
 
+              const itemProvider =
+                item.meta
+                  ? (
+                      item.provider as MetaProvider
+                    )
+                  : null
+
+              const isConnecting =
+                itemProvider !== null &&
+                metaConnecting === itemProvider
+
               return (
                 <div
                   key={item.provider}
@@ -1529,17 +1546,19 @@ function IntegrationsSection({
                         }
                         onClick={() =>
                           onMetaConnect(
-                            item.provider as MetaProvider,
+                            itemProvider as MetaProvider,
                           )
                         }
-                        disabled={metaConnecting}
+                        disabled={
+                          metaConnecting !== null
+                        }
                         className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[128px] sm:self-end ${
                           connected
                             ? 'border border-sand-300 bg-white text-ink-900 hover:border-sand-400 hover:bg-sand-50'
                             : 'bg-ink-950 text-white hover:bg-ink-900'
                         }`}
                       >
-                        {metaConnecting && (
+                        {isConnecting && (
                           <span
                             className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
                               connected
@@ -1549,7 +1568,7 @@ function IntegrationsSection({
                           />
                         )}
 
-                        {metaConnecting
+                        {isConnecting
                           ? 'جاري الربط...'
                           : connected
                             ? item.connectedActionLabel
@@ -1671,9 +1690,12 @@ function WhatsAppSection({
   onMetaConnect: (
     provider: MetaProvider,
   ) => void
-  metaConnecting: boolean
+  metaConnecting: MetaProvider | null
   metaConnectionError: string
 }) {
+  const isConnecting =
+    metaConnecting === 'whatsapp'
+
   return (
     <section>
       <SectionHeader
@@ -1733,14 +1755,16 @@ function WhatsAppSection({
                 onClick={() =>
                   onMetaConnect('whatsapp')
                 }
-                disabled={metaConnecting}
+                disabled={
+                  metaConnecting !== null
+                }
                 className="inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-200 hover:bg-ink-900 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[140px]"
               >
-                {metaConnecting && (
+                {isConnecting && (
                   <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 )}
 
-                {metaConnecting
+                {isConnecting
                   ? 'جاري الربط...'
                   : status.label === 'متصل'
                     ? 'إدارة WhatsApp'
