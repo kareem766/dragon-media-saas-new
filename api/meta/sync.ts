@@ -128,6 +128,15 @@ interface FacebookPageDiscovery {
    * store it in integrations.metadata.
    */
   page_access_token?: string
+
+  /*
+   * Webhook subscription status.
+   *
+   * These values are internal and are sanitized
+   * before being returned/stored where necessary.
+   */
+  webhook_subscribed?: boolean
+  webhook_error?: string | null
 }
 
 async function discoverFacebookData(
