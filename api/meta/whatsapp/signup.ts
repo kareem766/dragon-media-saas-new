@@ -274,7 +274,8 @@ export default function handler(
       className = '',
     ) {
       if (statusEl) {
-        statusEl.textContent = message;
+        statusEl.textContent =
+          message;
 
         statusEl.className =
           'status ' + className;
@@ -336,7 +337,8 @@ export default function handler(
 
               body:
                 JSON.stringify({
-                  state: STATE,
+                  state:
+                    STATE,
 
                   code,
 
@@ -403,7 +405,8 @@ export default function handler(
         completed = false;
 
         if (button) {
-          button.disabled = false;
+          button.disabled =
+            false;
         }
 
         setStatus(
@@ -540,7 +543,8 @@ export default function handler(
           completed = false;
 
           if (button) {
-            button.disabled = false;
+            button.disabled =
+              false;
           }
 
           setStatus(
