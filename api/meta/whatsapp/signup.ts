@@ -390,29 +390,7 @@ export default function handler(
         'جاري فتح إعداد WhatsApp الرسمي من Meta...',
       );
 
-      window.FB.login(
-        function(response) {
-          if (
-            !response ||
-            !response.authResponse
-          ) {
-            completed = false;
-            button.disabled = false;
-
-            setStatus(
-              'لم يتم إكمال تسجيل الدخول إلى Meta.',
-              'error',
-            );
-
-            return;
-          }
-
-          void completeSignup({
-            code:
-              response.authResponse.code ||
-              null,
-          });
-        },
+      api/meta/whatsapp/signup.ts
         {
           config_id: CONFIG_ID,
 
