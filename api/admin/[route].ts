@@ -10,6 +10,8 @@ import overview from '../_server/admin/overview.js'
 import payments from '../_server/admin/payments.js'
 import tickets from '../_server/admin/tickets.js'
 
+// Vercel deployment sync check
+
 type Handler = (
   req: VercelRequest,
   res: VercelResponse,
