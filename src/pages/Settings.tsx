@@ -483,11 +483,6 @@ export default function Settings() {
     loadIntegrations()
   }, [organizationId])
 
-  /*
-   * بعد الرجوع من Meta قد يكون الـ OAuth callback انتهى
-   * للتو وقام بتحديث Supabase. لذلك نعيد تحميل التكاملات
-   * عندما تعود الصفحة للواجهة أو تحصل على focus.
-   */
   useEffect(() => {
     if (!organizationId) {
       return
@@ -520,11 +515,6 @@ export default function Settings() {
     }
   }, [organizationId])
 
-  /*
-   * بعد العودة من OAuth، نعطي الـ callback فرصة قصيرة
-   * لتثبيت سجل التكامل ثم نقرأ الحالة مرة أخرى.
-   * لا نستخدم polling مستمر ولا نلمس أي token.
-   */
   useEffect(() => {
     if (!organizationId) {
       return
@@ -791,6 +781,52 @@ export default function Settings() {
         throw new Error(serverError)
       }
 
+      /*
+       * WhatsApp يستخدم Embedded Signup.
+       *
+       * api/meta/oauth/start.ts يرجع:
+       * {
+       *   mode: 'embedded_signup',
+       *   state: '...',
+       *   app_id: '...',
+       *   config_id: '...'
+       * }
+       *
+       * نرسل المستخدم إلى صفحة Embedded Signup
+       * الخاصة بنا، والتي تقوم بتشغيل Facebook JS SDK
+       * ثم تكمل العملية في:
+       *
+       * /api/meta/whatsapp/complete
+       */
+      if (provider === 'whatsapp') {
+        const responseData =
+          data &&
+          typeof data === 'object'
+            ? (data as Record<string, unknown>)
+            : {}
+
+        const mode = responseData.mode
+        const state = responseData.state
+
+        if (
+          mode === 'embedded_signup' &&
+          typeof state === 'string' &&
+          state.trim()
+        ) {
+          window.location.assign(
+            `/api/meta/whatsapp/signup?state=${encodeURIComponent(
+              state,
+            )}`,
+          )
+
+          return
+        }
+      }
+
+      /*
+       * Facebook و Instagram يفضلان على OAuth
+       * التقليدي الحالي.
+       */
       const authUrl =
         data &&
         typeof data === 'object'
