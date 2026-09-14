@@ -586,25 +586,26 @@ export default async function handler(
      * IMPORTANT:
      * FB.login() on this page falls back to a full-page
      * redirect when the popup is blocked (common on mobile
-     * browsers). When that happens, it implicitly uses the
-     * current page URL as redirect_uri. Meta requires the
-     * redirect_uri sent during the token exchange to be
-     * IDENTICAL to the one used in the OAuth dialog, so we
-     * must send it here too — omitting it causes:
+     * browsers). When that happens, the redirect_uri Meta
+     * actually used is the CURRENT PAGE URL, including its
+     * query string (?state=...) — not just the path. Meta
+     * requires the redirect_uri sent during the token
+     * exchange to be byte-for-byte identical to the one used
+     * in the OAuth dialog, so we rebuild that exact URL here,
+     * state included. Omitting the state (or the whole
+     * redirect_uri) causes:
      * "Error validating verification code. Please make sure
      * your redirect_uri is identical to the one you used in
      * the OAuth dialog request".
-     *
-     * We derive it from META_REDIRECT_URI (which points at
-     * /api/meta/oauth/callback) by swapping the path to this
-     * page's own path, so there is a single source of truth
-     * for the app's base URL.
      */
-    const redirectUri =
+    const redirectBase =
       env('META_REDIRECT_URI').replace(
         /\/api\/meta\/oauth\/callback\/?$/,
-        '/api/meta/whatsapp/signup',
+        '',
       )
+
+    const redirectUri =
+      `${redirectBase}/api/meta/whatsapp/signup?state=${encodeURIComponent(state)}`
 
     const exchangeParams =
       new URLSearchParams({
