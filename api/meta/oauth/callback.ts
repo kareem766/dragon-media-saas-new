@@ -27,6 +27,17 @@ interface MetaState {
   issued_at: number
 }
 
+interface MetaPage {
+  id?: string
+  name?: string
+  access_token?: string
+  instagram_business_account?: {
+    id?: string
+    username?: string
+    name?: string
+  } | null
+}
+
 function getEnv(name: string): string {
   const value = process.env[name]
 
@@ -182,6 +193,425 @@ async function graphRequest(
   return {
     response,
     data,
+  }
+}
+
+/**
+ * Server-side POST request to Meta Graph API.
+ *
+ * Access tokens are intentionally passed only
+ * server-side and are never returned to the browser.
+ */
+async function graphPost(
+  path: string,
+  accessToken: string
+) {
+  const separator =
+    path.includes('?')
+      ? '&'
+      : '?'
+
+  const response =
+    await fetch(
+      `https://graph.facebook.com/${META_AUTH_VERSION}${path}${separator}access_token=${encodeURIComponent(
+        accessToken
+      )}`,
+      {
+        method: 'POST',
+      }
+    )
+
+  const data =
+    await response
+      .json()
+      .catch(() => null)
+
+  return {
+    response,
+    data,
+  }
+}
+
+/**
+ * Discover Facebook Pages and the Instagram Business
+ * Accounts attached to those Pages.
+ *
+ * Page access tokens are used only during this
+ * server-side operation and are never persisted
+ * into integrations.metadata.
+ */
+async function discoverMetaPages(
+  accessToken: string
+): Promise<MetaPage[]> {
+  try {
+    const {
+      response,
+      data,
+    } = await graphRequest(
+      '/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}',
+      accessToken
+    )
+
+    if (
+      !response.ok ||
+      !Array.isArray(
+        data?.data
+      )
+    ) {
+      console.warn(
+        'Meta Pages discovery failed:',
+        {
+          status:
+            response.status,
+          error:
+            data?.error,
+        }
+      )
+
+      return []
+    }
+
+    return data.data
+      .filter(
+        (page: unknown) =>
+          Boolean(
+            page &&
+              typeof page ===
+                'object'
+          )
+      )
+      .map(
+        (page: MetaPage) => ({
+          id:
+            typeof page.id ===
+            'string'
+              ? page.id
+              : undefined,
+
+          name:
+            typeof page.name ===
+            'string'
+              ? page.name
+              : undefined,
+
+          access_token:
+            typeof page.access_token ===
+            'string'
+              ? page.access_token
+              : undefined,
+
+          instagram_business_account:
+            page.instagram_business_account &&
+            typeof page.instagram_business_account ===
+              'object'
+              ? {
+                  id:
+                    typeof page
+                      .instagram_business_account
+                      .id ===
+                    'string'
+                      ? page
+                          .instagram_business_account
+                          .id
+                      : undefined,
+
+                  username:
+                    typeof page
+                      .instagram_business_account
+                      .username ===
+                    'string'
+                      ? page
+                          .instagram_business_account
+                          .username
+                      : undefined,
+
+                  name:
+                    typeof page
+                      .instagram_business_account
+                      .name ===
+                    'string'
+                      ? page
+                          .instagram_business_account
+                          .name
+                      : undefined,
+                }
+              : null,
+        })
+      )
+      .filter(
+        (page: MetaPage) =>
+          Boolean(page.id)
+      )
+  } catch (error) {
+    console.warn(
+      'Meta Pages discovery error:',
+      error
+    )
+
+    return []
+  }
+}
+
+/**
+ * Subscribe a Facebook Page to Messenger webhook
+ * events.
+ *
+ * This must use the Page Access Token returned
+ * from /me/accounts.
+ */
+async function subscribeFacebookPage(
+  pageId: string,
+  pageAccessToken: string
+) {
+  try {
+    const {
+      response,
+      data,
+    } = await graphPost(
+      `/${encodeURIComponent(
+        pageId
+      )}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals`,
+      pageAccessToken
+    )
+
+    if (!response.ok) {
+      console.warn(
+        'Facebook Messenger webhook subscription failed:',
+        {
+          pageId,
+          status:
+            response.status,
+          error:
+            data?.error,
+        }
+      )
+
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.warn(
+      'Facebook Messenger webhook subscription error:',
+      {
+        pageId,
+        error,
+      }
+    )
+
+    return false
+  }
+}
+
+/**
+ * Subscribe an Instagram Business Account to
+ * Instagram Messaging webhook events.
+ *
+ * The Page Access Token associated with the
+ * connected Facebook Page is used server-side.
+ */
+async function subscribeInstagramAccount(
+  instagramBusinessAccountId: string,
+  pageAccessToken: string
+) {
+  try {
+    const {
+      response,
+      data,
+    } = await graphPost(
+      `/${encodeURIComponent(
+        instagramBusinessAccountId
+      )}/subscribed_apps?subscribed_fields=messages`,
+      pageAccessToken
+    )
+
+    if (!response.ok) {
+      console.warn(
+        'Instagram webhook subscription failed:',
+        {
+          instagramBusinessAccountId,
+          status:
+            response.status,
+          error:
+            data?.error,
+        }
+      )
+
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.warn(
+      'Instagram webhook subscription error:',
+      {
+        instagramBusinessAccountId,
+        error,
+      }
+    )
+
+    return false
+  }
+}
+
+/**
+ * Discover Pages and automatically subscribe
+ * Facebook Messenger + Instagram Messaging webhooks.
+ *
+ * Tokens are used only during this function and
+ * are never returned or stored in frontend-readable
+ * integrations metadata.
+ */
+async function configureFacebookInstagramWebhooks(
+  accessToken: string
+) {
+  const pages =
+    await discoverMetaPages(
+      accessToken
+    )
+
+  const facebookPages: Array<{
+    id: string
+    name: string | null
+    webhook_subscribed: boolean
+  }> = []
+
+  const instagramAccounts: Array<{
+    id: string
+    username: string | null
+    name: string | null
+    webhook_subscribed: boolean
+  }> = []
+
+  for (
+    const page of pages
+  ) {
+    if (
+      !page.id
+    ) {
+      continue
+    }
+
+    let facebookSubscribed =
+      false
+
+    if (
+      page.access_token
+    ) {
+      facebookSubscribed =
+        await subscribeFacebookPage(
+          page.id,
+          page.access_token
+        )
+    } else {
+      console.warn(
+        'Facebook Page access token was not returned:',
+        page.id
+      )
+    }
+
+    facebookPages.push({
+      id:
+        page.id,
+
+      name:
+        page.name ||
+        null,
+
+      webhook_subscribed:
+        facebookSubscribed,
+    })
+
+    const instagram =
+      page.instagram_business_account
+
+    if (
+      instagram?.id
+    ) {
+      let instagramSubscribed =
+        false
+
+      if (
+        page.access_token
+      ) {
+        instagramSubscribed =
+          await subscribeInstagramAccount(
+            instagram.id,
+            page.access_token
+          )
+      } else {
+        console.warn(
+          'Instagram subscription skipped because Page access token was not returned:',
+          instagram.id
+        )
+      }
+
+      instagramAccounts.push({
+        id:
+          instagram.id,
+
+        username:
+          instagram.username ||
+          null,
+
+        name:
+          instagram.name ||
+          null,
+
+        webhook_subscribed:
+          instagramSubscribed,
+      })
+    }
+  }
+
+  const firstFacebookPage =
+    facebookPages[0] ||
+    null
+
+  const firstInstagramAccount =
+    instagramAccounts[0] ||
+    null
+
+  return {
+    pages,
+    facebookPages,
+    instagramAccounts,
+
+    facebookPageId:
+      firstFacebookPage?.id ||
+      null,
+
+    facebookPageName:
+      firstFacebookPage?.name ||
+      null,
+
+    facebookWebhookSubscribed:
+      facebookPages.some(
+        (
+          page
+        ) =>
+          page.webhook_subscribed
+      ),
+
+    instagramBusinessAccountId:
+      firstInstagramAccount?.id ||
+      null,
+
+    instagramUsername:
+      firstInstagramAccount?.username ||
+      null,
+
+    instagramName:
+      firstInstagramAccount?.name ||
+      null,
+
+    instagramWebhookSubscribed:
+      instagramAccounts.some(
+        (
+          account
+        ) =>
+          account.webhook_subscribed
+      ),
   }
 }
 
@@ -780,6 +1210,54 @@ export default async function handler(
       | null = null
 
     /*
+     * Facebook / Instagram discovery and
+     * webhook subscription.
+     *
+     * This happens server-side immediately
+     * after OAuth succeeds.
+     */
+    let facebookPageId:
+      | string
+      | null = null
+
+    let facebookPageName:
+      | string
+      | null = null
+
+    let facebookWebhookSubscribed =
+      false
+
+    let instagramBusinessAccountId:
+      | string
+      | null = null
+
+    let instagramUsername:
+      | string
+      | null = null
+
+    let instagramName:
+      | string
+      | null = null
+
+    let instagramWebhookSubscribed =
+      false
+
+    let facebookPagesMetadata:
+      Array<{
+        id: string
+        name: string | null
+        webhook_subscribed: boolean
+      }> = []
+
+    let instagramAccountsMetadata:
+      Array<{
+        id: string
+        username: string | null
+        name: string | null
+        webhook_subscribed: boolean
+      }> = []
+
+    /*
      * WhatsApp-specific discovery.
      */
     if (
@@ -806,6 +1284,55 @@ export default async function handler(
 
       verifiedName =
         whatsappData.verifiedName
+    }
+
+    /*
+     * Facebook-specific discovery.
+     *
+     * We intentionally do this for the
+     * Facebook provider and also when an
+     * Instagram Business Account is present,
+     * because Instagram Messaging through
+     * Meta Login depends on the connected
+     * Facebook Page relationship.
+     */
+    if (
+      provider ===
+        'facebook' ||
+      provider ===
+        'instagram'
+    ) {
+      const metaPages =
+        await configureFacebookInstagramWebhooks(
+          accessToken
+        )
+
+      facebookPageId =
+        metaPages.facebookPageId
+
+      facebookPageName =
+        metaPages.facebookPageName
+
+      facebookWebhookSubscribed =
+        metaPages.facebookWebhookSubscribed
+
+      instagramBusinessAccountId =
+        metaPages.instagramBusinessAccountId
+
+      instagramUsername =
+        metaPages.instagramUsername
+
+      instagramName =
+        metaPages.instagramName
+
+      instagramWebhookSubscribed =
+        metaPages.instagramWebhookSubscribed
+
+      facebookPagesMetadata =
+        metaPages.facebookPages
+
+      instagramAccountsMetadata =
+        metaPages.instagramAccounts
     }
 
     const now =
@@ -856,6 +1383,52 @@ export default async function handler(
       last_oauth_verified_at:
         now,
 
+      /*
+       * Facebook Page information.
+       *
+       * IDs are safe metadata.
+       * Page access tokens are NEVER stored here.
+       */
+      ...(provider ===
+      'facebook'
+        ? {
+            facebook_page_id:
+              facebookPageId,
+
+            facebook_page_name:
+              facebookPageName,
+
+            facebook_webhook_subscribed:
+              facebookWebhookSubscribed,
+
+            facebook_pages:
+              facebookPagesMetadata,
+          }
+        : {}),
+
+      /*
+       * Instagram Business Account information.
+       */
+      ...(provider ===
+      'instagram'
+        ? {
+            instagram_business_account_id:
+              instagramBusinessAccountId,
+
+            instagram_username:
+              instagramUsername,
+
+            instagram_name:
+              instagramName,
+
+            instagram_webhook_subscribed:
+              instagramWebhookSubscribed,
+
+            instagram_accounts:
+              instagramAccountsMetadata,
+          }
+        : {}),
+
       ready_for_messaging:
         provider ===
           'whatsapp'
@@ -863,7 +1436,16 @@ export default async function handler(
               wabaId &&
                 phoneNumberId
             )
-          : true,
+          : provider ===
+              'facebook'
+            ? Boolean(
+                facebookPageId &&
+                  facebookWebhookSubscribed
+              )
+            : Boolean(
+                instagramBusinessAccountId &&
+                  instagramWebhookSubscribed
+              ),
     }
 
     const connectionPayload = {
@@ -1035,6 +1617,59 @@ export default async function handler(
               Boolean(
                 wabaId &&
                   phoneNumberId
+              ),
+          }
+        : {}),
+
+      /*
+       * Facebook metadata is safe for
+       * frontend display and does not
+       * contain Page Access Tokens.
+       */
+      ...(provider ===
+      'facebook'
+        ? {
+            facebook_page_id:
+              facebookPageId,
+
+            facebook_page_name:
+              facebookPageName,
+
+            facebook_webhook_subscribed:
+              facebookWebhookSubscribed,
+
+            ready_for_messaging:
+              Boolean(
+                facebookPageId &&
+                  facebookWebhookSubscribed
+              ),
+          }
+        : {}),
+
+      /*
+       * Instagram metadata is safe for
+       * frontend display and does not
+       * contain access tokens.
+       */
+      ...(provider ===
+      'instagram'
+        ? {
+            instagram_business_account_id:
+              instagramBusinessAccountId,
+
+            instagram_username:
+              instagramUsername,
+
+            instagram_name:
+              instagramName,
+
+            instagram_webhook_subscribed:
+              instagramWebhookSubscribed,
+
+            ready_for_messaging:
+              Boolean(
+                instagramBusinessAccountId &&
+                  instagramWebhookSubscribed
               ),
           }
         : {}),
