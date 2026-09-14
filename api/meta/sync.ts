@@ -65,6 +65,41 @@ async function graphRequest(
   }
 }
 
+/**
+ * Server-side POST to Meta Graph API.
+ *
+ * Access tokens are never returned to the browser.
+ */
+async function graphPost(
+  path: string,
+  accessToken: string
+) {
+  const separator =
+    path.includes('?')
+      ? '&'
+      : '?'
+
+  const response =
+    await fetch(
+      `https://graph.facebook.com/${META_GRAPH_API_VERSION}${path}${separator}access_token=${encodeURIComponent(
+        accessToken
+      )}`,
+      {
+        method: 'POST',
+      }
+    )
+
+  const data =
+    await response
+      .json()
+      .catch(() => null)
+
+  return {
+    response,
+    data,
+  }
+}
+
 function errorMessage(
   data: any,
   fallback: string
@@ -80,15 +115,26 @@ function errorMessage(
 /* Facebook                                                                    */
 /* -------------------------------------------------------------------------- */
 
+interface FacebookPageDiscovery {
+  id: string
+  name: string | null
+  category: string | null
+  access_token_available: boolean
+
+  /*
+   * Server-only value.
+   *
+   * NEVER return this from the API and NEVER
+   * store it in integrations.metadata.
+   */
+  page_access_token?: string
+}
+
 async function discoverFacebookData(
   accessToken: string
 ) {
-  const pages: Array<{
-    id: string
-    name: string | null
-    category: string | null
-    access_token_available: boolean
-  }> = []
+  const pages:
+    FacebookPageDiscovery[] = []
 
   const {
     response,
@@ -113,30 +159,46 @@ async function discoverFacebookData(
         continue
       }
 
+      const pageAccessToken =
+        typeof page.access_token ===
+        'string' &&
+        page.access_token.length > 0
+          ? page.access_token
+          : undefined
+
       pages.push({
-        id: String(page.id),
+        id:
+          String(page.id),
 
         name:
-          typeof page.name === 'string'
+          typeof page.name ===
+          'string'
             ? page.name
             : null,
 
         category:
-          typeof page.category === 'string'
+          typeof page.category ===
+          'string'
             ? page.category
             : null,
 
         access_token_available:
-          typeof page.access_token ===
-            'string' &&
-          page.access_token.length > 0,
+          Boolean(
+            pageAccessToken
+          ),
+
+        page_access_token:
+          pageAccessToken,
       })
     }
   }
 
   return {
     pages,
-    page_count: pages.length,
+
+    page_count:
+      pages.length,
+
     ready_for_messaging:
       pages.some(
         (page) =>
@@ -145,26 +207,91 @@ async function discoverFacebookData(
   }
 }
 
+/**
+ * Subscribe a Facebook Page to Messenger webhooks.
+ *
+ * The Page Access Token is used only server-side.
+ */
+async function subscribeFacebookPage(
+  pageId: string,
+  pageAccessToken: string
+) {
+  try {
+    const {
+      response,
+      data,
+    } =
+      await graphPost(
+        `/${encodeURIComponent(
+          pageId
+        )}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals`,
+        pageAccessToken
+      )
+
+    if (!response.ok) {
+      return {
+        subscribed:
+          false,
+
+        error:
+          errorMessage(
+            data,
+            'Facebook Messenger webhook subscription failed'
+          ),
+      }
+    }
+
+    return {
+      subscribed:
+        true,
+
+      error:
+        null,
+    }
+  } catch (error) {
+    return {
+      subscribed:
+        false,
+
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Facebook Messenger webhook subscription failed',
+    }
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Instagram                                                                   */
 /* -------------------------------------------------------------------------- */
 
+interface InstagramDiscovery {
+  page_id: string
+  page_name: string | null
+  instagram_business_account_id: string
+  instagram_username: string | null
+  instagram_name: string | null
+
+  /*
+   * Server-only.
+   */
+  page_access_token?: string
+
+  webhook_subscribed?: boolean
+  webhook_error?: string | null
+}
+
 async function discoverInstagramData(
   accessToken: string
 ) {
-  const accounts: Array<{
-    page_id: string
-    page_name: string | null
-    instagram_business_account_id: string
-    instagram_username: string | null
-    instagram_name: string | null
-  }> = []
+  const accounts:
+    InstagramDiscovery[] = []
 
   const {
     response,
     data,
   } = await graphRequest(
-    '/me/accounts?fields=id,name,instagram_business_account{id,username,name}',
+    '/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}',
     accessToken
   )
 
@@ -189,17 +316,27 @@ async function discoverInstagramData(
         continue
       }
 
+      const pageAccessToken =
+        typeof page.access_token ===
+        'string' &&
+        page.access_token.length > 0
+          ? page.access_token
+          : undefined
+
       accounts.push({
         page_id:
           String(page.id),
 
         page_name:
-          typeof page.name === 'string'
+          typeof page.name ===
+          'string'
             ? page.name
             : null,
 
         instagram_business_account_id:
-          String(instagram.id),
+          String(
+            instagram.id
+          ),
 
         instagram_username:
           typeof instagram.username ===
@@ -212,6 +349,9 @@ async function discoverInstagramData(
           'string'
             ? instagram.name
             : null,
+
+        page_access_token:
+          pageAccessToken,
       })
     }
   }
@@ -224,6 +364,62 @@ async function discoverInstagramData(
 
     ready_for_messaging:
       accounts.length > 0,
+  }
+}
+
+/**
+ * Subscribe an Instagram Business Account
+ * to Instagram Messaging webhooks.
+ *
+ * Uses the related Facebook Page Access Token
+ * only server-side.
+ */
+async function subscribeInstagramAccount(
+  instagramBusinessAccountId: string,
+  pageAccessToken: string
+) {
+  try {
+    const {
+      response,
+      data,
+    } =
+      await graphPost(
+        `/${encodeURIComponent(
+          instagramBusinessAccountId
+        )}/subscribed_apps?subscribed_fields=messages`,
+        pageAccessToken
+      )
+
+    if (!response.ok) {
+      return {
+        subscribed:
+          false,
+
+        error:
+          errorMessage(
+            data,
+            'Instagram webhook subscription failed'
+          ),
+      }
+    }
+
+    return {
+      subscribed:
+        true,
+
+      error:
+        null,
+    }
+  } catch (error) {
+    return {
+      subscribed:
+        false,
+
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Instagram webhook subscription failed',
+    }
   }
 }
 
@@ -261,12 +457,13 @@ async function discoverWhatsAppWabaIds(
   const {
     response,
     data,
-  } = await graphRequest(
-    `/debug_token?input_token=${encodeURIComponent(
-      accessToken
-    )}`,
-    appAccessToken
-  )
+  } =
+    await graphRequest(
+      `/debug_token?input_token=${encodeURIComponent(
+        accessToken
+      )}`,
+      appAccessToken
+    )
 
   if (!response.ok) {
     throw new Error(
@@ -306,7 +503,9 @@ async function discoverWhatsAppWabaIds(
           typeof id === 'number'
       )
       .map(
-        (id: string | number) =>
+        (
+          id: string | number
+        ) =>
           String(id)
       )
       .filter(Boolean)
@@ -350,7 +549,8 @@ async function discoverWhatsAppData(
     | string
     | null = null
 
-  const discoveryErrors: string[] = []
+  const discoveryErrors:
+    string[] = []
 
   /* --------------------------- Discover WABA IDs -------------------------- */
 
@@ -362,7 +562,9 @@ async function discoverWhatsAppData(
         accessToken
       )
 
-    if (wabaIds.length > 0) {
+    if (
+      wabaIds.length > 0
+    ) {
       wabaId =
         wabaIds[0]
     } else {
@@ -387,12 +589,13 @@ async function discoverWhatsAppData(
       const {
         response,
         data,
-      } = await graphRequest(
-        `/${encodeURIComponent(
-          wabaId
-        )}?fields=id,name,owner_business_info`,
-        accessToken
-      )
+      } =
+        await graphRequest(
+          `/${encodeURIComponent(
+            wabaId
+          )}?fields=id,name,owner_business_info`,
+          accessToken
+        )
 
       if (!response.ok) {
         discoveryErrors.push(
@@ -437,18 +640,6 @@ async function discoverWhatsAppData(
     }
   }
 
-  /* ---------------------- Business fallback information ------------------- */
-
-  /**
-   * If the WABA does not expose owner_business_info,
-   * do not call /{metaUserId}/businesses again.
-   *
-   * That endpoint was the source of the Missing Permission error.
-   *
-   * We keep businessId/businessName nullable because WABA + phone number
-   * are the resources actually required for WhatsApp messaging.
-   */
-
   /* ----------------------------- Phone number ----------------------------- */
 
   if (wabaId) {
@@ -456,12 +647,13 @@ async function discoverWhatsAppData(
       const {
         response,
         data,
-      } = await graphRequest(
-        `/${encodeURIComponent(
-          wabaId
-        )}/phone_numbers?fields=id,display_phone_number,verified_name`,
-        accessToken
-      )
+      } =
+        await graphRequest(
+          `/${encodeURIComponent(
+            wabaId
+          )}/phone_numbers?fields=id,display_phone_number,verified_name`,
+          accessToken
+        )
 
       if (!response.ok) {
         discoveryErrors.push(
@@ -471,7 +663,9 @@ async function discoverWhatsAppData(
           )}`
         )
       } else if (
-        Array.isArray(data?.data) &&
+        Array.isArray(
+          data?.data
+        ) &&
         data.data.length > 0
       ) {
         const phone =
@@ -479,7 +673,9 @@ async function discoverWhatsAppData(
 
         if (phone?.id) {
           phoneNumberId =
-            String(phone.id)
+            String(
+              phone.id
+            )
         }
 
         if (
@@ -517,11 +713,13 @@ async function discoverWhatsAppData(
     phoneNumberId,
     displayPhoneNumber,
     verifiedName,
+
     readyForMessaging:
       Boolean(
         wabaId &&
-        phoneNumberId
+          phoneNumberId
       ),
+
     discoveryErrors,
   }
 }
@@ -550,7 +748,8 @@ export default async function handler(
 
   try {
     const authorization =
-      req.headers.authorization || ''
+      req.headers.authorization ||
+      ''
 
     const accessToken =
       authorization.startsWith(
@@ -607,8 +806,11 @@ export default async function handler(
         publicKey,
         {
           auth: {
-            persistSession: false,
-            autoRefreshToken: false,
+            persistSession:
+              false,
+
+            autoRefreshToken:
+              false,
           },
         }
       )
@@ -641,8 +843,11 @@ export default async function handler(
         serviceKey,
         {
           auth: {
-            persistSession: false,
-            autoRefreshToken: false,
+            persistSession:
+              false,
+
+            autoRefreshToken:
+              false,
           },
         }
       )
@@ -651,7 +856,8 @@ export default async function handler(
 
     const {
       data: membership,
-      error: membershipError,
+      error:
+        membershipError,
     } =
       await admin
         .from('users')
@@ -683,7 +889,8 @@ export default async function handler(
 
     const {
       data: connection,
-      error: connectionError,
+      error:
+        connectionError,
     } =
       await admin
         .from(
@@ -713,6 +920,7 @@ export default async function handler(
         .json({
           error:
             'Unable to load Meta connection',
+
           code:
             'META_CONNECTION_LOOKUP_FAILED',
         })
@@ -724,6 +932,7 @@ export default async function handler(
         .json({
           error:
             'Meta connection not found',
+
           provider,
         })
     }
@@ -736,6 +945,7 @@ export default async function handler(
         .json({
           error:
             'Meta connection does not contain a server-side access token',
+
           provider,
         })
     }
@@ -749,6 +959,7 @@ export default async function handler(
         .json({
           error:
             'Meta user identity is missing from the connection',
+
           provider,
         })
     }
@@ -811,8 +1022,10 @@ export default async function handler(
         .json({
           error:
             message,
+
           code:
             'META_TOKEN_INVALID',
+
           provider,
         })
     }
@@ -826,23 +1039,141 @@ export default async function handler(
 
     /* ---------------------------- Discovery ------------------------------- */
 
-    let discovery: any = null
+    let discovery:
+      any = null
 
-    if (provider === 'facebook') {
+    const syncErrors:
+      string[] = []
+
+    if (
+      provider ===
+      'facebook'
+    ) {
       discovery =
         await discoverFacebookData(
           token
         )
+
+      /*
+       * Subscribe every discovered Page.
+       *
+       * Page Access Tokens are used only
+       * server-side and are not returned.
+       */
+      for (
+        const page of discovery.pages
+      ) {
+        if (
+          !page.page_access_token
+        ) {
+          continue
+        }
+
+        const subscription =
+          await subscribeFacebookPage(
+            page.id,
+            page.page_access_token
+          )
+
+        page.webhook_subscribed =
+          subscription.subscribed
+
+        page.webhook_error =
+          subscription.error
+
+        if (
+          !subscription.subscribed
+        ) {
+          syncErrors.push(
+            `Facebook Page ${page.id}: ${
+              subscription.error ||
+              'Webhook subscription failed'
+            }`
+          )
+        }
+      }
+
+      discovery.ready_for_messaging =
+        discovery.pages.some(
+          (page: FacebookPageDiscovery) =>
+            page.access_token_available &&
+            page.webhook_subscribed ===
+              true
+        )
     }
 
-    if (provider === 'instagram') {
+    if (
+      provider ===
+      'instagram'
+    ) {
       discovery =
         await discoverInstagramData(
           token
         )
+
+      /*
+       * Instagram Messaging subscription
+       * uses the Page Access Token related
+       * to the Instagram Business Account.
+       */
+      for (
+        const account of
+          discovery.accounts
+      ) {
+        if (
+          !account.page_access_token
+        ) {
+          account.webhook_subscribed =
+            false
+
+          account.webhook_error =
+            'Facebook Page access token was not returned by Meta'
+
+          syncErrors.push(
+            `Instagram account ${account.instagram_business_account_id}: Facebook Page access token unavailable`
+          )
+
+          continue
+        }
+
+        const subscription =
+          await subscribeInstagramAccount(
+            account.instagram_business_account_id,
+            account.page_access_token
+          )
+
+        account.webhook_subscribed =
+          subscription.subscribed
+
+        account.webhook_error =
+          subscription.error
+
+        if (
+          !subscription.subscribed
+        ) {
+          syncErrors.push(
+            `Instagram account ${account.instagram_business_account_id}: ${
+              subscription.error ||
+              'Webhook subscription failed'
+            }`
+          )
+        }
+      }
+
+      discovery.ready_for_messaging =
+        discovery.accounts.some(
+          (
+            account: InstagramDiscovery
+          ) =>
+            account.webhook_subscribed ===
+            true
+        )
     }
 
-    if (provider === 'whatsapp') {
+    if (
+      provider ===
+      'whatsapp'
+    ) {
       discovery =
         await discoverWhatsAppData(
           token
@@ -851,33 +1182,62 @@ export default async function handler(
 
     /* -------------------------- Build metadata ---------------------------- */
 
-    let connectionUpdate: Record<
-      string,
-      any
-    > = {
-      status:
-        'connected',
+    let connectionUpdate:
+      Record<string, any> = {
+        status:
+          'connected',
 
-      updated_at:
-        new Date().toISOString(),
-
-      metadata: {
-        ...metadataBase,
-
-        last_sync_at:
+        updated_at:
           new Date().toISOString(),
 
-        sync_error:
-          null,
+        metadata: {
+          ...metadataBase,
 
-        provider,
+          last_sync_at:
+            new Date().toISOString(),
 
-        ready_for_messaging:
-          false,
-      },
-    }
+          sync_error:
+            null,
 
-    if (provider === 'facebook') {
+          provider,
+
+          ready_for_messaging:
+            false,
+        },
+      }
+
+    if (
+      provider ===
+      'facebook'
+    ) {
+      const safePages =
+        discovery.pages.map(
+          (
+            page: FacebookPageDiscovery
+          ) => ({
+            id:
+              page.id,
+
+            name:
+              page.name,
+
+            category:
+              page.category,
+
+            access_token_available:
+              page.access_token_available,
+
+            webhook_subscribed:
+              Boolean(
+                page.webhook_subscribed
+              ),
+
+            webhook_error:
+              page.webhook_error ||
+              null,
+          })
+        )
+
       connectionUpdate.metadata = {
         ...metadataBase,
 
@@ -885,7 +1245,11 @@ export default async function handler(
           new Date().toISOString(),
 
         sync_error:
-          null,
+          syncErrors.length > 0
+            ? syncErrors.join(
+                ' | '
+              )
+            : null,
 
         provider,
 
@@ -893,23 +1257,65 @@ export default async function handler(
           discovery.page_count,
 
         pages:
-          discovery.pages.map(
-            (page: any) => ({
-              id: page.id,
-              name: page.name,
-              category:
-                page.category,
-              access_token_available:
-                page.access_token_available,
-            })
-          ),
+          safePages,
 
         ready_for_messaging:
           discovery.ready_for_messaging,
+
+        facebook_page_id:
+          discovery.pages[0]?.id ||
+          null,
+
+        facebook_page_name:
+          discovery.pages[0]?.name ||
+          null,
+
+        facebook_webhook_subscribed:
+          discovery.pages.some(
+            (
+              page: FacebookPageDiscovery
+            ) =>
+              page.webhook_subscribed ===
+              true
+          ),
       }
     }
 
-    if (provider === 'instagram') {
+    if (
+      provider ===
+      'instagram'
+    ) {
+      const safeAccounts =
+        discovery.accounts.map(
+          (
+            account: InstagramDiscovery
+          ) => ({
+            page_id:
+              account.page_id,
+
+            page_name:
+              account.page_name,
+
+            instagram_business_account_id:
+              account.instagram_business_account_id,
+
+            instagram_username:
+              account.instagram_username,
+
+            instagram_name:
+              account.instagram_name,
+
+            webhook_subscribed:
+              Boolean(
+                account.webhook_subscribed
+              ),
+
+            webhook_error:
+              account.webhook_error ||
+              null,
+          })
+        )
+
       connectionUpdate.metadata = {
         ...metadataBase,
 
@@ -917,7 +1323,11 @@ export default async function handler(
           new Date().toISOString(),
 
         sync_error:
-          null,
+          syncErrors.length > 0
+            ? syncErrors.join(
+                ' | '
+              )
+            : null,
 
         provider,
 
@@ -925,14 +1335,41 @@ export default async function handler(
           discovery.account_count,
 
         instagram_accounts:
-          discovery.accounts,
+          safeAccounts,
+
+        instagram_business_account_id:
+          discovery.accounts[0]
+            ?.instagram_business_account_id ||
+          null,
+
+        instagram_username:
+          discovery.accounts[0]
+            ?.instagram_username ||
+          null,
+
+        instagram_name:
+          discovery.accounts[0]
+            ?.instagram_name ||
+          null,
+
+        instagram_webhook_subscribed:
+          discovery.accounts.some(
+            (
+              account: InstagramDiscovery
+            ) =>
+              account.webhook_subscribed ===
+              true
+          ),
 
         ready_for_messaging:
           discovery.ready_for_messaging,
       }
     }
 
-    if (provider === 'whatsapp') {
+    if (
+      provider ===
+      'whatsapp'
+    ) {
       connectionUpdate = {
         ...connectionUpdate,
 
@@ -985,7 +1422,8 @@ export default async function handler(
     /* -------------------------- Save connection --------------------------- */
 
     const {
-      data: updatedConnection,
+      data:
+        updatedConnection,
       error:
         updateConnectionError,
     } =
@@ -1018,6 +1456,7 @@ export default async function handler(
         .json({
           error:
             'Unable to save Meta resource discovery',
+
           code:
             'META_CONNECTION_UPDATE_FAILED',
         })
@@ -1025,8 +1464,8 @@ export default async function handler(
 
     /* ------------------------- Sync integrations -------------------------- */
 
-    const integrationMetadata =
-      {
+    const integrationMetadata:
+      Record<string, any> = {
         provider,
 
         meta_user_id:
@@ -1041,27 +1480,116 @@ export default async function handler(
               .metadata
               ?.ready_for_messaging
           ),
-      } as Record<
-        string,
-        any
-      >
+      }
 
     if (
-      provider === 'facebook'
+      provider ===
+      'facebook'
     ) {
       integrationMetadata.pages =
-        discovery.pages
+        discovery.pages.map(
+          (
+            page: FacebookPageDiscovery
+          ) => ({
+            id:
+              page.id,
+
+            name:
+              page.name,
+
+            category:
+              page.category,
+
+            access_token_available:
+              page.access_token_available,
+
+            webhook_subscribed:
+              Boolean(
+                page.webhook_subscribed
+              ),
+
+            webhook_error:
+              page.webhook_error ||
+              null,
+          })
+        )
+
+      integrationMetadata.facebook_page_id =
+        discovery.pages[0]?.id ||
+        null
+
+      integrationMetadata.facebook_page_name =
+        discovery.pages[0]?.name ||
+        null
+
+      integrationMetadata.facebook_webhook_subscribed =
+        discovery.pages.some(
+          (
+            page: FacebookPageDiscovery
+          ) =>
+            page.webhook_subscribed ===
+            true
+        )
     }
 
     if (
-      provider === 'instagram'
+      provider ===
+      'instagram'
     ) {
       integrationMetadata.instagram_accounts =
-        discovery.accounts
+        discovery.accounts.map(
+          (
+            account: InstagramDiscovery
+          ) => ({
+            page_id:
+              account.page_id,
+
+            page_name:
+              account.page_name,
+
+            instagram_business_account_id:
+              account.instagram_business_account_id,
+
+            instagram_username:
+              account.instagram_username,
+
+            instagram_name:
+              account.instagram_name,
+
+            webhook_subscribed:
+              Boolean(
+                account.webhook_subscribed
+              ),
+
+            webhook_error:
+              account.webhook_error ||
+              null,
+          })
+        )
+
+      integrationMetadata.instagram_business_account_id =
+        discovery.accounts[0]
+          ?.instagram_business_account_id ||
+        null
+
+      integrationMetadata.instagram_username =
+        discovery.accounts[0]
+          ?.instagram_username ||
+        null
+
+      integrationMetadata.instagram_webhook_subscribed =
+        discovery.accounts.some(
+          (
+            account: InstagramDiscovery
+          ) =>
+            account.webhook_subscribed ===
+            true
+        )
     }
 
     if (
-      provider === 'whatsapp'
+      provider ===
+      'whatsapp'
     ) {
       integrationMetadata.business_id =
         discovery.businessId
@@ -1113,7 +1641,11 @@ export default async function handler(
               new Date().toISOString(),
 
             error_message:
-              null,
+              syncErrors.length > 0
+                ? syncErrors.join(
+                    ' | '
+                  )
+                : null,
 
             metadata:
               integrationMetadata,
@@ -1140,6 +1672,7 @@ export default async function handler(
         .json({
           error:
             'Meta connection synced but integration status could not be updated',
+
           code:
             'META_INTEGRATION_UPDATE_FAILED',
         })
@@ -1150,7 +1683,8 @@ export default async function handler(
     return res
       .status(200)
       .json({
-        success: true,
+        success:
+          true,
 
         provider,
 
@@ -1164,26 +1698,44 @@ export default async function handler(
               ?.ready_for_messaging
           ),
 
+        sync_errors:
+          syncErrors,
+
         connection:
           updatedConnection,
 
         discovery:
-          provider === 'facebook'
+          provider ===
+          'facebook'
             ? {
                 page_count:
                   discovery.page_count,
 
                 pages:
                   discovery.pages.map(
-                    (page: any) => ({
+                    (
+                      page: FacebookPageDiscovery
+                    ) => ({
                       id:
                         page.id,
+
                       name:
                         page.name,
+
                       category:
                         page.category,
+
                       access_token_available:
                         page.access_token_available,
+
+                      webhook_subscribed:
+                        Boolean(
+                          page.webhook_subscribed
+                        ),
+
+                      webhook_error:
+                        page.webhook_error ||
+                        null,
                     })
                   ),
               }
@@ -1194,7 +1746,35 @@ export default async function handler(
                   discovery.account_count,
 
                 accounts:
-                  discovery.accounts,
+                  discovery.accounts.map(
+                    (
+                      account: InstagramDiscovery
+                    ) => ({
+                      page_id:
+                        account.page_id,
+
+                      page_name:
+                        account.page_name,
+
+                      instagram_business_account_id:
+                        account.instagram_business_account_id,
+
+                      instagram_username:
+                        account.instagram_username,
+
+                      instagram_name:
+                        account.instagram_name,
+
+                      webhook_subscribed:
+                        Boolean(
+                          account.webhook_subscribed
+                        ),
+
+                      webhook_error:
+                        account.webhook_error ||
+                        null,
+                    })
+                  ),
               }
             : {
                 business_id:
