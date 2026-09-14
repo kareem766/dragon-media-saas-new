@@ -222,7 +222,7 @@ export default async function handler(
     if (provider === 'whatsapp') {
       return res.status(200).json({
         provider,
-        mode: 'embedded_signup_v4',
+        mode: 'embedded_signup',
         app_id: appId,
         config_id: configId,
         state,
