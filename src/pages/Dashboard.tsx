@@ -9,6 +9,7 @@ import {
 } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import AiUsageAlert from '../components/AiUsageAlert'
 
 interface DashboardData {
   leadsCount: number
@@ -455,6 +456,9 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {/* AI Usage Alert */}
+      <AiUsageAlert />
 
       {/* Main KPIs */}
       <section aria-label="المؤشرات الرئيسية">
