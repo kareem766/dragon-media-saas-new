@@ -792,3 +792,479 @@ export default async function handler(
             )
 
           if (
+            typeof candidate ===
+              'string'
+          ) {
+            wabaId =
+              candidate.trim()
+
+            break
+          }
+        }
+      }
+    }
+
+    /*
+     * If the Embedded Signup returned a business,
+     * discover its WhatsApp Business Account.
+     */
+    if (
+      !wabaId &&
+      businessId
+    ) {
+      const discovered =
+        await discoverWabaFromBusiness(
+          accessToken,
+          businessId,
+        )
+
+      if (discovered) {
+        wabaId =
+          discovered.id
+      }
+    }
+
+    /*
+     * Try any granular target as a WABA candidate.
+     * We validate it before storing.
+     */
+    if (
+      !wabaId &&
+      targetIds.length
+    ) {
+      for (
+        const targetId of targetIds
+      ) {
+        const {
+          response,
+          data,
+        } =
+          await graphGet(
+            `/${encodeURIComponent(targetId)}?fields=id,name,owner_business_info`,
+            accessToken,
+          )
+
+        if (
+          response.ok &&
+          data?.id
+        ) {
+          const owner =
+            data.owner_business_info
+
+          if (
+            owner?.id &&
+            !businessId
+          ) {
+            businessId =
+              String(
+                owner.id,
+              )
+          }
+
+          const phone =
+            await discoverPhone(
+              String(
+                data.id,
+              ),
+              accessToken,
+              phoneNumberId,
+            )
+
+          if (
+            phone.phoneNumberId
+          ) {
+            wabaId =
+              String(
+                data.id,
+              )
+
+            phoneNumberId =
+              phone.phoneNumberId
+
+            displayPhoneNumber =
+              phone.displayPhoneNumber
+
+            verifiedName =
+              phone.verifiedName
+
+            break
+          }
+        }
+      }
+    }
+
+    /*
+     * Validate WABA and discover phone.
+     */
+    if (wabaId) {
+      const {
+        response,
+        data,
+      } =
+        await graphGet(
+          `/${encodeURIComponent(wabaId)}?fields=id,name,owner_business_info`,
+          accessToken,
+        )
+
+      if (
+        !response.ok ||
+        !data?.id
+      ) {
+        wabaId =
+          null
+      } else {
+        const owner =
+          data.owner_business_info
+
+        if (
+          owner?.id &&
+          !businessId
+        ) {
+          businessId =
+            String(
+              owner.id,
+            )
+        }
+
+        const phone =
+          await discoverPhone(
+            String(
+              data.id,
+            ),
+            accessToken,
+            phoneNumberId,
+          )
+
+        phoneNumberId =
+          phone.phoneNumberId
+
+        displayPhoneNumber =
+          phone.displayPhoneNumber
+
+        verifiedName =
+          phone.verifiedName
+      }
+    }
+
+    /*
+     * Subscribe the WABA webhook only after
+     * obtaining a valid WABA.
+     */
+    let webhookSubscribed =
+      false
+
+    if (wabaId) {
+      const subscription =
+        await subscribeWaba(
+          wabaId,
+          accessToken,
+        )
+
+      webhookSubscribed =
+        subscription.success
+
+      if (
+        !subscription.success
+      ) {
+        console.warn(
+          'WhatsApp webhook subscription failed:',
+          subscription.error,
+        )
+      }
+    }
+
+    const readyForMessaging =
+      Boolean(
+        wabaId &&
+        phoneNumberId &&
+        webhookSubscribed,
+      )
+
+    const supabase =
+      createClient(
+        env('VITE_SUPABASE_URL'),
+        env('SUPABASE_SECRET_KEY'),
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        },
+      )
+
+    /*
+     * Never overwrite an existing valid connection
+     * with null IDs after a partial onboarding result.
+     */
+    const {
+      data: existing,
+      error:
+        existingError,
+    } =
+      await supabase
+        .from('meta_connections')
+        .select(
+          'id,waba_id,phone_number_id,business_id,display_phone_number,verified_name',
+        )
+        .eq(
+          'organization_id',
+          stateData.organization_id,
+        )
+        .eq(
+          'provider',
+          'whatsapp',
+        )
+        .maybeSingle()
+
+    if (existingError) {
+      throw existingError
+    }
+
+    const finalWabaId =
+      wabaId ||
+      existing?.waba_id ||
+      null
+
+    const finalPhoneNumberId =
+      phoneNumberId ||
+      existing?.phone_number_id ||
+      null
+
+    const finalBusinessId =
+      businessId ||
+      existing?.business_id ||
+      null
+
+    const finalDisplayPhoneNumber =
+      displayPhoneNumber ||
+      existing?.display_phone_number ||
+      null
+
+    const finalVerifiedName =
+      verifiedName ||
+      existing?.verified_name ||
+      null
+
+    const finalReady =
+      Boolean(
+        finalWabaId &&
+        finalPhoneNumberId &&
+        webhookSubscribed,
+      )
+
+    const metadata = {
+      connection_type:
+        'meta_login_business_embedded_signup',
+
+      meta_user_id:
+        metaUserId,
+
+      business_id:
+        finalBusinessId,
+
+      waba_id:
+        finalWabaId,
+
+      phone_number_id:
+        finalPhoneNumberId,
+
+      display_phone_number:
+        finalDisplayPhoneNumber,
+
+      verified_name:
+        finalVerifiedName,
+
+      whatsapp_webhook_subscribed:
+        webhookSubscribed,
+
+      ready_for_messaging:
+        finalReady,
+
+      last_oauth_verified_at:
+        new Date().toISOString(),
+    }
+
+    const connectionPayload = {
+      organization_id:
+        stateData.organization_id,
+
+      provider:
+        'whatsapp',
+
+      access_token:
+        accessToken,
+
+      meta_user_id:
+        metaUserId,
+
+      business_id:
+        finalBusinessId,
+
+      waba_id:
+        finalWabaId,
+
+      phone_number_id:
+        finalPhoneNumberId,
+
+      display_phone_number:
+        finalDisplayPhoneNumber,
+
+      verified_name:
+        finalVerifiedName,
+
+      status:
+        finalReady
+          ? 'connected'
+          : 'connected',
+
+      metadata,
+
+      updated_at:
+        new Date().toISOString(),
+    }
+
+    let connectionError
+
+    if (existing?.id) {
+      const result =
+        await supabase
+          .from('meta_connections')
+          .update(
+            connectionPayload,
+          )
+          .eq(
+            'id',
+            existing.id,
+          )
+
+      connectionError =
+        result.error
+    } else {
+      const result =
+        await supabase
+          .from('meta_connections')
+          .insert(
+            connectionPayload,
+          )
+
+      connectionError =
+        result.error
+    }
+
+    if (connectionError) {
+      throw connectionError
+    }
+
+    /*
+     * integrations.metadata is intentionally
+     * non-secret. Never put the access token here.
+     */
+    const integrationMetadata =
+      metadata
+
+    const {
+      error:
+        integrationError,
+    } =
+      await supabase
+        .from('integrations')
+        .upsert(
+          {
+            organization_id:
+              stateData.organization_id,
+
+            provider:
+              'whatsapp',
+
+            connected:
+              true,
+
+            status:
+              finalReady
+                ? 'connected'
+                : 'connected',
+
+            connected_at:
+              new Date().toISOString(),
+
+            last_verified_at:
+              new Date().toISOString(),
+
+            error_message:
+              finalReady
+                ? null
+                : 'WhatsApp connected but messaging setup is incomplete.',
+
+            metadata:
+              integrationMetadata,
+
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict:
+              'organization_id,provider',
+          },
+        )
+
+    if (integrationError) {
+      throw integrationError
+    }
+
+    return res.status(200).json({
+      success:
+        true,
+
+      ready_for_messaging:
+        finalReady,
+
+      waba_id:
+        finalWabaId,
+
+      phone_number_id:
+        finalPhoneNumberId,
+
+      business_id:
+        finalBusinessId,
+
+      display_phone_number:
+        finalDisplayPhoneNumber,
+
+      verified_name:
+        finalVerifiedName,
+
+      webhook_subscribed:
+        webhookSubscribed,
+
+      message:
+        finalReady
+          ? 'WhatsApp Business connected successfully.'
+          : 'WhatsApp connected, but messaging setup is incomplete.',
+
+      redirect_url:
+        '/#/settings',
+    })
+  } catch (error) {
+    const message =
+      getErrorMessage(
+        error,
+        'Unable to complete WhatsApp Embedded Signup.',
+      )
+
+    console.error(
+      'WhatsApp Embedded Signup completion error:',
+      error,
+    )
+
+    return res.status(500).json({
+      success:
+        false,
+
+      error:
+        message,
+
+      code:
+        'META_WHATSAPP_COMPLETE_FAILED',
+    })
+  }
+}
