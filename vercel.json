@@ -5,11 +5,5 @@
       "path": "/api/automation-run",
       "schedule": "0 0 * * *"
     }
-  ],
-  "rewrites": [
-    {
-      "source": "/api/meta/whatsapp/complete",
-      "destination": "/api/meta/whatsapp/complete-v2"
-    }
   ]
 }
