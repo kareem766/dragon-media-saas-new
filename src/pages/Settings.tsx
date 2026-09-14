@@ -68,7 +68,8 @@ const integrationProviders = [
   {
     provider: 'whatsapp',
     name: 'واتساب بيزنس',
-    description: 'ربط WhatsApp Business واستقبال وإرسال الرسائل.',
+    description:
+      'ربط WhatsApp Business واستقبال وإرسال الرسائل.',
     actionLabel: 'ربط WhatsApp',
     connectedActionLabel: 'إدارة WhatsApp',
     meta: true,
@@ -76,7 +77,8 @@ const integrationProviders = [
   {
     provider: 'facebook',
     name: 'فيسبوك ماسنجر',
-    description: 'ربط صفحات Facebook وإدارة محادثات Messenger.',
+    description:
+      'ربط صفحات Facebook وإدارة محادثات Messenger.',
     actionLabel: 'ربط Facebook',
     connectedActionLabel: 'إدارة Facebook',
     meta: true,
@@ -84,7 +86,8 @@ const integrationProviders = [
   {
     provider: 'instagram',
     name: 'إنستجرام',
-    description: 'ربط حساب Instagram وإدارة الرسائل.',
+    description:
+      'ربط حساب Instagram وإدارة الرسائل.',
     actionLabel: 'ربط Instagram',
     connectedActionLabel: 'إدارة Instagram',
     meta: true,
@@ -92,7 +95,8 @@ const integrationProviders = [
   {
     provider: 'telegram',
     name: 'تليجرام',
-    description: 'ربط Telegram Bot وإدارة المحادثات.',
+    description:
+      'ربط Telegram Bot وإدارة المحادثات.',
     actionLabel: 'إعداد Telegram',
     connectedActionLabel: 'إدارة Telegram',
     meta: false,
@@ -100,7 +104,8 @@ const integrationProviders = [
   {
     provider: 'paymob',
     name: 'بوابة الدفع',
-    description: 'حالة تكامل بوابة الدفع والعمليات المالية.',
+    description:
+      'حالة تكامل بوابة الدفع والعمليات المالية.',
     actionLabel: 'إعداد Paymob',
     connectedActionLabel: 'إدارة Paymob',
     meta: false,
@@ -130,7 +135,10 @@ const getMetaErrorMessage = (
     ]) {
       const candidate = value[key]
 
-      if (typeof candidate === 'string' && candidate.trim()) {
+      if (
+        typeof candidate === 'string' &&
+        candidate.trim()
+      ) {
         return candidate.trim()
       }
     }
@@ -147,6 +155,54 @@ const getMetaErrorMessage = (
   }
 
   return fallback
+}
+
+const getMetadataBoolean = (
+  metadata: Record<string, unknown> | undefined,
+  keys: string[],
+): boolean => {
+  if (!metadata) {
+    return false
+  }
+
+  for (const key of keys) {
+    const value = metadata[key]
+
+    if (value === true) {
+      return true
+    }
+
+    if (
+      typeof value === 'string' &&
+      value.toLowerCase() === 'true'
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
+const getMetadataString = (
+  metadata: Record<string, unknown> | undefined,
+  keys: string[],
+): string => {
+  if (!metadata) {
+    return ''
+  }
+
+  for (const key of keys) {
+    const value = metadata[key]
+
+    if (
+      typeof value === 'string' &&
+      value.trim()
+    ) {
+      return value.trim()
+    }
+  }
+
+  return ''
 }
 
 export default function Settings() {
@@ -226,13 +282,14 @@ export default function Settings() {
       setError('')
 
       try {
-        const { data, error: fetchError } = await supabase
-          .from('organizations')
-          .select(
-            'name, manager_name, phone, email, address, timezone, business_type, logo_url',
-          )
-          .eq('id', organizationId)
-          .single()
+        const { data, error: fetchError } =
+          await supabase
+            .from('organizations')
+            .select(
+              'name, manager_name, phone, email, address, timezone, business_type, logo_url',
+            )
+            .eq('id', organizationId)
+            .single()
 
         if (fetchError) {
           throw fetchError
@@ -245,8 +302,10 @@ export default function Settings() {
             phone: data.phone ?? '',
             email: data.email ?? '',
             address: data.address ?? '',
-            timezone: data.timezone ?? 'Africa/Cairo',
-            business_type: data.business_type ?? '',
+            timezone:
+              data.timezone ?? 'Africa/Cairo',
+            business_type:
+              data.business_type ?? '',
             logo_url: data.logo_url ?? '',
           })
         }
@@ -287,7 +346,9 @@ export default function Settings() {
         const userId = userData.user?.id
 
         if (!userId) {
-          throw new Error('تعذر تحديد المستخدم الحالي.')
+          throw new Error(
+            'تعذر تحديد المستخدم الحالي.',
+          )
         }
 
         const {
@@ -308,8 +369,10 @@ export default function Settings() {
         if (data) {
           setNotificationPreferences({
             new_lead: data.new_lead ?? true,
-            new_message: data.new_message ?? true,
-            overdue_tasks: data.overdue_tasks ?? true,
+            new_message:
+              data.new_message ?? true,
+            overdue_tasks:
+              data.overdue_tasks ?? true,
             weekly_report_email:
               data.weekly_report_email ?? false,
           })
@@ -335,13 +398,15 @@ export default function Settings() {
 
           if (createdData) {
             setNotificationPreferences({
-              new_lead: createdData.new_lead ?? true,
+              new_lead:
+                createdData.new_lead ?? true,
               new_message:
                 createdData.new_message ?? true,
               overdue_tasks:
                 createdData.overdue_tasks ?? true,
               weekly_report_email:
-                createdData.weekly_report_email ?? false,
+                createdData.weekly_report_email ??
+                false,
             })
           }
         }
@@ -418,6 +483,94 @@ export default function Settings() {
     loadIntegrations()
   }, [organizationId])
 
+  /*
+   * بعد الرجوع من Meta قد يكون الـ OAuth callback انتهى
+   * للتو وقام بتحديث Supabase. لذلك نعيد تحميل التكاملات
+   * عندما تعود الصفحة للواجهة أو تحصل على focus.
+   */
+  useEffect(() => {
+    if (!organizationId) {
+      return
+    }
+
+    const refreshIntegrations = () => {
+      void loadIntegrations()
+    }
+
+    window.addEventListener(
+      'focus',
+      refreshIntegrations,
+    )
+
+    document.addEventListener(
+      'visibilitychange',
+      refreshIntegrations,
+    )
+
+    return () => {
+      window.removeEventListener(
+        'focus',
+        refreshIntegrations,
+      )
+
+      document.removeEventListener(
+        'visibilitychange',
+        refreshIntegrations,
+      )
+    }
+  }, [organizationId])
+
+  /*
+   * بعد العودة من OAuth، نعطي الـ callback فرصة قصيرة
+   * لتثبيت سجل التكامل ثم نقرأ الحالة مرة أخرى.
+   * لا نستخدم polling مستمر ولا نلمس أي token.
+   */
+  useEffect(() => {
+    if (!organizationId) {
+      return
+    }
+
+    const params = new URLSearchParams(
+      window.location.search,
+    )
+
+    const metaResult =
+      params.get('meta') ||
+      params.get('meta_status') ||
+      params.get('provider')
+
+    if (!metaResult) {
+      return
+    }
+
+    const timers = [
+      window.setTimeout(
+        () => {
+          void loadIntegrations()
+        },
+        500,
+      ),
+      window.setTimeout(
+        () => {
+          void loadIntegrations()
+        },
+        1800,
+      ),
+      window.setTimeout(
+        () => {
+          void loadIntegrations()
+        },
+        3500,
+      ),
+    ]
+
+    return () => {
+      timers.forEach((timer) =>
+        window.clearTimeout(timer),
+      )
+    }
+  }, [organizationId])
+
   const getIntegration = (provider: string) => {
     return integrations.find(
       (integration) =>
@@ -440,6 +593,57 @@ export default function Settings() {
     )
   }
 
+  const isWhatsAppMessagingReady = (
+    integration?: Integration,
+  ) => {
+    if (!integration) {
+      return false
+    }
+
+    const metadata = integration.metadata
+
+    const ready = getMetadataBoolean(
+      metadata,
+      [
+        'ready_for_messaging',
+        'whatsapp_ready',
+        'messaging_ready',
+      ],
+    )
+
+    const wabaId = getMetadataString(
+      metadata,
+      ['waba_id', 'wabaId'],
+    )
+
+    const phoneNumberId =
+      getMetadataString(
+        metadata,
+        [
+          'phone_number_id',
+          'phoneNumberId',
+        ],
+      )
+
+    const webhookSubscribed =
+      getMetadataBoolean(
+        metadata,
+        [
+          'whatsapp_webhook_subscribed',
+          'webhook_subscribed',
+        ],
+      )
+
+    return (
+      ready ||
+      Boolean(
+        wabaId &&
+          phoneNumberId &&
+          webhookSubscribed,
+      )
+    )
+  }
+
   const getIntegrationStatus = (
     integration?: Integration,
   ): {
@@ -450,6 +654,18 @@ export default function Settings() {
       return {
         label: 'غير متصل',
         tone: 'neutral',
+      }
+    }
+
+    if (
+      integration.provider.toLowerCase() ===
+        'whatsapp' &&
+      isIntegrationConnected(integration) &&
+      !isWhatsAppMessagingReady(integration)
+    ) {
+      return {
+        label: 'متصل — يحتاج إكمال الإعداد',
+        tone: 'warning',
       }
     }
 
@@ -538,14 +754,17 @@ export default function Settings() {
       )
 
       const contentType =
-        response.headers.get('content-type') || ''
+        response.headers.get('content-type') ||
+        ''
 
       let data: unknown = null
 
       if (
         contentType.includes('application/json')
       ) {
-        data = await response.json().catch(() => null)
+        data = await response
+          .json()
+          .catch(() => null)
       } else {
         const text = await response
           .text()
@@ -555,15 +774,19 @@ export default function Settings() {
       }
 
       if (!response.ok) {
-        const serverError = getMetaErrorMessage(
-          data &&
-            typeof data === 'object'
-            ? (
-                data as Record<string, unknown>
-              ).error
-            : data,
-          `تعذر بدء عملية ربط Meta. رمز الخطأ: ${response.status}.`,
-        )
+        const serverError =
+          getMetaErrorMessage(
+            data &&
+              typeof data === 'object'
+              ? (
+                  data as Record<
+                    string,
+                    unknown
+                  >
+                ).error
+              : data,
+            `تعذر بدء عملية ربط Meta. رمز الخطأ: ${response.status}.`,
+          )
 
         throw new Error(serverError)
       }
@@ -572,7 +795,10 @@ export default function Settings() {
         data &&
         typeof data === 'object'
           ? (
-              data as Record<string, unknown>
+              data as Record<
+                string,
+                unknown
+              >
             ).auth_url
           : null
 
@@ -662,14 +888,17 @@ export default function Settings() {
       )
 
       const contentType =
-        response.headers.get('content-type') || ''
+        response.headers.get('content-type') ||
+        ''
 
       let data: unknown = null
 
       if (
         contentType.includes('application/json')
       ) {
-        data = await response.json().catch(() => null)
+        data = await response
+          .json()
+          .catch(() => null)
       } else {
         const text = await response
           .text()
@@ -708,7 +937,8 @@ export default function Settings() {
           : null
 
       setMetaSyncMessage(
-        typeof responseMessage === 'string' &&
+        typeof responseMessage ===
+          'string' &&
           responseMessage.trim()
           ? responseMessage
           : `تمت مزامنة ${provider} بنجاح.`,
@@ -1229,7 +1459,8 @@ function CompanySection({
                 <img
                   src={org.logo_url}
                   alt={
-                    org.name || 'شعار الشركة'
+                    org.name ||
+                    'شعار الشركة'
                   }
                   className="h-full w-full object-contain p-2"
                   onError={(event) => {
@@ -1727,7 +1958,10 @@ function IntegrationsSection({
                 )
 
               const connected =
-                status.label === 'متصل'
+                isIntegrationConnectedForCard(
+                  integration,
+                  status,
+                )
 
               const itemProvider =
                 item.meta
@@ -1754,10 +1988,14 @@ function IntegrationsSection({
                   className={`relative flex min-h-[190px] min-w-0 flex-col overflow-hidden rounded-2xl border p-4 transition-all duration-200 sm:p-5 ${
                     connected
                       ? 'border-emerald-200 bg-emerald-50/40'
-                      : status.label ===
-                        'يوجد خطأ'
-                        ? 'border-red-200 bg-red-50/30'
-                        : 'border-sand-200 bg-white hover:border-sand-300 hover:shadow-sm'
+                      : status.label.includes(
+                            'إكمال الإعداد',
+                          )
+                        ? 'border-amber-200 bg-amber-50/40'
+                        : status.label ===
+                            'يوجد خطأ'
+                          ? 'border-red-200 bg-red-50/30'
+                          : 'border-sand-200 bg-white hover:border-sand-300 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex min-w-0 items-start justify-between gap-3">
@@ -1766,7 +2004,11 @@ function IntegrationsSection({
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[11px] font-black sm:h-11 sm:w-11 ${
                           connected
                             ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-sand-100 text-ink-900/60'
+                            : status.label.includes(
+                                  'إكمال الإعداد',
+                                )
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-sand-100 text-ink-900/60'
                         }`}
                       >
                         {item.provider
@@ -1787,7 +2029,13 @@ function IntegrationsSection({
 
                     <StatusBadge
                       label={status.label}
-                      tone={status.tone}
+                      tone={
+                        status.label.includes(
+                          'إكمال الإعداد',
+                        )
+                          ? 'warning'
+                          : status.tone
+                      }
                     />
                   </div>
 
@@ -1795,9 +2043,13 @@ function IntegrationsSection({
                     <div className="text-xs leading-5 text-ink-900/40">
                       {connected
                         ? 'الاتصال مفعل'
-                        : item.meta
-                          ? 'يتطلب اتصال Meta الرسمي'
-                          : 'إعداد التكامل من لوحة الإدارة'}
+                        : status.label.includes(
+                              'إكمال الإعداد',
+                            )
+                          ? 'الاتصال موجود ولكن إعداد Messaging لم يكتمل بعد'
+                          : item.meta
+                            ? 'يتطلب اتصال Meta الرسمي'
+                            : 'إعداد التكامل من لوحة الإدارة'}
                     </div>
 
                     {item.meta ? (
@@ -1810,7 +2062,8 @@ function IntegrationsSection({
                               : item.actionLabel
                           }
                           onClick={() =>
-                            connected && itemProvider
+                            connected &&
+                            itemProvider
                               ? onMetaSync(
                                   itemProvider,
                                 )
@@ -1829,7 +2082,8 @@ function IntegrationsSection({
                               : 'bg-ink-950 text-white hover:bg-ink-900'
                           }`}
                         >
-                          {(isConnecting || isSyncing) && (
+                          {(isConnecting ||
+                            isSyncing) && (
                             <span
                               className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
                                 connected
@@ -1848,30 +2102,33 @@ function IntegrationsSection({
                                 : item.actionLabel}
                         </button>
 
-                        {connected && itemProvider && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onMetaDisconnect(
-                                itemProvider,
-                              )
-                            }
-                            disabled={
-                              metaDisconnecting !== null ||
-                              metaConnecting !== null ||
-                              metaSyncing !== null
-                            }
-                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px]"
-                          >
-                            {isDisconnecting && (
-                              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-red-700/20 border-t-red-700" />
-                            )}
+                        {connected &&
+                          itemProvider && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onMetaDisconnect(
+                                  itemProvider,
+                                )
+                              }
+                              disabled={
+                                metaDisconnecting !==
+                                  null ||
+                                metaConnecting !==
+                                  null ||
+                                metaSyncing !== null
+                              }
+                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px]"
+                            >
+                              {isDisconnecting && (
+                                <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-red-700/20 border-t-red-700" />
+                              )}
 
-                            {isDisconnecting
-                              ? 'جاري إلغاء الاتصال...'
-                              : 'إلغاء الاتصال'}
-                          </button>
-                        )}
+                              {isDisconnecting
+                                ? 'جاري إلغاء الاتصال...'
+                                : 'إلغاء الاتصال'}
+                            </button>
+                          )}
                       </div>
                     ) : (
                       <button
@@ -1949,6 +2206,25 @@ function IntegrationsSection({
   )
 }
 
+function isIntegrationConnectedForCard(
+  integration: Integration | undefined,
+  status: {
+    label: string
+    tone: StatusTone
+  },
+) {
+  if (!integration) {
+    return false
+  }
+
+  return (
+    integration.connected === true ||
+    integration.status === 'connected' ||
+    integration.status === 'active' ||
+    status.label === 'متصل — يحتاج إكمال الإعداد'
+  )
+}
+
 function WhatsAppSection({
   integration,
   status,
@@ -1991,7 +2267,14 @@ function WhatsAppSection({
     metaDisconnecting === 'whatsapp'
 
   const connected =
-    status.label === 'متصل'
+    status.label === 'متصل' ||
+    status.label ===
+      'متصل — يحتاج إكمال الإعداد'
+
+  const messagingReady =
+    isWhatsAppMessagingReadyForSection(
+      integration,
+    )
 
   return (
     <section>
@@ -2022,9 +2305,11 @@ function WhatsAppSection({
 
         <div
           className={`rounded-2xl border p-4 sm:rounded-3xl sm:p-6 ${
-            connected
+            messagingReady
               ? 'border-emerald-200 bg-emerald-50/40'
-              : 'border-sand-200 bg-sand-50/50'
+              : connected
+                ? 'border-amber-200 bg-amber-50/40'
+                : 'border-sand-200 bg-sand-50/50'
           }`}
         >
           <div className="flex flex-col gap-5">
@@ -2046,10 +2331,33 @@ function WhatsAppSection({
             </div>
 
             <div className="flex flex-col gap-3 border-t border-sand-200/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <StatusBadge
-                label={status.label}
-                tone={status.tone}
-              />
+              <div className="flex flex-col items-start gap-2">
+                <StatusBadge
+                  label={status.label}
+                  tone={
+                    status.label ===
+                    'متصل — يحتاج إكمال الإعداد'
+                      ? 'warning'
+                      : status.tone
+                  }
+                />
+
+                {connected &&
+                  !messagingReady && (
+                    <span className="text-xs font-medium leading-5 text-amber-800/70">
+                      الاتصال مع Meta موجود، لكن
+                      إعداد WhatsApp Messaging لم يكتمل
+                      بعد. استخدم المزامنة لإعادة محاولة
+                      اكتشاف أصول WhatsApp.
+                    </span>
+                  )}
+
+                {messagingReady && (
+                  <span className="text-xs font-medium leading-5 text-emerald-700">
+                    WhatsApp جاهز لاستقبال وإرسال الرسائل.
+                  </span>
+                )}
+              </div>
 
               <div className="flex w-full flex-col gap-2 sm:w-auto">
                 <button
@@ -2075,7 +2383,8 @@ function WhatsAppSection({
                       : 'bg-ink-950 text-white hover:bg-ink-900'
                   }`}
                 >
-                  {(isConnecting || isSyncing) && (
+                  {(isConnecting ||
+                    isSyncing) && (
                     <span
                       className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
                         connected
@@ -2103,7 +2412,8 @@ function WhatsAppSection({
                       )
                     }
                     disabled={
-                      metaDisconnecting !== null ||
+                      metaDisconnecting !==
+                        null ||
                       metaConnecting !== null ||
                       metaSyncing !== null
                     }
@@ -2173,6 +2483,56 @@ function WhatsAppSection({
         </div>
       </div>
     </section>
+  )
+}
+
+function isWhatsAppMessagingReadyForSection(
+  integration?: Integration,
+) {
+  if (!integration) {
+    return false
+  }
+
+  const metadata = integration.metadata
+
+  const ready = getMetadataBoolean(
+    metadata,
+    [
+      'ready_for_messaging',
+      'whatsapp_ready',
+      'messaging_ready',
+    ],
+  )
+
+  const wabaId = getMetadataString(
+    metadata,
+    ['waba_id', 'wabaId'],
+  )
+
+  const phoneNumberId = getMetadataString(
+    metadata,
+    [
+      'phone_number_id',
+      'phoneNumberId',
+    ],
+  )
+
+  const webhookSubscribed =
+    getMetadataBoolean(
+      metadata,
+      [
+        'whatsapp_webhook_subscribed',
+        'webhook_subscribed',
+      ],
+    )
+
+  return (
+    ready ||
+    Boolean(
+      wabaId &&
+        phoneNumberId &&
+        webhookSubscribed,
+    )
   )
 }
 
