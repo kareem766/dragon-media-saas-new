@@ -199,6 +199,9 @@ export default function Settings() {
   const [metaSyncMessage, setMetaSyncMessage] =
     useState('')
 
+  const [metaDisconnecting, setMetaDisconnecting] =
+    useState<MetaProvider | null>(null)
+
   const updateOrg = (
     field: keyof OrgData,
     value: string,
@@ -724,6 +727,88 @@ export default function Settings() {
     }
   }
 
+  const disconnectMetaProvider = async (
+    provider: MetaProvider,
+  ) => {
+    if (!supabase) {
+      setMetaConnectionError(
+        'تعذر الاتصال بخدمة المصادقة.',
+      )
+      return
+    }
+
+    if (metaDisconnecting !== null) {
+      return
+    }
+
+    const providerNames: Record<
+      MetaProvider,
+      string
+    > = {
+      whatsapp: 'WhatsApp',
+      facebook: 'Facebook',
+      instagram: 'Instagram',
+    }
+
+    const confirmed = window.confirm(
+      `هل أنت متأكد من إلغاء اتصال ${providerNames[provider]}؟\n\nسيتم إيقاف الاتصال وحذف بيانات الاتصال الخاصة به من Dragon Media، ويمكنك إعادة الربط لاحقًا.`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setMetaDisconnecting(provider)
+    setMetaConnectionError('')
+    setMetaSyncMessage('')
+
+    try {
+      const {
+        data,
+        error: functionError,
+      } = await supabase.functions.invoke(
+        'meta-disconnect',
+        {
+          body: {
+            provider,
+          },
+        },
+      )
+
+      if (functionError) {
+        throw functionError
+      }
+
+      const disconnected =
+        data &&
+        typeof data === 'object' &&
+        (
+          data as Record<string, unknown>
+        ).disconnected === true
+
+      if (!disconnected) {
+        throw new Error(
+          'لم يتم تأكيد إلغاء اتصال Meta.',
+        )
+      }
+
+      await loadIntegrations()
+
+      setMetaSyncMessage(
+        `تم إلغاء اتصال ${providerNames[provider]} بنجاح. يمكنك إعادة الربط في أي وقت.`,
+      )
+    } catch (err: unknown) {
+      setMetaConnectionError(
+        getMetaErrorMessage(
+          err,
+          'تعذر إلغاء اتصال Meta. حاول مرة أخرى.',
+        ),
+      )
+    } finally {
+      setMetaDisconnecting(null)
+    }
+  }
+
   const validate = () => {
     if (!org.name.trim()) {
       return 'اسم الشركة مطلوب.'
@@ -1054,6 +1139,12 @@ export default function Settings() {
               onMetaSync={
                 syncMetaProvider
               }
+              onMetaDisconnect={
+                disconnectMetaProvider
+              }
+              metaDisconnecting={
+                metaDisconnecting
+              }
             />
           )}
 
@@ -1080,6 +1171,12 @@ export default function Settings() {
               }
               onMetaSync={
                 syncMetaProvider
+              }
+              onMetaDisconnect={
+                disconnectMetaProvider
+              }
+              metaDisconnecting={
+                metaDisconnecting
               }
             />
           )}
@@ -1504,6 +1601,8 @@ function IntegrationsSection({
   metaSyncing,
   metaSyncMessage,
   onMetaSync,
+  onMetaDisconnect,
+  metaDisconnecting,
 }: {
   integrations: Integration[]
   loading: boolean
@@ -1528,6 +1627,10 @@ function IntegrationsSection({
   onMetaSync: (
     provider: MetaProvider,
   ) => void
+  onMetaDisconnect: (
+    provider: MetaProvider,
+  ) => void
+  metaDisconnecting: MetaProvider | null
 }) {
   return (
     <section>
@@ -1641,6 +1744,10 @@ function IntegrationsSection({
                 itemProvider !== null &&
                 metaSyncing === itemProvider
 
+              const isDisconnecting =
+                itemProvider !== null &&
+                metaDisconnecting === itemProvider
+
               return (
                 <div
                   key={item.provider}
@@ -1713,7 +1820,8 @@ function IntegrationsSection({
                           }
                           disabled={
                             metaConnecting !== null ||
-                            metaSyncing !== null
+                            metaSyncing !== null ||
+                            metaDisconnecting !== null
                           }
                           className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px] ${
                             connected
@@ -1739,6 +1847,31 @@ function IntegrationsSection({
                                 ? 'مزامنة الأصول'
                                 : item.actionLabel}
                         </button>
+
+                        {connected && itemProvider && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onMetaDisconnect(
+                                itemProvider,
+                              )
+                            }
+                            disabled={
+                              metaDisconnecting !== null ||
+                              metaConnecting !== null ||
+                              metaSyncing !== null
+                            }
+                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px]"
+                          >
+                            {isDisconnecting && (
+                              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-red-700/20 border-t-red-700" />
+                            )}
+
+                            {isDisconnecting
+                              ? 'جاري إلغاء الاتصال...'
+                              : 'إلغاء الاتصال'}
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <button
@@ -1825,6 +1958,8 @@ function WhatsAppSection({
   metaSyncing,
   metaSyncMessage,
   onMetaSync,
+  onMetaDisconnect,
+  metaDisconnecting,
 }: {
   integration?: Integration
   status: {
@@ -1841,12 +1976,19 @@ function WhatsAppSection({
   onMetaSync: (
     provider: MetaProvider,
   ) => void
+  onMetaDisconnect: (
+    provider: MetaProvider,
+  ) => void
+  metaDisconnecting: MetaProvider | null
 }) {
   const isConnecting =
     metaConnecting === 'whatsapp'
 
   const isSyncing =
     metaSyncing === 'whatsapp'
+
+  const isDisconnecting =
+    metaDisconnecting === 'whatsapp'
 
   const connected =
     status.label === 'متصل'
@@ -1924,7 +2066,8 @@ function WhatsAppSection({
                   }
                   disabled={
                     metaConnecting !== null ||
-                    metaSyncing !== null
+                    metaSyncing !== null ||
+                    metaDisconnecting !== null
                   }
                   className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[160px] ${
                     connected
@@ -1950,6 +2093,31 @@ function WhatsAppSection({
                         ? 'مزامنة الأصول'
                         : 'ربط WhatsApp'}
                 </button>
+
+                {connected && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onMetaDisconnect(
+                        'whatsapp',
+                      )
+                    }
+                    disabled={
+                      metaDisconnecting !== null ||
+                      metaConnecting !== null ||
+                      metaSyncing !== null
+                    }
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[160px]"
+                  >
+                    {isDisconnecting && (
+                      <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-red-700/20 border-t-red-700" />
+                    )}
+
+                    {isDisconnecting
+                      ? 'جاري إلغاء الاتصال...'
+                      : 'إلغاء الاتصال'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
