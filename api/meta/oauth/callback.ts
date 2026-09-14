@@ -38,11 +38,17 @@ interface MetaPage {
   } | null
 }
 
-function getEnv(
-  name: string
-): string {
-  const value =
-    process.env[name]
+interface WhatsAppDiscoveryResult {
+  businessId: string | null
+  wabaId: string | null
+  phoneNumberId: string | null
+  displayPhoneNumber: string | null
+  verifiedName: string | null
+  webhookSubscribed: boolean
+}
+
+function getEnv(name: string): string {
+  const value = process.env[name]
 
   if (!value) {
     throw new Error(
@@ -74,9 +80,7 @@ function verifyState(
   const separator =
     state.lastIndexOf('.')
 
-  if (
-    separator <= 0
-  ) {
+  if (separator <= 0) {
     return null
   }
 
@@ -100,14 +104,10 @@ function verifyState(
       .digest('base64url')
 
   const providedBuffer =
-    Buffer.from(
-      signature
-    )
+    Buffer.from(signature)
 
   const expectedBuffer =
-    Buffer.from(
-      expected
-    )
+    Buffer.from(expected)
 
   if (
     providedBuffer.length !==
@@ -125,14 +125,10 @@ function verifyState(
       Buffer.from(
         payload,
         'base64url'
-      ).toString(
-        'utf8'
-      )
+      ).toString('utf8')
 
     const parsed =
-      JSON.parse(
-        decoded
-      )
+      JSON.parse(decoded)
 
     if (
       !parsed ||
@@ -153,8 +149,7 @@ function redirectToSettings(
   status:
     | 'connected'
     | 'error',
-  provider: MetaProvider =
-    'whatsapp'
+  provider: MetaProvider = 'whatsapp'
 ) {
   const redirectUri =
     process.env.META_REDIRECT_URI
@@ -210,6 +205,12 @@ async function graphRequest(
   }
 }
 
+/**
+ * Server-side POST request to Meta Graph API.
+ *
+ * Access tokens are intentionally passed only
+ * server-side and are never returned to the browser.
+ */
 async function graphPost(
   path: string,
   accessToken: string
@@ -241,8 +242,12 @@ async function graphPost(
 }
 
 /**
- * Discover Facebook Pages and
- * attached Instagram Business Accounts.
+ * Discover Facebook Pages and Instagram Business
+ * Accounts attached to those Pages.
+ *
+ * Page access tokens are used only during this
+ * server-side operation and are never persisted
+ * into integrations.metadata.
  */
 async function discoverMetaPages(
   accessToken: string
@@ -251,11 +256,10 @@ async function discoverMetaPages(
     const {
       response,
       data,
-    } =
-      await graphRequest(
-        '/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}',
-        accessToken
-      )
+    } = await graphRequest(
+      '/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name}',
+      accessToken
+    )
 
     if (
       !response.ok ||
@@ -286,9 +290,7 @@ async function discoverMetaPages(
           )
       )
       .map(
-        (
-          page: MetaPage
-        ) => ({
+        (page: MetaPage) => ({
           id:
             typeof page.id ===
             'string'
@@ -346,16 +348,10 @@ async function discoverMetaPages(
         })
       )
       .filter(
-        (
-          page: MetaPage
-        ) =>
-          Boolean(
-            page.id
-          )
+        (page: MetaPage) =>
+          Boolean(page.id)
       )
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.warn(
       'Meta Pages discovery error:',
       error
@@ -366,8 +362,11 @@ async function discoverMetaPages(
 }
 
 /**
- * Subscribe Facebook Page to
- * Messenger webhook events.
+ * Subscribe a Facebook Page to Messenger webhook
+ * events.
+ *
+ * This must use the Page Access Token returned
+ * from /me/accounts.
  */
 async function subscribeFacebookPage(
   pageId: string,
@@ -377,17 +376,14 @@ async function subscribeFacebookPage(
     const {
       response,
       data,
-    } =
-      await graphPost(
-        `/${encodeURIComponent(
-          pageId
-        )}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals`,
-        pageAccessToken
-      )
+    } = await graphPost(
+      `/${encodeURIComponent(
+        pageId
+      )}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals`,
+      pageAccessToken
+    )
 
-    if (
-      !response.ok
-    ) {
+    if (!response.ok) {
       console.warn(
         'Facebook Messenger webhook subscription failed:',
         {
@@ -403,9 +399,7 @@ async function subscribeFacebookPage(
     }
 
     return true
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.warn(
       'Facebook Messenger webhook subscription error:',
       {
@@ -419,8 +413,8 @@ async function subscribeFacebookPage(
 }
 
 /**
- * Subscribe Instagram Business Account
- * to Instagram Messaging webhooks.
+ * Subscribe an Instagram Business Account to
+ * Instagram Messaging webhook events.
  */
 async function subscribeInstagramAccount(
   instagramBusinessAccountId: string,
@@ -430,17 +424,14 @@ async function subscribeInstagramAccount(
     const {
       response,
       data,
-    } =
-      await graphPost(
-        `/${encodeURIComponent(
-          instagramBusinessAccountId
-        )}/subscribed_apps?subscribed_fields=messages`,
-        pageAccessToken
-      )
+    } = await graphPost(
+      `/${encodeURIComponent(
+        instagramBusinessAccountId
+      )}/subscribed_apps?subscribed_fields=messages`,
+      pageAccessToken
+    )
 
-    if (
-      !response.ok
-    ) {
+    if (!response.ok) {
       console.warn(
         'Instagram webhook subscription failed:',
         {
@@ -456,9 +447,7 @@ async function subscribeInstagramAccount(
     }
 
     return true
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.warn(
       'Instagram webhook subscription error:',
       {
@@ -472,8 +461,8 @@ async function subscribeInstagramAccount(
 }
 
 /**
- * Discover and subscribe Facebook /
- * Instagram messaging webhooks.
+ * Discover Pages and automatically subscribe
+ * Facebook Messenger + Instagram Messaging webhooks.
  */
 async function configureFacebookInstagramWebhooks(
   accessToken: string
@@ -516,11 +505,6 @@ async function configureFacebookInstagramWebhooks(
           page.id,
           page.access_token
         )
-    } else {
-      console.warn(
-        'Facebook Page access token was not returned:',
-        page.id
-      )
     }
 
     facebookPages.push({
@@ -552,11 +536,6 @@ async function configureFacebookInstagramWebhooks(
             instagram.id,
             page.access_token
           )
-      } else {
-        console.warn(
-          'Instagram subscription skipped because Page access token was not returned:',
-          instagram.id
-        )
       }
 
       instagramAccounts.push({
@@ -602,9 +581,7 @@ async function configureFacebookInstagramWebhooks(
 
     facebookWebhookSubscribed:
       facebookPages.some(
-        (
-          page
-        ) =>
+        (page) =>
           page.webhook_subscribed
       ),
 
@@ -622,28 +599,166 @@ async function configureFacebookInstagramWebhooks(
 
     instagramWebhookSubscribed:
       instagramAccounts.some(
-        (
-          account
-        ) =>
+        (account) =>
           account.webhook_subscribed
       ),
   }
 }
 
 /**
- * Discover WhatsApp data from Meta Embedded Signup.
+ * Extract WhatsApp Business Account IDs from
+ * Meta debug_token granular scopes.
  *
- * Priority:
- * 1. WABA ID from granular_scopes.
- * 2. WABA owner business.
- * 3. Phone Number ID.
- * 4. WABA webhook subscription.
- * 5. Fallback Business Manager discovery.
+ * Meta Embedded Signup may return WABA IDs
+ * inside granular_scopes even when /me/businesses
+ * does not expose the required information.
+ */
+function extractWhatsAppTargetIds(
+  granularScopes: unknown
+): string[] {
+  if (
+    !Array.isArray(
+      granularScopes
+    )
+  ) {
+    return []
+  }
+
+  const result =
+    new Set<string>()
+
+  for (
+    const scope of granularScopes
+  ) {
+    if (
+      !scope ||
+      typeof scope !==
+        'object'
+    ) {
+      continue
+    }
+
+    const current =
+      scope as {
+        scope?: unknown
+        target_ids?: unknown
+      }
+
+    const scopeName =
+      typeof current.scope ===
+      'string'
+        ? current.scope
+        : ''
+
+    const isWhatsAppScope =
+      scopeName ===
+        'whatsapp_business_management' ||
+      scopeName ===
+        'whatsapp_business_messaging' ||
+      scopeName.includes(
+        'whatsapp_business'
+      )
+
+    if (
+      !isWhatsAppScope ||
+      !Array.isArray(
+        current.target_ids
+      )
+    ) {
+      continue
+    }
+
+    for (
+      const targetId of
+        current.target_ids
+    ) {
+      if (
+        typeof targetId ===
+          'string' &&
+        targetId.trim()
+      ) {
+        result.add(
+          targetId.trim()
+        )
+      }
+    }
+  }
+
+  return Array.from(
+    result
+  )
+}
+
+/**
+ * Subscribe the WABA itself to the Meta App webhook.
+ *
+ * This is required for WhatsApp Cloud API webhook
+ * events to reach the application.
+ */
+async function subscribeWhatsAppBusinessAccount(
+  wabaId: string,
+  accessToken: string
+) {
+  try {
+    const {
+      response,
+      data,
+    } = await graphPost(
+      `/${encodeURIComponent(
+        wabaId
+      )}/subscribed_apps`,
+      accessToken
+    )
+
+    if (
+      !response.ok
+    ) {
+      console.warn(
+        'WhatsApp WABA webhook subscription failed:',
+        {
+          wabaId,
+          status:
+            response.status,
+          error:
+            data?.error,
+        }
+      )
+
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.warn(
+      'WhatsApp WABA webhook subscription error:',
+      {
+        wabaId,
+        error,
+      }
+    )
+
+    return false
+  }
+}
+
+/**
+ * Discover WhatsApp Business Account and
+ * phone information after Embedded Signup.
+ *
+ * Discovery order:
+ *
+ * 1. debug_token granular_scopes target IDs
+ * 2. /me/businesses
+ * 3. /business-id/owned_whatsapp_business_accounts
+ * 4. /business-id/client_whatsapp_business_accounts
+ * 5. /waba-id/phone_numbers
+ *
+ * Access tokens remain server-side.
  */
 async function discoverWhatsAppData(
   accessToken: string,
   metaUserId: string
-) {
+): Promise<WhatsAppDiscoveryResult> {
   let businessId:
     | string
     | null = null
@@ -667,11 +782,10 @@ async function discoverWhatsAppData(
   let webhookSubscribed =
     false
 
-  /**
-   * Step 1:
-   * Inspect Embedded Signup token.
-   *
-   * This is the critical part for Embedded Signup.
+  /*
+   * --------------------------------------------------
+   * 1. Validate token and inspect granular scopes.
+   * --------------------------------------------------
    */
   try {
     const appId =
@@ -710,395 +824,245 @@ async function discoverWhatsAppData(
       debugResponse.ok &&
       debugData?.data
     ) {
-      const tokenData =
-        debugData.data
-
       const granularScopes =
-        Array.isArray(
-          tokenData.granular_scopes
-        )
-          ? tokenData.granular_scopes
-          : []
+        debugData.data
+          .granular_scopes
 
-      /**
-       * Preferred:
-       * whatsapp_business_management target IDs.
+      const targetIds =
+        extractWhatsAppTargetIds(
+          granularScopes
+        )
+
+      /*
+       * Prefer a target ID belonging to
+       * whatsapp_business_management.
        */
-      const managementScope =
-        granularScopes.find(
-          (
-            scope: unknown
-          ) =>
-            scope &&
-            typeof scope ===
-              'object' &&
-            (
-              scope as {
-                scope?: string
-              }
-            ).scope ===
-              'whatsapp_business_management'
-        )
-
-      const managementTargetIds =
-        managementScope &&
-        typeof managementScope ===
-          'object' &&
+      if (
         Array.isArray(
-          (
-            managementScope as {
+          granularScopes
+        )
+      ) {
+        for (
+          const scope of
+            granularScopes
+        ) {
+          if (
+            !scope ||
+            typeof scope !==
+              'object'
+          ) {
+            continue
+          }
+
+          const current =
+            scope as {
+              scope?: unknown
               target_ids?: unknown
             }
-          ).target_ids
-        )
-          ? (
-              managementScope as {
-                target_ids: unknown[]
-              }
-            ).target_ids
-              .filter(
-                (
-                  id
-                ): id is
-                  | string
-                  | number =>
-                  typeof id ===
-                    'string' ||
-                  typeof id ===
-                    'number'
-              )
-              .map(
-                String
-              )
-          )
-          : []
 
-      if (
-        managementTargetIds.length >
-        0
-      ) {
-        wabaId =
-          managementTargetIds[0]
+          if (
+            current.scope ===
+              'whatsapp_business_management' &&
+            Array.isArray(
+              current.target_ids
+            )
+          ) {
+            const target =
+              current.target_ids.find(
+                (
+                  value: unknown
+                ) =>
+                  typeof value ===
+                    'string' &&
+                  value.trim()
+              )
+
+            if (
+              typeof target ===
+                'string'
+            ) {
+              wabaId =
+                target.trim()
+
+              break
+            }
+          }
+        }
       }
 
-      /**
-       * Fallback:
-       * Some Meta configurations may associate
-       * WABA targets with messaging permission.
+      /*
+       * Fallback to any WhatsApp target ID.
        */
       if (
-        !wabaId
+        !wabaId &&
+        targetIds.length > 0
       ) {
-        const messagingScope =
-          granularScopes.find(
-            (
-              scope: unknown
-            ) =>
-              scope &&
-              typeof scope ===
-                'object' &&
-              (
-                scope as {
-                  scope?: string
-                }
-              ).scope ===
-                'whatsapp_business_messaging'
-          )
-
-        const messagingTargetIds =
-          messagingScope &&
-          typeof messagingScope ===
-            'object' &&
-          Array.isArray(
-            (
-              messagingScope as {
-                target_ids?: unknown
-              }
-            ).target_ids
-          )
-            ? (
-                messagingScope as {
-                  target_ids: unknown[]
-                }
-              ).target_ids
-                .filter(
-                  (
-                    id
-                  ): id is
-                    | string
-                    | number =>
-                    typeof id ===
-                      'string' ||
-                    typeof id ===
-                      'number'
-                )
-                .map(
-                  String
-                )
-            )
-            : []
-
-        if (
-          messagingTargetIds.length >
-          0
-        ) {
-          wabaId =
-            messagingTargetIds[0]
-        }
+        wabaId =
+          targetIds[0]
       }
 
-      console.log(
-        'WhatsApp Embedded Signup token inspected:',
+      console.info(
+        'WhatsApp Meta token inspected:',
         {
           is_valid:
-            tokenData.is_valid,
-
-          meta_user_id:
-            tokenData.user_id,
-
-          scopes:
+            debugData.data
+              ?.is_valid,
+          app_id:
+            debugData.data
+              ?.app_id,
+          has_whatsapp_management:
             Array.isArray(
-              tokenData.scopes
+              granularScopes
             )
-              ? tokenData.scopes
-              : [],
-
-          has_whatsapp_business_management:
-            granularScopes.some(
-              (
-                scope: unknown
-              ) =>
-                scope &&
-                typeof scope ===
-                  'object' &&
-                (
-                  scope as {
-                    scope?: string
-                  }
-                ).scope ===
-                  'whatsapp_business_management'
+              ? granularScopes.some(
+                  (
+                    scope: any
+                  ) =>
+                    scope?.scope ===
+                    'whatsapp_business_management'
+                )
+              : false,
+          whatsapp_target_count:
+            targetIds.length,
+          has_waba_id:
+            Boolean(
+              wabaId
             ),
-
-          whatsapp_waba_target_count:
-            managementTargetIds.length,
-        }
-      )
-    } else {
-      console.warn(
-        'WhatsApp debug_token failed:',
-        {
-          status:
-            debugResponse.status,
-
-          error:
-            debugData?.error,
         }
       )
     }
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.warn(
-      'WhatsApp Embedded Signup token inspection failed:',
+      'WhatsApp token inspection failed:',
       error
     )
   }
 
-  /**
-   * Step 2:
-   * Resolve WABA owner business and
-   * normalize WABA ID.
+  /*
+   * --------------------------------------------------
+   * 2. Discover business accounts from /me/businesses.
+   * --------------------------------------------------
    */
-  if (
-    wabaId
-  ) {
-    try {
-      const {
-        response,
-        data,
-      } =
-        await graphRequest(
-          `/${encodeURIComponent(
-            wabaId
-          )}?fields=id,name,owner_business_info`,
-          accessToken
-        )
+  try {
+    const {
+      response,
+      data,
+    } = await graphRequest(
+      `/${encodeURIComponent(
+        metaUserId
+      )}/businesses?fields=id,name`,
+      accessToken
+    )
 
-      if (
-        response.ok
-      ) {
-        if (
-          data?.id
-        ) {
-          wabaId =
-            String(
-              data.id
-            )
-        }
-
-        const ownerBusinessId =
-          data?.owner_business_info?.id
-
-        if (
-          ownerBusinessId
-        ) {
-          businessId =
-            String(
-              ownerBusinessId
-            )
-        }
-      } else {
-        console.warn(
-          'WhatsApp WABA lookup failed:',
-          {
-            wabaId,
-
-            status:
-              response.status,
-
-            error:
-              data?.error,
-          }
-        )
-      }
-    } catch (
-      error
+    if (
+      response.ok &&
+      Array.isArray(
+        data?.data
+      ) &&
+      data.data.length > 0
     ) {
-      console.warn(
-        'WhatsApp WABA lookup error:',
-        error
-      )
+      businessId =
+        data.data[0]?.id
+          ? String(
+              data.data[0].id
+            )
+          : null
     }
+  } catch (error) {
+    console.warn(
+      'WhatsApp business discovery failed:',
+      error
+    )
   }
 
-  /**
-   * Step 3:
-   * Fallback to Business Manager only
-   * if Embedded Signup didn't provide WABA.
+  /*
+   * --------------------------------------------------
+   * 3. Discover WABA from owned accounts.
+   * --------------------------------------------------
    */
   if (
+    businessId &&
     !wabaId
   ) {
     try {
       const {
         response,
         data,
-      } =
-        await graphRequest(
-          `/${encodeURIComponent(
-            metaUserId
-          )}/businesses?fields=id,name`,
-          accessToken
-        )
+      } = await graphRequest(
+        `/${encodeURIComponent(
+          businessId
+        )}/owned_whatsapp_business_accounts?fields=id,name`,
+        accessToken
+      )
 
       if (
         response.ok &&
         Array.isArray(
           data?.data
         ) &&
-        data.data.length >
-          0
+        data.data.length > 0
       ) {
-        businessId =
-          String(
-            data.data[0].id
-          )
+        wabaId =
+          data.data[0]?.id
+            ? String(
+                data.data[0].id
+              )
+            : null
       }
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.warn(
-        'WhatsApp business discovery failed:',
+        'WhatsApp owned WABA discovery failed:',
         error
       )
     }
+  }
 
-    if (
-      businessId
-    ) {
-      /**
-       * Owned WABAs.
-       */
-      try {
-        const {
-          response,
-          data,
-        } =
-          await graphRequest(
-            `/${encodeURIComponent(
-              businessId
-            )}/owned_whatsapp_business_accounts?fields=id,name`,
-            accessToken
-          )
+  /*
+   * --------------------------------------------------
+   * 4. Fallback: client WABA accounts.
+   * --------------------------------------------------
+   */
+  if (
+    businessId &&
+    !wabaId
+  ) {
+    try {
+      const {
+        response,
+        data,
+      } = await graphRequest(
+        `/${encodeURIComponent(
+          businessId
+        )}/client_whatsapp_business_accounts?fields=id,name`,
+        accessToken
+      )
 
-        if (
-          response.ok &&
-          Array.isArray(
-            data?.data
-          ) &&
-          data.data.length >
-            0
-        ) {
-          wabaId =
-            String(
-              data.data[0].id
-            )
-        }
-      } catch (
-        error
-      ) {
-        console.warn(
-          'WhatsApp owned WABA discovery failed:',
-          error
-        )
-      }
-
-      /**
-       * Shared/client WABAs.
-       */
       if (
-        !wabaId
+        response.ok &&
+        Array.isArray(
+          data?.data
+        ) &&
+        data.data.length > 0
       ) {
-        try {
-          const {
-            response,
-            data,
-          } =
-            await graphRequest(
-              `/${encodeURIComponent(
-                businessId
-              )}/client_whatsapp_business_accounts?fields=id,name`,
-              accessToken
-            )
-
-          if (
-            response.ok &&
-            Array.isArray(
-              data?.data
-            ) &&
-            data.data.length >
-              0
-          ) {
-            wabaId =
-              String(
+        wabaId =
+          data.data[0]?.id
+            ? String(
                 data.data[0].id
               )
-          }
-        } catch (
-          error
-        ) {
-          console.warn(
-            'WhatsApp shared WABA discovery failed:',
-            error
-          )
-        }
+            : null
       }
+    } catch (error) {
+      console.warn(
+        'WhatsApp client WABA discovery failed:',
+        error
+      )
     }
   }
 
-  /**
-   * Step 4:
-   * Discover phone number.
+  /*
+   * --------------------------------------------------
+   * 5. Inspect WABA itself.
+   * --------------------------------------------------
    */
   if (
     wabaId
@@ -1107,21 +1071,63 @@ async function discoverWhatsAppData(
       const {
         response,
         data,
-      } =
-        await graphRequest(
-          `/${encodeURIComponent(
-            wabaId
-          )}/phone_numbers?fields=id,display_phone_number,verified_name`,
-          accessToken
-        )
+      } = await graphRequest(
+        `/${encodeURIComponent(
+          wabaId
+        )}?fields=id,name,owner_business_info`,
+        accessToken
+      )
+
+      if (
+        response.ok &&
+        data
+      ) {
+        if (
+          !businessId &&
+          data.owner_business_info
+            ?.id
+        ) {
+          businessId =
+            String(
+              data
+                .owner_business_info
+                .id
+            )
+        }
+      }
+    } catch (error) {
+      console.warn(
+        'WhatsApp WABA details lookup failed:',
+        error
+      )
+    }
+  }
+
+  /*
+   * --------------------------------------------------
+   * 6. Discover phone number.
+   * --------------------------------------------------
+   */
+  if (
+    wabaId
+  ) {
+    try {
+      const {
+        response,
+        data,
+      } = await graphRequest(
+        `/${encodeURIComponent(
+          wabaId
+        )}/phone_numbers?fields=id,display_phone_number,verified_name`,
+        accessToken
+      )
 
       if (
         response.ok &&
         Array.isArray(
           data?.data
         ) &&
-        data.data.length >
-          0
+        data.data.length > 0
       ) {
         const phone =
           data.data[0]
@@ -1144,115 +1150,36 @@ async function discoverWhatsAppData(
           'string'
             ? phone.verified_name
             : null
-      } else {
-        console.warn(
-          'WhatsApp phone number discovery failed:',
-          {
-            wabaId,
-
-            status:
-              response.status,
-
-            error:
-              data?.error,
-          }
-        )
       }
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.warn(
-        'WhatsApp phone number discovery error:',
+        'WhatsApp phone discovery failed:',
         error
       )
     }
   }
 
-  /**
-   * Step 5:
-   * Subscribe WABA to WhatsApp webhook.
+  /*
+   * --------------------------------------------------
+   * 7. Subscribe WABA webhook.
+   * --------------------------------------------------
    */
   if (
-    wabaId &&
-    phoneNumberId
+    wabaId
   ) {
-    try {
-      const {
-        response,
-        data,
-      } =
-        await graphPost(
-          `/${encodeURIComponent(
-            wabaId
-          )}/subscribed_apps`,
-          accessToken
-        )
-
-      if (
-        response.ok
-      ) {
-        webhookSubscribed =
-          true
-      } else {
-        console.warn(
-          'WhatsApp WABA webhook subscription failed:',
-          {
-            wabaId,
-
-            status:
-              response.status,
-
-            error:
-              data?.error,
-          }
-        )
-      }
-    } catch (
-      error
-    ) {
-      console.warn(
-        'WhatsApp WABA webhook subscription error:',
-        error
+    webhookSubscribed =
+      await subscribeWhatsAppBusinessAccount(
+        wabaId,
+        accessToken
       )
-    }
   }
-
-  console.log(
-    'WhatsApp Embedded Signup discovery result:',
-    {
-      metaUserId,
-
-      businessId,
-
-      wabaId,
-
-      phoneNumberId,
-
-      displayPhoneNumber,
-
-      verifiedName,
-
-      webhookSubscribed,
-
-      readyForMessaging:
-        Boolean(
-          wabaId &&
-          phoneNumberId
-        ),
-    }
-  )
 
   return {
     businessId,
-
     wabaId,
-
     phoneNumberId,
-
     displayPhoneNumber,
-
     verifiedName,
-
     webhookSubscribed,
   }
 }
@@ -1306,6 +1233,10 @@ export default async function handler(
         ? req.query.error_description
         : null
 
+    /*
+     * Provider is trusted only from
+     * the signed state.
+     */
     let preliminaryState:
       | MetaState
       | null = null
@@ -1339,9 +1270,7 @@ export default async function handler(
         {
           error:
             metaError,
-
           errorDescription,
-
           provider,
         }
       )
@@ -1453,9 +1382,9 @@ export default async function handler(
         'SUPABASE_SECRET_KEY'
       )
 
-    /**
+    /*
      * Exchange authorization code
-     * server-side.
+     * for Meta access token server-side.
      */
     const tokenParams =
       new URLSearchParams({
@@ -1490,7 +1419,6 @@ export default async function handler(
         {
           status:
             tokenResponse.status,
-
           error:
             tokenData?.error,
         }
@@ -1518,9 +1446,6 @@ export default async function handler(
         tokenData.access_token
       )
 
-    /**
-     * Token expiration.
-     */
     const expiresIn =
       Number(
         tokenData.expires_in
@@ -1553,21 +1478,18 @@ export default async function handler(
         }
       )
 
-    /**
+    /*
      * Validate organization.
      */
     const {
       data: organization,
-      error:
-        organizationError,
+      error: organizationError,
     } =
       await admin
         .from(
           'organizations'
         )
-        .select(
-          'id'
-        )
+        .select('id')
         .eq(
           'id',
           stateData.organization_id
@@ -1590,18 +1512,15 @@ export default async function handler(
         )
     }
 
-    /**
+    /*
      * Validate user membership.
      */
     const {
       data: membership,
-      error:
-        membershipError,
+      error: membershipError,
     } =
       await admin
-        .from(
-          'users'
-        )
+        .from('users')
         .select(
           'organization_id'
         )
@@ -1631,13 +1550,12 @@ export default async function handler(
         )
     }
 
-    /**
-     * Validate Meta identity.
+    /*
+     * Validate Meta access token.
      */
     const {
       response:
         meResponse,
-
       data:
         meData,
     } =
@@ -1655,7 +1573,6 @@ export default async function handler(
         {
           status:
             meResponse.status,
-
           error:
             meData?.error,
         }
@@ -1753,8 +1670,8 @@ export default async function handler(
         webhook_subscribed: boolean
       }> = []
 
-    /**
-     * WhatsApp.
+    /*
+     * WhatsApp discovery.
      */
     if (
       provider ===
@@ -1785,8 +1702,9 @@ export default async function handler(
         whatsappData.webhookSubscribed
     }
 
-    /**
-     * Facebook / Instagram.
+    /*
+     * Facebook / Instagram discovery
+     * and webhook subscription.
      */
     if (
       provider ===
@@ -1830,8 +1748,8 @@ export default async function handler(
     const now =
       new Date().toISOString()
 
-    /**
-     * Existing connection.
+    /*
+     * Find existing secure Meta connection.
      */
     const {
       data:
@@ -1893,12 +1811,6 @@ export default async function handler(
 
             whatsapp_webhook_subscribed:
               whatsappWebhookSubscribed,
-
-            ready_for_messaging:
-              Boolean(
-                wabaId &&
-                phoneNumberId
-              ),
           }
         : {}),
 
@@ -1916,12 +1828,6 @@ export default async function handler(
 
             facebook_pages:
               facebookPagesMetadata,
-
-            ready_for_messaging:
-              Boolean(
-                facebookPageId &&
-                facebookWebhookSubscribed
-              ),
           }
         : {}),
 
@@ -1942,8 +1848,394 @@ export default async function handler(
 
             instagram_accounts:
               instagramAccountsMetadata,
+          }
+        : {}),
+
+      ready_for_messaging:
+        provider ===
+          'whatsapp'
+          ? Boolean(
+              wabaId &&
+                phoneNumberId &&
+                whatsappWebhookSubscribed
+            )
+          : provider ===
+              'facebook'
+            ? Boolean(
+                facebookPageId &&
+                  facebookWebhookSubscribed
+              )
+            : Boolean(
+                instagramBusinessAccountId &&
+                  instagramWebhookSubscribed
+              ),
+    }
+
+    /*
+     * Sensitive credentials stay ONLY in
+     * meta_connections.
+     */
+    const connectionPayload = {
+      organization_id:
+        stateData.organization_id,
+
+      provider,
+
+      access_token:
+        accessToken,
+
+      token_expires_at:
+        tokenExpiresAt,
+
+      meta_user_id:
+        metaUserId,
+
+      business_id:
+        businessId,
+
+      waba_id:
+        wabaId,
+
+      phone_number_id:
+        phoneNumberId,
+
+      display_phone_number:
+        displayPhoneNumber,
+
+      verified_name:
+        verifiedName,
+
+      status:
+        'connected',
+
+      metadata:
+        connectionMetadata,
+
+      updated_at:
+        now,
+    }
+
+    let connectionResult
+
+    if (
+      existingConnection?.id
+    ) {
+      connectionResult =
+        await admin
+          .from(
+            'meta_connections'
+          )
+          .update(
+            connectionPayload
+          )
+          .eq(
+            'id',
+            existingConnection.id
+          )
+    } else {
+      connectionResult =
+        await admin
+          .from(
+            'meta_connections'
+          )
+          .insert(
+            connectionPayload
+          )
+    }
+
+    if (
+      connectionResult.error
+    ) {
+      console.error(
+        'Meta credential persistence failed:',
+        connectionResult.error
+      )
+
+      return res
+        .status(500)
+        .send(
+          'تم التحقق من Meta لكن تعذر حفظ بيانات الاتصال الآمنة.'
+        )
+    }
+
+    /*
+     * integrations table must never
+     * contain access_token.
+     */
+    const {
+      data:
+        existingIntegration,
+      error:
+        existingIntegrationError,
+    } =
+      await admin
+        .from(
+          'integrations'
+        )
+        .select(
+          'id, metadata, connected_at'
+        )
+        .eq(
+          'organization_id',
+          stateData.organization_id
+        )
+        .eq(
+          'provider',
+          provider
+        )
+        .maybeSingle()
+
+    if (
+      existingIntegrationError
+    ) {
+      console.error(
+        'Meta OAuth integration lookup failed:',
+        existingIntegrationError
+      )
+
+      return res
+        .status(500)
+        .send(
+          'تم حفظ الاتصال الآمن لكن تعذر تحديث حالة التكامل.'
+        )
+    }
+
+    const existingIntegrationMetadata =
+      existingIntegration?.metadata &&
+      typeof existingIntegration.metadata ===
+        'object'
+        ? existingIntegration.metadata
+        : {}
+
+    const integrationMetadata = {
+      ...existingIntegrationMetadata,
+
+      meta_user_id:
+        metaUserId,
+
+      meta_user_name:
+        metaUserName,
+
+      connection_type:
+        'meta_login_business',
+
+      last_oauth_verified_at:
+        now,
+
+      ...(provider ===
+      'whatsapp'
+        ? {
+            business_id:
+              businessId,
+
+            waba_id:
+              wabaId,
+
+            phone_number_id:
+              phoneNumberId,
+
+            display_phone_number:
+              displayPhoneNumber,
+
+            verified_name:
+              verifiedName,
+
+            whatsapp_webhook_subscribed:
+              whatsappWebhookSubscribed,
+
+            ready_for_messaging:
+              Boolean(
+                wabaId &&
+                  phoneNumberId &&
+                  whatsappWebhookSubscribed
+              ),
+          }
+        : {}),
+
+      ...(provider ===
+      'facebook'
+        ? {
+            facebook_page_id:
+              facebookPageId,
+
+            facebook_page_name:
+              facebookPageName,
+
+            facebook_webhook_subscribed:
+              facebookWebhookSubscribed,
+
+            ready_for_messaging:
+              Boolean(
+                facebookPageId &&
+                  facebookWebhookSubscribed
+              ),
+          }
+        : {}),
+
+      ...(provider ===
+      'instagram'
+        ? {
+            instagram_business_account_id:
+              instagramBusinessAccountId,
+
+            instagram_username:
+              instagramUsername,
+
+            instagram_name:
+              instagramName,
+
+            instagram_webhook_subscribed:
+              instagramWebhookSubscribed,
 
             ready_for_messaging:
               Boolean(
                 instagramBusinessAccountId &&
-                instagramWebhookSubscribed
+                  instagramWebhookSubscribed
+              ),
+          }
+        : {}),
+    }
+
+    const integrationPayload = {
+      organization_id:
+        stateData.organization_id,
+
+      provider,
+
+      connected: true,
+
+      status:
+        'connected',
+
+      metadata:
+        integrationMetadata,
+
+      connected_at:
+        existingIntegration?.connected_at ||
+        now,
+
+      last_verified_at:
+        now,
+
+      error_message:
+        null,
+
+      updated_at:
+        now,
+    }
+
+    let integrationResult
+
+    if (
+      existingIntegration?.id
+    ) {
+      integrationResult =
+        await admin
+          .from(
+            'integrations'
+          )
+          .update(
+            integrationPayload
+          )
+          .eq(
+            'id',
+            existingIntegration.id
+          )
+    } else {
+      integrationResult =
+        await admin
+          .from(
+            'integrations'
+          )
+          .insert(
+            integrationPayload
+          )
+    }
+
+    if (
+      integrationResult.error
+    ) {
+      console.error(
+        'Meta OAuth integration persistence failed:',
+        integrationResult.error
+      )
+
+      return res
+        .status(500)
+        .send(
+          'تم حفظ اتصال Meta لكن تعذر تحديث حالة التكامل.'
+        )
+    }
+
+    /*
+     * Never return the access token.
+     */
+    if (
+      redirectToSettings(
+        res,
+        'connected',
+        provider
+      )
+    ) {
+      return
+    }
+
+    return res
+      .status(200)
+      .send(`
+        <!doctype html>
+        <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="utf-8" />
+            <meta
+              name="viewport"
+              content="width=device-width, initial-scale=1"
+            />
+            <title>تم الاتصال</title>
+          </head>
+
+          <body>
+            <main
+              style="
+                max-width:520px;
+                margin:80px auto;
+                padding:32px;
+                font-family:Arial,sans-serif;
+                text-align:center
+              "
+            >
+              <h1>
+                تم ربط Meta بنجاح
+              </h1>
+
+              <p>
+                يمكنك العودة إلى Dragon Media
+                لمراجعة حالة التكامل.
+              </p>
+            </main>
+          </body>
+        </html>
+      `)
+  } catch (error) {
+    console.error(
+      'Meta OAuth callback error:',
+      error
+    )
+
+    if (
+      redirectToSettings(
+        res,
+        'error',
+        provider
+      )
+    ) {
+      return
+    }
+
+    return res
+      .status(500)
+      .send(
+        'حدث خطأ أثناء إكمال اتصال Meta.'
+      )
+  }
+}
