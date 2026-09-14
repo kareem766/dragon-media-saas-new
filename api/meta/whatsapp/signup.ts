@@ -27,13 +27,20 @@ export default function handler(
   )
 
   if (req.method !== 'GET') {
-    return res.status(405).send('Method not allowed')
+    return res
+      .status(405)
+      .send('Method not allowed')
   }
 
   const configId =
     process.env.META_WHATSAPP_EMBEDDED_CONFIG_ID
 
-  const appId = process.env.META_APP_ID
+  const appId =
+    process.env.META_APP_ID
+
+  const graphVersion =
+    process.env.META_GRAPH_API_VERSION ||
+    'v23.0'
 
   const state =
     typeof req.query.state === 'string'
@@ -52,6 +59,9 @@ export default function handler(
   const safeAppId =
     escapeHtml(appId)
 
+  const safeGraphVersion =
+    escapeHtml(graphVersion)
+
   const safeState =
     escapeHtml(state)
 
@@ -59,11 +69,15 @@ export default function handler(
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
+
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1"
   />
-  <title>ربط WhatsApp Business — Dragon Media</title>
+
+  <title>
+    ربط WhatsApp Business — Dragon Media
+  </title>
 
   <style>
     * {
@@ -73,9 +87,11 @@ export default function handler(
     body {
       margin: 0;
       min-height: 100vh;
+
       display: flex;
       align-items: center;
       justify-content: center;
+
       background:
         radial-gradient(
           circle at top,
@@ -83,21 +99,32 @@ export default function handler(
           #020617 55%,
           #000 100%
         );
+
       color: #fff;
+
       font-family:
         Arial,
         Tahoma,
         sans-serif;
+
       padding: 24px;
     }
 
     .card {
       width: min(520px, 100%);
-      background: rgba(15, 23, 42, 0.94);
-      border: 1px solid rgba(255,255,255,.1);
+
+      background:
+        rgba(15, 23, 42, 0.94);
+
+      border:
+        1px solid rgba(255,255,255,.1);
+
       border-radius: 24px;
+
       padding: 36px;
+
       text-align: center;
+
       box-shadow:
         0 25px 80px rgba(0,0,0,.45);
     }
@@ -105,36 +132,56 @@ export default function handler(
     .logo {
       width: 64px;
       height: 64px;
-      margin: 0 auto 20px;
+
+      margin:
+        0 auto 20px;
+
       border-radius: 18px;
+
       display: flex;
       align-items: center;
       justify-content: center;
+
       background: #2563eb;
+
       font-weight: 800;
       font-size: 24px;
     }
 
     h1 {
-      margin: 0 0 12px;
+      margin:
+        0 0 12px;
+
       font-size: 25px;
     }
 
     p {
       color: #cbd5e1;
+
       line-height: 1.8;
-      margin: 0 0 24px;
+
+      margin:
+        0 0 24px;
     }
 
     button {
       width: 100%;
+
       border: 0;
+
       border-radius: 14px;
-      padding: 15px 20px;
+
+      padding:
+        15px 20px;
+
       background: #2563eb;
+
       color: #fff;
+
       font-size: 16px;
+
       font-weight: 700;
+
       cursor: pointer;
     }
 
@@ -145,9 +192,13 @@ export default function handler(
 
     .status {
       margin-top: 18px;
+
       color: #94a3b8;
+
       font-size: 14px;
+
       line-height: 1.7;
+
       white-space: pre-wrap;
     }
 
@@ -163,9 +214,14 @@ export default function handler(
 
 <body>
   <main class="card">
-    <div class="logo">DM</div>
 
-    <h1>ربط WhatsApp Business</h1>
+    <div class="logo">
+      DM
+    </div>
+
+    <h1>
+      ربط WhatsApp Business
+    </h1>
 
     <p>
       سيتم فتح إعداد WhatsApp Business الرسمي من Meta.
@@ -183,12 +239,21 @@ export default function handler(
     >
       جاري تجهيز الاتصال...
     </div>
+
   </main>
 
   <script>
-    const CONFIG_ID = ${JSON.stringify(safeConfigId)};
-    const APP_ID = ${JSON.stringify(safeAppId)};
-    const STATE = ${JSON.stringify(safeState)};
+    const CONFIG_ID =
+      ${JSON.stringify(safeConfigId)};
+
+    const APP_ID =
+      ${JSON.stringify(safeAppId)};
+
+    const GRAPH_VERSION =
+      ${JSON.stringify(safeGraphVersion)};
+
+    const STATE =
+      ${JSON.stringify(safeState)};
 
     const statusEl =
       document.getElementById('status');
@@ -198,13 +263,22 @@ export default function handler(
 
     let completed = false;
 
+    let signupData = {
+      waba_id: null,
+      phone_number_id: null,
+      business_id: null,
+    };
+
     function setStatus(
       message,
       className = '',
     ) {
-      statusEl.textContent = message;
-      statusEl.className =
-        'status ' + className;
+      if (statusEl) {
+        statusEl.textContent = message;
+
+        statusEl.className =
+          'status ' + className;
+      }
     }
 
     async function completeSignup(
@@ -214,9 +288,32 @@ export default function handler(
         return;
       }
 
+      if (
+        !payload ||
+        typeof payload !== 'object'
+      ) {
+        return;
+      }
+
+      const code =
+        typeof payload.code === 'string'
+          ? payload.code
+          : '';
+
+      if (!code) {
+        setStatus(
+          'لم يتم استلام رمز التحقق من Meta.',
+          'error',
+        );
+
+        return;
+      }
+
       completed = true;
 
-      button.disabled = true;
+      if (button) {
+        button.disabled = true;
+      }
 
       setStatus(
         'جاري إكمال إعداد WhatsApp والتحقق من الحساب...',
@@ -228,24 +325,54 @@ export default function handler(
             '/api/meta/whatsapp/complete',
             {
               method: 'POST',
+
               headers: {
                 'Content-Type':
                   'application/json',
               },
-              credentials: 'same-origin',
-              body: JSON.stringify({
-                state: STATE,
-                ...payload,
-              }),
+
+              credentials:
+                'same-origin',
+
+              body:
+                JSON.stringify({
+                  state: STATE,
+
+                  code,
+
+                  waba_id:
+                    payload.waba_id ||
+                    signupData.waba_id ||
+                    null,
+
+                  phone_number_id:
+                    payload.phone_number_id ||
+                    signupData.phone_number_id ||
+                    null,
+
+                  business_id:
+                    payload.business_id ||
+                    signupData.business_id ||
+                    null,
+
+                  event:
+                    payload.event ||
+                    null,
+                }),
             },
           );
 
         const data =
           await response
             .json()
-            .catch(() => ({}));
+            .catch(
+              () => ({}),
+            );
 
-        if (!response.ok || !data.success) {
+        if (
+          !response.ok ||
+          !data.success
+        ) {
           throw new Error(
             data.error ||
             'تعذر إكمال ربط WhatsApp.',
@@ -258,17 +385,26 @@ export default function handler(
         );
 
         const redirect =
-          data.redirect_url ||
-          '/#/settings';
+          typeof data.redirect_url ===
+            'string' &&
+          data.redirect_url.trim()
+            ? data.redirect_url
+            : '/#/settings';
 
-        window.setTimeout(() => {
-          window.location.assign(
-            redirect,
-          );
-        }, 800);
+        window.setTimeout(
+          () => {
+            window.location.assign(
+              redirect,
+            );
+          },
+          800,
+        );
       } catch (error) {
         completed = false;
-        button.disabled = false;
+
+        if (button) {
+          button.disabled = false;
+        }
 
         setStatus(
           error instanceof Error
@@ -289,13 +425,17 @@ export default function handler(
           return;
         }
 
-        let data = event.data;
+        let data =
+          event.data;
 
         if (
           typeof data === 'string'
         ) {
           try {
-            data = JSON.parse(data);
+            data =
+              JSON.parse(
+                data,
+              );
           } catch {
             return;
           }
@@ -303,7 +443,8 @@ export default function handler(
 
         if (
           !data ||
-          typeof data !== 'object'
+          typeof data !==
+            'object'
         ) {
           return;
         }
@@ -317,9 +458,40 @@ export default function handler(
 
         const eventData =
           data.data &&
-          typeof data.data === 'object'
+          typeof data.data ===
+            'object'
             ? data.data
             : {};
+
+        const wabaId =
+          eventData.waba_id ||
+          eventData.wabaId ||
+          null;
+
+        const phoneNumberId =
+          eventData.phone_number_id ||
+          eventData.phoneNumberId ||
+          null;
+
+        const businessId =
+          eventData.business_id ||
+          eventData.businessId ||
+          null;
+
+        if (wabaId) {
+          signupData.waba_id =
+            String(wabaId);
+        }
+
+        if (phoneNumberId) {
+          signupData.phone_number_id =
+            String(phoneNumberId);
+        }
+
+        if (businessId) {
+          signupData.business_id =
+            String(businessId);
+        }
 
         if (
           data.event ===
@@ -329,40 +501,47 @@ export default function handler(
           data.event ===
             'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'
         ) {
-          void completeSignup({
-            code:
-              eventData.code ||
-              data.code ||
-              null,
+          const code =
+            eventData.code ||
+            data.code ||
+            null;
 
-            waba_id:
-              eventData.waba_id ||
-              eventData.wabaId ||
-              null,
+          if (code) {
+            void completeSignup({
+              code:
+                String(code),
 
-            phone_number_id:
-              eventData.phone_number_id ||
-              eventData.phoneNumberId ||
-              null,
+              waba_id:
+                signupData.waba_id,
 
-            business_id:
-              eventData.business_id ||
-              eventData.businessId ||
-              null,
+              phone_number_id:
+                signupData.phone_number_id,
 
-            event:
-              data.event ||
-              null,
-          });
+              business_id:
+                signupData.business_id,
+
+              event:
+                data.event,
+            });
+          } else {
+            setStatus(
+              'تم إكمال إعداد Meta، لكن لم يتم استلام رمز التحقق.',
+              'error',
+            );
+          }
 
           return;
         }
 
         if (
-          data.event === 'CANCEL'
+          data.event ===
+          'CANCEL'
         ) {
           completed = false;
-          button.disabled = false;
+
+          if (button) {
+            button.disabled = false;
+          }
 
           setStatus(
             'تم إلغاء عملية ربط WhatsApp.',
@@ -390,11 +569,58 @@ export default function handler(
         'جاري فتح إعداد WhatsApp الرسمي من Meta...',
       );
 
-      api/meta/whatsapp/signup.ts
-        {
-          config_id: CONFIG_ID,
+      window.FB.login(
+        function(response) {
+          if (
+            !response ||
+            !response.authResponse
+          ) {
+            setStatus(
+              'لم يتم إكمال تسجيل الدخول إلى Meta.',
+              'error',
+            );
 
-          response_type: 'code',
+            return;
+          }
+
+          const authResponse =
+            response.authResponse;
+
+          const code =
+            authResponse.code;
+
+          if (!code) {
+            setStatus(
+              'لم يتم استلام رمز التحقق من Meta.',
+              'error',
+            );
+
+            return;
+          }
+
+          void completeSignup({
+            code:
+              String(code),
+
+            waba_id:
+              signupData.waba_id,
+
+            phone_number_id:
+              signupData.phone_number_id,
+
+            business_id:
+              signupData.business_id,
+
+            event:
+              'FB_LOGIN',
+          });
+        },
+        {
+          config_id:
+            CONFIG_ID,
+
+          response_type:
+            'code',
 
           override_default_response_type:
             true,
@@ -410,46 +636,72 @@ export default function handler(
       );
     }
 
-    button.addEventListener(
-      'click',
-      launchSignup,
-    );
-
-    window.fbAsyncInit = function() {
-      window.FB.init({
-        appId: APP_ID,
-        cookie: true,
-        xfbml: false,
-        version: 'v23.0',
-      });
-
-      setStatus(
-        'جاهز لبدء ربط WhatsApp.',
+    if (button) {
+      button.addEventListener(
+        'click',
+        launchSignup,
       );
-    };
+    }
 
-    (function(d, s, id) {
+    window.fbAsyncInit =
+      function() {
+        window.FB.init({
+          appId:
+            APP_ID,
+
+          cookie:
+            true,
+
+          xfbml:
+            false,
+
+          version:
+            GRAPH_VERSION,
+        });
+
+        setStatus(
+          'جاهز لبدء ربط WhatsApp.',
+        );
+      };
+
+    (function(
+      d,
+      s,
+      id,
+    ) {
       const firstScript =
-        d.getElementsByTagName(s)[0];
+        d.getElementsByTagName(
+          s,
+        )[0];
 
       if (
-        d.getElementById(id)
+        d.getElementById(
+          id,
+        )
       ) {
         return;
       }
 
       const script =
-        d.createElement(s);
+        d.createElement(
+          s,
+        );
 
-      script.id = id;
+      script.id =
+        id;
 
       script.src =
         'https://connect.facebook.net/en_US/sdk.js';
 
-      firstScript.parentNode.insertBefore(
-        script,
-        firstScript,
-      );
+      if (
+        firstScript &&
+        firstScript.parentNode
+      ) {
+        firstScript.parentNode.insertBefore(
+          script,
+          firstScript,
+        );
+      }
     })(
       document,
       'script',
@@ -459,5 +711,7 @@ export default function handler(
 </body>
 </html>`
 
-  return res.status(200).send(html)
+  return res
+    .status(200)
+    .send(html)
 }
