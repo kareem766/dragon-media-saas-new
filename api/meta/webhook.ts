@@ -14,6 +14,11 @@ export const config = {
   },
 }
 
+type MetaProvider =
+  | 'whatsapp'
+  | 'facebook'
+  | 'instagram'
+
 function env(name: string): string {
   const value = process.env[name]
 
@@ -103,12 +108,230 @@ async function sleep(
   )
 }
 
+/*
+ * =========================================================
+ * COMMON HELPERS
+ * =========================================================
+ */
+
+function getObjectValue(
+  source: unknown,
+  keys: string[],
+): unknown {
+  if (
+    !source ||
+    typeof source !== 'object'
+  ) {
+    return null
+  }
+
+  const object =
+    source as Record<
+      string,
+      unknown
+    >
+
+  for (const key of keys) {
+    const value = object[key]
+
+    if (
+      value !== undefined &&
+      value !== null &&
+      String(value).trim() !== ''
+    ) {
+      return value
+    }
+  }
+
+  return null
+}
+
+function getNestedObjectValue(
+  source: unknown,
+  keys: string[],
+): unknown {
+  if (
+    !source ||
+    typeof source !== 'object'
+  ) {
+    return null
+  }
+
+  const object =
+    source as Record<
+      string,
+      unknown
+    >
+
+  const metadata =
+    object.metadata
+
+  if (
+    metadata &&
+    typeof metadata === 'object'
+  ) {
+    const metadataObject =
+      metadata as Record<
+        string,
+        unknown
+      >
+
+    for (const key of keys) {
+      const value =
+        metadataObject[key]
+
+      if (
+        value !== undefined &&
+        value !== null &&
+        String(value).trim() !== ''
+      ) {
+        return value
+      }
+    }
+  }
+
+  return null
+}
+
+function connectionContainsExternalId(
+  connection: Record<
+    string,
+    unknown
+  >,
+  externalId: string,
+): boolean {
+  if (!externalId) {
+    return false
+  }
+
+  const normalizedTarget =
+    String(externalId).trim()
+
+  const directKeys = [
+    'page_id',
+    'facebook_page_id',
+    'facebook_pageId',
+    'instagram_account_id',
+    'instagram_business_account_id',
+    'instagram_business_id',
+    'business_account_id',
+    'external_id',
+    'external_account_id',
+    'account_id',
+    'meta_account_id',
+  ]
+
+  for (const key of directKeys) {
+    const value =
+      connection[key]
+
+    if (
+      value !== undefined &&
+      value !== null &&
+      String(value).trim() ===
+        normalizedTarget
+    ) {
+      return true
+    }
+  }
+
+  const nestedValue =
+    getNestedObjectValue(
+      connection,
+      [
+        'page_id',
+        'facebook_page_id',
+        'facebook_pageId',
+        'instagram_account_id',
+        'instagram_business_account_id',
+        'instagram_business_id',
+        'business_account_id',
+        'external_id',
+        'external_account_id',
+        'account_id',
+        'meta_account_id',
+      ],
+    )
+
+  if (
+    nestedValue !== null &&
+    String(nestedValue).trim() ===
+      normalizedTarget
+  ) {
+    return true
+  }
+
+  return false
+}
+
+function getSocialConnectionId(
+  connection: Record<
+    string,
+    unknown
+  >,
+): string | null {
+  const candidates = [
+    'page_id',
+    'facebook_page_id',
+    'facebook_pageId',
+    'instagram_account_id',
+    'instagram_business_account_id',
+    'instagram_business_id',
+    'business_account_id',
+    'external_id',
+    'external_account_id',
+    'account_id',
+    'meta_account_id',
+  ]
+
+  const directValue =
+    getObjectValue(
+      connection,
+      candidates,
+    )
+
+  if (
+    directValue !== null
+  ) {
+    return String(
+      directValue,
+    )
+  }
+
+  const nestedValue =
+    getNestedObjectValue(
+      connection,
+      candidates,
+    )
+
+  if (
+    nestedValue !== null
+  ) {
+    return String(
+      nestedValue,
+    )
+  }
+
+  return null
+}
+
+/*
+ * =========================================================
+ * WHATSAPP OUTBOUND STATUS HELPERS
+ * =========================================================
+ */
+
 async function findOutboundMessage(
   supabase: ReturnType<typeof getSupabase>,
   externalId: string,
   organizationId: string,
 ) {
-  const delays = [0, 250, 750, 1500]
+  const delays = [
+    0,
+    250,
+    750,
+    1500,
+  ]
 
   for (const delay of delays) {
     if (delay > 0) {
@@ -138,7 +361,7 @@ async function findOutboundMessage(
 
     if (messageError) {
       console.error(
-        'WhatsApp webhook: outbound message lookup failed',
+        'Meta webhook: outbound message lookup failed',
         messageError,
       )
 
@@ -167,7 +390,7 @@ async function findOutboundMessage(
 
     if (conversationError) {
       console.error(
-        'WhatsApp webhook: conversation ownership lookup failed',
+        'Meta webhook: conversation ownership lookup failed',
         conversationError,
       )
 
@@ -182,7 +405,7 @@ async function findOutboundMessage(
         'whatsapp'
     ) {
       console.warn(
-        'WhatsApp webhook: message organization mismatch',
+        'Meta webhook: outbound message organization mismatch',
         {
           externalId,
           organizationId,
@@ -201,6 +424,12 @@ async function findOutboundMessage(
   return null
 }
 
+/*
+ * =========================================================
+ * WHATSAPP CUSTOMER
+ * =========================================================
+ */
+
 async function findCustomer(
   supabase: ReturnType<typeof getSupabase>,
   organizationId: string,
@@ -214,15 +443,23 @@ async function findCustomer(
     error: exactError,
   } = await supabase
     .from('customers')
-    .select('id, name, phone')
+    .select(
+      'id, name, phone',
+    )
     .eq(
       'organization_id',
       organizationId,
     )
-    .eq('phone', phone)
-    .order('created_at', {
-      ascending: false,
-    })
+    .eq(
+      'phone',
+      phone,
+    )
+    .order(
+      'created_at',
+      {
+        ascending: false,
+      },
+    )
     .limit(1)
     .maybeSingle()
 
@@ -246,14 +483,19 @@ async function findCustomer(
     error: normalizedError,
   } = await supabase
     .from('customers')
-    .select('id, name, phone')
+    .select(
+      'id, name, phone',
+    )
     .eq(
       'organization_id',
       organizationId,
     )
-    .order('created_at', {
-      ascending: false,
-    })
+    .order(
+      'created_at',
+      {
+        ascending: false,
+      },
+    )
 
   if (normalizedError) {
     console.error(
@@ -265,19 +507,33 @@ async function findCustomer(
   }
 
   const normalizedCustomer =
-    (customers || []).find(
+    (
+      customers || []
+    ).find(
       (customer) =>
-        normalizePhone(customer.phone) ===
+        normalizePhone(
+          customer.phone,
+        ) ===
         normalizedPhone,
     )
 
-  return normalizedCustomer || null
+  return (
+    normalizedCustomer ||
+    null
+  )
 }
+
+/*
+ * =========================================================
+ * CONVERSATION LOOKUP
+ * =========================================================
+ */
 
 async function findConversation(
   supabase: ReturnType<typeof getSupabase>,
   organizationId: string,
   customerId: string,
+  channel: MetaProvider,
 ) {
   const {
     data: conversation,
@@ -300,7 +556,7 @@ async function findConversation(
     )
     .eq(
       'channel',
-      'whatsapp',
+      channel,
     )
     .eq(
       'customer_id',
@@ -330,7 +586,7 @@ async function findConversation(
 
   if (error) {
     console.error(
-      'WhatsApp webhook: conversation lookup failed',
+      'Meta webhook: conversation lookup failed',
       error,
     )
 
@@ -345,11 +601,15 @@ async function updateConversation(
   conversationId: string,
   existingMetadata: unknown,
   unreadCount: number,
-  incomingMetadata: Record<string, unknown>,
+  incomingMetadata: Record<
+    string,
+    unknown
+  >,
 ) {
   const metadata =
     existingMetadata &&
-    typeof existingMetadata === 'object'
+    typeof existingMetadata ===
+      'object'
       ? existingMetadata
       : {}
 
@@ -361,15 +621,21 @@ async function updateConversation(
   } = await supabase
     .from('conversations')
     .update({
-      last_message_at: now,
-      updated_at: now,
+      last_message_at:
+        now,
+
+      updated_at:
+        now,
+
       unread_count:
         unreadCount + 1,
+
       metadata: {
         ...(metadata as Record<
           string,
           unknown
         >),
+
         ...incomingMetadata,
       },
     })
@@ -380,7 +646,7 @@ async function updateConversation(
 
   if (error) {
     console.error(
-      'WhatsApp webhook: conversation update failed',
+      'Meta webhook: conversation update failed',
       error,
     )
 
@@ -389,6 +655,751 @@ async function updateConversation(
 
   return true
 }
+
+/*
+ * =========================================================
+ * SOCIAL CONNECTION LOOKUP
+ * =========================================================
+ *
+ * We intentionally select * here because existing projects
+ * can contain different Meta connection fields depending on
+ * which Meta provider was connected.
+ *
+ * No token value is logged.
+ */
+
+async function findSocialConnection(
+  supabase: ReturnType<typeof getSupabase>,
+  provider: 'facebook' | 'instagram',
+  externalAccountId: string,
+) {
+  const {
+    data: connections,
+    error,
+  } = await supabase
+    .from(
+      'meta_connections',
+    )
+    .select('*')
+    .eq(
+      'provider',
+      provider,
+    )
+
+  if (error) {
+    console.error(
+      'Meta webhook: social connection lookup failed',
+      {
+        provider,
+        error,
+      },
+    )
+
+    return null
+  }
+
+  const connection =
+    (
+      connections || []
+    ).find(
+      (
+        item: Record<
+          string,
+          unknown
+        >,
+      ) =>
+        connectionContainsExternalId(
+          item,
+          externalAccountId,
+        ),
+    )
+
+  return (
+    connection || null
+  )
+}
+
+/*
+ * =========================================================
+ * SOCIAL CUSTOMER
+ * =========================================================
+ *
+ * The existing customers table already uses phone as a
+ * stable external contact identifier for WhatsApp.
+ *
+ * For Messenger / Instagram we keep the external sender ID
+ * in the same field so we do not require a schema rebuild.
+ */
+
+async function findSocialCustomer(
+  supabase: ReturnType<typeof getSupabase>,
+  organizationId: string,
+  externalUserId: string,
+) {
+  const {
+    data: customer,
+    error,
+  } = await supabase
+    .from('customers')
+    .select(
+      'id, name, phone',
+    )
+    .eq(
+      'organization_id',
+      organizationId,
+    )
+    .eq(
+      'phone',
+      externalUserId,
+    )
+    .order(
+      'created_at',
+      {
+        ascending: false,
+      },
+    )
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error(
+      'Meta webhook: social customer lookup failed',
+      error,
+    )
+
+    return null
+  }
+
+  return customer
+}
+
+/*
+ * =========================================================
+ * SOCIAL MESSAGE CONTENT
+ * =========================================================
+ */
+
+function extractSocialMessageContent(
+  message: any,
+): string {
+  const text =
+    typeof message?.message
+      ?.text === 'string'
+      ? message.message.text
+      : ''
+
+  if (text) {
+    return text
+  }
+
+  const attachment =
+    message?.message
+      ?.attachments?.[0]
+
+  if (
+    attachment?.type
+  ) {
+    const attachmentType =
+      String(
+        attachment.type,
+      )
+
+    const title =
+      typeof attachment
+        ?.payload?.title ===
+      'string'
+        ? attachment.payload
+            .title
+        : ''
+
+    if (title) {
+      return title
+    }
+
+    return `[${attachmentType}]`
+  }
+
+  if (
+    typeof message?.message
+      ?.quick_reply
+      ?.payload === 'string'
+  ) {
+    return String(
+      message.message
+        .quick_reply.payload,
+    )
+  }
+
+  return '[Meta message]'
+}
+
+/*
+ * =========================================================
+ * SOCIAL CUSTOMER NAME
+ * =========================================================
+ */
+
+function getSocialCustomerName(
+  message: any,
+): string {
+  const sender =
+    message?.sender
+
+  const profile =
+    message?.sender?.profile
+
+  const candidates = [
+    profile?.name,
+    profile?.username,
+    message?.sender_name,
+    message?.username,
+  ]
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate ===
+        'string' &&
+      candidate.trim()
+    ) {
+      return candidate.trim()
+    }
+  }
+
+  const senderId =
+    typeof sender?.id ===
+      'string'
+      ? sender.id
+      : 'Meta customer'
+
+  return senderId
+}
+
+/*
+ * =========================================================
+ * PROCESS FACEBOOK / INSTAGRAM INBOUND MESSAGE
+ * =========================================================
+ */
+
+async function processSocialMessage(
+  supabase: ReturnType<typeof getSupabase>,
+  provider:
+    | 'facebook'
+    | 'instagram',
+  connection: Record<
+    string,
+    unknown
+  >,
+  message: any,
+  entryId: string,
+) {
+  const organizationId =
+    String(
+      connection.organization_id ||
+        '',
+    )
+
+  if (!organizationId) {
+    return
+  }
+
+  const senderId =
+    String(
+      message?.sender?.id ||
+        '',
+    )
+
+  if (!senderId) {
+    return
+  }
+
+  /*
+   * Meta can send echo messages when our own outgoing
+   * message comes back through the webhook.
+   *
+   * Never create a customer/inbound message for an echo.
+   */
+
+  if (
+    message?.message?.is_echo ===
+      true ||
+    message?.is_echo === true
+  ) {
+    return
+  }
+
+  const externalId =
+    String(
+      message?.message?.mid ||
+        message?.mid ||
+        '',
+    ) || null
+
+  /*
+   * Duplicate protection happens BEFORE creating or updating
+   * the conversation.
+   *
+   * This is important because Meta retries can otherwise
+   * increment unread_count more than once.
+   */
+
+  if (externalId) {
+    const {
+      data: duplicate,
+      error:
+        duplicateLookupError,
+    } = await supabase
+      .from('messages')
+      .select('id')
+      .eq(
+        'external_id',
+        externalId,
+      )
+      .limit(1)
+      .maybeSingle()
+
+    if (
+      duplicateLookupError
+    ) {
+      console.error(
+        'Meta webhook: social duplicate lookup failed',
+        duplicateLookupError,
+      )
+    }
+
+    if (duplicate?.id) {
+      console.log(
+        'Meta webhook: social duplicate ignored',
+        {
+          provider,
+          externalId,
+        },
+      )
+
+      return
+    }
+  }
+
+  const content =
+    extractSocialMessageContent(
+      message,
+    )
+
+  const customerName =
+    getSocialCustomerName(
+      message,
+    )
+
+  /*
+   * =======================================================
+   * CUSTOMER
+   * =======================================================
+   */
+
+  let customer =
+    await findSocialCustomer(
+      supabase,
+      organizationId,
+      senderId,
+    )
+
+  let customerId =
+    customer?.id || null
+
+  if (!customerId) {
+    const {
+      data:
+        createdCustomer,
+      error,
+    } = await supabase
+      .from('customers')
+      .insert({
+        organization_id:
+          organizationId,
+
+        name:
+          customerName,
+
+        phone:
+          senderId,
+
+        source:
+          provider ===
+          'facebook'
+            ? 'facebook'
+            : 'instagram',
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      /*
+       * If another webhook created the same customer between
+       * lookup and insert, try the lookup once again.
+       */
+
+      console.error(
+        'Meta webhook: social customer insert failed',
+        error,
+      )
+
+      customer =
+        await findSocialCustomer(
+          supabase,
+          organizationId,
+          senderId,
+        )
+
+      customerId =
+        customer?.id ||
+        null
+
+      if (!customerId) {
+        return
+      }
+    } else {
+      customerId =
+        createdCustomer?.id ||
+        null
+    }
+  }
+
+  if (!customerId) {
+    return
+  }
+
+  /*
+   * =======================================================
+   * CONVERSATION
+   * =======================================================
+   */
+
+  const accountId =
+    getSocialConnectionId(
+      connection,
+    )
+
+  const incomingMetadata: Record<
+    string,
+    unknown
+  > = {
+    provider,
+
+    meta_account_id:
+      accountId,
+
+    external_user_id:
+      senderId,
+
+    external_message_id:
+      externalId,
+
+    meta_entry_id:
+      entryId,
+
+    message_type:
+      message?.message
+        ? 'message'
+        : 'event',
+
+    timestamp:
+      message?.timestamp ||
+      null,
+
+    source:
+      `${provider}_webhook`,
+  }
+
+  let conversationId:
+    | string
+    | null = null
+
+  const existingConversation =
+    await findConversation(
+      supabase,
+      organizationId,
+      customerId,
+      provider,
+    )
+
+  if (
+    existingConversation?.id
+  ) {
+    conversationId =
+      existingConversation.id
+
+    await updateConversation(
+      supabase,
+      existingConversation.id,
+      existingConversation.metadata,
+      Number(
+        existingConversation
+          .unread_count || 0,
+      ),
+      incomingMetadata,
+    )
+  } else {
+    const now =
+      new Date().toISOString()
+
+    const {
+      data:
+        createdConversation,
+      error,
+    } = await supabase
+      .from('conversations')
+      .insert({
+        organization_id:
+          organizationId,
+
+        customer_id:
+          customerId,
+
+        channel:
+          provider,
+
+        handled_by:
+          'ai',
+
+        last_message_at:
+          now,
+
+        status:
+          'open',
+
+        subject:
+          customerName,
+
+        unread_count:
+          1,
+
+        metadata:
+          incomingMetadata,
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      /*
+       * Concurrent webhook:
+       * retrieve the conversation that was created by
+       * another request.
+       */
+
+      console.error(
+        'Meta webhook: social conversation insert failed',
+        error,
+      )
+
+      const concurrent =
+        await findConversation(
+          supabase,
+          organizationId,
+          customerId,
+          provider,
+        )
+
+      if (
+        concurrent?.id
+      ) {
+        conversationId =
+          concurrent.id
+
+        await updateConversation(
+          supabase,
+          concurrent.id,
+          concurrent.metadata,
+          Number(
+            concurrent
+              .unread_count || 0,
+          ),
+          incomingMetadata,
+        )
+      }
+    } else {
+      conversationId =
+        createdConversation?.id ||
+        null
+    }
+  }
+
+  if (!conversationId) {
+    return
+  }
+
+  /*
+   * =======================================================
+   * MESSAGE
+   * =======================================================
+   */
+
+  const {
+    error:
+      messageInsertError,
+  } = await supabase
+    .from('messages')
+    .insert({
+      conversation_id:
+        conversationId,
+
+      sender_type:
+        'customer',
+
+      content,
+
+      external_id:
+        externalId,
+
+      metadata: {
+        ...incomingMetadata,
+
+        received_at:
+          new Date()
+            .toISOString(),
+      },
+    })
+
+  if (
+    messageInsertError
+  ) {
+    /*
+     * Unique external_id index protects us from Meta
+     * retries even if two webhook requests arrive at the
+     * same time.
+     */
+
+    if (
+      messageInsertError.code ===
+      '23505'
+    ) {
+      console.log(
+        'Meta webhook: social duplicate external_id ignored',
+        {
+          provider,
+          externalId,
+        },
+      )
+    } else {
+      console.error(
+        'Meta webhook: social message insert failed',
+        messageInsertError,
+      )
+    }
+
+    return
+  }
+
+  console.log(
+    'Meta webhook: social incoming message saved',
+    {
+      provider,
+      organizationId,
+      conversationId,
+      customerId,
+      externalId,
+    },
+  )
+}
+
+/*
+ * =========================================================
+ * FACEBOOK / INSTAGRAM ENTRY PROCESSOR
+ * =========================================================
+ */
+
+async function processSocialEntry(
+  supabase: ReturnType<typeof getSupabase>,
+  provider:
+    | 'facebook'
+    | 'instagram',
+  entry: any,
+) {
+  const entryId =
+    String(
+      entry?.id || '',
+    )
+
+  if (!entryId) {
+    return
+  }
+
+  const connection =
+    await findSocialConnection(
+      supabase,
+      provider,
+      entryId,
+    )
+
+  if (
+    !connection?.organization_id
+  ) {
+    console.warn(
+      'Meta webhook: no social connection found',
+      {
+        provider,
+        entryId,
+      },
+    )
+
+    return
+  }
+
+  /*
+   * Messenger / Instagram webhooks normally expose
+   * incoming events in entry.messaging.
+   */
+
+  const messaging =
+    Array.isArray(
+      entry?.messaging,
+    )
+      ? entry.messaging
+      : []
+
+  for (
+    const messageEvent of messaging
+  ) {
+    if (!messageEvent) {
+      continue
+    }
+
+    /*
+     * Ignore read / delivery / typing events here.
+     * Phase 2 is inbound customer messages.
+     */
+
+    if (
+      messageEvent?.read ||
+      messageEvent?.delivery ||
+      messageEvent?.message?.is_echo
+    ) {
+      continue
+    }
+
+    if (
+      !messageEvent?.message &&
+      !messageEvent?.postback
+    ) {
+      continue
+    }
+
+    await processSocialMessage(
+      supabase,
+      provider,
+      connection as Record<
+        string,
+        unknown
+      >,
+      messageEvent,
+      entryId,
+    )
+  }
+}
+
+/*
+ * =========================================================
+ * MAIN HANDLER
+ * =========================================================
+ */
 
 export default async function handler(
   req: VercelRequest,
@@ -400,7 +1411,9 @@ export default async function handler(
   )
 
   const verifyToken =
-    env('META_WHATSAPP_VERIFY_TOKEN')
+    env(
+      'META_WHATSAPP_VERIFY_TOKEN',
+    )
 
   /*
    * =========================================================
@@ -413,15 +1426,20 @@ export default async function handler(
       req.query['hub.mode']
 
     const token =
-      req.query['hub.verify_token']
+      req.query[
+        'hub.verify_token'
+      ]
 
     const challenge =
-      req.query['hub.challenge']
+      req.query[
+        'hub.challenge'
+      ]
 
     if (
       mode === 'subscribe' &&
       token === verifyToken &&
-      typeof challenge === 'string'
+      typeof challenge ===
+        'string'
     ) {
       return res
         .status(200)
@@ -464,21 +1482,24 @@ export default async function handler(
      * =======================================================
      */
 
-    const signature = String(
-      req.headers[
-        'x-hub-signature-256'
-      ] || '',
-    )
+    const signature =
+      String(
+        req.headers[
+          'x-hub-signature-256'
+        ] || '',
+      )
 
     if (
       !verifySignature(
         rawBody,
         signature,
-        env('META_APP_SECRET'),
+        env(
+          'META_APP_SECRET',
+        ),
       )
     ) {
       console.error(
-        'WhatsApp webhook: invalid Meta signature',
+        'Meta webhook: invalid Meta signature',
       )
 
       return res
@@ -502,7 +1523,7 @@ export default async function handler(
         JSON.parse(rawBody)
     } catch (error) {
       console.error(
-        'WhatsApp webhook: invalid JSON payload',
+        'Meta webhook: invalid JSON payload',
         error,
       )
 
@@ -514,8 +1535,109 @@ export default async function handler(
         })
     }
 
+    const webhookObject =
+      String(
+        payload?.object ||
+          '',
+      )
+
+    /*
+     * =======================================================
+     * SUPABASE
+     * =======================================================
+     */
+
+    const supabase =
+      getSupabase()
+
+    /*
+     * =======================================================
+     * FACEBOOK MESSENGER
+     * =======================================================
+     *
+     * Meta Page webhooks use:
+     * object = page
+     */
+
     if (
-      payload?.object !==
+      webhookObject ===
+      'page'
+    ) {
+      const entries =
+        Array.isArray(
+          payload?.entry,
+        )
+          ? payload.entry
+          : []
+
+      for (
+        const entry of entries
+      ) {
+        await processSocialEntry(
+          supabase,
+          'facebook',
+          entry,
+        )
+      }
+
+      return res
+        .status(200)
+        .json({
+          received: true,
+          provider:
+            'facebook',
+        })
+    }
+
+    /*
+     * =======================================================
+     * INSTAGRAM
+     * =======================================================
+     *
+     * Instagram messaging webhooks use:
+     * object = instagram
+     */
+
+    if (
+      webhookObject ===
+      'instagram'
+    ) {
+      const entries =
+        Array.isArray(
+          payload?.entry,
+        )
+          ? payload.entry
+          : []
+
+      for (
+        const entry of entries
+      ) {
+        await processSocialEntry(
+          supabase,
+          'instagram',
+          entry,
+        )
+      }
+
+      return res
+        .status(200)
+        .json({
+          received: true,
+          provider:
+            'instagram',
+        })
+    }
+
+    /*
+     * =======================================================
+     * WHATSAPP
+     * =======================================================
+     *
+     * Existing WhatsApp logic is intentionally preserved.
+     */
+
+    if (
+      webhookObject !==
       'whatsapp_business_account'
     ) {
       return res
@@ -526,12 +1648,9 @@ export default async function handler(
         })
     }
 
-    const supabase =
-      getSupabase()
-
     /*
      * =======================================================
-     * PROCESS ENTRIES
+     * PROCESS WHATSAPP ENTRIES
      * =======================================================
      */
 
@@ -652,7 +1771,8 @@ export default async function handler(
 
           const deliveryStatus =
             String(
-              status?.status || '',
+              status?.status ||
+                '',
             ).toLowerCase()
 
           if (
@@ -747,7 +1867,8 @@ export default async function handler(
           }
 
           if (
-            deliveryStatus === 'read' &&
+            deliveryStatus ===
+              'read' &&
             !matchedMessage.read_at
           ) {
             updateData.read_at =
@@ -760,13 +1881,17 @@ export default async function handler(
               statusUpdateError,
           } = await supabase
             .from('messages')
-            .update(updateData)
+            .update(
+              updateData,
+            )
             .eq(
               'id',
               matchedMessage.id,
             )
 
-          if (statusUpdateError) {
+          if (
+            statusUpdateError
+          ) {
             console.error(
               'WhatsApp webhook: status update failed',
               statusUpdateError,
@@ -890,7 +2015,8 @@ export default async function handler(
             )
 
           let customerId =
-            customer?.id || null
+            customer?.id ||
+            null
 
           if (!customerId) {
             const {
@@ -966,11 +2092,6 @@ export default async function handler(
            * =================================================
            * CONVERSATION
            * =================================================
-           *
-           * IMPORTANT:
-           * Always select the latest existing WhatsApp
-           * conversation. Never use an unrestricted
-           * maybeSingle().
            */
 
           let conversationId:
@@ -982,6 +2103,7 @@ export default async function handler(
               supabase,
               connection.organization_id,
               customerId,
+              'whatsapp',
             )
 
           if (
@@ -999,15 +2121,12 @@ export default async function handler(
               existingConversation.metadata,
               Number(
                 existingConversation
-                  .unread_count || 0,
+                  .unread_count ||
+                  0,
               ),
               incomingMetadata,
             )
           } else {
-            /*
-             * First message for this customer.
-             */
-
             const now =
               new Date().toISOString()
 
@@ -1052,12 +2171,6 @@ export default async function handler(
               .single()
 
             if (error) {
-              /*
-               * Concurrent Meta webhook:
-               * the unique partial index should
-               * prevent duplicate conversations.
-               */
-
               if (
                 error.code ===
                 '23505'
@@ -1067,6 +2180,7 @@ export default async function handler(
                     supabase,
                     connection.organization_id,
                     customerId,
+                    'whatsapp',
                   )
 
                 if (
@@ -1194,7 +2308,9 @@ export default async function handler(
               },
             })
 
-          if (messageInsertError) {
+          if (
+            messageInsertError
+          ) {
             if (
               messageInsertError.code ===
               '23505'
@@ -1245,7 +2361,7 @@ export default async function handler(
       })
   } catch (error) {
     console.error(
-      'WhatsApp webhook: fatal error',
+      'Meta webhook: fatal error',
       error,
     )
 
