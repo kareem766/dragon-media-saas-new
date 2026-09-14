@@ -65,11 +65,6 @@ async function graphRequest(
   }
 }
 
-/**
- * Server-side POST to Meta Graph API.
- *
- * Access tokens are never returned to the browser.
- */
 async function graphPost(
   path: string,
   accessToken: string
@@ -120,21 +115,7 @@ interface FacebookPageDiscovery {
   name: string | null
   category: string | null
   access_token_available: boolean
-
-  /*
-   * Server-only value.
-   *
-   * NEVER return this from the API and NEVER
-   * store it in integrations.metadata.
-   */
   page_access_token?: string
-
-  /*
-   * Webhook subscription status.
-   *
-   * These values are internal and are sanitized
-   * before being returned/stored where necessary.
-   */
   webhook_subscribed?: boolean
   webhook_error?: string | null
 }
@@ -142,8 +123,7 @@ interface FacebookPageDiscovery {
 async function discoverFacebookData(
   accessToken: string
 ) {
-  const pages:
-    FacebookPageDiscovery[] = []
+  const pages: FacebookPageDiscovery[] = []
 
   const {
     response,
@@ -170,31 +150,26 @@ async function discoverFacebookData(
 
       const pageAccessToken =
         typeof page.access_token ===
-        'string' &&
+          'string' &&
         page.access_token.length > 0
           ? page.access_token
           : undefined
 
       pages.push({
-        id:
-          String(page.id),
+        id: String(page.id),
 
         name:
-          typeof page.name ===
-          'string'
+          typeof page.name === 'string'
             ? page.name
             : null,
 
         category:
-          typeof page.category ===
-          'string'
+          typeof page.category === 'string'
             ? page.category
             : null,
 
         access_token_available:
-          Boolean(
-            pageAccessToken
-          ),
+          Boolean(pageAccessToken),
 
         page_access_token:
           pageAccessToken,
@@ -216,11 +191,6 @@ async function discoverFacebookData(
   }
 }
 
-/**
- * Subscribe a Facebook Page to Messenger webhooks.
- *
- * The Page Access Token is used only server-side.
- */
 async function subscribeFacebookPage(
   pageId: string,
   pageAccessToken: string
@@ -239,8 +209,7 @@ async function subscribeFacebookPage(
 
     if (!response.ok) {
       return {
-        subscribed:
-          false,
+        subscribed: false,
 
         error:
           errorMessage(
@@ -251,16 +220,12 @@ async function subscribeFacebookPage(
     }
 
     return {
-      subscribed:
-        true,
-
-      error:
-        null,
+      subscribed: true,
+      error: null,
     }
   } catch (error) {
     return {
-      subscribed:
-        false,
+      subscribed: false,
 
       error:
         error instanceof Error
@@ -280,12 +245,7 @@ interface InstagramDiscovery {
   instagram_business_account_id: string
   instagram_username: string | null
   instagram_name: string | null
-
-  /*
-   * Server-only.
-   */
   page_access_token?: string
-
   webhook_subscribed?: boolean
   webhook_error?: string | null
 }
@@ -293,8 +253,7 @@ interface InstagramDiscovery {
 async function discoverInstagramData(
   accessToken: string
 ) {
-  const accounts:
-    InstagramDiscovery[] = []
+  const accounts: InstagramDiscovery[] = []
 
   const {
     response,
@@ -327,7 +286,7 @@ async function discoverInstagramData(
 
       const pageAccessToken =
         typeof page.access_token ===
-        'string' &&
+          'string' &&
         page.access_token.length > 0
           ? page.access_token
           : undefined
@@ -338,24 +297,22 @@ async function discoverInstagramData(
 
         page_name:
           typeof page.name ===
-          'string'
+            'string'
             ? page.name
             : null,
 
         instagram_business_account_id:
-          String(
-            instagram.id
-          ),
+          String(instagram.id),
 
         instagram_username:
           typeof instagram.username ===
-          'string'
+            'string'
             ? instagram.username
             : null,
 
         instagram_name:
           typeof instagram.name ===
-          'string'
+            'string'
             ? instagram.name
             : null,
 
@@ -376,13 +333,6 @@ async function discoverInstagramData(
   }
 }
 
-/**
- * Subscribe an Instagram Business Account
- * to Instagram Messaging webhooks.
- *
- * Uses the related Facebook Page Access Token
- * only server-side.
- */
 async function subscribeInstagramAccount(
   instagramBusinessAccountId: string,
   pageAccessToken: string
@@ -401,8 +351,7 @@ async function subscribeInstagramAccount(
 
     if (!response.ok) {
       return {
-        subscribed:
-          false,
+        subscribed: false,
 
         error:
           errorMessage(
@@ -413,16 +362,12 @@ async function subscribeInstagramAccount(
     }
 
     return {
-      subscribed:
-        true,
-
-      error:
-        null,
+      subscribed: true,
+      error: null,
     }
   } catch (error) {
     return {
-      subscribed:
-        false,
+      subscribed: false,
 
       error:
         error instanceof Error
@@ -436,21 +381,6 @@ async function subscribeInstagramAccount(
 /* WhatsApp                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Embedded Signup / Login for Business can expose the WhatsApp Business
- * Account IDs granted to the user token through granular_scopes.
- *
- * This avoids relying on:
- *
- *   /{metaUserId}/businesses
- *
- * which can fail with:
- *
- *   (#100) Missing Permission
- *
- * even when the WhatsApp Business permissions themselves are correctly
- * granted to the configuration.
- */
 async function discoverWhatsAppWabaIds(
   accessToken: string
 ) {
@@ -514,8 +444,7 @@ async function discoverWhatsAppWabaIds(
       .map(
         (
           id: string | number
-        ) =>
-          String(id)
+        ) => String(id)
       )
       .filter(Boolean)
 
@@ -558,10 +487,7 @@ async function discoverWhatsAppData(
     | string
     | null = null
 
-  const discoveryErrors:
-    string[] = []
-
-  /* --------------------------- Discover WABA IDs -------------------------- */
+  const discoveryErrors: string[] = []
 
   try {
     const {
@@ -571,9 +497,7 @@ async function discoverWhatsAppData(
         accessToken
       )
 
-    if (
-      wabaIds.length > 0
-    ) {
+    if (wabaIds.length > 0) {
       wabaId =
         wabaIds[0]
     } else {
@@ -590,8 +514,6 @@ async function discoverWhatsAppData(
       }`
     )
   }
-
-  /* --------------------------- WABA information --------------------------- */
 
   if (wabaId) {
     try {
@@ -648,8 +570,6 @@ async function discoverWhatsAppData(
       )
     }
   }
-
-  /* ----------------------------- Phone number ----------------------------- */
 
   if (wabaId) {
     try {
@@ -726,7 +646,7 @@ async function discoverWhatsAppData(
     readyForMessaging:
       Boolean(
         wabaId &&
-          phoneNumberId
+        phoneNumberId
       ),
 
     discoveryErrors,
@@ -906,7 +826,7 @@ export default async function handler(
           'meta_connections'
         )
         .select(
-          'id,organization_id,provider,access_token,token_expires_at,meta_user_id,status,metadata'
+          'id,organization_id,provider,access_token,token_expires_at,meta_user_id,status,metadata,business_id,waba_id,phone_number_id,display_phone_number,verified_name'
         )
         .eq(
           'organization_id',
@@ -1048,11 +968,9 @@ export default async function handler(
 
     /* ---------------------------- Discovery ------------------------------- */
 
-    let discovery:
-      any = null
+    let discovery: any = null
 
-    const syncErrors:
-      string[] = []
+    const syncErrors: string[] = []
 
     if (
       provider ===
@@ -1063,18 +981,22 @@ export default async function handler(
           token
         )
 
-      /*
-       * Subscribe every discovered Page.
-       *
-       * Page Access Tokens are used only
-       * server-side and are not returned.
-       */
       for (
         const page of discovery.pages
       ) {
         if (
           !page.page_access_token
         ) {
+          page.webhook_subscribed =
+            false
+
+          page.webhook_error =
+            'Facebook Page access token was not returned by Meta'
+
+          syncErrors.push(
+            `Facebook Page ${page.id}: Facebook Page access token unavailable`
+          )
+
           continue
         }
 
@@ -1104,7 +1026,9 @@ export default async function handler(
 
       discovery.ready_for_messaging =
         discovery.pages.some(
-          (page: FacebookPageDiscovery) =>
+          (
+            page: FacebookPageDiscovery
+          ) =>
             page.access_token_available &&
             page.webhook_subscribed ===
               true
@@ -1120,11 +1044,6 @@ export default async function handler(
           token
         )
 
-      /*
-       * Instagram Messaging subscription
-       * uses the Page Access Token related
-       * to the Instagram Business Account.
-       */
       for (
         const account of
           discovery.accounts
@@ -1255,9 +1174,7 @@ export default async function handler(
 
         sync_error:
           syncErrors.length > 0
-            ? syncErrors.join(
-                ' | '
-              )
+            ? syncErrors.join(' | ')
             : null,
 
         provider,
@@ -1333,9 +1250,7 @@ export default async function handler(
 
         sync_error:
           syncErrors.length > 0
-            ? syncErrors.join(
-                ' | '
-              )
+            ? syncErrors.join(' | ')
             : null,
 
         provider,
@@ -1644,16 +1559,16 @@ export default async function handler(
               true,
 
             status:
-              'connected',
+              syncErrors.length > 0
+                ? 'error'
+                : 'connected',
 
             last_verified_at:
               new Date().toISOString(),
 
             error_message:
               syncErrors.length > 0
-                ? syncErrors.join(
-                    ' | '
-                  )
+                ? syncErrors.join(' | ')
                 : null,
 
             metadata:
@@ -1687,6 +1602,52 @@ export default async function handler(
         })
     }
 
+    /* --------------------------- Real sync result ------------------------- */
+
+    if (
+      syncErrors.length > 0
+    ) {
+      console.error(
+        'Meta webhook subscription failed:',
+        {
+          provider,
+          organizationId,
+          errors: syncErrors,
+        }
+      )
+
+      return res
+        .status(502)
+        .json({
+          success:
+            false,
+
+          provider,
+
+          status:
+            'connected',
+
+          ready_for_messaging:
+            Boolean(
+              connectionUpdate
+                .metadata
+                ?.ready_for_messaging
+            ),
+
+          error:
+            'Meta connection is valid, but webhook subscription failed',
+
+          code:
+            'META_WEBHOOK_SUBSCRIPTION_FAILED',
+
+          sync_errors:
+            syncErrors,
+
+          connection:
+            updatedConnection,
+        })
+    }
+
     /* ------------------------------- Result -------------------------------- */
 
     return res
@@ -1708,7 +1669,7 @@ export default async function handler(
           ),
 
         sync_errors:
-          syncErrors,
+          [],
 
         connection:
           updatedConnection,
