@@ -3,12 +3,20 @@ import type {
   VercelResponse,
 } from '@vercel/node'
 
-import { createClient } from '@supabase/supabase-js'
+import {
+  createClient,
+} from '@supabase/supabase-js'
 
-const META_GRAPH_API_VERSION =
-  process.env.META_GRAPH_API_VERSION || 'v23.0'
+import {
+  createHmac,
+  timingSafeEqual,
+} from 'node:crypto'
 
-function env(name: string): string {
+const GRAPH_VERSION =
+  process.env.META_GRAPH_API_VERSION ||
+  'v23.0'
+
+function env(name: string) {
   const value = process.env[name]
 
   if (!value) {
@@ -20,12 +28,115 @@ function env(name: string): string {
   return value
 }
 
-function errorMessage(
+function verifyState(
+  state: string,
+) {
+  const secret =
+    env('META_STATE_SECRET')
+
+  const parts =
+    state.split('.')
+
+  if (parts.length !== 2) {
+    return null
+  }
+
+  const [
+    encodedPayload,
+    signature,
+  ] = parts
+
+  const expected =
+    createHmac(
+      'sha256',
+      secret,
+    )
+      .update(encodedPayload)
+      .digest('base64url')
+
+  try {
+    const valid =
+      timingSafeEqual(
+        Buffer.from(
+          signature,
+          'utf8',
+        ),
+        Buffer.from(
+          expected,
+          'utf8',
+        ),
+      )
+
+    if (!valid) {
+      return null
+    }
+  } catch {
+    return null
+  }
+
+  try {
+    const payload =
+      JSON.parse(
+        Buffer.from(
+          encodedPayload,
+          'base64url',
+        ).toString('utf8'),
+      )
+
+    if (
+      !payload ||
+      typeof payload !== 'object'
+    ) {
+      return null
+    }
+
+    const issuedAt =
+      Number(
+        payload.issued_at,
+      )
+
+    /*
+     * State is intentionally short-lived.
+     */
+    if (
+      !Number.isFinite(
+        issuedAt,
+      ) ||
+      Math.abs(
+        Date.now() -
+          issuedAt,
+      ) >
+        15 * 60 * 1000
+    ) {
+      return null
+    }
+
+    if (
+      payload.provider !==
+      'whatsapp'
+    ) {
+      return null
+    }
+
+    return payload as {
+      user_id: string
+      organization_id: string
+      provider: 'whatsapp'
+      nonce: string
+      issued_at: number
+    }
+  } catch {
+    return null
+  }
+}
+
+function getErrorMessage(
   error: unknown,
   fallback: string,
-): string {
+) {
   if (
-    typeof error === 'string' &&
+    typeof error ===
+      'string' &&
     error.trim()
   ) {
     return error.trim()
@@ -40,22 +151,29 @@ function errorMessage(
 
   if (
     error &&
-    typeof error === 'object'
+    typeof error ===
+      'object'
   ) {
     const value =
-      error as Record<string, unknown>
+      error as Record<
+        string,
+        unknown
+      >
 
-    for (const key of [
-      'message',
-      'error',
-      'error_description',
-      'details',
-    ]) {
+    for (
+      const key of [
+        'message',
+        'error',
+        'error_description',
+        'details',
+      ]
+    ) {
       const candidate =
         value[key]
 
       if (
-        typeof candidate === 'string' &&
+        typeof candidate ===
+          'string' &&
         candidate.trim()
       ) {
         return candidate.trim()
@@ -70,16 +188,12 @@ async function graphGet(
   path: string,
   accessToken: string,
 ) {
-  const separator =
-    path.includes('?')
-      ? '&'
-      : '?'
+  const url =
+    `https://graph.facebook.com/${GRAPH_VERSION}${path}`
 
   const response =
     await fetch(
-      `https://graph.facebook.com/${META_GRAPH_API_VERSION}${path}${separator}access_token=${encodeURIComponent(
-        accessToken,
-      )}`,
+      `${url}${path.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(accessToken)}`,
     )
 
   const data =
@@ -97,18 +211,18 @@ async function graphPost(
   path: string,
   accessToken: string,
 ) {
-  const separator =
-    path.includes('?')
-      ? '&'
-      : '?'
+  const url =
+    `https://graph.facebook.com/${GRAPH_VERSION}${path}`
 
   const response =
     await fetch(
-      `https://graph.facebook.com/${META_GRAPH_API_VERSION}${path}${separator}access_token=${encodeURIComponent(
-        accessToken,
-      )}`,
+      url,
       {
         method: 'POST',
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`,
+        },
       },
     )
 
@@ -123,6 +237,254 @@ async function graphPost(
   }
 }
 
+function extractTargetIds(
+  granularScopes: unknown,
+) {
+  const ids: string[] = []
+
+  if (
+    !Array.isArray(
+      granularScopes,
+    )
+  ) {
+    return ids
+  }
+
+  for (
+    const scope of granularScopes
+  ) {
+    if (
+      !scope ||
+      typeof scope !==
+        'object'
+    ) {
+      continue
+    }
+
+    const current =
+      scope as {
+        scope?: unknown
+        target_ids?: unknown
+      }
+
+    if (
+      !Array.isArray(
+        current.target_ids,
+      )
+    ) {
+      continue
+    }
+
+    for (
+      const id of current.target_ids
+    ) {
+      if (
+        typeof id ===
+          'string' &&
+        id.trim() &&
+        !ids.includes(
+          id.trim(),
+        )
+      ) {
+        ids.push(
+          id.trim(),
+        )
+      }
+    }
+  }
+
+  return ids
+}
+
+async function subscribeWaba(
+  wabaId: string,
+  accessToken: string,
+) {
+  const {
+    response,
+    data,
+  } =
+    await graphPost(
+      `/${encodeURIComponent(wabaId)}/subscribed_apps`,
+      accessToken,
+    )
+
+  return {
+    success:
+      response.ok,
+    error:
+      response.ok
+        ? null
+        : data?.error?.message ||
+          'Unable to subscribe WABA webhook',
+  }
+}
+
+async function discoverPhone(
+  wabaId: string,
+  accessToken: string,
+  preferredPhoneId:
+    | string
+    | null,
+) {
+  if (
+    preferredPhoneId
+  ) {
+    const {
+      response,
+      data,
+    } =
+      await graphGet(
+        `/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name`,
+        accessToken,
+      )
+
+    if (
+      response.ok &&
+      Array.isArray(
+        data?.data,
+      )
+    ) {
+      const found =
+        data.data.find(
+          (
+            phone: any,
+          ) =>
+            String(
+              phone?.id || '',
+            ) ===
+            preferredPhoneId,
+        )
+
+      if (found) {
+        return {
+          phoneNumberId:
+            String(
+              found.id,
+            ),
+
+          displayPhoneNumber:
+            found.display_phone_number ||
+            null,
+
+          verifiedName:
+            found.verified_name ||
+            null,
+        }
+      }
+    }
+
+    return {
+      phoneNumberId:
+        preferredPhoneId,
+
+      displayPhoneNumber:
+        null,
+
+      verifiedName:
+        null,
+    }
+  }
+
+  const {
+    response,
+    data,
+  } =
+    await graphGet(
+      `/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name`,
+      accessToken,
+    )
+
+  if (
+    !response.ok ||
+    !Array.isArray(
+      data?.data,
+    ) ||
+    !data.data.length
+  ) {
+    return {
+      phoneNumberId:
+        null,
+
+      displayPhoneNumber:
+        null,
+
+      verifiedName:
+        null,
+    }
+  }
+
+  const phone =
+    data.data[0]
+
+  return {
+    phoneNumberId:
+      phone?.id
+        ? String(
+            phone.id,
+          )
+        : null,
+
+    displayPhoneNumber:
+      phone?.display_phone_number ||
+      null,
+
+    verifiedName:
+      phone?.verified_name ||
+      null,
+  }
+}
+
+async function discoverWabaFromBusiness(
+  accessToken: string,
+  businessId: string,
+) {
+  const endpoints = [
+    `/${encodeURIComponent(businessId)}/owned_whatsapp_business_accounts?fields=id,name`,
+    `/${encodeURIComponent(businessId)}/client_whatsapp_business_accounts?fields=id,name`,
+  ]
+
+  for (
+    const endpoint of endpoints
+  ) {
+    const {
+      response,
+      data,
+    } =
+      await graphGet(
+        endpoint,
+        accessToken,
+      )
+
+    if (
+      response.ok &&
+      Array.isArray(
+        data?.data,
+      ) &&
+      data.data.length
+    ) {
+      const waba =
+        data.data[0]
+
+      if (
+        waba?.id
+      ) {
+        return {
+          id: String(
+            waba.id,
+          ),
+
+          name:
+            waba.name ||
+            null,
+        }
+      }
+    }
+  }
+
+  return null
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -132,157 +494,82 @@ export default async function handler(
     'no-store',
   )
 
-  if (req.method !== 'POST') {
-    return res
-      .status(405)
-      .json({
-        success: false,
-        error: 'Method not allowed',
-      })
+  if (
+    req.method !==
+    'POST'
+  ) {
+    return res.status(405).json({
+      error:
+        'Method not allowed',
+    })
   }
 
   try {
-    const authorization =
-      req.headers.authorization || ''
-
-    const supabaseAccessToken =
-      authorization.startsWith('Bearer ')
-        ? authorization.slice(
-            'Bearer '.length,
-          )
-        : ''
-
-    if (!supabaseAccessToken) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          error:
-            'Authentication required',
-        })
-    }
-
     const body =
-      req.body &&
-      typeof req.body === 'object'
+      typeof req.body ===
+        'object' &&
+      req.body !== null
         ? req.body
         : {}
 
+    const state =
+      typeof body.state ===
+        'string'
+        ? body.state
+        : ''
+
     const code =
-      typeof body.code === 'string'
-        ? body.code.trim()
+      typeof body.code ===
+        'string'
+        ? body.code
         : ''
 
     const eventWabaId =
-      typeof body.waba_id === 'string'
-        ? body.waba_id.trim()
-        : ''
+      typeof body.waba_id ===
+        'string'
+        ? body.waba_id
+        : null
 
     const eventPhoneNumberId =
       typeof body.phone_number_id ===
-      'string'
-        ? body.phone_number_id.trim()
-        : ''
+        'string'
+        ? body.phone_number_id
+        : null
+
+    const eventBusinessId =
+      typeof body.business_id ===
+        'string'
+        ? body.business_id
+        : null
+
+    if (!state) {
+      return res.status(400).json({
+        error:
+          'Missing OAuth state',
+      })
+    }
+
+    const stateData =
+      verifyState(state)
+
+    if (!stateData) {
+      return res.status(400).json({
+        error:
+          'Invalid or expired OAuth state',
+        code:
+          'META_INVALID_STATE',
+      })
+    }
 
     if (!code) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error:
-            'WhatsApp authorization code is missing',
-          code:
-            'WHATSAPP_AUTH_CODE_MISSING',
-        })
+      return res.status(400).json({
+        error:
+          'Meta did not return an authorization code',
+        code:
+          'META_AUTH_CODE_MISSING',
+      })
     }
 
-    const authSupabase =
-      createClient(
-        env('VITE_SUPABASE_URL'),
-        env('VITE_SUPABASE_ANON_KEY'),
-        {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-          },
-        },
-      )
-
-    const {
-      data: authData,
-      error: authError,
-    } =
-      await authSupabase.auth.getUser(
-        supabaseAccessToken,
-      )
-
-    if (
-      authError ||
-      !authData.user
-    ) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          error:
-            'Invalid authentication token',
-        })
-    }
-
-    const adminSupabase =
-      createClient(
-        env('VITE_SUPABASE_URL'),
-        env('SUPABASE_SECRET_KEY'),
-        {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-          },
-        },
-      )
-
-    const {
-      data: membership,
-      error:
-        membershipError,
-    } =
-      await adminSupabase
-        .from('users')
-        .select(
-          'organization_id',
-        )
-        .eq(
-          'id',
-          authData.user.id,
-        )
-        .maybeSingle()
-
-    if (
-      membershipError
-    ) {
-      throw membershipError
-    }
-
-    const organizationId =
-      membership?.organization_id
-
-    if (!organizationId) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error:
-            'Organization membership not found',
-        })
-    }
-
-    /*
-     * Exchange the Embedded Signup
-     * authorization code server-side.
-     *
-     * The Meta App Secret never reaches
-     * the browser.
-     */
     const appId =
       env('META_APP_ID')
 
@@ -292,34 +579,27 @@ export default async function handler(
     const redirectUri =
       env('META_REDIRECT_URI')
 
-    const exchangeUrl =
-      new URL(
-        `https://graph.facebook.com/${META_GRAPH_API_VERSION}/oauth/access_token`,
-      )
+    /*
+     * Exchange the Embedded Signup authorization
+     * code on the trusted backend.
+     */
+    const exchangeParams =
+      new URLSearchParams({
+        client_id:
+          appId,
 
-    exchangeUrl.searchParams.set(
-      'client_id',
-      appId,
-    )
+        client_secret:
+          appSecret,
 
-    exchangeUrl.searchParams.set(
-      'client_secret',
-      appSecret,
-    )
+        code,
 
-    exchangeUrl.searchParams.set(
-      'code',
-      code,
-    )
-
-    exchangeUrl.searchParams.set(
-      'redirect_uri',
-      redirectUri,
-    )
+        redirect_uri:
+          redirectUri,
+      })
 
     const exchangeResponse =
       await fetch(
-        exchangeUrl.toString(),
+        `https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token?${exchangeParams.toString()}`,
       )
 
     const exchangeData =
@@ -329,47 +609,49 @@ export default async function handler(
 
     if (
       !exchangeResponse.ok ||
-      typeof exchangeData?.access_token !==
-        'string'
+      !exchangeData?.access_token
     ) {
       console.error(
         'WhatsApp Embedded Signup token exchange failed:',
         {
           status:
             exchangeResponse.status,
+
           error:
             exchangeData?.error,
         },
       )
 
-      return res
-        .status(502)
-        .json({
-          success: false,
-          error:
-            'Meta authorization code exchange failed',
-          code:
-            'WHATSAPP_TOKEN_EXCHANGE_FAILED',
-        })
+      return res.status(502).json({
+        error:
+          exchangeData?.error?.message ||
+          'Meta authorization code exchange failed',
+
+        code:
+          'META_TOKEN_EXCHANGE_FAILED',
+      })
     }
 
     const accessToken =
-      exchangeData.access_token as string
+      String(
+        exchangeData.access_token,
+      )
 
     /*
-     * Validate the newly issued token.
+     * Validate token and obtain Meta user.
      */
     const debugParams =
       new URLSearchParams({
         input_token:
           accessToken,
+
         access_token:
           `${appId}|${appSecret}`,
       })
 
     const debugResponse =
       await fetch(
-        `https://graph.facebook.com/${META_GRAPH_API_VERSION}/debug_token?${debugParams.toString()}`,
+        `https://graph.facebook.com/${GRAPH_VERSION}/debug_token?${debugParams.toString()}`,
       )
 
     const debugData =
@@ -377,79 +659,74 @@ export default async function handler(
         .json()
         .catch(() => null)
 
-    const tokenData =
-      debugData?.data
-
     if (
       !debugResponse.ok ||
-      tokenData?.is_valid !== true
+      !debugData?.data?.is_valid
     ) {
-      return res
-        .status(502)
-        .json({
-          success: false,
-          error:
-            'Meta returned an invalid WhatsApp access token',
-          code:
-            'WHATSAPP_TOKEN_INVALID',
-        })
+      return res.status(502).json({
+        error:
+          'Meta returned an invalid WhatsApp access token.',
+        code:
+          'META_TOKEN_INVALID',
+      })
     }
 
-    const scopes =
-      Array.isArray(
-        tokenData?.scopes,
-      )
-        ? tokenData.scopes
-        : []
+    const metaUserId =
+      debugData.data.user_id
+        ? String(
+            debugData.data.user_id,
+          )
+        : null
 
-    const hasManagementPermission =
-      scopes.includes(
-        'whatsapp_business_management',
-      )
-
-    const hasMessagingPermission =
-      scopes.includes(
-        'whatsapp_business_messaging',
-      )
-
-    if (
-      !hasManagementPermission ||
-      !hasMessagingPermission
-    ) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error:
-            'WhatsApp Embedded Signup configuration is missing the required WhatsApp permissions.',
-          code:
-            'WHATSAPP_REQUIRED_PERMISSIONS_MISSING',
-          required_permissions: [
-            'whatsapp_business_management',
-            'whatsapp_business_messaging',
-          ],
-        })
+    if (!metaUserId) {
+      return res.status(502).json({
+        error:
+          'Meta user ID was not returned.',
+        code:
+          'META_USER_ID_MISSING',
+      })
     }
 
     /*
-     * Prefer WABA ID supplied by the
-     * Embedded Signup session event.
+     * Embedded Signup can provide the WABA directly.
+     * If not, use granular scope target IDs and
+     * business discovery.
      */
+    const granularScopes =
+      debugData.data.granular_scopes
+
+    const targetIds =
+      extractTargetIds(
+        granularScopes,
+      )
+
+    let businessId =
+      eventBusinessId
+
     let wabaId =
-      eventWabaId || null
+      eventWabaId
+
+    let phoneNumberId =
+      eventPhoneNumberId
+
+    let displayPhoneNumber:
+      | string
+      | null = null
+
+    let verifiedName:
+      | string
+      | null = null
 
     /*
-     * If Meta did not send it in the
-     * browser event, use granular scopes.
+     * Prefer a target associated with
+     * whatsapp_business_management.
      */
-    if (!wabaId) {
-      const granularScopes =
-        Array.isArray(
-          tokenData?.granular_scopes,
-        )
-          ? tokenData.granular_scopes
-          : []
-
+    if (
+      !wabaId &&
+      Array.isArray(
+        granularScopes,
+      )
+    ) {
       for (
         const scope of granularScopes
       ) {
@@ -461,555 +738,502 @@ export default async function handler(
           continue
         }
 
-        const item =
+        const current =
           scope as {
             scope?: unknown
             target_ids?: unknown
           }
 
         if (
-          item.scope ===
-            'whatsapp_business_management' &&
+          current.scope !==
+          'whatsapp_business_management'
+        ) {
+          continue
+        }
+
+        if (
           Array.isArray(
-            item.target_ids,
+            current.target_ids,
           )
         ) {
-          const first =
-            item.target_ids.find(
-              (value: unknown) =>
+          const candidate =
+            current.target_ids.find(
+              (
+                value: unknown,
+              ) =>
                 typeof value ===
                   'string' &&
                 value.trim(),
             )
 
           if (
-            typeof first ===
+            typeof candidate ===
               'string'
           ) {
             wabaId =
-              first.trim()
+              candidate.trim()
+
             break
           }
         }
       }
     }
 
-    if (!wabaId) {
-      return res
-        .status(422)
-        .json({
-          success: false,
-          error:
-            'Meta did not return a WhatsApp Business Account ID.',
-          code:
-            'WHATSAPP_WABA_ID_MISSING',
-        })
+    /*
+     * If the Embedded Signup returned a business,
+     * discover its WhatsApp Business Account.
+     */
+    if (
+      !wabaId &&
+      businessId
+    ) {
+      const discovered =
+        await discoverWabaFromBusiness(
+          accessToken,
+          businessId,
+        )
+
+      if (discovered) {
+        wabaId =
+          discovered.id
+      }
     }
 
     /*
-     * Verify the WABA belongs to
-     * the newly issued Meta token.
+     * Try any granular target as a WABA candidate.
+     * We validate it before storing.
      */
-    const {
-      response:
-        wabaResponse,
-      data:
-        wabaData,
-    } =
-      await graphGet(
-        `/${encodeURIComponent(
-          wabaId,
-        )}?fields=id,name,owner_business_info`,
-        accessToken,
-      )
-
     if (
-      !wabaResponse.ok ||
-      wabaData?.id !==
-        wabaId
+      !wabaId &&
+      targetIds.length
     ) {
-      console.error(
-        'WhatsApp WABA validation failed:',
-        {
-          wabaId,
-          status:
-            wabaResponse.status,
-          error:
-            wabaData?.error,
-        },
-      )
-
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error:
-            'The selected WhatsApp Business Account could not be verified.',
-          code:
-            'WHATSAPP_WABA_VALIDATION_FAILED',
-        })
-    }
-
-    /*
-     * Find the phone number.
-     */
-    const {
-      response:
-        phoneResponse,
-      data:
-        phoneData,
-    } =
-      await graphGet(
-        `/${encodeURIComponent(
-          wabaId,
-        )}/phone_numbers?fields=id,display_phone_number,verified_name,name_status`,
-        accessToken,
-      )
-
-    if (
-      !phoneResponse.ok ||
-      !Array.isArray(
-        phoneData?.data,
-      )
-    ) {
-      return res
-        .status(502)
-        .json({
-          success: false,
-          error:
-            'Unable to load WhatsApp phone numbers.',
-          code:
-            'WHATSAPP_PHONE_DISCOVERY_FAILED',
-        })
-    }
-
-    const phoneNumbers =
-      phoneData.data as Array<
-        Record<string, unknown>
-      >
-
-    const selectedPhone =
-      eventPhoneNumberId
-        ? phoneNumbers.find(
-            (phone) =>
-              phone.id ===
-              eventPhoneNumberId,
+      for (
+        const targetId of targetIds
+      ) {
+        const {
+          response,
+          data,
+        } =
+          await graphGet(
+            `/${encodeURIComponent(targetId)}?fields=id,name,owner_business_info`,
+            accessToken,
           )
-        : phoneNumbers[0]
 
-    if (!selectedPhone) {
-      return res
-        .status(422)
-        .json({
-          success: false,
-          error:
-            'No WhatsApp phone number was returned for this WABA.',
-          code:
-            'WHATSAPP_PHONE_NUMBER_MISSING',
-        })
+        if (
+          response.ok &&
+          data?.id
+        ) {
+          const owner =
+            data.owner_business_info
+
+          if (
+            owner?.id &&
+            !businessId
+          ) {
+            businessId =
+              String(
+                owner.id,
+              )
+          }
+
+          const phone =
+            await discoverPhone(
+              String(
+                data.id,
+              ),
+              accessToken,
+              phoneNumberId,
+            )
+
+          if (
+            phone.phoneNumberId
+          ) {
+            wabaId =
+              String(
+                data.id,
+              )
+
+            phoneNumberId =
+              phone.phoneNumberId
+
+            displayPhoneNumber =
+              phone.displayPhoneNumber
+
+            verifiedName =
+              phone.verifiedName
+
+            break
+          }
+        }
+      }
     }
 
-    const phoneNumberId =
-      String(
-        selectedPhone.id,
-      )
+    /*
+     * Validate WABA and discover phone.
+     */
+    if (wabaId) {
+      const {
+        response,
+        data,
+      } =
+        await graphGet(
+          `/${encodeURIComponent(wabaId)}?fields=id,name,owner_business_info`,
+          accessToken,
+        )
 
-    const displayPhoneNumber =
-      typeof selectedPhone
-        .display_phone_number ===
-      'string'
-        ? selectedPhone.display_phone_number
-        : null
+      if (
+        !response.ok ||
+        !data?.id
+      ) {
+        wabaId = null
+      } else {
+        const owner =
+          data.owner_business_info
 
-    const verifiedName =
-      typeof selectedPhone
-        .verified_name ===
-      'string'
-        ? selectedPhone.verified_name
-        : null
+        if (
+          owner?.id &&
+          !businessId
+        ) {
+          businessId =
+            String(
+              owner.id,
+            )
+        }
+
+        const phone =
+          await discoverPhone(
+            String(
+              data.id,
+            ),
+            accessToken,
+            phoneNumberId,
+          )
+
+        phoneNumberId =
+          phone.phoneNumberId
+
+        displayPhoneNumber =
+          phone.displayPhoneNumber
+
+        verifiedName =
+          phone.verifiedName
+      }
+    }
 
     /*
-     * Subscribe the WABA to the app.
+     * Subscribe the WABA webhook only after
+     * obtaining a valid WABA.
      */
-    const {
-      response:
-        subscribeResponse,
-      data:
-        subscribeData,
-    } =
-      await graphPost(
-        `/${encodeURIComponent(
-          wabaId,
-        )}/subscribed_apps`,
-        accessToken,
-      )
+    let webhookSubscribed =
+      false
 
-    const webhookSubscribed =
-      subscribeResponse.ok
-
-    if (
-      !webhookSubscribed
-    ) {
-      console.error(
-        'WhatsApp WABA webhook subscription failed:',
-        {
+    if (wabaId) {
+      const subscription =
+        await subscribeWaba(
           wabaId,
-          status:
-            subscribeResponse.status,
-          error:
-            subscribeData?.error,
-        },
-      )
+          accessToken,
+        )
+
+      webhookSubscribed =
+        subscription.success
+
+      if (
+        !subscription.success
+      ) {
+        console.warn(
+          'WhatsApp webhook subscription failed:',
+          subscription.error,
+        )
+      }
     }
 
     const readyForMessaging =
       Boolean(
         wabaId &&
-          phoneNumberId &&
-          webhookSubscribed,
+        phoneNumberId &&
+        webhookSubscribed,
+      )
+
+    const supabase =
+      createClient(
+        env('VITE_SUPABASE_URL'),
+        env('SUPABASE_SECRET_KEY'),
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        },
       )
 
     /*
-     * Store the encrypted/secret token
-     * only in meta_connections.access_token.
-     * Never place it in metadata.
+     * Never overwrite an existing valid connection
+     * with null IDs after a partial onboarding result.
      */
     const {
-      data:
-        existingConnection,
+      data: existing,
       error:
-        existingConnectionError,
+        existingError,
     } =
-      await adminSupabase
+      await supabase
         .from('meta_connections')
         .select(
-          'id',
+          'id,waba_id,phone_number_id,business_id,display_phone_number,verified_name',
         )
         .eq(
           'organization_id',
-          organizationId,
+          stateData.organization_id,
         )
         .eq(
           'provider',
           'whatsapp',
         )
-        .order(
-          'updated_at',
-          {
-            ascending: false,
-          },
-        )
-        .limit(1)
         .maybeSingle()
 
-    if (
-      existingConnectionError
-    ) {
-      throw existingConnectionError
+    if (existingError) {
+      throw existingError
     }
 
-    const tokenExpiresIn =
-      Number(
-        exchangeData?.expires_in ||
-          0,
+    const finalWabaId =
+      wabaId ||
+      existing?.waba_id ||
+      null
+
+    const finalPhoneNumberId =
+      phoneNumberId ||
+      existing?.phone_number_id ||
+      null
+
+    const finalBusinessId =
+      businessId ||
+      existing?.business_id ||
+      null
+
+    const finalDisplayPhoneNumber =
+      displayPhoneNumber ||
+      existing?.display_phone_number ||
+      null
+
+    const finalVerifiedName =
+      verifiedName ||
+      existing?.verified_name ||
+      null
+
+    const finalReady =
+      Boolean(
+        finalWabaId &&
+        finalPhoneNumberId &&
+        webhookSubscribed,
       )
 
-    const tokenExpiresAt =
-      tokenExpiresIn > 0
-        ? new Date(
-            Date.now() +
-              tokenExpiresIn *
-                1000,
-          ).toISOString()
-        : null
-
     const metadata = {
-      ...(existingConnection
-        ? {}
-        : {}),
+      connection_type:
+        'meta_login_business_embedded_signup',
+
+      meta_user_id:
+        metaUserId,
+
+      business_id:
+        finalBusinessId,
+
+      waba_id:
+        finalWabaId,
+
+      phone_number_id:
+        finalPhoneNumberId,
+
+      display_phone_number:
+        finalDisplayPhoneNumber,
+
+      verified_name:
+        finalVerifiedName,
+
       whatsapp_webhook_subscribed:
         webhookSubscribed,
+
       ready_for_messaging:
-        readyForMessaging,
-      waba_name:
-        typeof wabaData?.name ===
-        'string'
-          ? wabaData.name
-          : null,
-      owner_business_id:
-        typeof wabaData
-          ?.owner_business_info
-          ?.id === 'string'
-          ? wabaData
-              .owner_business_info.id
-          : null,
-      last_completed_at:
+        finalReady,
+
+      last_oauth_verified_at:
         new Date().toISOString(),
     }
 
-    if (
-      existingConnection?.id
-    ) {
-      const {
-        error:
-          updateConnectionError,
-      } =
-        await adminSupabase
-          .from('meta_connections')
-          .update({
-            access_token:
-              accessToken,
-            token_expires_at:
-              tokenExpiresAt,
-            meta_user_id:
-              typeof tokenData?.user_id ===
-              'string'
-                ? tokenData.user_id
-                : null,
-            business_id:
-              typeof wabaData
-                ?.owner_business_info
-                ?.id === 'string'
-                ? wabaData
-                    .owner_business_info
-                    .id
-                : null,
-            waba_id:
-              wabaId,
-            phone_number_id:
-              phoneNumberId,
-            display_phone_number:
-              displayPhoneNumber,
-            verified_name:
-              verifiedName,
-            status:
-              readyForMessaging
-                ? 'connected'
-                : 'error',
-            metadata,
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq(
-            'id',
-            existingConnection.id,
-          )
-
-      if (
-        updateConnectionError
-      ) {
-        throw updateConnectionError
-      }
-    } else {
-      const {
-        error:
-          insertConnectionError,
-      } =
-        await adminSupabase
-          .from('meta_connections')
-          .insert({
-            organization_id:
-              organizationId,
-            provider:
-              'whatsapp',
-            access_token:
-              accessToken,
-            token_expires_at:
-              tokenExpiresAt,
-            meta_user_id:
-              typeof tokenData?.user_id ===
-              'string'
-                ? tokenData.user_id
-                : null,
-            business_id:
-              typeof wabaData
-                ?.owner_business_info
-                ?.id === 'string'
-                ? wabaData
-                    .owner_business_info
-                    .id
-                : null,
-            waba_id:
-              wabaId,
-            phone_number_id:
-              phoneNumberId,
-            display_phone_number:
-              displayPhoneNumber,
-            verified_name:
-              verifiedName,
-            status:
-              readyForMessaging
-                ? 'connected'
-                : 'error',
-            metadata,
-          })
-
-      if (
-        insertConnectionError
-      ) {
-        throw insertConnectionError
-      }
-    }
-
-    /*
-     * Keep integrations as the UI-facing
-     * connection state.
-     */
-    const {
-      data:
-        existingIntegration,
-      error:
-        integrationLookupError,
-    } =
-      await adminSupabase
-        .from('integrations')
-        .select(
-          'id',
-        )
-        .eq(
-          'organization_id',
-          organizationId,
-        )
-        .eq(
-          'provider',
-          'whatsapp',
-        )
-        .maybeSingle()
-
-    if (
-      integrationLookupError
-    ) {
-      throw integrationLookupError
-    }
-
-    const integrationPayload = {
+    const connectionPayload = {
       organization_id:
-        organizationId,
+        stateData.organization_id,
+
       provider:
         'whatsapp',
-      connected:
-        readyForMessaging,
+
+      access_token:
+        accessToken,
+
+      meta_user_id:
+        metaUserId,
+
+      business_id:
+        finalBusinessId,
+
+      waba_id:
+        finalWabaId,
+
+      phone_number_id:
+        finalPhoneNumberId,
+
+      display_phone_number:
+        finalDisplayPhoneNumber,
+
+      verified_name:
+        finalVerifiedName,
+
       status:
-        readyForMessaging
+        finalReady
           ? 'connected'
-          : 'error',
-      connected_at:
-        new Date().toISOString(),
-      last_verified_at:
-        new Date().toISOString(),
-      error_message:
-        readyForMessaging
-          ? null
-          : 'WhatsApp connection is authenticated but webhook messaging is not ready.',
-      metadata: {
-        waba_id:
-          wabaId,
-        phone_number_id:
-          phoneNumberId,
-        display_phone_number:
-          displayPhoneNumber,
-        verified_name:
-          verifiedName,
-        whatsapp_webhook_subscribed:
-          webhookSubscribed,
-        ready_for_messaging:
-          readyForMessaging,
-      },
+          : 'connected',
+
+      metadata,
+
       updated_at:
         new Date().toISOString(),
     }
 
-    if (
-      existingIntegration?.id
-    ) {
-      const {
-        error:
-          integrationUpdateError,
-      } =
-        await adminSupabase
-          .from('integrations')
+    let connectionError
+
+    if (existing?.id) {
+      const result =
+        await supabase
+          .from('meta_connections')
           .update(
-            integrationPayload,
+            connectionPayload,
           )
           .eq(
             'id',
-            existingIntegration.id,
+            existing.id,
           )
 
-      if (
-        integrationUpdateError
-      ) {
-        throw integrationUpdateError
-      }
+      connectionError =
+        result.error
     } else {
-      const {
-        error:
-          integrationInsertError,
-      } =
-        await adminSupabase
-          .from('integrations')
+      const result =
+        await supabase
+          .from('meta_connections')
           .insert(
-            integrationPayload,
+            connectionPayload,
           )
 
-      if (
-        integrationInsertError
-      ) {
-        throw integrationInsertError
-      }
+      connectionError =
+        result.error
     }
 
-    if (!readyForMessaging) {
-      return res
-        .status(502)
-        .json({
-          success: false,
-          error:
-            'WhatsApp was authorized, but webhook subscription failed.',
-          code:
-            'WHATSAPP_WEBHOOK_SUBSCRIPTION_FAILED',
-          waba_id:
-            wabaId,
-          phone_number_id:
-            phoneNumberId,
-        })
+    if (connectionError) {
+      throw connectionError
     }
 
-    return res
-      .status(200)
-      .json({
-        success: true,
-        provider:
-          'whatsapp',
-        waba_id:
-          wabaId,
-        phone_number_id:
-          phoneNumberId,
-        display_phone_number:
-          displayPhoneNumber,
-        verified_name:
-          verifiedName,
-        webhook_subscribed:
-          true,
-        ready_for_messaging:
-          true,
-      })
+    /*
+     * integrations.metadata is intentionally
+     * non-secret. Never put the access token here.
+     */
+    const integrationMetadata =
+      metadata
+
+    const {
+      error:
+        integrationError,
+    } =
+      await supabase
+        .from('integrations')
+        .upsert(
+          {
+            organization_id:
+              stateData.organization_id,
+
+            provider:
+              'whatsapp',
+
+            connected:
+              true,
+
+            status:
+              finalReady
+                ? 'connected'
+                : 'connected',
+
+            connected_at:
+              new Date().toISOString(),
+
+            last_verified_at:
+              new Date().toISOString(),
+
+            error_message:
+              finalReady
+                ? null
+                : 'WhatsApp connected but messaging setup is incomplete.',
+
+            metadata:
+              integrationMetadata,
+
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict:
+              'organization_id,provider',
+          },
+        )
+
+    if (integrationError) {
+      throw integrationError
+    }
+
+    return res.status(200).json({
+      success: true,
+
+      ready_for_messaging:
+        finalReady,
+
+      waba_id:
+        finalWabaId,
+
+      phone_number_id:
+        finalPhoneNumberId,
+
+      business_id:
+        finalBusinessId,
+
+      display_phone_number:
+        finalDisplayPhoneNumber,
+
+      verified_name:
+        finalVerifiedName,
+
+      webhook_subscribed:
+        webhookSubscribed,
+
+      message:
+        finalReady
+          ? 'WhatsApp Business connected successfully.'
+          : 'WhatsApp connected, but messaging setup is incomplete.',
+
+      redirect_url:
+        '/#/settings',
+    })
   } catch (error) {
+    const message =
+      getErrorMessage(
+        error,
+        'Unable to complete WhatsApp Embedded Signup.',
+      )
+
     console.error(
       'WhatsApp Embedded Signup completion error:',
       error,
     )
 
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: errorMessage(
-          error,
-          'Unable to complete WhatsApp Embedded Signup.',
-        ),
-        code:
-          'WHATSAPP_EMBEDDED_SIGNUP_FAILED',
-      })
+    return res.status(500).json({
+      success: false,
+      error: message,
+      code:
+        'META_WHATSAPP_COMPLETE_FAILED',
+    })
   }
 }
