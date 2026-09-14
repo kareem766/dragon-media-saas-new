@@ -312,6 +312,7 @@ async function subscribeWaba(
   return {
     success:
       response.ok,
+
     error:
       response.ok
         ? null
@@ -556,6 +557,7 @@ export default async function handler(
       return res.status(400).json({
         error:
           'Invalid or expired OAuth state',
+
         code:
           'META_INVALID_STATE',
       })
@@ -565,6 +567,7 @@ export default async function handler(
       return res.status(400).json({
         error:
           'Meta did not return an authorization code',
+
         code:
           'META_AUTH_CODE_MISSING',
       })
@@ -576,12 +579,15 @@ export default async function handler(
     const appSecret =
       env('META_APP_SECRET')
 
-    const redirectUri =
-      env('META_REDIRECT_URI')
-
     /*
-     * Exchange the Embedded Signup authorization
-     * code on the trusted backend.
+     * Embedded Signup authorization-code
+     * exchange.
+     *
+     * IMPORTANT:
+     * Do not send META_REDIRECT_URI here.
+     * Embedded Signup generates the code using
+     * its own configured flow, and Meta validates
+     * the code against that flow.
      */
     const exchangeParams =
       new URLSearchParams({
@@ -592,9 +598,6 @@ export default async function handler(
           appSecret,
 
         code,
-
-        redirect_uri:
-          redirectUri,
       })
 
     const exchangeResponse =
@@ -666,6 +669,7 @@ export default async function handler(
       return res.status(502).json({
         error:
           'Meta returned an invalid WhatsApp access token.',
+
         code:
           'META_TOKEN_INVALID',
       })
@@ -682,6 +686,7 @@ export default async function handler(
       return res.status(502).json({
         error:
           'Meta user ID was not returned.',
+
         code:
           'META_USER_ID_MISSING',
       })
@@ -885,7 +890,8 @@ export default async function handler(
         !response.ok ||
         !data?.id
       ) {
-        wabaId = null
+        wabaId =
+          null
       } else {
         const owner =
           data.owner_business_info
@@ -1186,7 +1192,8 @@ export default async function handler(
     }
 
     return res.status(200).json({
-      success: true,
+      success:
+        true,
 
       ready_for_messaging:
         finalReady,
@@ -1230,8 +1237,12 @@ export default async function handler(
     )
 
     return res.status(500).json({
-      success: false,
-      error: message,
+      success:
+        false,
+
+      error:
+        message,
+
       code:
         'META_WHATSAPP_COMPLETE_FAILED',
     })
