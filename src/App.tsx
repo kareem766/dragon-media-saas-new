@@ -24,6 +24,7 @@ import Campaigns from './pages/Campaigns'
 import Inbox from './pages/Inbox'
 import Account from './pages/Account'
 import Ryan from './pages/Ryan'
+import RyanSettings from './pages/RyanSettings'
 import KnowledgeBase from './pages/KnowledgeBase'
 import HandoffRequests from './pages/HandoffRequests'
 import Automations from './pages/Automations'
@@ -58,327 +59,50 @@ export default function App() {
       <AuthProvider>
         <HashRouter>
           <Routes>
-            {/* Public website */}
-            <Route
-              path="/home"
-              element={<Landing />}
-            />
+            <Route path="/home" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/support" element={<Support />} />
 
-            {/* Authentication */}
-            <Route
-              path="/login"
-              element={<Login />}
-            />
+            <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/crm" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute>} />
+              <Route path="/crm/customer/:id" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CustomerDetail /></FeatureRoute>} />
+              <Route path="/pipeline" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><Pipeline /></FeatureRoute>} />
+              <Route path="/pipeline/deal/:id" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><DealDetail /></FeatureRoute>} />
+              <Route path="/services" element={<Services />} />
+              <Route path="/campaigns" element={<FeatureRoute feature="campaigns" featureName="الحملات التسويقية"><Campaigns /></FeatureRoute>} />
+              <Route path="/inbox" element={<Inbox />} />
+              <Route path="/ryan" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><Ryan /></FeatureRoute>} />
+              <Route path="/ryan/settings" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanSettings /></FeatureRoute>} />
+              <Route path="/ryan/knowledge" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><KnowledgeBase /></FeatureRoute>} />
+              <Route path="/ryan/handoff" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><HandoffRequests /></FeatureRoute>} />
+              <Route path="/automations" element={<FeatureRoute feature="automations" featureName="الأتمتة"><Automations /></FeatureRoute>} />
+              <Route path="/tickets" element={<Tickets />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/plans" element={<Plans />} />
+              <Route path="/billing/pay" element={<PaymentRequest />} />
+              <Route path="/tasks" element={<Tasks />} />
+              <Route path="/appointments" element={<Appointments />} />
+              <Route path="/billing" element={<Billing />} />
+              <Route path="/reports" element={<FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute>} />
+              <Route path="/users" element={<Users />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/settings" element={<Settings />} />
 
-            <Route
-              path="/forgot-password"
-              element={<ForgotPassword />}
-            />
-
-            <Route
-              path="/reset-password"
-              element={<ResetPassword />}
-            />
-            
-            {/* Legal / support */}
-            <Route
-              path="/privacy"
-              element={<Privacy />}
-            />
-
-            <Route
-              path="/terms"
-              element={<Terms />}
-            />
-
-            <Route
-              path="/support"
-              element={<Support />}
-            />
-
-            {/* Protected application */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              <Route
-                path="/"
-                element={<Dashboard />}
-              />
-
-              <Route
-                path="/crm"
-                element={
-                  <FeatureRoute
-                    feature="crm"
-                    featureName="إدارة العملاء CRM"
-                  >
-                    <CRM />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/crm/customer/:id"
-                element={
-                  <FeatureRoute
-                    feature="crm"
-                    featureName="إدارة العملاء CRM"
-                  >
-                    <CustomerDetail />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/pipeline"
-                element={
-                  <FeatureRoute
-                    feature="crm"
-                    featureName="إدارة العملاء CRM"
-                  >
-                    <Pipeline />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/pipeline/deal/:id"
-                element={
-                  <FeatureRoute
-                    feature="crm"
-                    featureName="إدارة العملاء CRM"
-                  >
-                    <DealDetail />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/services"
-                element={<Services />}
-              />
-
-              <Route
-                path="/campaigns"
-                element={
-                  <FeatureRoute
-                    feature="campaigns"
-                    featureName="الحملات التسويقية"
-                  >
-                    <Campaigns />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/inbox"
-                element={<Inbox />}
-              />
-
-              <Route
-                path="/ryan"
-                element={
-                  <FeatureRoute
-                    feature="ryan"
-                    featureName="Ryan الذكي"
-                  >
-                    <Ryan />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/ryan/knowledge"
-                element={
-                  <FeatureRoute
-                    feature="ryan"
-                    featureName="Ryan الذكي"
-                  >
-                    <KnowledgeBase />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/ryan/handoff"
-                element={
-                  <FeatureRoute
-                    feature="ryan"
-                    featureName="Ryan الذكي"
-                  >
-                    <HandoffRequests />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/automations"
-                element={
-                  <FeatureRoute
-                    feature="automations"
-                    featureName="الأتمتة"
-                  >
-                    <Automations />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/tickets"
-                element={<Tickets />}
-              />
-
-              <Route
-                path="/search"
-                element={<Search />}
-              />
-
-              <Route
-                path="/plans"
-                element={<Plans />}
-              />
-
-              <Route
-                path="/billing/pay"
-                element={<PaymentRequest />}
-              />
-
-              <Route
-                path="/tasks"
-                element={<Tasks />}
-              />
-
-              <Route
-                path="/appointments"
-                element={<Appointments />}
-              />
-
-              <Route
-                path="/billing"
-                element={<Billing />}
-              />
-
-              <Route
-                path="/reports"
-                element={
-                  <FeatureRoute
-                    feature="advanced_reports"
-                    featureName="التقارير المتقدمة"
-                  >
-                    <Reports />
-                  </FeatureRoute>
-                }
-              />
-
-              <Route
-                path="/users"
-                element={<Users />}
-              />
-
-              <Route
-                path="/account"
-                element={<Account />}
-              />
-
-              <Route
-                path="/settings"
-                element={<Settings />}
-              />
-
-              {/* Admin */}
-              <Route
-                path="/admin"
-                element={
-                  <AdminRoute>
-                    <AdminDashboard />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/organizations"
-                element={
-                  <AdminRoute>
-                    <AdminOrganizations />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/payments"
-                element={
-                  <AdminRoute>
-                    <AdminPayments />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/audit-logs"
-                element={
-                  <AdminRoute>
-                    <AdminAuditLogs />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/settings"
-                element={
-                  <AdminRoute>
-                    <AdminSettings />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/branding"
-                element={
-                  <AdminRoute>
-                    <AdminBranding />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/plans"
-                element={
-                  <AdminRoute>
-                    <AdminPlans />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/ryan-credits"
-                element={
-                  <AdminRoute>
-                    <AdminRyanCredits />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/roles"
-                element={
-                  <AdminRoute>
-                    <AdminRoles />
-                  </AdminRoute>
-                }
-              />
-
-              <Route
-                path="/admin/tickets"
-                element={
-                  <AdminRoute>
-                    <AdminTickets />
-                  </AdminRoute>
-                }
-              />
+              <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+              <Route path="/admin/organizations" element={<AdminRoute><AdminOrganizations /></AdminRoute>} />
+              <Route path="/admin/payments" element={<AdminRoute><AdminPayments /></AdminRoute>} />
+              <Route path="/admin/audit-logs" element={<AdminRoute><AdminAuditLogs /></AdminRoute>} />
+              <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
+              <Route path="/admin/branding" element={<AdminRoute><AdminBranding /></AdminRoute>} />
+              <Route path="/admin/plans" element={<AdminRoute><AdminPlans /></AdminRoute>} />
+              <Route path="/admin/ryan-credits" element={<AdminRoute><AdminRyanCredits /></AdminRoute>} />
+              <Route path="/admin/roles" element={<AdminRoute><AdminRoles /></AdminRoute>} />
+              <Route path="/admin/tickets" element={<AdminRoute><AdminTickets /></AdminRoute>} />
             </Route>
           </Routes>
         </HashRouter>
