@@ -5,10 +5,13 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
 
-function env(name: string) {
-  const value = process.env[name]
-  if (!value) throw new Error(`Missing environment variable: ${name}`)
-  return value
+function env(name: string, fallbackNames: string[] = []) {
+  const names = [name, ...fallbackNames]
+  for (const currentName of names) {
+    const value = process.env[currentName]
+    if (value) return value
+  }
+  throw new Error(`Missing environment variable: ${name}`)
 }
 
 function verifyState(state: string) {
@@ -194,7 +197,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const readyForMessaging = Boolean(wabaId && phoneNumberId)
     const subscriptionResult = wabaId ? await subscribeWaba(wabaId, accessToken) : { success: false, error: 'WABA ID not discovered' }
 
-    const supabase = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } })
+    // SUPABASE_URL is the preferred server-side variable. Keep a safe fallback
+    // to the existing Vite project URL so this OAuth endpoint works on the
+    // current Vercel Hobby project without requiring a paid plan or exposing
+    // the service-role key to the browser.
+    const supabaseUrl = env('SUPABASE_URL', ['VITE_SUPABASE_URL'])
+    const supabase = createClient(supabaseUrl, env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } })
 
     const metadata = {
       connection_type: 'meta_login_business',
