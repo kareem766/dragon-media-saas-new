@@ -152,7 +152,7 @@ async function ryanInbox(req: VercelRequest, res: VercelResponse) {
   ]
 
   let provider = 'gemini'
-  let model = process.env.RYAN_GEMINI_MODEL || 'gemini-2.5-flash'
+  let model = process.env.RYAN_GEMINI_MODEL || 'gemini-3.6-flash'
   let aiBody: any = null
 
   if (process.env.GEMINI_API_KEY) {
