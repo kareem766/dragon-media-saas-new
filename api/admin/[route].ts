@@ -103,7 +103,7 @@ async function ryanInbox(req: VercelRequest, res: VercelResponse) {
 
   const { data: conversation } = await supabase.from('conversations').select('id, organization_id, customer_id, channel, handled_by').eq('id', conversationId).eq('organization_id', organizationId).maybeSingle()
   if (!conversation) return res.status(404).json({ error: 'Conversation not found' })
-  if (conversation.channel !== 'whatsapp') return res.status(200).json({ ok: true, skipped: true, reason: 'not_whatsapp' })
+  if (!['whatsapp', 'facebook', 'messenger', 'instagram'].includes(String(conversation.channel || ''))) return res.status(200).json({ ok: true, skipped: true, reason: 'unsupported_channel' })
   if (conversation.handled_by === 'human') return res.status(200).json({ ok: true, skipped: true, reason: 'human_handoff' })
 
   const metadata = message.metadata && typeof message.metadata === 'object' ? (message.metadata as Record<string, unknown>) : {}
