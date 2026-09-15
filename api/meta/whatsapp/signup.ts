@@ -19,6 +19,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const appId = process.env.META_APP_ID
   const graphVersion = process.env.META_GRAPH_API_VERSION || 'v23.0'
   const queryState = typeof req.query.state === 'string' ? req.query.state : ''
+  const redirectUri = process.env.META_WHATSAPP_OAUTH_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/whatsapp/signup'
 
   if (!configId || !appId) {
     return res.status(500).send('WhatsApp Embedded Signup is not configured.')
@@ -47,7 +48,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const CONFIG_ID = ${JSON.stringify(escapeHtml(configId))};
     const GRAPH_VERSION = ${JSON.stringify(escapeHtml(graphVersion))};
     const QUERY_STATE = ${JSON.stringify(escapeHtml(queryState))};
-    const REDIRECT_URI = window.location.origin + window.location.pathname;
+    const REDIRECT_URI = ${JSON.stringify(redirectUri)};
 
     const statusEl = document.getElementById('status');
     const button = document.getElementById('connect');
