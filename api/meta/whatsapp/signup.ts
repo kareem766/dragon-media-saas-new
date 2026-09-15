@@ -72,6 +72,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         response_type: 'code',
         config_id: CONFIG_ID,
         auth_type: 'rerequest',
+        scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
       });
 
       // Keep the OAuth redirect URI fixed and identical to the server-side
