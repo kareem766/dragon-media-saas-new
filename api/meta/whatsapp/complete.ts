@@ -112,12 +112,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    const body = typeof req.body === 'object' && req.body !== null ? req.body : {}
-    const state = typeof body.state === 'string' ? body.state : ''
-    const code = typeof body.code === 'string' ? body.code : ''
-    const eventWabaId = typeof body.waba_id === 'string' ? body.waba_id : null
-    const eventPhoneNumberId = typeof body.phone_number_id === 'string' ? body.phone_number_id : null
-    const eventBusinessId = typeof body.business_id === 'string' ? body.business_id : null
+    // Deliberately read OAuth state/code ONLY from the query string.
+    // Vercel's automatic req.body parser can throw "Invalid JSON" before
+    // handler code can inspect a form or JSON body, so this endpoint never
+    // touches req.body. The browser callback sends a POST with no request body.
+    const state = typeof req.query.state === 'string' ? req.query.state : ''
+    const code = typeof req.query.code === 'string' ? req.query.code : ''
+    const eventWabaId = typeof req.query.waba_id === 'string' ? req.query.waba_id : null
+    const eventPhoneNumberId = typeof req.query.phone_number_id === 'string' ? req.query.phone_number_id : null
+    const eventBusinessId = typeof req.query.business_id === 'string' ? req.query.business_id : null
 
     if (!state) return res.status(400).json({ error: 'Missing OAuth state' })
     const stateData = verifyState(state)
@@ -126,11 +129,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const appId = env('META_APP_ID')
     const appSecret = env('META_APP_SECRET')
-
-    // IMPORTANT: this MUST be byte-for-byte identical to the redirect_uri used
-    // by signup.ts in the OAuth dialog. The OAuth dialog now uses the canonical
-    // callback WITHOUT the state query string. State is returned by Meta as a
-    // query parameter, but it is not part of redirect_uri used for token exchange.
     const redirectUri = process.env.META_WHATSAPP_OAUTH_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/whatsapp/signup'
 
     const exchangeParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code })
