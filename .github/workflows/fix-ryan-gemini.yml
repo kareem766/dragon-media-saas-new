@@ -9,30 +9,62 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch Ryan Gemini resilience
+      - name: Patch Ryan conversation memory
+        shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           p = Path('api/admin/[route].ts')
           s = p.read_text()
-          s = s.replace("let model = process.env.RYAN_GEMINI_MODEL || 'gemini-3.6-flash'", "let model = process.env.RYAN_GEMINI_MODEL || 'gemini-2.5-flash'")
-          old = """      if (response.ok) aiBody = await response.json()\n      else if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) return res.status(502).json({ error: 'تعذر تشغيل Ryan حاليًا.' })"""
-          new = """      if (response.ok) {\n        aiBody = await response.json()\n      } else {\n        const errorText = await response.text()\n        console.error('Ryan inbox Gemini response failed', { status: response.status, model, body: errorText.slice(0, 1000) })\n        aiBody = null\n      }"""
+
+          old = """  const history = (rows || []).reverse().map((row) => ({ role: row.sender_type === 'customer' ? 'user' : 'model', text: String(row.content || '') })).filter((row) => row.text.trim())
+  const knowledgeText = (knowledge || []).map((item) => `${String(item.title || '')}: ${String(item.content || '')}`).filter(Boolean).join('\\n')
+"""
+          new = """  const history = (rows || []).reverse().map((row) => ({ role: row.sender_type === 'customer' ? 'user' : 'model', text: String(row.content || '') })).filter((row) => row.text.trim())
+  const customerHistory = history.filter((item) => item.role === 'user').map((item) => item.text).slice(-8)
+  const contextMemory = customerHistory.length ? customerHistory.map((text, index) => `${index + 1}. ${text}`).join('\\n') : 'لا توجد معلومات سابقة كافية.'
+  const knowledgeText = (knowledge || []).map((item) => `${String(item.title || '')}: ${String(item.content || '')}`).filter(Boolean).join('\\n')
+"""
           if old not in s:
-              raise SystemExit('Expected Gemini response block not found')
+              raise SystemExit('history block not found')
           s = s.replace(old, new, 1)
+
+          old2 = """- اعتبر سجل المحادثة السابق هو المصدر الأساسي لفهم السياق، واستخرج منه نشاط العميل وهدفه والخدمة التي يهتم بها وأي تفاصيل ذكرها بالفعل.\\n- قبل كتابة الرد، لخّص ذهنيًا آخر نية للعميل وما الذي يعرفه Ryan عنه بالفعل، ثم ابنِ الرد على هذه المعلومات بدل البدء من الصفر.\\n- إذا ذكر العميل نشاطًا أو صناعة أو خدمة أو هدفًا واضحًا، احتفظ بهذه المعلومة واستخدمها في الرد التالي حتى لو لم يكررها العميل.\\n"""
+          new2 = """- اعتبر سجل المحادثة السابق هو المصدر الأساسي لفهم السياق، واستخرج منه نشاط العميل وهدفه والخدمة التي يهتم بها وأي تفاصيل ذكرها بالفعل.\\n- قبل كتابة الرد، لخّص ذهنيًا آخر نية للعميل وما الذي يعرفه Ryan عنه بالفعل، ثم ابنِ الرد على هذه المعلومات بدل البدء من الصفر.\\n- إذا ذكر العميل نشاطًا أو صناعة أو خدمة أو هدفًا واضحًا، احتفظ بهذه المعلومة واستخدمها في الرد التالي حتى لو لم يكررها العميل.\\n- قسم \"ذاكرة العميل\" أدناه ذاكرة حقيقية من المحادثة وليس أمثلة؛ حافظ على معلوماته واستخدمها في الرد.\\n- إذا كانت الرسالة الحالية قصيرة مثل \"تمام\" أو \"أيوه\" أو تحية، اربطها بآخر موضوع معروف للعميل ولا تبدأ من الصفر.\\n- ممنوع طلب تفاصيل سبق أن ذكرها العميل، وممنوع الرد العام \"قولي تفاصيل أكتر وأنا أساعدك\" عندما يوجد سياق سابق.\\n"""
+          if old2 not in s:
+              raise SystemExit('prompt context block not found')
+          s = s.replace(old2, new2, 1)
+
+          old3 = """قاعدة المعرفة:\\n${knowledgeText || 'لا توجد معلومات إضافية.'}`"""
+          new3 = """ذاكرة العميل من الرسائل السابقة:\\n${contextMemory}\\n\\nقاعدة المعرفة:\\n${knowledgeText || 'لا توجد معلومات إضافية.'}`"""
+          if old3 not in s:
+              raise SystemExit('prompt footer not found')
+          s = s.replace(old3, new3, 1)
+
+          old4 = """  if (!reply) reply = 'تمام، قولي تفاصيل أكتر وأنا أساعدك.'\n"""
+          new4 = """  if (!reply) {
+    reply = customerHistory.length
+      ? 'تمام يا فندم 👌 نكمل على كلامنا.. تحب نحدد الخطوة الجاية؟'
+      : 'تمام يا فندم 👌 تحب نبدأ منين؟'
+  }
+"""
+          if old4 not in s:
+              raise SystemExit('generic fallback not found')
+          s = s.replace(old4, new4, 1)
+
           p.write_text(s)
           PY
       - name: Commit patch
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add api/admin/[route].ts
-          git commit -m "Harden Ryan Gemini fallback" || exit 0
+          git add api/admin/'[route].ts'
+          git commit -m "Improve Ryan conversation memory" || exit 0
           git push
       - name: Remove temporary workflow
         if: always()
         run: |
           git rm .github/workflows/fix-ryan-gemini.yml || true
-          git commit -m "Remove temporary Ryan Gemini fix workflow" || exit 0
+          git commit -m "Remove temporary Ryan context fix workflow" || exit 0
           git push
