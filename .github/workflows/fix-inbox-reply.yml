@@ -1,0 +1,69 @@
+name: Fix Inbox Reply
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'chore: enable manual inbox replies'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable replies in Inbox
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/pages/Inbox.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old = """                      disabled={
+                        sending ||
+                        activeConversation.handled_by ===
+                          'human'
+                      }"""
+          new = """                      disabled={sending}"""
+
+          if old not in text:
+              raise SystemExit('textarea disabled block not found')
+          text = text.replace(old, new, 1)
+
+          old = """                      disabled={
+                        sending ||
+                        !reply.trim() ||
+                        activeConversation.handled_by ===
+                          'human'
+                      }"""
+          new = """                      disabled={
+                        sending ||
+                        !reply.trim()
+                      }"""
+
+          if old not in text:
+              raise SystemExit('send button disabled block not found')
+          text = text.replace(old, new, 1)
+
+          old = "Ryan متوقف — اكتب رد الموظف هنا..."
+          new = "اكتب رد الموظف هنا..."
+          if old not in text:
+              raise SystemExit('human reply placeholder not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Commit and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/fix-inbox-reply.yml
+          git add src/pages/Inbox.tsx .github/workflows/fix-inbox-reply.yml
+          git commit -m "fix: enable manual inbox replies"
+          git push
