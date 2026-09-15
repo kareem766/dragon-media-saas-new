@@ -45,7 +45,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).send('Missing OAuth state.')
   }
 
-  const redirectUri = `${new URL(req.url || '/', `https://${req.headers.host}`).origin}/api/meta/whatsapp/signup`
+  // Keep one canonical callback URL so Meta OAuth never receives a Vercel
+  // preview/alias hostname that is not whitelisted in the Meta app.
+  // Set META_WHATSAPP_OAUTH_REDIRECT_URI in Vercel if a custom production
+  // domain is used; otherwise use Dragon Media's canonical production URL.
+  const redirectUri = process.env.META_WHATSAPP_OAUTH_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/whatsapp/signup'
   const extras = JSON.stringify({ setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3' })
   const params = new URLSearchParams({
     client_id: appId,
