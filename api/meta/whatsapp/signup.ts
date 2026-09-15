@@ -74,12 +74,16 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         config_id: CONFIG_ID,
         auth_type: 'rerequest',
         scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
-        extras: JSON.stringify({ sessionInfoVersion: 3 }),
+        extras: JSON.stringify({
+          setup: {},
+          featureType: 'whatsapp_business_app_onboarding',
+          sessionInfoVersion: '3',
+        }),
       });
 
-      // Embedded Signup requires the response-type override and session
-      // metadata when launched through the OAuth redirect flow. Keep the
-      // redirect URI fixed and identical to the server-side code exchange.
+      // Embedded Signup uses featureType to select the WhatsApp Business App
+      // onboarding path and sessionInfoVersion 3 for the session payload.
+      // Keep the redirect URI fixed and identical to the server-side code exchange.
       window.location.assign(
         'https://www.facebook.com/' + GRAPH_VERSION + '/dialog/oauth?' + params.toString()
       );
