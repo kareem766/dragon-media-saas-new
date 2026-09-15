@@ -70,13 +70,16 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         redirect_uri: REDIRECT_URI,
         state: STATE,
         response_type: 'code',
+        override_default_response_type: 'true',
         config_id: CONFIG_ID,
         auth_type: 'rerequest',
         scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
+        extras: JSON.stringify({ sessionInfoVersion: 3 }),
       });
 
-      // Keep the OAuth redirect URI fixed and identical to the server-side
-      // exchange value. State is OAuth state, never part of redirect_uri.
+      // Embedded Signup requires the response-type override and session
+      // metadata when launched through the OAuth redirect flow. Keep the
+      // redirect URI fixed and identical to the server-side code exchange.
       window.location.assign(
         'https://www.facebook.com/' + GRAPH_VERSION + '/dialog/oauth?' + params.toString()
       );
