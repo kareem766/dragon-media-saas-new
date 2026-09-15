@@ -8,7 +8,7 @@ function escapeHtml(value: string) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/\"/g, '&quot;')
     .replace(/'/g, '&#039;')
 }
 
@@ -72,8 +72,7 @@ export default function handler(
     const GRAPH_VERSION = ${JSON.stringify(safeGraphVersion)};
     const STATE = ${JSON.stringify(safeState)};
 
-    // This exact URL is also reconstructed by /api/meta/whatsapp/complete.
-    // Keeping it identical prevents Meta OAuth error 100 / subcode 36008.
+    // The complete endpoint reconstructs this exact URL for the OAuth exchange.
     const REDIRECT_URI = window.location.href;
 
     const statusEl = document.getElementById('status');
@@ -82,6 +81,7 @@ export default function handler(
     let sessionInfo = null;
     let authorizationCode = null;
     let submitted = false;
+    let submitTimer = null;
 
     function setStatus(message, className = '') {
       if (statusEl) {
@@ -90,8 +90,22 @@ export default function handler(
       }
     }
 
+    function scheduleSubmit() {
+      if (submitted || !authorizationCode) return;
+
+      // Meta can deliver the OAuth code and WA_EMBEDDED_SIGNUP session data
+      // as separate events. Give the session event a short opportunity to arrive,
+      // but never leave the user stuck forever if Meta omits it.
+      if (submitTimer) window.clearTimeout(submitTimer);
+
+      submitTimer = window.setTimeout(() => {
+        submitWhenReady();
+      }, sessionInfo ? 0 : 2000);
+    }
+
     function parseMessage(event) {
-      if (!event.origin || !event.origin.endsWith('facebook.com')) return;
+      const origin = typeof event.origin === 'string' ? event.origin : '';
+      if (!origin || !(origin === 'https://facebook.com' || origin.endsWith('.facebook.com'))) return;
 
       let data = null;
       try {
@@ -109,7 +123,7 @@ export default function handler(
           business_id: data.data?.business_id || data.data?.businessId || null,
         };
         setStatus('تم استكمال إعداد WhatsApp. جاري تأكيد الربط...');
-        submitWhenReady();
+        scheduleSubmit();
         return;
       }
 
@@ -124,7 +138,7 @@ export default function handler(
     }
 
     async function submitWhenReady() {
-      if (submitted || !authorizationCode || !sessionInfo) return;
+      if (submitted || !authorizationCode) return;
 
       submitted = true;
       if (button) button.disabled = true;
@@ -138,9 +152,11 @@ export default function handler(
           body: JSON.stringify({
             state: STATE,
             code: authorizationCode,
-            waba_id: sessionInfo.waba_id,
-            phone_number_id: sessionInfo.phone_number_id,
-            business_id: sessionInfo.business_id,
+            // These may be null. The server can discover them from the
+            // exchanged token when Meta did not send the session event.
+            waba_id: sessionInfo?.waba_id || null,
+            phone_number_id: sessionInfo?.phone_number_id || null,
+            business_id: sessionInfo?.business_id || null,
           }),
         });
 
@@ -170,7 +186,7 @@ export default function handler(
       if (response && response.authResponse && response.authResponse.code) {
         authorizationCode = response.authResponse.code;
         setStatus('تم استلام رمز الربط من Meta. جاري إنهاء العملية...');
-        submitWhenReady();
+        scheduleSubmit();
         return;
       }
 
