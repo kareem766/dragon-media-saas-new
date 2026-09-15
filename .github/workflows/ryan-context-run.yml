@@ -1,0 +1,39 @@
+name: Run Ryan context patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Patch Ryan
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('api/admin/[route].ts')
+          s = p.read_text()
+          old_query = "supabase.from('messages').select('sender_type, content').eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(13)"
+          new_query = "supabase.from('messages').select('sender_type, content').eq('conversation_id', conversationId).neq('id', messageId).order('created_at', { ascending: false }).limit(13)"
+          if old_query in s:
+              s = s.replace(old_query, new_query, 1)
+          old = "- اربط ردك دائمًا بآخر شيء قاله العميل وبنشاطه أو الخدمة التي يهتم بها.\\n"
+          new = "- اعتبر سجل المحادثة السابق هو المصدر الأساسي لفهم السياق، واستخرج منه نشاط العميل وهدفه والخدمة التي يهتم بها وأي تفاصيل ذكرها بالفعل.\\n- قبل كتابة الرد، لخّص ذهنيًا آخر نية للعميل وما الذي يعرفه Ryan عنه بالفعل، ثم ابنِ الرد على هذه المعلومات بدل البدء من الصفر.\\n- إذا ذكر العميل نشاطًا أو صناعة أو خدمة أو هدفًا واضحًا، احتفظ بهذه المعلومة واستخدمها في الرد التالي حتى لو لم يكررها العميل.\\n- لا تطلب من العميل أن يعيد معلومة ذكرها بالفعل في المحادثة.\\n- عندما يكون عندك سياق كافٍ، لا تقل عبارات عامة مثل \\\"قولي تفاصيل أكتر وأنا أساعدك\\\"؛ وجّه الحوار بسؤال محدد مرتبط بسياق العميل.\\n- اربط ردك دائمًا بآخر شيء قاله العميل وبنشاطه أو الخدمة التي يهتم بها.\\n"
+          if old in s:
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'api/admin/[route].ts'
+          git commit -m 'Improve Ryan context awareness'
+          git rm .github/workflows/ryan-context-run.yml
+          git push
