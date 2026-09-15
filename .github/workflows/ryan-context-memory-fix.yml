@@ -1,0 +1,60 @@
+name: Ryan Context Memory Fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch Ryan context memory
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('api/admin/[route].ts')
+          s = p.read_text()
+
+          if 'const customerHistory = history.filter' not in s:
+              needle = "  const history = (rows || []).reverse().map((row) => ({ role: row.sender_type === 'customer' ? 'user' : 'model', text: String(row.content || '') })).filter((row) => row.text.trim())\n"
+              insert = needle + "  const customerHistory = history.filter((item) => item.role === 'user').map((item) => item.text).slice(-8)\n  const contextMemory = customerHistory.length ? customerHistory.map((text, index) => `${index + 1}. ${text}`).join('\\n') : 'لا توجد معلومات سابقة كافية.'\n"
+              if needle not in s:
+                  raise SystemExit('history anchor not found')
+              s = s.replace(needle, insert, 1)
+
+          marker = "- اعتبر سجل المحادثة السابق هو المصدر الأساسي لفهم السياق"
+          if marker in s and 'اعتبر قسم \\\"ذاكرة العميل\\\"' not in s:
+              s = s.replace(marker, "- اعتبر قسم \\\"ذاكرة العميل\\\" أدناه ذاكرة محادثة صريحة؛ أي معلومة حقيقية فيها يجب الحفاظ عليها وعدم تجاهلها.\\n- إذا كانت الرسالة الحالية قصيرة مثل \\\"تمام\\\" أو \\\"أيوه\\\" أو تحية أو متابعة مختصرة، اربطها مباشرة بآخر موضوع معروف للعميل ولا تبدأ من الصفر.\\n- ممنوع أن تسأل العميل عن تفاصيل سبق أن ذكرها.\\n" + marker, 1)
+
+          footer = "قاعدة المعرفة:\\n${knowledgeText || 'لا توجد معلومات إضافية.'}`"
+          if footer in s and 'ذاكرة العميل من الرسائل السابقة' not in s:
+              s = s.replace(footer, "ذاكرة العميل من الرسائل السابقة:\\n${contextMemory}\\n\\n" + footer, 1)
+
+          fallback = "  if (!reply) reply = 'تمام، قولي تفاصيل أكتر وأنا أساعدك.'\n"
+          if fallback in s:
+              replacement = "  if (!reply) reply = customerHistory.length ? 'تمام يا فندم 👌 نكمل على كلامنا.. تحب نحدد الخطوة الجاية؟' : 'تمام يا فندم 👌 تحب نبدأ منين؟'\n"
+              s = s.replace(fallback, replacement, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Commit source patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/admin/'[route].ts'
+          git commit -m "Improve Ryan conversation memory" || exit 0
+          git push
+
+      - name: Remove temporary workflows
+        if: always()
+        run: |
+          git rm .github/workflows/ryan-context-memory-fix.yml .github/workflows/fix-ryan-gemini.yml 2>/dev/null || true
+          git commit -m "Remove temporary Ryan fix workflows" || exit 0
+          git push
