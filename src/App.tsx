@@ -1,5 +1,5 @@
 import React from 'react'
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route, Link } from 'react-router-dom'
 import { AuthProvider } from './lib/AuthContext'
 import { ToastProvider } from './lib/ToastContext'
 
@@ -53,6 +53,35 @@ import Settings from './pages/Settings'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
+function RyanPageShell() {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-ink-900/10 bg-white p-3 shadow-sm">
+        <span className="mr-auto text-sm font-semibold text-ink-950">إدارة Ryan</span>
+        <Link
+          to="/ryan/settings"
+          className="rounded-xl bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-800"
+        >
+          إعدادات Ryan
+        </Link>
+        <Link
+          to="/ryan/knowledge"
+          className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50"
+        >
+          قاعدة المعرفة
+        </Link>
+        <Link
+          to="/ryan/handoff"
+          className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50"
+        >
+          طلبات التحويل
+        </Link>
+      </div>
+      <Ryan />
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <ToastProvider>
@@ -76,7 +105,7 @@ export default function App() {
               <Route path="/services" element={<Services />} />
               <Route path="/campaigns" element={<FeatureRoute feature="campaigns" featureName="الحملات التسويقية"><Campaigns /></FeatureRoute>} />
               <Route path="/inbox" element={<Inbox />} />
-              <Route path="/ryan" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><Ryan /></FeatureRoute>} />
+              <Route path="/ryan" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanPageShell /></FeatureRoute>} />
               <Route path="/ryan/settings" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanSettings /></FeatureRoute>} />
               <Route path="/ryan/knowledge" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><KnowledgeBase /></FeatureRoute>} />
               <Route path="/ryan/handoff" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><HandoffRequests /></FeatureRoute>} />
