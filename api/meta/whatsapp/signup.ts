@@ -145,7 +145,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         response_type: 'code',
         override_default_response_type: true,
         redirect_uri: REDIRECT_URI,
-        extras: {setup: {}, sessionInfoVersion: '3'},
+        extras: {setup: {}, featureType: 'whatsapp_business_app_onboarding', sessionInfoVersion: '3'},
       });
     }
 
