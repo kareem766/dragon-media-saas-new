@@ -92,11 +92,19 @@ export default async function handler(
       return errorResponse(res, 404, 'Message not found')
     }
 
-    if (message.sender_type !== 'agent') {
+    const messageMetadata =
+      message.metadata && typeof message.metadata === 'object'
+        ? (message.metadata as Record<string, unknown>)
+        : {}
+    const isRyanMessage =
+      message.sender_type === 'ai' &&
+      messageMetadata.source === 'ryan'
+
+    if (message.sender_type !== 'agent' && !isRyanMessage) {
       return res.status(200).json({
         ok: true,
         skipped: true,
-        reason: 'not_agent_message',
+        reason: 'not_outbound_agent_or_ryan_message',
       })
     }
 
@@ -108,11 +116,6 @@ export default async function handler(
         external_id: message.external_id,
       })
     }
-
-    const metadata =
-      message.metadata && typeof message.metadata === 'object'
-        ? (message.metadata as Record<string, unknown>)
-        : {}
 
     const { data: conversation, error: conversationError } = await db
       .from('conversations')
@@ -213,7 +216,7 @@ export default async function handler(
         .from('messages')
         .update({
           metadata: {
-            ...metadata,
+            ...messageMetadata,
             whatsapp_outbound: true,
             outbound_status: 'failed',
             outbound_error: errorMessage,
@@ -247,7 +250,7 @@ export default async function handler(
       .update({
         external_id: externalId,
         metadata: {
-          ...metadata,
+          ...messageMetadata,
           whatsapp_outbound: true,
           outbound_status: 'accepted',
           whatsapp_to: to,
