@@ -152,7 +152,7 @@ async function ryanInbox(req: VercelRequest, res: VercelResponse) {
   ]
 
   let provider = 'gemini'
-  let model = process.env.RYAN_GEMINI_MODEL || 'gemini-3.6-flash'
+  let model = process.env.RYAN_GEMINI_MODEL || 'gemini-2.5-flash'
   let aiBody: any = null
 
   if (process.env.GEMINI_API_KEY) {
@@ -165,8 +165,13 @@ async function ryanInbox(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify({ contents, tools: [{ functionDeclarations: RYAN_TOOLS }], generationConfig: { maxOutputTokens: 512, temperature: 0.4 } }),
         signal: controller.signal,
       })
-      if (response.ok) aiBody = await response.json()
-      else if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) return res.status(502).json({ error: 'تعذر تشغيل Ryan حاليًا.' })
+      if (response.ok) {
+        aiBody = await response.json()
+      } else {
+        const errorText = await response.text()
+        console.error('Ryan inbox Gemini response failed', { status: response.status, model, body: errorText.slice(0, 1000) })
+        aiBody = null
+      }
     } catch (error) {
       console.error('Ryan inbox Gemini request failed', error)
     } finally {
