@@ -38,9 +38,6 @@ export default function handler(
   const appId =
     process.env.META_APP_ID
 
-  const redirectUri =
-    process.env.META_REDIRECT_URI
-
   const graphVersion =
     process.env.META_GRAPH_API_VERSION ||
     'v23.0'
@@ -50,40 +47,22 @@ export default function handler(
       ? req.query.state
       : ''
 
-  if (
-    !configId ||
-    !appId ||
-    !redirectUri ||
-    !state
-  ) {
+  if (!configId || !appId || !state) {
     return res.status(500).send(
       'WhatsApp Embedded Signup is not configured.',
     )
   }
 
-  const safeConfigId =
-    escapeHtml(configId)
-
-  const safeAppId =
-    escapeHtml(appId)
-
-  const safeRedirectUri =
-    escapeHtml(redirectUri)
-
-  const safeGraphVersion =
-    escapeHtml(graphVersion)
-
-  const safeState =
-    escapeHtml(state)
+  const safeConfigId = escapeHtml(configId)
+  const safeAppId = escapeHtml(appId)
+  const safeGraphVersion = escapeHtml(graphVersion)
+  const safeState = escapeHtml(state)
 
   const html = `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ربط WhatsApp Business — Dragon Media</title>
   <style>
     * { box-sizing: border-box; }
@@ -141,6 +120,7 @@ export default function handler(
       white-space: pre-wrap;
     }
     .error { color: #fca5a5; }
+    .success { color: #86efac; }
   </style>
 </head>
 <body>
@@ -148,22 +128,28 @@ export default function handler(
     <div class="logo">DM</div>
     <h1>ربط WhatsApp Business</h1>
     <p>
-      سيتم فتح إعداد WhatsApp Business الرسمي من Meta.
-      بعد إتمام الربط ستتم إعادة توجيهك تلقائيًا إلى Dragon Media.
+      سيتم فتح نافذة الربط الرسمية من Meta.
+      بعد إتمام الربط سيعود الحساب إلى Dragon Media تلقائيًا.
     </p>
-    <button id="connect">متابعة ربط WhatsApp</button>
-    <div id="status" class="status">جاري تجهيز الاتصال...</div>
+    <button id="connect" disabled>فتح ربط WhatsApp</button>
+    <div id="status" class="status">جاري تحميل خدمة Meta...</div>
   </main>
 
   <script>
-    const CONFIG_ID = ${JSON.stringify(safeConfigId)};
     const APP_ID = ${JSON.stringify(safeAppId)};
-    const REDIRECT_URI = ${JSON.stringify(safeRedirectUri)};
+    const CONFIG_ID = ${JSON.stringify(safeConfigId)};
     const GRAPH_VERSION = ${JSON.stringify(safeGraphVersion)};
     const STATE = ${JSON.stringify(safeState)};
 
+    const REDIRECT_URI =
+      window.location.origin + '/api/meta/whatsapp/signup';
+
     const statusEl = document.getElementById('status');
     const button = document.getElementById('connect');
+
+    let sessionInfo = null;
+    let authorizationCode = null;
+    let submitted = false;
 
     function setStatus(message, className = '') {
       if (statusEl) {
@@ -172,38 +158,202 @@ export default function handler(
       }
     }
 
-    function launchSignup() {
+    function parseMessage(event) {
+      if (!event.origin || !event.origin.endsWith('facebook.com')) {
+        return;
+      }
+
+      let data = null;
+
+      try {
+        data = typeof event.data === 'string'
+          ? JSON.parse(event.data)
+          : event.data;
+      } catch {
+        return;
+      }
+
+      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') {
+        return;
+      }
+
+      if (
+        data.event === 'FINISH' ||
+        data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'
+      ) {
+        sessionInfo = {
+          waba_id: data.data?.waba_id || null,
+          phone_number_id: data.data?.phone_number_id || null,
+          business_id:
+            data.data?.business_id ||
+            data.data?.businessId ||
+            null,
+        };
+
+        setStatus('تم استكمال إعداد WhatsApp. جاري تأكيد الربط...');
+        submitWhenReady();
+        return;
+      }
+
+      if (data.event === 'ERROR') {
+        setStatus(
+          data.data?.error_message ||
+            'حدث خطأ أثناء إعداد WhatsApp من Meta.',
+          'error',
+        );
+      }
+
+      if (data.event === 'CANCEL') {
+        if (!submitted) {
+          if (button) button.disabled = false;
+          setStatus('تم إلغاء عملية ربط WhatsApp.');
+        }
+      }
+    }
+
+    async function submitWhenReady() {
+      if (
+        submitted ||
+        !authorizationCode ||
+        !sessionInfo
+      ) {
+        return;
+      }
+
+      submitted = true;
       if (button) button.disabled = true;
+      setStatus('جاري حفظ حساب WhatsApp وتفعيل استقبال الرسائل...');
 
-      setStatus('جاري فتح إعداد WhatsApp الرسمي من Meta...');
+      try {
+        const response = await fetch(
+          '/api/meta/whatsapp/complete',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            cache: 'no-store',
+            body: JSON.stringify({
+              state: STATE,
+              code: authorizationCode,
+              waba_id: sessionInfo.waba_id,
+              phone_number_id: sessionInfo.phone_number_id,
+              business_id: sessionInfo.business_id,
+            }),
+          },
+        );
 
-      const params = new URLSearchParams({
-        client_id: APP_ID,
-        redirect_uri: REDIRECT_URI,
-        response_type: 'code',
-        state: STATE,
-        config_id: CONFIG_ID,
+        const contentType =
+          response.headers.get('content-type') || '';
+
+        const data = contentType.includes('application/json')
+          ? await response.json().catch(() => null)
+          : { error: await response.text().catch(() => '') };
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              'تعذر إكمال ربط WhatsApp.',
+          );
+        }
+
+        sessionStorage.removeItem('dragon_meta_whatsapp_state');
+        setStatus('تم ربط WhatsApp بنجاح. جارٍ العودة إلى الإعدادات...', 'success');
+
+        window.setTimeout(() => {
+          window.location.replace('/#/settings?tab=إعدادات%20واتساب&meta=success');
+        }, 700);
+      } catch (error) {
+        submitted = false;
+        if (button) button.disabled = false;
+        setStatus(
+          error instanceof Error
+            ? error.message
+            : 'تعذر إكمال ربط WhatsApp.',
+          'error',
+        );
+      }
+    }
+
+    function fbLoginCallback(response) {
+      if (response && response.authResponse && response.authResponse.code) {
+        authorizationCode = response.authResponse.code;
+        setStatus('تم استلام رمز الربط من Meta. جاري إنهاء العملية...');
+        submitWhenReady();
+        return;
+      }
+
+      if (response && response.status === 'not_authorized') {
+        setStatus('لم يتم منح صلاحية الربط من Meta.', 'error');
+      } else {
+        setStatus('تم إلغاء أو عدم إكمال ربط WhatsApp.', 'error');
+      }
+
+      if (button) button.disabled = false;
+    }
+
+    function launchSignup() {
+      if (!window.FB || submitted) {
+        return;
+      }
+
+      if (button) button.disabled = true;
+      setStatus('جاري فتح نافذة WhatsApp الرسمية من Meta...');
+
+      window.FB.login(
+        fbLoginCallback,
+        {
+          config_id: CONFIG_ID,
+          response_type: 'code',
+          override_default_response_type: true,
+          redirect_uri: REDIRECT_URI,
+          extras: {
+            setup: {},
+            sessionInfoVersion: '3',
+          },
+        },
+      );
+    }
+
+    window.addEventListener('message', parseMessage);
+
+    window.fbAsyncInit = function () {
+      window.FB.init({
+        appId: APP_ID,
+        cookie: true,
+        xfbml: true,
+        version: GRAPH_VERSION,
       });
 
-      const oauthUrl =
-        'https://www.facebook.com/' +
-        GRAPH_VERSION +
-        '/dialog/oauth?' +
-        params.toString();
+      if (button) {
+        button.disabled = false;
+        button.addEventListener('click', launchSignup);
+      }
 
-      window.location.replace(oauthUrl);
-    }
+      setStatus('جاهز لبدء ربط WhatsApp.');
+    };
 
-    if (button) {
-      button.addEventListener('click', launchSignup);
-    }
+    (function (d, s, id) {
+      const firstScript = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) return;
 
-    setStatus('جاهز لبدء ربط WhatsApp.');
+      const script = d.createElement(s);
+      script.id = id;
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+
+      if (firstScript && firstScript.parentNode) {
+        firstScript.parentNode.insertBefore(script, firstScript);
+      } else {
+        d.head.appendChild(script);
+      }
+    })(document, 'script', 'facebook-jssdk');
   </script>
 </body>
 </html>`
 
-  return res
-    .status(200)
-    .send(html)
+  return res.status(200).send(html)
 }
