@@ -16,41 +16,20 @@ export default function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-  res.setHeader(
-    'Content-Type',
-    'text/html; charset=utf-8',
-  )
-
-  res.setHeader(
-    'Cache-Control',
-    'no-store',
-  )
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-store')
 
   if (req.method !== 'GET') {
-    return res
-      .status(405)
-      .send('Method not allowed')
+    return res.status(405).send('Method not allowed')
   }
 
-  const configId =
-    process.env.META_WHATSAPP_EMBEDDED_CONFIG_ID
-
-  const appId =
-    process.env.META_APP_ID
-
-  const graphVersion =
-    process.env.META_GRAPH_API_VERSION ||
-    'v23.0'
-
-  const state =
-    typeof req.query.state === 'string'
-      ? req.query.state
-      : ''
+  const configId = process.env.META_WHATSAPP_EMBEDDED_CONFIG_ID
+  const appId = process.env.META_APP_ID
+  const graphVersion = process.env.META_GRAPH_API_VERSION || 'v23.0'
+  const state = typeof req.query.state === 'string' ? req.query.state : ''
 
   if (!configId || !appId || !state) {
-    return res.status(500).send(
-      'WhatsApp Embedded Signup is not configured.',
-    )
+    return res.status(500).send('WhatsApp Embedded Signup is not configured.')
   }
 
   const safeConfigId = escapeHtml(configId)
@@ -66,59 +45,14 @@ export default function handler(
   <title>ربط WhatsApp Business — Dragon Media</title>
   <style>
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: radial-gradient(circle at top, #172554 0, #020617 55%, #000 100%);
-      color: #fff;
-      font-family: Arial, Tahoma, sans-serif;
-      padding: 24px;
-    }
-    .card {
-      width: min(520px, 100%);
-      background: rgba(15, 23, 42, 0.94);
-      border: 1px solid rgba(255,255,255,.1);
-      border-radius: 24px;
-      padding: 36px;
-      text-align: center;
-      box-shadow: 0 25px 80px rgba(0,0,0,.45);
-    }
-    .logo {
-      width: 64px;
-      height: 64px;
-      margin: 0 auto 20px;
-      border-radius: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #2563eb;
-      font-weight: 800;
-      font-size: 24px;
-    }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top, #172554 0, #020617 55%, #000 100%); color: #fff; font-family: Arial, Tahoma, sans-serif; padding: 24px; }
+    .card { width: min(520px, 100%); background: rgba(15, 23, 42, 0.94); border: 1px solid rgba(255,255,255,.1); border-radius: 24px; padding: 36px; text-align: center; box-shadow: 0 25px 80px rgba(0,0,0,.45); }
+    .logo { width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: #2563eb; font-weight: 800; font-size: 24px; }
     h1 { margin: 0 0 12px; font-size: 25px; }
     p { color: #cbd5e1; line-height: 1.8; margin: 0 0 24px; }
-    button {
-      width: 100%;
-      border: 0;
-      border-radius: 14px;
-      padding: 15px 20px;
-      background: #2563eb;
-      color: #fff;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-    }
+    button { width: 100%; border: 0; border-radius: 14px; padding: 15px 20px; background: #2563eb; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
     button:disabled { opacity: .6; cursor: wait; }
-    .status {
-      margin-top: 18px;
-      color: #94a3b8;
-      font-size: 14px;
-      line-height: 1.7;
-      white-space: pre-wrap;
-    }
+    .status { margin-top: 18px; color: #94a3b8; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
     .error { color: #fca5a5; }
     .success { color: #86efac; }
   </style>
@@ -127,10 +61,7 @@ export default function handler(
   <main class="card">
     <div class="logo">DM</div>
     <h1>ربط WhatsApp Business</h1>
-    <p>
-      سيتم فتح نافذة الربط الرسمية من Meta.
-      بعد إتمام الربط سيعود الحساب إلى Dragon Media تلقائيًا.
-    </p>
+    <p>سيتم فتح نافذة الربط الرسمية من Meta. بعد إتمام الربط سيعود الحساب إلى Dragon Media تلقائيًا.</p>
     <button id="connect" disabled>فتح ربط WhatsApp</button>
     <div id="status" class="status">جاري تحميل خدمة Meta...</div>
   </main>
@@ -141,8 +72,9 @@ export default function handler(
     const GRAPH_VERSION = ${JSON.stringify(safeGraphVersion)};
     const STATE = ${JSON.stringify(safeState)};
 
-    const REDIRECT_URI =
-      window.location.origin + '/api/meta/whatsapp/signup';
+    // This exact URL is also reconstructed by /api/meta/whatsapp/complete.
+    // Keeping it identical prevents Meta OAuth error 100 / subcode 36008.
+    const REDIRECT_URI = window.location.href;
 
     const statusEl = document.getElementById('status');
     const button = document.getElementById('connect');
@@ -159,103 +91,66 @@ export default function handler(
     }
 
     function parseMessage(event) {
-      if (!event.origin || !event.origin.endsWith('facebook.com')) {
-        return;
-      }
+      if (!event.origin || !event.origin.endsWith('facebook.com')) return;
 
       let data = null;
-
       try {
-        data = typeof event.data === 'string'
-          ? JSON.parse(event.data)
-          : event.data;
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
       } catch {
         return;
       }
 
-      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') {
-        return;
-      }
+      if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
 
-      if (
-        data.event === 'FINISH' ||
-        data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'
-      ) {
+      if (data.event === 'FINISH' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
         sessionInfo = {
           waba_id: data.data?.waba_id || null,
           phone_number_id: data.data?.phone_number_id || null,
-          business_id:
-            data.data?.business_id ||
-            data.data?.businessId ||
-            null,
+          business_id: data.data?.business_id || data.data?.businessId || null,
         };
-
         setStatus('تم استكمال إعداد WhatsApp. جاري تأكيد الربط...');
         submitWhenReady();
         return;
       }
 
       if (data.event === 'ERROR') {
-        setStatus(
-          data.data?.error_message ||
-            'حدث خطأ أثناء إعداد WhatsApp من Meta.',
-          'error',
-        );
+        setStatus(data.data?.error_message || 'حدث خطأ أثناء إعداد WhatsApp من Meta.', 'error');
       }
 
-      if (data.event === 'CANCEL') {
-        if (!submitted) {
-          if (button) button.disabled = false;
-          setStatus('تم إلغاء عملية ربط WhatsApp.');
-        }
+      if (data.event === 'CANCEL' && !submitted) {
+        if (button) button.disabled = false;
+        setStatus('تم إلغاء عملية ربط WhatsApp.');
       }
     }
 
     async function submitWhenReady() {
-      if (
-        submitted ||
-        !authorizationCode ||
-        !sessionInfo
-      ) {
-        return;
-      }
+      if (submitted || !authorizationCode || !sessionInfo) return;
 
       submitted = true;
       if (button) button.disabled = true;
       setStatus('جاري حفظ حساب WhatsApp وتفعيل استقبال الرسائل...');
 
       try {
-        const response = await fetch(
-          '/api/meta/whatsapp/complete',
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Accept: 'application/json',
-            },
-            cache: 'no-store',
-            body: JSON.stringify({
-              state: STATE,
-              code: authorizationCode,
-              waba_id: sessionInfo.waba_id,
-              phone_number_id: sessionInfo.phone_number_id,
-              business_id: sessionInfo.business_id,
-            }),
-          },
-        );
+        const response = await fetch('/api/meta/whatsapp/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          cache: 'no-store',
+          body: JSON.stringify({
+            state: STATE,
+            code: authorizationCode,
+            waba_id: sessionInfo.waba_id,
+            phone_number_id: sessionInfo.phone_number_id,
+            business_id: sessionInfo.business_id,
+          }),
+        });
 
-        const contentType =
-          response.headers.get('content-type') || '';
-
+        const contentType = response.headers.get('content-type') || '';
         const data = contentType.includes('application/json')
           ? await response.json().catch(() => null)
           : { error: await response.text().catch(() => '') };
 
         if (!response.ok) {
-          throw new Error(
-            data?.error ||
-              'تعذر إكمال ربط WhatsApp.',
-          );
+          throw new Error(data?.error || 'تعذر إكمال ربط WhatsApp.');
         }
 
         sessionStorage.removeItem('dragon_meta_whatsapp_state');
@@ -267,12 +162,7 @@ export default function handler(
       } catch (error) {
         submitted = false;
         if (button) button.disabled = false;
-        setStatus(
-          error instanceof Error
-            ? error.message
-            : 'تعذر إكمال ربط WhatsApp.',
-          'error',
-        );
+        setStatus(error instanceof Error ? error.message : 'تعذر إكمال ربط WhatsApp.', 'error');
       }
     }
 
@@ -294,26 +184,21 @@ export default function handler(
     }
 
     function launchSignup() {
-      if (!window.FB || submitted) {
-        return;
-      }
+      if (!window.FB || submitted) return;
 
       if (button) button.disabled = true;
       setStatus('جاري فتح نافذة WhatsApp الرسمية من Meta...');
 
-      window.FB.login(
-        fbLoginCallback,
-        {
-          config_id: CONFIG_ID,
-          response_type: 'code',
-          override_default_response_type: true,
-          redirect_uri: REDIRECT_URI,
-          extras: {
-            setup: {},
-            sessionInfoVersion: '3',
-          },
+      window.FB.login(fbLoginCallback, {
+        config_id: CONFIG_ID,
+        response_type: 'code',
+        override_default_response_type: true,
+        redirect_uri: REDIRECT_URI,
+        extras: {
+          setup: {},
+          sessionInfoVersion: '3',
         },
-      );
+      });
     }
 
     window.addEventListener('message', parseMessage);
