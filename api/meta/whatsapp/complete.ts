@@ -129,16 +129,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const appId = env('META_APP_ID')
     const appSecret = env('META_APP_SECRET')
 
-    // WhatsApp Embedded Signup codes returned by FB.login() are a special
-    // authorization-code flow. The JS SDK owns the OAuth dialog redirect,
-    // so sending our application callback here creates a redirect_uri mismatch.
-    // Meta accepts the Embedded Signup exchange with an empty redirect_uri.
+    // FB.login() above intentionally does not send a redirect_uri. For an
+    // Embedded Signup code, do not send an empty redirect_uri here: Meta treats
+    // an empty value as an explicit URI and rejects the code with subcode 36008.
+    // The exchange must therefore contain only the OAuth parameters that were
+    // actually used by the Embedded Signup dialog.
     const exchangeParams = new URLSearchParams({
       client_id: appId,
       client_secret: appSecret,
       code,
-      grant_type: 'authorization_code',
-      redirect_uri: '',
     })
     const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`, {
       method: 'POST',
@@ -151,7 +150,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('WhatsApp Embedded Signup token exchange failed:', {
         status: exchangeResponse.status,
         error: exchangeData?.error,
-        redirect_uri: '',
       })
       return res.status(502).json({ error: exchangeData?.error?.message || 'Meta authorization code exchange failed', code: 'META_TOKEN_EXCHANGE_FAILED' })
     }
