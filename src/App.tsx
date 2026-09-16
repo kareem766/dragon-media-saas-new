@@ -38,7 +38,6 @@ import AdminBranding from './pages/AdminBranding'
 import AdminOrganizations from './pages/AdminOrganizations'
 import AdminPlans from './pages/AdminPlans'
 import AdminRoles from './pages/AdminRoles'
-import AdminRyanCredits from './pages/AdminRyanCredits'
 import AdminTickets from './pages/AdminTickets'
 
 import Tickets from './pages/Tickets'
@@ -119,7 +118,6 @@ export default function App() {
               <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
               <Route path="/admin/branding" element={<AdminRoute><AdminBranding /></AdminRoute>} />
               <Route path="/admin/plans" element={<AdminRoute><AdminPlans /></AdminRoute>} />
-              <Route path="/admin/ryan-credits" element={<AdminRoute><AdminRyanCredits /></AdminRoute>} />
               <Route path="/admin/roles" element={<AdminRoute><AdminRoles /></AdminRoute>} />
               <Route path="/admin/tickets" element={<AdminRoute><AdminTickets /></AdminRoute>} />
             </Route>
