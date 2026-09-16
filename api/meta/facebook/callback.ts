@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createCipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
 const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/facebook/callback'
@@ -20,6 +20,15 @@ function verifyState(value: string) {
     if (Date.now() - payload.iat > 10 * 60 * 1000) return null
     return payload
   } catch { return null }
+}
+
+function encryptToken(token: string) {
+  const seed = env('META_TOKEN_ENCRYPTION_KEY', 'META_APP_SECRET')
+  const key = createHash('sha256').update(seed).digest()
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', key, iv)
+  const data = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()])
+  return { v: 1, alg: 'aes-256-gcm', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') }
 }
 
 async function graph(path: string, token: string, init?: RequestInit) {
@@ -65,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const { error } = await db.from('integrations').upsert({
       organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected',
-      config: { access_token: pageToken },
+      config: { access_token: encryptToken(pageToken) },
       metadata: { facebook_page_id: String(page.id), facebook_page_name: String(page.name || ''), facebook_page_category: String(page.category || ''), facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [], facebook_webhook_subscribed: subscription, ready_for_messaging: subscription, connected_via: 'facebook_oauth' },
       connected_at: new Date().toISOString(), last_verified_at: new Date().toISOString(), error_message: subscription ? null : 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.', updated_at: new Date().toISOString(),
     }, { onConflict: 'organization_id,provider' })
