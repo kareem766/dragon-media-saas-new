@@ -50,11 +50,10 @@ if (reliableStart >= 0 && reliableEnd > reliableStart) {
   patched = patched.slice(0, reliableStart) + reliableName + patched.slice(reliableEnd)
 }
 
-const safeStart = patched.indexOf('function safeReply(value: unknown, fallback: string)')
-const safeEnd = patched.indexOf('\n\nasync function executeRyanTool', safeStart)
-if (safeStart >= 0 && safeEnd > safeStart) {
-  const safeReply = `function safeReply(value: unknown, fallback: string) { const text = clean(value, 1800).replace(/^\\`\\`\\`(?:json|text)?\\s*/i, '').replace(/\\s*\\`\\`\\`$/i, '').trim(); if (!text || /^\\s*[\\[{]/.test(text) || /\"(?:functionCall|functionResponse|args)\"\\s*:/.test(text)) return fallback; if (/(?:\\breliable\\b|\\bmemory\\b|\\breasoning\\b|\\bfunctionCall\\b|\\bfunctionResponse\\b|\\bargs\\b|\\bsystem\\b|\\bprompt\\b|الذاكرة الداخلية|السياق الداخلي|التعليمات الداخلية)/i.test(text)) return fallback; return text }`
-  patched = patched.slice(0, safeStart) + safeReply + patched.slice(safeEnd)
+const leakGuard = `  reply = safeReply(reply, fallback)`
+const leakGuardReplacement = `  reply = safeReply(reply, fallback)\n  if (/(?:\\breliable\\b|\\bmemory\\b|\\breasoning\\b|\\bfunctionCall\\b|\\bfunctionResponse\\b|\\bargs\\b|\\bsystem\\b|\\bprompt\\b|الذاكرة الداخلية|السياق الداخلي|التعليمات الداخلية)/i.test(reply)) reply = fallback`
+if (patched.includes(leakGuard) && !patched.includes('الذاكرة الداخلية')) {
+  patched = patched.replace(leakGuard, leakGuardReplacement)
 }
 
 if (patched !== source) {
