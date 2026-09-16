@@ -46,6 +46,23 @@ const cards = [
   { provider: 'instagram', title: 'Instagram', text: 'ربط Instagram سيستخدم نفس طبقة Meta الرسمية بعد اكتمال WhatsApp.' },
 ]
 
+function normalizeSessionInfo(value: any): SessionInfo | null {
+  let data = value
+  if (typeof data === 'string') {
+    try { data = JSON.parse(data) } catch { return null }
+  }
+  if (data?.data && typeof data.data === 'object') data = data.data
+  const wabaId = data?.waba_id ?? data?.wabaId ?? data?.waba?.id
+  const phoneId = data?.phone_number_id ?? data?.phoneNumberId ?? data?.phone?.id
+  const businessId = data?.business_id ?? data?.businessId ?? data?.business?.id
+  if (!wabaId) return null
+  return {
+    waba_id: String(wabaId),
+    phone_number_id: phoneId ? String(phoneId) : undefined,
+    business_id: businessId ? String(businessId) : undefined,
+  }
+}
+
 export default function MetaConnections() {
   const { organizationId } = useOrganization()
   const [rows, setRows] = useState<Integration[]>([])
@@ -64,7 +81,6 @@ export default function MetaConnections() {
       .select('provider,connected,status,metadata,error_message')
       .eq('organization_id', organizationId)
       .in('provider', ['whatsapp', 'facebook', 'instagram'])
-
     if (fetchError) setError('تعذر تحميل حالة اتصالات Meta.')
     setRows((data ?? []) as Integration[])
     setLoading(false)
@@ -84,22 +100,19 @@ export default function MetaConnections() {
 
   useEffect(() => {
     const sessionInfoListener = (event: MessageEvent) => {
-      if (!event.origin?.endsWith('facebook.com')) return
+      if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://facebook.com') return
 
-      let data: any
-      try {
-        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
-      } catch {
-        return
+      let data: any = event.data
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data) } catch { return }
       }
-
       if (data?.type !== 'WA_EMBEDDED_SIGNUP') return
 
       if (data.event === 'ERROR') {
         pendingRef.current = null
         completingRef.current = false
         setConnecting(false)
-        setError(String(data.data?.error_message || 'Meta لم تُكمل عملية ربط WhatsApp.'))
+        setError(String(data.data?.error_message || data.error_message || 'Meta لم تُكمل عملية ربط WhatsApp.'))
         return
       }
 
@@ -112,14 +125,10 @@ export default function MetaConnections() {
       }
 
       if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
-        const session = data.data || {}
+        const session = normalizeSessionInfo(data)
         const current = pendingRef.current
-        if (!current || !session.waba_id) return
-        current.session = {
-          waba_id: String(session.waba_id),
-          phone_number_id: session.phone_number_id ? String(session.phone_number_id) : undefined,
-          business_id: session.business_id || session.businessId ? String(session.business_id || session.businessId) : undefined,
-        }
+        if (!current || !session) return
+        current.session = session
         void completeSignup()
       }
     }
@@ -133,7 +142,6 @@ export default function MetaConnections() {
       window.FB.init({ appId, cookie: true, xfbml: true, version: 'v23.0' })
       return
     }
-
     await new Promise<void>((resolve, reject) => {
       const existing = document.getElementById('facebook-jssdk')
       const finish = () => {
@@ -143,13 +151,11 @@ export default function MetaConnections() {
           resolve()
         }
       }
-
       window.fbAsyncInit = finish
       if (existing) {
-        const timeout = window.setTimeout(finish, 5000)
-        return () => window.clearTimeout(timeout)
+        window.setTimeout(finish, 5000)
+        return
       }
-
       const script = document.createElement('script')
       script.id = 'facebook-jssdk'
       script.async = true
@@ -164,32 +170,25 @@ export default function MetaConnections() {
   const completeSignup = async () => {
     if (completingRef.current) return
     const pending = pendingRef.current
-    if (!pending?.code || !pending.session || !supabase) return
-
+    if (!pending?.code || !supabase) return
     completingRef.current = true
     setError('')
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
-
       const response = await fetch('/api/meta/oauth/callback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` },
         body: JSON.stringify({
           code: pending.code,
           state: pending.state,
-          waba_id: pending.session.waba_id,
-          phone_number_id: pending.session.phone_number_id,
-          business_id: pending.session.business_id,
+          waba_id: pending.session?.waba_id,
+          phone_number_id: pending.session?.phone_number_id,
+          business_id: pending.session?.business_id,
         }),
       })
-
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result.connected) throw new Error(result.error || 'تعذر إكمال حفظ اتصال WhatsApp.')
-
       pendingRef.current = null
       setConnecting(false)
       await load()
@@ -209,26 +208,16 @@ export default function MetaConnections() {
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
       if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
-
       const response = await fetch('/api/meta/oauth/start', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` },
         body: JSON.stringify({ organizationId }),
       })
-
       const result = await response.json().catch(() => ({}))
-      if (!response.ok || !result.state || !result.app_id || !result.config_id) {
-        throw new Error(result.error || 'تعذر تجهيز ربط Meta.')
-      }
-
+      if (!response.ok || !result.state || !result.app_id || !result.config_id) throw new Error(result.error || 'تعذر تجهيز ربط Meta.')
       pendingRef.current = { state: String(result.state), code: '', session: null }
       await loadMetaSdk(String(result.app_id))
-
       if (!window.FB) throw new Error('Meta JavaScript SDK غير متاح.')
-
       window.FB.login(
         (loginResponse) => {
           const code = loginResponse.authResponse?.code
@@ -238,7 +227,6 @@ export default function MetaConnections() {
             setError('Meta لم تُرجع authorization code صالحًا.')
             return
           }
-
           const pending = pendingRef.current
           if (!pending) return
           pending.code = String(code)
@@ -248,10 +236,7 @@ export default function MetaConnections() {
           config_id: String(result.config_id),
           response_type: 'code',
           override_default_response_type: true,
-          extras: {
-            setup: {},
-            sessionInfoVersion: '3',
-          },
+          extras: { setup: {}, sessionInfoVersion: '3' },
         },
       )
     } catch (err) {
@@ -267,9 +252,7 @@ export default function MetaConnections() {
         <h1 className="text-2xl font-bold text-ink-950">اتصالات Meta</h1>
         <p className="mt-1 text-sm text-ink-600">ربط WhatsApp عبر Meta Embedded Signup الرسمي مع حفظ WABA ورقم الهاتف المحدد من داخل مسار Meta.</p>
       </div>
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
-        تم فصل الربط الجديد عن المحاولات السابقة، والـ redirect URI المستخدم في تبادل الكود ثابت ومطابق للإعداد المسجل في Meta.
-      </div>
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">استخدم زر «ربط WhatsApp» الموجود هنا لبدء Embedded Signup. سيتم التقاط بيانات WABA ورقم الهاتف من جلسة Meta وإرسالها مباشرة إلى Dragon Media.</div>
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       <div className="grid gap-4 md:grid-cols-3">
         {cards.map((card) => {
@@ -283,9 +266,7 @@ export default function MetaConnections() {
               </div>
               <p className="mt-3 min-h-12 text-sm leading-6 text-ink-600">{card.text}</p>
               {card.provider === 'whatsapp' ? (
-                <button onClick={startWhatsApp} disabled={connecting || loading} className="mt-5 w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
-                  {connecting ? 'جارٍ فتح Meta…' : connected ? 'إدارة اتصال WhatsApp' : 'ربط WhatsApp'}
-                </button>
+                <button onClick={startWhatsApp} disabled={connecting || loading} className="mt-5 w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{connecting ? 'جارٍ فتح Meta…' : connected ? 'إدارة اتصال WhatsApp' : 'ربط WhatsApp'}</button>
               ) : (
                 <button disabled className="mt-5 w-full rounded-xl border border-ink-900/10 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">سيتم تفعيله بعد WhatsApp</button>
               )}
