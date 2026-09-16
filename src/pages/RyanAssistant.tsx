@@ -97,7 +97,7 @@ export default function RyanAssistant() {
           </div>
         </div>
 
-        <div className="min-h-[430px] max-h-[58vh] overflow-y-auto space-y-4 p-4 md:p-6 bg-ink-50/40">
+        <div className="min-h-[430px] max-h-[58vh] overflow-y-auto space-y-4 p-4 md:p-6 bg-ink-50/40" aria-live="polite">
           {messages.map((message, index) => (
             <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-start' : 'justify-end'}`}>
               <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-7 ${message.role === 'user' ? 'bg-white border border-ink-900/10 text-ink-900' : 'bg-ink-950 text-white'}`}>
