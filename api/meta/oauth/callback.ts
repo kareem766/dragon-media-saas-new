@@ -97,6 +97,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const token = String(tokenData.access_token)
+    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+
+    // Facebook uses this same already-whitelisted callback, distinguished by
+    // the signed provider value in state. Keep the WhatsApp branch below intact.
+    if (stateData.provider === 'facebook') {
+      const pages = await graph('/me/accounts?fields=id,name,category,access_token,tasks&limit=100', token)
+      const page = Array.isArray(pages?.data)
+        ? pages.data.find((item: any) => item?.id && item?.access_token)
+        : null
+      if (!page) throw new Error('تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.')
+
+      const pageToken = String(page.access_token)
+      const subscription = await graph(
+        `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals`,
+        pageToken,
+        { method: 'POST' },
+      ).then(() => true).catch(() => false)
+
+      const { error: saveError } = await db.from('integrations').upsert({
+        organization_id: String(stateData.organizationId),
+        provider: 'facebook',
+        connected: true,
+        status: 'connected',
+        config: { access_token: encryptToken(pageToken) },
+        metadata: {
+          facebook_page_id: String(page.id),
+          facebook_page_name: String(page.name || ''),
+          facebook_page_category: String(page.category || ''),
+          facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [],
+          facebook_webhook_subscribed: subscription,
+          ready_for_messaging: subscription,
+          connected_via: 'facebook_oauth',
+        },
+        connected_at: new Date().toISOString(),
+        last_verified_at: new Date().toISOString(),
+        error_message: subscription ? null : 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'organization_id,provider' })
+
+      if (saveError) throw new Error('تمت مصادقة Facebook لكن تعذر حفظ الاتصال في Dragon Media.')
+
+      if (req.method === 'POST') return res.status(200).json({ ok: true, connected: true, provider: 'facebook' })
+      return res.redirect(302, 'https://dragon-media-saas-new.vercel.app/#/integrations/meta?meta_provider=facebook&meta_status=connected')
+    }
 
     let selectedWaba: any = null
     let selectedPhone: any = null
@@ -152,7 +196,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await graph(`/${encodeURIComponent(selectedWaba.id)}/subscribed_apps`, token, { method: 'POST' }).catch(() => null)
 
-    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const metadata = {
       business_id: businessId,
       business_name: '',
