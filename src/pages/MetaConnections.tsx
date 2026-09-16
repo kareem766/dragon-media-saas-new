@@ -129,7 +129,9 @@ export default function MetaConnections() {
         const current = pendingRef.current
         if (!current || !session) return
         current.session = session
-        void completeSignup()
+        // Meta can deliver the session event before or after the authorization
+        // code. completeSignup() only proceeds once both are present.
+        if (current.code) void completeSignup()
       }
     }
 
@@ -170,7 +172,10 @@ export default function MetaConnections() {
   const completeSignup = async () => {
     if (completingRef.current) return
     const pending = pendingRef.current
-    if (!pending?.code || !supabase) return
+    // Critical: Meta returns the authorization code and the
+    // WA_EMBEDDED_SIGNUP session payload asynchronously and their order is not
+    // guaranteed. Never call the server callback until BOTH are available.
+    if (!pending?.code || !pending.session?.waba_id) return
     completingRef.current = true
     setError('')
     try {
@@ -182,9 +187,9 @@ export default function MetaConnections() {
         body: JSON.stringify({
           code: pending.code,
           state: pending.state,
-          waba_id: pending.session?.waba_id,
-          phone_number_id: pending.session?.phone_number_id,
-          business_id: pending.session?.business_id,
+          waba_id: pending.session.waba_id,
+          phone_number_id: pending.session.phone_number_id,
+          business_id: pending.session.business_id,
         }),
       })
       const result = await response.json().catch(() => ({}))
@@ -193,7 +198,8 @@ export default function MetaConnections() {
       setConnecting(false)
       await load()
     } catch (err) {
-      pendingRef.current = null
+      // Keep the pending session intact so a delayed Meta message can still
+      // complete the flow if the request itself was transiently unavailable.
       setConnecting(false)
       setError(err instanceof Error ? err.message : 'تعذر إكمال اتصال WhatsApp.')
     } finally {
@@ -230,7 +236,9 @@ export default function MetaConnections() {
           const pending = pendingRef.current
           if (!pending) return
           pending.code = String(code)
-          void completeSignup()
+          // The session event may already have arrived, or it may arrive after
+          // this callback. In either case completeSignup waits for both values.
+          if (pending.session?.waba_id) void completeSignup()
         },
         {
           config_id: String(result.config_id),
