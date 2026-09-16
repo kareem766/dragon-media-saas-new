@@ -1,0 +1,78 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { createClient } from '@supabase/supabase-js'
+import { createHmac, timingSafeEqual } from 'node:crypto'
+
+const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
+const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/facebook/callback'
+const APP_URL = 'https://dragon-media-saas-new.vercel.app'
+const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
+
+function verifyState(value: string) {
+  const [raw, signature] = value.split('.')
+  if (!raw || !signature) return null
+  const secret = env('META_STATE_SECRET', 'META_APP_SECRET')
+  const expected = createHmac('sha256', secret).update(raw).digest('base64url')
+  const a = Buffer.from(signature), b = Buffer.from(expected)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null
+  try {
+    const payload = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Record<string, unknown>
+    if (payload.provider !== 'facebook' || typeof payload.organizationId !== 'string' || typeof payload.iat !== 'number') return null
+    if (Date.now() - payload.iat > 10 * 60 * 1000) return null
+    return payload
+  } catch { return null }
+}
+
+async function graph(path: string, token: string, init?: RequestInit) {
+  const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}${path}`, { ...init, headers: { ...(init?.headers || {}), Authorization: `Bearer ${token}` } })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data?.error?.message || `Meta Graph request failed (${response.status})`)
+  return data
+}
+
+function redirect(res: VercelResponse, status: string, message = '') {
+  return res.redirect(302, `${APP_URL}/#/integrations/meta?meta_provider=facebook&meta_status=${status}${message ? `&meta_message=${encodeURIComponent(message)}` : ''}`)
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') return redirect(res, 'error', 'طلب Facebook OAuth غير صالح.')
+  try {
+    const code = String(req.query.code || '')
+    const state = String(req.query.state || '')
+    if (req.query.error) return redirect(res, 'error', String(req.query.error_description || req.query.error))
+    if (!code || !state) return redirect(res, 'error', 'Facebook لم يُرجع authorization code صالحًا.')
+    const stateData = verifyState(state)
+    if (!stateData) return redirect(res, 'error', 'جلسة Facebook انتهت أو غير صالحة.')
+
+    const appId = env('META_APP_ID', 'FACEBOOK_APP_ID')
+    const appSecret = env('META_APP_SECRET', 'FACEBOOK_APP_SECRET')
+    const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
+    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
+    if (!appId || !appSecret || !supabaseUrl || !serviceKey) return redirect(res, 'error', 'إعدادات Facebook على الخادم غير مكتملة.')
+
+    const params = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: REDIRECT_URI, code })
+    const tokenResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params })
+    const tokenData = await tokenResponse.json().catch(() => ({}))
+    if (!tokenResponse.ok || !tokenData.access_token) throw new Error(tokenData?.error?.message || 'فشل تبادل authorization code مع Facebook.')
+
+    const userToken = String(tokenData.access_token)
+    const pages = await graph('/me/accounts?fields=id,name,category,access_token,tasks&limit=100', userToken)
+    const page = Array.isArray(pages?.data) ? pages.data.find((item: any) => item?.id && item?.access_token) : null
+    if (!page) throw new Error('تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.')
+
+    const pageToken = String(page.access_token)
+    const subscription = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals`, pageToken, { method: 'POST' }).then(() => true).catch(() => false)
+
+    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    const { error } = await db.from('integrations').upsert({
+      organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected',
+      config: { access_token: pageToken },
+      metadata: { facebook_page_id: String(page.id), facebook_page_name: String(page.name || ''), facebook_page_category: String(page.category || ''), facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [], facebook_webhook_subscribed: subscription, ready_for_messaging: subscription, connected_via: 'facebook_oauth' },
+      connected_at: new Date().toISOString(), last_verified_at: new Date().toISOString(), error_message: subscription ? null : 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.', updated_at: new Date().toISOString(),
+    }, { onConflict: 'organization_id,provider' })
+    if (error) throw new Error('تعذر حفظ اتصال Facebook في Dragon Media.')
+    return redirect(res, 'connected')
+  } catch (error) {
+    console.error('Facebook OAuth callback failed', error)
+    return redirect(res, 'error', error instanceof Error ? error.message : 'فشل اتصال Facebook.')
+  }
+}
