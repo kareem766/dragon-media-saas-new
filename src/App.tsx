@@ -50,6 +50,7 @@ import Billing from './pages/Billing'
 import Reports from './pages/Reports'
 import Users from './pages/Users'
 import Settings from './pages/Settings'
+import MetaConnections from './pages/MetaConnections'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
@@ -58,24 +59,9 @@ function RyanPageShell() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-ink-900/10 bg-white p-3 shadow-sm">
         <span className="mr-auto text-sm font-semibold text-ink-950">إدارة Ryan</span>
-        <Link
-          to="/ryan/settings"
-          className="rounded-xl bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-800"
-        >
-          إعدادات Ryan
-        </Link>
-        <Link
-          to="/ryan/knowledge"
-          className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50"
-        >
-          قاعدة المعرفة
-        </Link>
-        <Link
-          to="/ryan/handoff"
-          className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50"
-        >
-          طلبات التحويل
-        </Link>
+        <Link to="/ryan/settings" className="rounded-xl bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-800">إعدادات Ryan</Link>
+        <Link to="/ryan/knowledge" className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50">قاعدة المعرفة</Link>
+        <Link to="/ryan/handoff" className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50">طلبات التحويل</Link>
       </div>
       <Ryan />
     </div>
@@ -121,6 +107,7 @@ export default function App() {
               <Route path="/users" element={<Users />} />
               <Route path="/account" element={<Account />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/integrations/meta" element={<MetaConnections />} />
 
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="/admin/organizations" element={<AdminRoute><AdminOrganizations /></AdminRoute>} />
