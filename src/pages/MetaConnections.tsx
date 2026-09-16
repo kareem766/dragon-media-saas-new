@@ -98,16 +98,48 @@ export default function MetaConnections() {
     if (status === 'error' && message) setError(message)
   }, [organizationId])
 
+  const completeSignup = async () => {
+    if (completingRef.current) return
+    const pending = pendingRef.current
+    if (!pending?.code || !pending.session?.waba_id) return
+    completingRef.current = true
+    setError('')
+    try {
+      if (!supabase) throw new Error('تعذر الوصول إلى جلسة Supabase.')
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
+      const response = await fetch('/api/meta/oauth/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: JSON.stringify({
+          code: pending.code,
+          state: pending.state,
+          waba_id: pending.session.waba_id,
+          phone_number_id: pending.session.phone_number_id,
+          business_id: pending.session.business_id,
+        }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.connected) throw new Error(result.error || 'تعذر إكمال حفظ اتصال WhatsApp.')
+      pendingRef.current = null
+      setConnecting(false)
+      await load()
+    } catch (err) {
+      setConnecting(false)
+      setError(err instanceof Error ? err.message : 'تعذر إكمال اتصال WhatsApp.')
+    } finally {
+      completingRef.current = false
+    }
+  }
+
   useEffect(() => {
     const sessionInfoListener = (event: MessageEvent) => {
       if (event.origin !== 'https://www.facebook.com' && event.origin !== 'https://facebook.com') return
-
       let data: any = event.data
       if (typeof data === 'string') {
         try { data = JSON.parse(data) } catch { return }
       }
       if (data?.type !== 'WA_EMBEDDED_SIGNUP') return
-
       if (data.event === 'ERROR') {
         pendingRef.current = null
         completingRef.current = false
@@ -115,7 +147,6 @@ export default function MetaConnections() {
         setError(String(data.data?.error_message || data.error_message || 'Meta لم تُكمل عملية ربط WhatsApp.'))
         return
       }
-
       if (data.event === 'CANCEL') {
         pendingRef.current = null
         completingRef.current = false
@@ -123,18 +154,14 @@ export default function MetaConnections() {
         setError('تم إلغاء ربط WhatsApp قبل اكتماله.')
         return
       }
-
       if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
         const session = normalizeSessionInfo(data)
         const current = pendingRef.current
         if (!current || !session) return
         current.session = session
-        // Meta can deliver the session event before or after the authorization
-        // code. completeSignup() only proceeds once both are present.
         if (current.code) void completeSignup()
       }
     }
-
     window.addEventListener('message', sessionInfoListener)
     return () => window.removeEventListener('message', sessionInfoListener)
   }, [])
@@ -169,44 +196,6 @@ export default function MetaConnections() {
     })
   }
 
-  const completeSignup = async () => {
-    if (completingRef.current) return
-    const pending = pendingRef.current
-    // Critical: Meta returns the authorization code and the
-    // WA_EMBEDDED_SIGNUP session payload asynchronously and their order is not
-    // guaranteed. Never call the server callback until BOTH are available.
-    if (!pending?.code || !pending.session?.waba_id) return
-    completingRef.current = true
-    setError('')
-    try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
-      const response = await fetch('/api/meta/oauth/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` },
-        body: JSON.stringify({
-          code: pending.code,
-          state: pending.state,
-          waba_id: pending.session.waba_id,
-          phone_number_id: pending.session.phone_number_id,
-          business_id: pending.session.business_id,
-        }),
-      })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok || !result.connected) throw new Error(result.error || 'تعذر إكمال حفظ اتصال WhatsApp.')
-      pendingRef.current = null
-      setConnecting(false)
-      await load()
-    } catch (err) {
-      // Keep the pending session intact so a delayed Meta message can still
-      // complete the flow if the request itself was transiently unavailable.
-      setConnecting(false)
-      setError(err instanceof Error ? err.message : 'تعذر إكمال اتصال WhatsApp.')
-    } finally {
-      completingRef.current = false
-    }
-  }
-
   const startWhatsApp = async () => {
     if (!organizationId || !supabase) return
     setError('')
@@ -236,8 +225,6 @@ export default function MetaConnections() {
           const pending = pendingRef.current
           if (!pending) return
           pending.code = String(code)
-          // The session event may already have arrived, or it may arrive after
-          // this callback. In either case completeSignup waits for both values.
           if (pending.session?.waba_id) void completeSignup()
         },
         {
