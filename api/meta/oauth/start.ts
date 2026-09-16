@@ -19,7 +19,9 @@ function signState(payload: Record<string, unknown>) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return json(res, 405, { error: 'Method not allowed' })
+  }
 
   try {
     const appId = env('META_APP_ID', 'FACEBOOK_APP_ID')
@@ -36,23 +38,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
     if (!accessToken) return json(res, 401, { error: 'جلسة الدخول غير موجودة.' })
 
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
-    const organizationId = String(body.organizationId || '')
-    if (!organizationId) return json(res, 400, { error: 'معرّف الشركة غير موجود.' })
-
     const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const { data: userData, error: userError } = await db.auth.getUser(accessToken)
     if (userError || !userData.user) return json(res, 401, { error: 'جلسة الدخول غير صالحة.' })
 
-    const { data: membership } = await db
-      .from('users')
-      .select('id,organization_id,active')
-      .eq('id', userData.user.id)
-      .eq('organization_id', organizationId)
-      .maybeSingle()
+    let organizationId = ''
 
-    if (!membership || membership.active === false) {
-      return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
+    if (req.method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
+      organizationId = String(body.organizationId || '')
+    }
+
+    // Backward-compatible GET support for the existing Settings integration UI.
+    // The old UI sends the authenticated user's token but does not send organizationId.
+    if (!organizationId) {
+      const { data: membership, error: membershipError } = await db
+        .from('users')
+        .select('organization_id,active')
+        .eq('id', userData.user.id)
+        .maybeSingle()
+
+      if (membershipError) {
+        console.error('Meta OAuth membership lookup failed', membershipError)
+        return json(res, 500, { error: 'تعذر التحقق من الشركة المرتبطة بالحساب.' })
+      }
+
+      organizationId = String(membership?.organization_id || '')
+      if (!organizationId || membership?.active === false) {
+        return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
+      }
+    } else {
+      const { data: membership } = await db
+        .from('users')
+        .select('id,organization_id,active')
+        .eq('id', userData.user.id)
+        .eq('organization_id', organizationId)
+        .maybeSingle()
+
+      if (!membership || membership.active === false) {
+        return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
+      }
     }
 
     const state = signState({
