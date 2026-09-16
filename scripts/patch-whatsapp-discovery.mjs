@@ -19,9 +19,11 @@ const replacement = String.raw`async function discoverWhatsAppData(
   let webhookSubscribed = false
   const businessIds = new Set<string>()
   const candidateWabaIds = new Set<string>()
+
   const addBusiness = (value: unknown) => {
     if (typeof value === 'string' && value.trim()) businessIds.add(value.trim())
   }
+
   const addWaba = (value: unknown) => {
     if (typeof value === 'string' && value.trim()) candidateWabaIds.add(value.trim())
   }
@@ -69,28 +71,52 @@ const replacement = String.raw`async function discoverWhatsAppData(
     for (const edge of ['owned_whatsapp_business_accounts', 'client_whatsapp_business_accounts']) {
       try {
         const { response, data } = await graphRequest('/' + encodeURIComponent(currentBusinessId) + '/' + edge + '?fields=id,name', accessToken)
-        if (response.ok && Array.isArray(data?.data)) for (const waba of data.data) addWaba(waba?.id)
-        else console.warn('WhatsApp WABA edge discovery failed:', { businessId: currentBusinessId, edge, status: response.status, error: data?.error })
+        if (response.ok && Array.isArray(data?.data)) {
+          for (const waba of data.data) addWaba(waba?.id)
+        } else {
+          console.warn('WhatsApp WABA edge discovery failed:', { businessId: currentBusinessId, edge, status: response.status, error: data?.error })
+        }
       } catch (error) {
         console.warn('WhatsApp WABA edge discovery error:', { businessId: currentBusinessId, edge, error })
       }
     }
   }
 
+  // Meta may return several granular-scope target IDs. The first valid ID is
+  // not guaranteed to be the WABA that owns the connected phone number.
+  // Try every candidate and select the first WABA that actually exposes a phone.
+  let firstValidWaba: string | null = null
+
   for (const candidateId of candidateWabaIds) {
     try {
-      const { response, data } = await graphRequest('/' + encodeURIComponent(candidateId) + '?fields=id,name,owner_business_info', accessToken)
-      if (!response.ok || !data?.id) continue
-      wabaId = String(data.id)
-      if (data.owner_business_info?.id) businessId = String(data.owner_business_info.id)
+      const details = await graphRequest('/' + encodeURIComponent(candidateId) + '?fields=id,name,owner_business_info', accessToken)
+      if (!details.response.ok || !details.data?.id) continue
+
+      const currentWabaId = String(details.data.id)
+      if (!firstValidWaba) firstValidWaba = currentWabaId
+      if (details.data.owner_business_info?.id) businessId = String(details.data.owner_business_info.id)
       if (!businessId && businessIds.size) businessId = Array.from(businessIds)[0]
-      break
+
+      const phones = await graphRequest('/' + encodeURIComponent(currentWabaId) + '/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating,platform_type', accessToken)
+      if (phones.response.ok && Array.isArray(phones.data?.data) && phones.data.data.length) {
+        const phone = phones.data.data[0]
+        wabaId = currentWabaId
+        phoneNumberId = phone?.id ? String(phone.id) : null
+        displayPhoneNumber = typeof phone?.display_phone_number === 'string' ? phone.display_phone_number : null
+        verifiedName = typeof phone?.verified_name === 'string' ? phone.verified_name : null
+        console.info('WhatsApp phone discovered from WABA candidate:', { wabaId, phoneNumberId })
+        break
+      }
+
+      console.warn('WhatsApp WABA candidate has no phone numbers:', { wabaId: currentWabaId, status: phones.response.status, error: phones.data?.error })
     } catch (error) {
-      console.warn('WhatsApp WABA details lookup failed:', { candidateId, error })
+      console.warn('WhatsApp WABA candidate discovery failed:', { candidateId, error })
     }
   }
 
-  if (wabaId) {
+  if (!wabaId && firstValidWaba) wabaId = firstValidWaba
+
+  if (wabaId && !phoneNumberId) {
     try {
       const { response, data } = await graphRequest('/' + encodeURIComponent(wabaId) + '/phone_numbers?fields=id,display_phone_number,verified_name,code_verification_status,quality_rating,platform_type', accessToken)
       if (response.ok && Array.isArray(data?.data) && data.data.length) {
