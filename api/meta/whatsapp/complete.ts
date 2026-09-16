@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
-const META_REDIRECT_URI = process.env.META_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
+const META_WHATSAPP_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 
 function env(name: string, fallbackNames: string[] = []) {
   const names = [name, ...fallbackNames]
@@ -130,11 +130,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const appId = env('META_APP_ID')
     const appSecret = env('META_APP_SECRET')
 
-    // Embedded Signup must exchange the code with the exact redirect URI
-    // registered in the Meta app and supplied to FB.login.
-    const redirectUri = META_REDIRECT_URI
-
-    const exchangeParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code })
+    const exchangeParams = new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
+      redirect_uri: META_WHATSAPP_REDIRECT_URI,
+      code,
+    })
     const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token?${exchangeParams.toString()}`)
     const exchangeData = await exchangeResponse.json().catch(() => null)
 
@@ -142,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('WhatsApp OAuth token exchange failed:', {
         status: exchangeResponse.status,
         error: exchangeData?.error,
-        redirect_uri: redirectUri,
+        redirect_uri: META_WHATSAPP_REDIRECT_URI,
       })
       return res.status(502).json({ error: exchangeData?.error?.message || 'Meta authorization code exchange failed', code: 'META_TOKEN_EXCHANGE_FAILED' })
     }
