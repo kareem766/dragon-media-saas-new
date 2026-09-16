@@ -1,6 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+
+declare global {
+  interface Window {
+    FB?: {
+      init: (options: { appId: string; cookie?: boolean; xfbml?: boolean; version: string }) => void
+      login: (
+        callback: (response: { status?: string; authResponse?: { code?: string } }) => void,
+        options: {
+          config_id: string
+          response_type: 'code'
+          override_default_response_type: boolean
+          extras?: Record<string, unknown>
+        },
+      ) => void
+    }
+    fbAsyncInit?: () => void
+  }
+}
 
 type Integration = {
   provider: string
@@ -8,6 +26,18 @@ type Integration = {
   status: string
   metadata: Record<string, unknown>
   error_message: string | null
+}
+
+type SessionInfo = {
+  waba_id: string
+  phone_number_id?: string
+  business_id?: string
+}
+
+type PendingSignup = {
+  state: string
+  code: string
+  session: SessionInfo | null
 }
 
 const cards = [
@@ -22,6 +52,8 @@ export default function MetaConnections() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [connecting, setConnecting] = useState(false)
+  const pendingRef = useRef<PendingSignup | null>(null)
+  const completingRef = useRef(false)
 
   const load = async () => {
     if (!organizationId || !supabase) return
@@ -42,11 +74,133 @@ export default function MetaConnections() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const status = params.get('meta_status')
-    const message = params.get('meta_message')
+    const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''
+    const hashParams = new URLSearchParams(hashQuery)
+    const status = params.get('meta_status') || hashParams.get('meta_status')
+    const message = params.get('meta_message') || hashParams.get('meta_message')
     if (status === 'connected') void load()
-    if (status === 'error' && message) setError(decodeURIComponent(message))
+    if (status === 'error' && message) setError(message)
+  }, [organizationId])
+
+  useEffect(() => {
+    const sessionInfoListener = (event: MessageEvent) => {
+      if (!event.origin?.endsWith('facebook.com')) return
+
+      let data: any
+      try {
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
+      } catch {
+        return
+      }
+
+      if (data?.type !== 'WA_EMBEDDED_SIGNUP') return
+
+      if (data.event === 'ERROR') {
+        pendingRef.current = null
+        completingRef.current = false
+        setConnecting(false)
+        setError(String(data.data?.error_message || 'Meta لم تُكمل عملية ربط WhatsApp.'))
+        return
+      }
+
+      if (data.event === 'CANCEL') {
+        pendingRef.current = null
+        completingRef.current = false
+        setConnecting(false)
+        setError('تم إلغاء ربط WhatsApp قبل اكتماله.')
+        return
+      }
+
+      if (data.event === 'FINISH' || data.event === 'FINISH_ONLY_WABA' || data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+        const session = data.data || {}
+        const current = pendingRef.current
+        if (!current || !session.waba_id) return
+        current.session = {
+          waba_id: String(session.waba_id),
+          phone_number_id: session.phone_number_id ? String(session.phone_number_id) : undefined,
+          business_id: session.business_id || session.businessId ? String(session.business_id || session.businessId) : undefined,
+        }
+        void completeSignup()
+      }
+    }
+
+    window.addEventListener('message', sessionInfoListener)
+    return () => window.removeEventListener('message', sessionInfoListener)
   }, [])
+
+  const loadMetaSdk = async (appId: string) => {
+    if (window.FB) {
+      window.FB.init({ appId, cookie: true, xfbml: true, version: 'v23.0' })
+      return
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.getElementById('facebook-jssdk')
+      const finish = () => {
+        if (!window.FB) reject(new Error('تعذر تحميل Meta JavaScript SDK.'))
+        else {
+          window.FB.init({ appId, cookie: true, xfbml: true, version: 'v23.0' })
+          resolve()
+        }
+      }
+
+      window.fbAsyncInit = finish
+      if (existing) {
+        const timeout = window.setTimeout(finish, 5000)
+        return () => window.clearTimeout(timeout)
+      }
+
+      const script = document.createElement('script')
+      script.id = 'facebook-jssdk'
+      script.async = true
+      script.defer = true
+      script.crossOrigin = 'anonymous'
+      script.src = 'https://connect.facebook.net/en_US/sdk.js'
+      script.onerror = () => reject(new Error('تعذر تحميل Meta JavaScript SDK.'))
+      document.body.appendChild(script)
+    })
+  }
+
+  const completeSignup = async () => {
+    if (completingRef.current) return
+    const pending = pendingRef.current
+    if (!pending?.code || !pending.session || !supabase) return
+
+    completingRef.current = true
+    setError('')
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
+
+      const response = await fetch('/api/meta/oauth/callback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          code: pending.code,
+          state: pending.state,
+          waba_id: pending.session.waba_id,
+          phone_number_id: pending.session.phone_number_id,
+          business_id: pending.session.business_id,
+        }),
+      })
+
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.connected) throw new Error(result.error || 'تعذر إكمال حفظ اتصال WhatsApp.')
+
+      pendingRef.current = null
+      setConnecting(false)
+      await load()
+    } catch (err) {
+      pendingRef.current = null
+      setConnecting(false)
+      setError(err instanceof Error ? err.message : 'تعذر إكمال اتصال WhatsApp.')
+    } finally {
+      completingRef.current = false
+    }
+  }
 
   const startWhatsApp = async () => {
     if (!organizationId || !supabase) return
@@ -54,9 +208,7 @@ export default function MetaConnections() {
     setConnecting(true)
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError || !sessionData.session?.access_token) {
-        throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
-      }
+      if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
 
       const response = await fetch('/api/meta/oauth/start', {
         method: 'POST',
@@ -68,9 +220,42 @@ export default function MetaConnections() {
       })
 
       const result = await response.json().catch(() => ({}))
-      if (!response.ok || !result.url) throw new Error(result.error || 'تعذر بدء اتصال Meta.')
-      window.location.assign(result.url)
+      if (!response.ok || !result.state || !result.app_id || !result.config_id) {
+        throw new Error(result.error || 'تعذر تجهيز ربط Meta.')
+      }
+
+      pendingRef.current = { state: String(result.state), code: '', session: null }
+      await loadMetaSdk(String(result.app_id))
+
+      if (!window.FB) throw new Error('Meta JavaScript SDK غير متاح.')
+
+      window.FB.login(
+        (loginResponse) => {
+          const code = loginResponse.authResponse?.code
+          if (loginResponse.status !== 'connected' || !code) {
+            pendingRef.current = null
+            setConnecting(false)
+            setError('Meta لم تُرجع authorization code صالحًا.')
+            return
+          }
+
+          const pending = pendingRef.current
+          if (!pending) return
+          pending.code = String(code)
+          void completeSignup()
+        },
+        {
+          config_id: String(result.config_id),
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            sessionInfoVersion: '3',
+          },
+        },
+      )
     } catch (err) {
+      pendingRef.current = null
       setConnecting(false)
       setError(err instanceof Error ? err.message : 'تعذر بدء اتصال Meta.')
     }
@@ -80,10 +265,10 @@ export default function MetaConnections() {
     <div dir="rtl" className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-ink-950">اتصالات Meta</h1>
-        <p className="mt-1 text-sm text-ink-600">مسار واحد واضح لربط WhatsApp وFacebook وInstagram بدون خلط بين OAuth القديم والجديد.</p>
+        <p className="mt-1 text-sm text-ink-600">ربط WhatsApp عبر Meta Embedded Signup الرسمي مع حفظ WABA ورقم الهاتف المحدد من داخل مسار Meta.</p>
       </div>
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
-        تم فصل الربط الجديد عن المحاولات السابقة. الـ redirect URI المستخدم في بدء OAuth وفي تبادل الكود ثابت ومطابق حرفيًا.
+        تم فصل الربط الجديد عن المحاولات السابقة، والـ redirect URI المستخدم في تبادل الكود ثابت ومطابق للإعداد المسجل في Meta.
       </div>
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       <div className="grid gap-4 md:grid-cols-3">
