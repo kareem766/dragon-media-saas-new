@@ -4,11 +4,11 @@ const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
 
 function htmlEscape(value: string) {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
@@ -122,7 +122,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
     }catch(_error){
-      // Meta also posts internal non-JSON bridge messages. Ignore them.
+      // Ignore non-JSON bridge messages from Meta.
     }
   });
 
