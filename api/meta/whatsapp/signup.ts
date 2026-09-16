@@ -44,6 +44,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a}
     .card{width:min(92vw,440px);padding:32px;border:1px solid #e2e8f0;border-radius:18px;background:#fff;box-shadow:0 18px 50px rgba(15,23,42,.08);text-align:center}
     .spinner{width:28px;height:28px;margin:0 auto 18px;border:3px solid #cbd5e1;border-top-color:#0f172a;border-radius:50%;animation:spin .8s linear infinite}
+    .button{display:none;width:100%;border:0;border-radius:12px;padding:14px 18px;background:#0f172a;color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+    .button:disabled{opacity:.55;cursor:not-allowed}
     .error{color:#b91c1c;white-space:pre-wrap;line-height:1.6}
     @keyframes spin{to{transform:rotate(360deg)}}
   </style>
@@ -51,8 +53,9 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 <body>
   <main class="card">
     <div id="spinner" class="spinner"></div>
-    <h2 id="title">Connecting WhatsApp</h2>
-    <p id="message">Opening Meta Embedded Signup…</p>
+    <h2 id="title">Connect WhatsApp</h2>
+    <p id="message">Preparing Meta WhatsApp setup…</p>
+    <button id="connect" class="button" type="button">Continue with Meta</button>
   </main>
 <script>
 (function(){
@@ -62,12 +65,22 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   let sessionData = null;
   let authResponse = null;
   let completed = false;
+  let sdkReady = false;
+  let loginStarted = false;
+
+  const button = document.getElementById('connect');
 
   function setMessage(title, message, isError){
     document.getElementById('title').textContent = title;
     document.getElementById('message').textContent = message;
     document.getElementById('spinner').style.display = isError ? 'none' : 'block';
     if(isError) document.getElementById('message').className = 'error';
+  }
+
+  function showButton(){
+    document.getElementById('spinner').style.display = 'none';
+    button.style.display = 'block';
+    button.disabled = !sdkReady || loginStarted;
   }
 
   function tryComplete(){
@@ -77,6 +90,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     if(!accessToken && !code) return;
 
     completed = true;
+    button.style.display = 'none';
     setMessage('Finishing connection', 'Saving your WhatsApp Business connection…', false);
 
     const data = {
@@ -104,8 +118,42 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     .catch(function(error){
       completed = false;
       setMessage('Connection failed', error && error.message ? error.message : 'تعذر إكمال ربط WhatsApp.', true);
+      button.style.display = 'block';
+      button.disabled = false;
+      loginStarted = false;
     });
   }
+
+  function startLogin(){
+    if(!sdkReady || loginStarted) return;
+    loginStarted = true;
+    button.disabled = true;
+    button.style.display = 'none';
+    document.getElementById('spinner').style.display = 'block';
+    setMessage('Connect WhatsApp', 'Opening Meta WhatsApp setup…', false);
+
+    window.FB.login(function(response){
+      if(response && response.authResponse){
+        authResponse = response.authResponse;
+        tryComplete();
+      }else{
+        loginStarted = false;
+        setMessage('Connection cancelled', 'The Meta WhatsApp setup was cancelled or did not finish.', true);
+        button.style.display = 'block';
+        button.disabled = false;
+      }
+    }, {
+      config_id: CONFIG_ID,
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: {
+        setup: {},
+        sessionInfoVersion: '3'
+      }
+    });
+  }
+
+  button.addEventListener('click', startLogin);
 
   window.addEventListener('message', function(event){
     if(event.origin !== 'https://www.facebook.com' && event.origin !== 'https://facebook.com') return;
@@ -128,23 +176,9 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
 
   window.fbAsyncInit = function(){
     window.FB.init({appId:APP_ID,cookie:true,xfbml:true,version:'${GRAPH_VERSION}'});
-    setMessage('Connect WhatsApp', 'Complete the Meta WhatsApp setup to continue.', false);
-    window.FB.login(function(response){
-      if(response && response.authResponse){
-        authResponse = response.authResponse;
-        tryComplete();
-      }else{
-        setMessage('Connection cancelled', 'The Meta WhatsApp setup was cancelled or did not finish.', true);
-      }
-    }, {
-      config_id: CONFIG_ID,
-      response_type: 'code',
-      override_default_response_type: true,
-      extras: {
-        setup: {},
-        sessionInfoVersion: '3'
-      }
-    });
+    sdkReady = true;
+    setMessage('Connect WhatsApp', 'اضغط الزر لفتح إعداد WhatsApp من Meta.', false);
+    showButton();
   };
 
   (function(d,s,id){
@@ -155,6 +189,14 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     js.defer=true;
     js.crossOrigin='anonymous';
     js.src='https://connect.facebook.net/en_US/sdk.js';
+    js.onload=function(){
+      if(!sdkReady){
+        setMessage('Connection failed', 'تعذر تحميل Meta SDK. تأكد من السماح بالنوافذ المنبثقة ثم أعد المحاولة.', true);
+      }
+    };
+    js.onerror=function(){
+      setMessage('Connection failed', 'تعذر تحميل Meta SDK. تأكد من اتصال الإنترنت ثم أعد المحاولة.', true);
+    };
     const first=d.getElementsByTagName(s)[0];
     first.parentNode.insertBefore(js,first);
   })(document,'script','facebook-jssdk');
