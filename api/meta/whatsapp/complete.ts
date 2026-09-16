@@ -132,14 +132,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const appId = env('META_APP_ID')
     const appSecret = env('META_APP_SECRET')
-    const redirectUri = process.env.META_WHATSAPP_OAUTH_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/whatsapp/signup'
+
+    // IMPORTANT: this must be byte-for-byte identical to the redirect_uri
+    // supplied to FB.login in api/meta/whatsapp/signup.ts. Do NOT use the
+    // generic META_WHATSAPP_OAUTH_REDIRECT_URI here because an old value such
+    // as https://www.facebook.com/connect/login_success.html causes Meta code
+    // 191 / "domain isn't included in the app's domains" during token exchange.
+    // Embedded Signup is launched from our own canonical production domain.
+    const redirectUri = 'https://dragon-media-saas-new.vercel.app/api/meta/whatsapp/signup'
 
     const exchangeParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code })
     const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token?${exchangeParams.toString()}`)
     const exchangeData = await exchangeResponse.json().catch(() => null)
 
     if (!exchangeResponse.ok || !exchangeData?.access_token) {
-      console.error('WhatsApp OAuth token exchange failed:', { status: exchangeResponse.status, error: exchangeData?.error })
+      console.error('WhatsApp OAuth token exchange failed:', {
+        status: exchangeResponse.status,
+        error: exchangeData?.error,
+        redirect_uri: redirectUri,
+      })
       return res.status(502).json({ error: exchangeData?.error?.message || 'Meta authorization code exchange failed', code: 'META_TOKEN_EXCHANGE_FAILED' })
     }
 
