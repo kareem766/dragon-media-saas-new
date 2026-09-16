@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createDecipheriv, createHash } from 'node:crypto'
+import { createDecipheriv, createHash, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
@@ -7,6 +7,12 @@ const env = (...names: string[]) => names.map((name) => process.env[name]).find(
 
 function json(res: VercelResponse, status: number, body: unknown) {
   return res.status(status).json(body)
+}
+
+function sameSecret(a: string, b: string) {
+  const left = Buffer.from(a)
+  const right = Buffer.from(b)
+  return left.length === right.length && timingSafeEqual(left, right)
 }
 
 function decryptToken(value: any) {
@@ -39,31 +45,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const authorization = String(req.headers.authorization || '')
-    const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
-    if (!accessToken) return json(res, 401, { error: 'Unauthorized.' })
-
+    const bearerToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
     const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
-    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
+    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY')
     if (!supabaseUrl || !serviceKey) return json(res, 500, { error: 'Server configuration is incomplete.' })
 
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
-    const { data: authData, error: authError } = await admin.auth.getUser(accessToken)
-    if (authError || !authData.user) return json(res, 401, { error: 'جلسة الدخول غير صالحة.' })
+    let authenticatedUserId = ''
+    let internalAuthorized = false
+
+    if (bearerToken) {
+      const { data: authData, error: authError } = await admin.auth.getUser(bearerToken)
+      if (!authError && authData.user) authenticatedUserId = authData.user.id
+    }
+
+    if (!authenticatedUserId) {
+      const internalSecret = String(req.headers['x-ryan-inbox-secret'] || '').trim()
+      if (internalSecret) {
+        const { data: secretRow } = await admin
+          .from('system_secrets')
+          .select('value')
+          .eq('key', 'ryan_inbox_webhook_secret')
+          .maybeSingle()
+        internalAuthorized = Boolean(secretRow?.value && sameSecret(internalSecret, String(secretRow.value)))
+      }
+    }
+
+    if (!authenticatedUserId && !internalAuthorized) return json(res, 401, { error: 'Unauthorized.' })
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
-    const organizationId = String(body.organizationId || '')
-    const conversationId = String(body.conversationId || '')
-    const content = String(body.content || '').trim()
+    const organizationId = String(body.organizationId || body.organization_id || '')
+    const conversationId = String(body.conversationId || body.conversation_id || '')
+    const content = String(body.content || body.reply || '').trim()
     if (!organizationId || !conversationId || !content) return json(res, 400, { error: 'بيانات الرسالة غير مكتملة.' })
 
-    const { data: membership, error: membershipError } = await admin
-      .from('users')
-      .select('id, organization_id, active')
-      .eq('id', authData.user.id)
-      .eq('organization_id', organizationId)
-      .eq('active', true)
-      .maybeSingle()
-    if (membershipError || !membership) return json(res, 403, { error: 'غير مصرح لهذا الحساب.' })
+    if (authenticatedUserId) {
+      const { data: membership, error: membershipError } = await admin
+        .from('users')
+        .select('id, organization_id, active')
+        .eq('id', authenticatedUserId)
+        .eq('organization_id', organizationId)
+        .eq('active', true)
+        .maybeSingle()
+      if (membershipError || !membership) return json(res, 403, { error: 'غير مصرح لهذا الحساب.' })
+    }
 
     const { data: conversation, error: conversationError } = await admin
       .from('conversations')
@@ -106,12 +131,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sender_type: 'agent',
       content,
       external_id: externalId || null,
-      metadata: { source: 'whatsapp', outbound_status: 'accepted', sent_by: authData.user.id, whatsapp_message_id: externalId || null },
+      metadata: { source: 'whatsapp', outbound_status: 'accepted', sent_by: authenticatedUserId || null, whatsapp_message_id: externalId || null },
       created_at: now,
     }).select('id, conversation_id, sender_type, content, created_at, metadata, read_at, delivered_at, external_id').single()
     if (insertError) throw insertError
 
     await admin.from('conversations').update({ handled_by: 'human', last_message_at: now, updated_at: now }).eq('id', conversationId).eq('organization_id', organizationId)
+    console.log('WhatsApp outbound message sent', { organizationId, conversationId, phoneNumberId, to, externalId, internalAuthorized })
     return json(res, 200, { ok: true, message })
   } catch (error) {
     console.error('WhatsApp outbound send failed', error)
