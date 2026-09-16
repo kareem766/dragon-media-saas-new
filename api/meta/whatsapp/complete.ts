@@ -136,12 +136,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       display_phone_number: displayPhoneNumber,
       verified_name: verifiedName,
       status: readyForMessaging ? 'connected' : 'pending',
-      metadata: { connection_type: 'meta_embedded_signup', business_id: businessId, waba_id: wabaId, phone_number_id: phoneNumberId, display_phone_number: displayPhoneNumber, verified_name: verifiedName, ready_for_messaging: readyForMessaging, whatsapp_webhook_subscribed: webhookSubscribed, last_oauth_verified_at: new Date().toISOString() },
-      discovery_errors: readyForMessaging ? null : 'Meta OAuth succeeded but WABA/phone number discovery is incomplete.',
-      sync_error: webhookSubscribed ? null : webhookError,
+      metadata: { connection_type: 'meta_embedded_signup', business_id: businessId, waba_id: wabaId, phone_number_id: phoneNumberId, display_phone_number: displayPhoneNumber, verified_name: verifiedName, ready_for_messaging: readyForMessaging, whatsapp_webhook_subscribed: webhookSubscribed, last_oauth_verified_at: new Date().toISOString(), webhook_error: webhookError },
       updated_at: new Date().toISOString(),
     }, { onConflict: 'organization_id,provider' })
-    if (error) return res.status(500).json({ error: 'تعذر حفظ اتصال WhatsApp.', code: 'WHATSAPP_CONNECTION_SAVE_FAILED' })
+    if (error) {
+      console.error('WhatsApp connection save failed:', { message: error.message, code: error.code, details: error.details, hint: error.hint })
+      return res.status(500).json({ error: 'تعذر حفظ اتصال WhatsApp.', code: 'WHATSAPP_CONNECTION_SAVE_FAILED' })
+    }
 
     if (req.method === 'GET') return res.redirect(303, `https://dragon-media-saas-new.vercel.app/#/settings?meta=${readyForMessaging ? 'connected' : 'error'}&provider=whatsapp`)
     return res.status(200).json({ success: true, connected: readyForMessaging, waba_id: wabaId, phone_number_id: phoneNumberId, display_phone_number: displayPhoneNumber, webhook_subscribed: webhookSubscribed })
