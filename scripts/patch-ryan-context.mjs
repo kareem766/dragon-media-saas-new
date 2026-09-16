@@ -6,7 +6,7 @@ const source = fs.readFileSync(path, 'utf8')
 let patched = source
 
 const historyOld = `  const history = (rows || []).reverse().map((row) => ({ role: row.sender_type === 'customer' ? 'user' : 'model', text: String(row.content || '') })).filter((row) => row.text.trim())
-  const knowledgeText = \`${'${'}String(item.title || '')}: ${'${'}String(item.content || '')}\`.filter(Boolean).join('\\n')
+  const knowledgeText = (knowledge || []).map((item) => \`${'${'}String(item.title || '')}: ${'${'}String(item.content || '')}\`).filter(Boolean).join('\\n')
 `
 const historyNew = `  const history = (rows || []).reverse().map((row) => ({ role: row.sender_type === 'customer' ? 'user' : 'model', text: String(row.content || '') })).filter((row) => row.text.trim())
   const customerHistory = history.filter((item) => item.role === 'user').map((item) => item.text).slice(-8)
@@ -43,16 +43,18 @@ if (patched.includes(fallbackOld)) {
   patched = patched.replace(fallbackOld, fallbackNew)
 }
 
-const reliableNameOld = `function reliableName(value: unknown) { const text = clean(value, 120); if (!text || /^(غير معروف|unknown|none|null|undefined)$/i.test(text)) return ''; const letters = text.replace(/[^\\u0600-\\u06FFA-Za-z]/g, ''); if (letters.length < 2 || /\\d/.test(text) || /[@+]/.test(text)) return ''; return text }`
-const reliableNameNew = `function reliableName(value: unknown) { const text = clean(value, 120); if (!text || /^(غير معروف|unknown|none|null|undefined)$/i.test(text)) return ''; if (/[\\u0640\\u064B-\\u065F]/.test(text) || /[\\u200B-\\u200F\\u202A-\\u202E]/.test(text)) return ''; const letters = text.replace(/[^\\u0600-\\u06FFA-Za-z]/g, ''); if (letters.length < 2 || /\\d/.test(text) || /[@+]/.test(text)) return ''; return text }`
-if (patched.includes(reliableNameOld) && !patched.includes('\\u0640\\u064B-\\u065F')) {
-  patched = patched.replace(reliableNameOld, reliableNameNew)
+const reliableStart = patched.indexOf('function reliableName(value: unknown)')
+const reliableEnd = patched.indexOf('\nfunction conversationTopic', reliableStart)
+if (reliableStart >= 0 && reliableEnd > reliableStart) {
+  const reliableName = `function reliableName(value: unknown) { const text = clean(value, 120); if (!text || /^(غير معروف|unknown|none|null|undefined)$/i.test(text)) return ''; if (/[\\u0640\\u064B-\\u065F]/.test(text) || /[\\u200B-\\u200F\\u202A-\\u202E]/.test(text)) return ''; const letters = text.replace(/[^\\u0600-\\u06FFA-Za-z]/g, ''); if (letters.length < 2 || /\\d/.test(text) || /[@+]/.test(text)) return ''; return text }`
+  patched = patched.slice(0, reliableStart) + reliableName + patched.slice(reliableEnd)
 }
 
-const safeReplyOld = `function safeReply(value: unknown, fallback: string) { const text = clean(value, 1800).replace(/^\\`\\`\\`(?:json|text)?\\s*/i, '').replace(/\\s*\\`\\`\\`$/i, '').trim(); if (!text || /^\\s*[\\[{]/.test(text) || /\\"(?:functionCall|functionResponse|args)\\"\\s*:/.test(text)) return fallback; return text }`
-const safeReplyNew = `function safeReply(value: unknown, fallback: string) { const text = clean(value, 1800).replace(/^\\`\\`\\`(?:json|text)?\\s*/i, '').replace(/\\s*\\`\\`\\`$/i, '').trim(); if (!text || /^\\s*[\\[{]/.test(text) || /\\"(?:functionCall|functionResponse|args)\\"\\s*:/.test(text)) return fallback; if (/(?:\\breliable\\b|\\bmemory\\b|\\breasoning\\b|\\bfunctionCall\\b|\\bfunctionResponse\\b|\\bargs\\b|\\bsystem\\b|\\bprompt\\b|الذاكرة الداخلية|السياق الداخلي|التعليمات الداخلية)/i.test(text)) return fallback; return text }`
-if (patched.includes(safeReplyOld) && !patched.includes('الذاكرة الداخلية')) {
-  patched = patched.replace(safeReplyOld, safeReplyNew)
+const safeStart = patched.indexOf('function safeReply(value: unknown, fallback: string)')
+const safeEnd = patched.indexOf('\n\nasync function executeRyanTool', safeStart)
+if (safeStart >= 0 && safeEnd > safeStart) {
+  const safeReply = `function safeReply(value: unknown, fallback: string) { const text = clean(value, 1800).replace(/^\\`\\`\\`(?:json|text)?\\s*/i, '').replace(/\\s*\\`\\`\\`$/i, '').trim(); if (!text || /^\\s*[\\[{]/.test(text) || /\"(?:functionCall|functionResponse|args)\"\\s*:/.test(text)) return fallback; if (/(?:\\breliable\\b|\\bmemory\\b|\\breasoning\\b|\\bfunctionCall\\b|\\bfunctionResponse\\b|\\bargs\\b|\\bsystem\\b|\\bprompt\\b|الذاكرة الداخلية|السياق الداخلي|التعليمات الداخلية)/i.test(text)) return fallback; return text }`
+  patched = patched.slice(0, safeStart) + safeReply + patched.slice(safeEnd)
 }
 
 if (patched !== source) {
