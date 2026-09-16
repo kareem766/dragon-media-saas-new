@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
+const META_REDIRECT_URI = process.env.META_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 
 function env(name: string, fallbackNames: string[] = []) {
   const names = [name, ...fallbackNames]
@@ -129,11 +130,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const appId = env('META_APP_ID')
     const appSecret = env('META_APP_SECRET')
 
-    // Embedded Signup via the Meta JS SDK generates the authorization code
-    // against Meta's SDK login-success redirect. Do not invent a Dragon Media
-    // redirect URI for the code exchange; it must exactly match the URI used
-    // by Meta when the code was issued.
-    const redirectUri = 'https://www.facebook.com/connect/login_success.html'
+    // Embedded Signup must exchange the code with the exact redirect URI
+    // registered in the Meta app and supplied to FB.login.
+    const redirectUri = META_REDIRECT_URI
 
     const exchangeParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code })
     const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token?${exchangeParams.toString()}`)
