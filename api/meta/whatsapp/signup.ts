@@ -9,13 +9,6 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#039;')
 }
 
-function escapeScriptJson(value: unknown) {
-  return JSON.stringify(value)
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026')
-}
-
 export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
   res.setHeader('Cache-Control', 'no-store')
@@ -25,6 +18,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const configId = process.env.META_WHATSAPP_EMBEDDED_CONFIG_ID
   const appId = process.env.META_APP_ID
   const graphVersion = process.env.META_GRAPH_API_VERSION || 'v23.0'
+  const redirectUri = process.env.META_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
   const queryState = typeof req.query.state === 'string' ? req.query.state : ''
 
   if (!configId || !appId) {
@@ -50,10 +44,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     <div id="status" class="status">جاري تحميل خدمة Meta...</div>
   </main>
   <script>
-    const APP_ID = ${JSON.stringify(escapeHtml(appId))};
-    const CONFIG_ID = ${JSON.stringify(escapeHtml(configId))};
-    const GRAPH_VERSION = ${JSON.stringify(escapeHtml(graphVersion))};
-    const QUERY_STATE = ${JSON.stringify(escapeHtml(queryState))};
+    const APP_ID = ${JSON.stringify(appId)};
+    const CONFIG_ID = ${JSON.stringify(configId)};
+    const GRAPH_VERSION = ${JSON.stringify(graphVersion)};
+    const REDIRECT_URI = ${JSON.stringify(redirectUri)};
+    const QUERY_STATE = ${JSON.stringify(queryState)};
 
     const statusEl = document.getElementById('status');
     const button = document.getElementById('connect');
@@ -156,13 +151,13 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       }
       button.disabled = true;
       setStatus('جاري فتح نافذة WhatsApp الرسمية من Meta...');
-      // Do not pass redirect_uri here. Meta's JS SDK Embedded Signup uses its
-      // own OAuth dialog redirect (facebook.com/connect/login_success.html).
-      // The backend must exchange the returned code using that exact URI.
+      // The same registered redirect URI must be used when Meta issues the
+      // authorization code and when the backend exchanges that code.
       window.FB.login(fbLoginCallback, {
         config_id: CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
+        redirect_uri: REDIRECT_URI,
         extras: { setup: {}, sessionInfoVersion: '3' },
       });
     }
