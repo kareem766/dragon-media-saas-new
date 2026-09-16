@@ -1,0 +1,1 @@
+Ryan async dispatch fix verified in Supabase. Triggering a fresh Production deployment so the current Ryan Agent implementation is served by Vercel.
