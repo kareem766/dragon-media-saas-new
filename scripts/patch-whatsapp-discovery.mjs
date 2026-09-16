@@ -1,8 +1,7 @@
 import fs from 'node:fs'
 
 const path = 'api/meta/oauth/callback.ts'
-let source = fs.readFileSync(path, 'utf8')
-
+const source = fs.readFileSync(path, 'utf8')
 const marker = "  /*\n   * --------------------------------------------------\n   * 2. Discover business accounts from /me/businesses.\n   * --------------------------------------------------\n   */"
 
 const block = String.raw`  /*
@@ -26,10 +25,12 @@ const block = String.raw`  /*
       }
     }
 
-    for (const endpoint of [
-      `/${encodeURIComponent(metaUserId)}/whatsapp_business_accounts?fields=id,name`,
+    const directEndpoints = [
+      '/' + encodeURIComponent(metaUserId) + '/whatsapp_business_accounts?fields=id,name',
       '/me/whatsapp_business_accounts?fields=id,name',
-    ]) {
+    ]
+
+    for (const endpoint of directEndpoints) {
       try {
         const { response, data } = await graphRequest(endpoint, accessToken)
         if (response.ok) {
@@ -49,7 +50,7 @@ const block = String.raw`  /*
     for (const candidateId of directWabaCandidates) {
       try {
         const { response, data } = await graphRequest(
-          `/${encodeURIComponent(candidateId)}/phone_numbers?fields=id,display_phone_number,verified_name`,
+          '/' + encodeURIComponent(candidateId) + '/phone_numbers?fields=id,display_phone_number,verified_name',
           accessToken,
         )
 
@@ -79,8 +80,9 @@ const block = String.raw`  /*
 if (!source.includes("Embedded Signup direct WABA discovery fallback.")) {
   const index = source.indexOf(marker)
   if (index < 0) throw new Error('WhatsApp discovery insertion marker not found')
-  source = source.slice(0, index) + block + source.slice(index)
+  const patched = source.slice(0, index) + block + source.slice(index)
+  fs.writeFileSync(path, patched)
+  console.log('WhatsApp direct WABA discovery fallback applied')
+} else {
+  console.log('WhatsApp direct WABA discovery fallback already present')
 }
-
-fs.writeFileSync(path, source)
-console.log('WhatsApp direct WABA discovery fallback applied')
