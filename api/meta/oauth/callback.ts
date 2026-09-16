@@ -89,28 +89,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const token = String(tokenData.access_token)
-    const businesses = await graph('/me/businesses?fields=id,name&limit=50', token)
-    const businessList = Array.isArray(businesses.data) ? businesses.data : []
+
+    // Embedded Signup grants whatsapp_business_management on the WABA(s) selected
+    // by the business. Use debug_token to get the exact WABA target IDs instead of
+    // calling /me/businesses, which requires business_management and may not be
+    // granted by the selected Facebook Login for Business configuration.
+    const appAccessToken = `${appId}|${appSecret}`
+    const debugToken = await graph(`/debug_token?input_token=${encodeURIComponent(token)}`, appAccessToken)
+    const granularScopes = Array.isArray(debugToken?.data?.granular_scopes) ? debugToken.data.granular_scopes : []
+    const whatsappScope = granularScopes.find((item: any) => item?.scope === 'whatsapp_business_management')
+    const targetIds = Array.isArray(whatsappScope?.target_ids)
+      ? whatsappScope.target_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+      : []
 
     let selectedBusiness: any = null
     let selectedWaba: any = null
     let selectedPhone: any = null
 
-    for (const business of businessList) {
-      const wabas = await graph(`/${encodeURIComponent(business.id)}/client_whatsapp_business_accounts?fields=id,name&limit=50`, token).catch(() => ({ data: [] }))
-      for (const waba of Array.isArray(wabas.data) ? wabas.data : []) {
-        const phones = await graph(`/${encodeURIComponent(waba.id)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=50`, token).catch(() => ({ data: [] }))
+    for (const wabaId of targetIds) {
+      try {
+        const waba = await graph(`/${encodeURIComponent(wabaId)}?fields=id,name,owner_business_info`, token)
+        const phones = await graph(`/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=50`, token)
         if (phones.data?.[0]) {
-          selectedBusiness = business
           selectedWaba = waba
           selectedPhone = phones.data[0]
+          selectedBusiness = waba?.owner_business_info || null
           break
         }
+      } catch {
+        // Try the next WABA target returned by Meta.
       }
-      if (selectedWaba) break
     }
 
-    if (!selectedWaba) throw new Error('تمت مصادقة Meta لكن لم يتم العثور على WhatsApp Business Account متاح لهذا المستخدم.')
+    // Backward-compatible fallback for configurations that also grant business_management.
+    if (!selectedWaba) {
+      const businesses = await graph('/me/businesses?fields=id,name&limit=50', token)
+      const businessList = Array.isArray(businesses.data) ? businesses.data : []
+
+      for (const business of businessList) {
+        const wabas = await graph(`/${encodeURIComponent(business.id)}/client_whatsapp_business_accounts?fields=id,name&limit=50`, token).catch(() => ({ data: [] }))
+        for (const waba of Array.isArray(wabas.data) ? wabas.data : []) {
+          const phones = await graph(`/${encodeURIComponent(waba.id)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=50`, token).catch(() => ({ data: [] }))
+          if (phones.data?.[0]) {
+            selectedBusiness = business
+            selectedWaba = waba
+            selectedPhone = phones.data[0]
+            break
+          }
+        }
+        if (selectedWaba) break
+      }
+    }
+
+    if (!selectedWaba) {
+      throw new Error('تمت مصادقة Meta، لكن لم يتم العثور على WhatsApp Business Account أو رقم هاتف في صلاحيات الربط.')
+    }
 
     await graph(`/${encodeURIComponent(selectedWaba.id)}/subscribed_apps`, token, { method: 'POST' }).catch(() => null)
 
@@ -124,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       display_phone_number: String(selectedPhone.display_phone_number || ''),
       verified_name: String(selectedPhone.verified_name || ''),
       ready_for_messaging: true,
-      connected_via: 'meta_oauth_configured_redirect',
+      connected_via: 'meta_embedded_signup_oauth',
     }
 
     const { error: saveError } = await db.from('integrations').upsert({
