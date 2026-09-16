@@ -4,7 +4,6 @@ import { createClient } from '@supabase/supabase-js'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
-const META_WHATSAPP_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 
 function env(name: string, fallbackNames: string[] = []) {
   const names = [name, ...fallbackNames]
@@ -22,7 +21,7 @@ function verifyState(state: string) {
   const [encodedPayload, signature] = parts
   const expected = createHmac('sha256', secret).update(encodedPayload).digest('base64url')
   try {
-    if (!timingSafeEqual(Buffer.from(signature, 'utf8'), Buffer.from(expected, 'utf8'))) return null
+    if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature, 'utf8'), Buffer.from(expected, 'utf8'))) return null
   } catch {
     return null
   }
@@ -70,7 +69,7 @@ function extractTargetIds(granularScopes: unknown) {
   if (!Array.isArray(granularScopes)) return ids
   for (const scope of granularScopes) {
     if (!scope || typeof scope !== 'object') continue
-    const current = scope as { scope?: unknown; target_ids?: unknown }
+    const current = scope as { target_ids?: unknown }
     if (!Array.isArray(current.target_ids)) continue
     for (const id of current.target_ids) {
       if (typeof id === 'string' && id.trim() && !ids.includes(id.trim())) ids.push(id.trim())
@@ -130,20 +129,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const appId = env('META_APP_ID')
     const appSecret = env('META_APP_SECRET')
 
+    // WhatsApp Embedded Signup codes returned by FB.login() are a special
+    // authorization-code flow. The JS SDK owns the OAuth dialog redirect,
+    // so sending our application callback here creates a redirect_uri mismatch.
+    // Meta accepts the Embedded Signup exchange with an empty redirect_uri.
     const exchangeParams = new URLSearchParams({
       client_id: appId,
       client_secret: appSecret,
-      redirect_uri: META_WHATSAPP_REDIRECT_URI,
       code,
+      grant_type: 'authorization_code',
+      redirect_uri: '',
     })
-    const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token?${exchangeParams.toString()}`)
+    const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+      body: exchangeParams.toString(),
+    })
     const exchangeData = await exchangeResponse.json().catch(() => null)
 
     if (!exchangeResponse.ok || !exchangeData?.access_token) {
-      console.error('WhatsApp OAuth token exchange failed:', {
+      console.error('WhatsApp Embedded Signup token exchange failed:', {
         status: exchangeResponse.status,
         error: exchangeData?.error,
-        redirect_uri: META_WHATSAPP_REDIRECT_URI,
+        redirect_uri: '',
       })
       return res.status(502).json({ error: exchangeData?.error?.message || 'Meta authorization code exchange failed', code: 'META_TOKEN_EXCHANGE_FAILED' })
     }
