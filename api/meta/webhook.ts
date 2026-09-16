@@ -2,6 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+}
+
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 
@@ -21,6 +27,15 @@ function verifySignature(req: VercelRequest, rawBody: string) {
 
 function normalizePhone(value: unknown) {
   return String(value || '').replace(/[^0-9+]/g, '').replace(/^\+/, '')
+}
+
+function readRawBody(req: VercelRequest) {
+  return new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = []
+    req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    req.on('error', reject)
+  })
 }
 
 async function getDb() {
@@ -162,10 +177,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed.' })
 
   try {
-    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {})
+    const rawBody = await readRawBody(req)
     if (!verifySignature(req, rawBody)) return json(res, 401, { error: 'Invalid webhook signature.' })
 
-    const payload = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
+    const payload = JSON.parse(rawBody)
     if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
 
     const db = await getDb()
