@@ -1,7 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-const META_WHATSAPP_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
-
 export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
   res.setHeader('Cache-Control', 'no-store')
@@ -39,7 +37,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const APP_ID = ${JSON.stringify(appId)};
     const CONFIG_ID = ${JSON.stringify(configId)};
     const GRAPH_VERSION = ${JSON.stringify(graphVersion)};
-    const REDIRECT_URI = ${JSON.stringify(META_WHATSAPP_REDIRECT_URI)};
     const QUERY_STATE = ${JSON.stringify(queryState)};
 
     const statusEl = document.getElementById('status');
@@ -143,13 +140,13 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       }
       button.disabled = true;
       setStatus('جاري فتح نافذة WhatsApp الرسمية من Meta...');
-      // Keep the Embedded Signup dialog and backend token exchange on the
-      // exact same registered redirect URI.
+      // Do not pass redirect_uri to FB.login(). Facebook Login for Business
+      // owns the embedded OAuth dialog redirect. Passing our application URL
+      // here creates the code/redirect_uri mismatch during token exchange.
       window.FB.login(fbLoginCallback, {
         config_id: CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
-        redirect_uri: REDIRECT_URI,
         extras: { setup: {}, sessionInfoVersion: '3' },
       });
     }
