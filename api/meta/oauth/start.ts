@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createHmac, randomBytes } from 'node:crypto'
 
 const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
-const FACEBOOK_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/facebook/callback'
+const FACEBOOK_REDIRECT_URI = REDIRECT_URI
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 
 function json(res: VercelResponse, status: number, body: unknown) { return res.status(status).json(body) }
