@@ -42,8 +42,8 @@ type PendingSignup = {
 
 const cards = [
   { provider: 'whatsapp', title: 'WhatsApp Business', text: 'اربط رقم WhatsApp Business مباشرة من خلال مسار Meta الرسمي.' },
-  { provider: 'facebook', title: 'Facebook', text: 'ربط صفحات Facebook سيستخدم نفس طبقة Meta الرسمية بعد اكتمال WhatsApp.' },
-  { provider: 'instagram', title: 'Instagram', text: 'ربط Instagram سيستخدم نفس طبقة Meta الرسمية بعد اكتمال WhatsApp.' },
+  { provider: 'facebook', title: 'Facebook', text: 'اربط صفحة Facebook لإدارة رسائل الصفحة من داخل Dragon Media.' },
+  { provider: 'instagram', title: 'Instagram', text: 'ربط Instagram سيستخدم نفس طبقة Meta الرسمية بعد اكتمال Facebook.' },
 ]
 
 function normalizeSessionInfo(value: any): SessionInfo | null {
@@ -241,13 +241,34 @@ export default function MetaConnections() {
     }
   }
 
+  const startFacebook = async () => {
+    if (!organizationId || !supabase) return
+    setError('')
+    setConnecting(true)
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
+      const response = await fetch('/api/meta/facebook/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: JSON.stringify({ organizationId }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.auth_url) throw new Error(result.error || 'تعذر تجهيز ربط Facebook.')
+      window.location.assign(String(result.auth_url))
+    } catch (err) {
+      setConnecting(false)
+      setError(err instanceof Error ? err.message : 'تعذر بدء اتصال Facebook.')
+    }
+  }
+
   return (
     <div dir="rtl" className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-ink-950">اتصالات Meta</h1>
-        <p className="mt-1 text-sm text-ink-600">ربط WhatsApp عبر Meta Embedded Signup الرسمي مع حفظ WABA ورقم الهاتف المحدد من داخل مسار Meta.</p>
+        <p className="mt-1 text-sm text-ink-600">ربط WhatsApp عبر Meta Embedded Signup الرسمي، وربط صفحات Facebook عبر OAuth الرسمي.</p>
       </div>
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">استخدم زر «ربط WhatsApp» الموجود هنا لبدء Embedded Signup. سيتم التقاط بيانات WABA ورقم الهاتف من جلسة Meta وإرسالها مباشرة إلى Dragon Media.</div>
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">WhatsApp يحتفظ بمساره الحالي. ربط Facebook له مسار OAuth مستقل ولا يغيّر إعدادات WhatsApp.</div>
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       <div className="grid gap-4 md:grid-cols-3">
         {cards.map((card) => {
@@ -262,8 +283,10 @@ export default function MetaConnections() {
               <p className="mt-3 min-h-12 text-sm leading-6 text-ink-600">{card.text}</p>
               {card.provider === 'whatsapp' ? (
                 <button onClick={startWhatsApp} disabled={connecting || loading} className="mt-5 w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{connecting ? 'جارٍ فتح Meta…' : connected ? 'إدارة اتصال WhatsApp' : 'ربط WhatsApp'}</button>
+              ) : card.provider === 'facebook' ? (
+                <button onClick={startFacebook} disabled={connecting || loading} className="mt-5 w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{connecting ? 'جارٍ فتح Facebook…' : connected ? 'إعادة ربط Facebook' : 'ربط Facebook'}</button>
               ) : (
-                <button disabled className="mt-5 w-full rounded-xl border border-ink-900/10 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">سيتم تفعيله بعد WhatsApp</button>
+                <button disabled className="mt-5 w-full rounded-xl border border-ink-900/10 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">سيتم تفعيله بعد Facebook</button>
               )}
             </div>
           )
