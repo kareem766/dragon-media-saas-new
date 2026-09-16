@@ -53,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     let authenticatedUserId = ''
     let internalAuthorized = false
+    let internalDispatch = false
 
     if (bearerToken) {
       const { data: authData, error: authError } = await admin.auth.getUser(bearerToken)
@@ -60,23 +61,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!authenticatedUserId) {
-      const internalSecret = String(req.headers['x-ryan-inbox-secret'] || '').trim()
-      if (internalSecret) {
+      const ryanSecret = String(req.headers['x-ryan-inbox-secret'] || '').trim()
+      const outboundSecret = String(req.headers['x-dragon-outbound-secret'] || '').trim()
+
+      if (ryanSecret) {
         const { data: secretRow } = await admin
           .from('system_secrets')
           .select('value')
           .eq('key', 'ryan_inbox_webhook_secret')
           .maybeSingle()
-        internalAuthorized = Boolean(secretRow?.value && sameSecret(internalSecret, String(secretRow.value)))
+        internalAuthorized = Boolean(secretRow?.value && sameSecret(ryanSecret, String(secretRow.value)))
+      }
+
+      if (!internalAuthorized && outboundSecret) {
+        const { data: secretRow } = await admin
+          .from('system_secrets')
+          .select('value')
+          .eq('key', 'whatsapp_outbound_webhook_secret')
+          .maybeSingle()
+        internalAuthorized = Boolean(secretRow?.value && sameSecret(outboundSecret, String(secretRow.value)))
+        internalDispatch = internalAuthorized
       }
     }
 
     if (!authenticatedUserId && !internalAuthorized) return json(res, 401, { error: 'Unauthorized.' })
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
-    const organizationId = String(body.organizationId || body.organization_id || '')
-    const conversationId = String(body.conversationId || body.conversation_id || '')
-    const content = String(body.content || body.reply || '').trim()
+    const messageId = String(body.message_id || body.messageId || '')
+    let organizationId = String(body.organizationId || body.organization_id || '')
+    let conversationId = String(body.conversationId || body.conversation_id || '')
+    let content = String(body.content || body.reply || '').trim()
+    let sourceSenderType: 'agent' | 'ai' = 'agent'
+
+    if (messageId) {
+      const { data: sourceMessage, error: sourceMessageError } = await admin
+        .from('messages')
+        .select('id, conversation_id, sender_type, content, external_id, metadata')
+        .eq('id', messageId)
+        .maybeSingle()
+      if (sourceMessageError || !sourceMessage) return json(res, 404, { error: 'رسالة الإرسال غير موجودة.' })
+      if (!['agent', 'ai'].includes(String(sourceMessage.sender_type))) return json(res, 200, { ok: true, skipped: true, reason: 'unsupported_sender' })
+
+      conversationId = String(sourceMessage.conversation_id)
+      content = String(sourceMessage.content || '').trim()
+      sourceSenderType = sourceMessage.sender_type === 'ai' ? 'ai' : 'agent'
+
+      if (sourceMessage.external_id) {
+        return json(res, 200, { ok: true, skipped: true, reason: 'already_sent', external_id: sourceMessage.external_id })
+      }
+
+      const sourceMetadata = sourceMessage.metadata && typeof sourceMessage.metadata === 'object' ? sourceMessage.metadata : {}
+      if (sourceMetadata && (sourceMetadata as any).outbound_status === 'failed') {
+        return json(res, 200, { ok: true, skipped: true, reason: 'previously_failed' })
+      }
+    }
+
+    if (!organizationId && conversationId) {
+      const { data: conversationForOrg } = await admin
+        .from('conversations')
+        .select('organization_id')
+        .eq('id', conversationId)
+        .maybeSingle()
+      organizationId = String(conversationForOrg?.organization_id || '')
+    }
+
     if (!organizationId || !conversationId || !content) return json(res, 400, { error: 'بيانات الرسالة غير مكتملة.' })
 
     if (authenticatedUserId) {
@@ -126,6 +174,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const externalId = String(sent?.messages?.[0]?.id || '')
     const now = new Date().toISOString()
+
+    if (messageId) {
+      const { data: message, error: updateError } = await admin.from('messages').update({
+        external_id: externalId || null,
+        metadata: {
+          source: sourceSenderType === 'ai' ? 'ryan' : 'whatsapp',
+          outbound_status: 'accepted',
+          sent_by: authenticatedUserId || null,
+          whatsapp_message_id: externalId || null,
+          whatsapp_outbound: true,
+          dispatch: internalDispatch ? 'database_webhook' : 'internal',
+        },
+      }).eq('id', messageId).select('id, conversation_id, sender_type, content, created_at, metadata, read_at, delivered_at, external_id').single()
+      if (updateError) throw updateError
+
+      await admin.from('conversations').update({
+        handled_by: sourceSenderType === 'ai' ? 'ai' : 'human',
+        last_message_at: now,
+        updated_at: now,
+      }).eq('id', conversationId).eq('organization_id', organizationId)
+
+      console.log('WhatsApp outbound message sent', { organizationId, conversationId, phoneNumberId, to, externalId, sourceSenderType, internalDispatch })
+      return json(res, 200, { ok: true, message })
+    }
+
     const { data: message, error: insertError } = await admin.from('messages').insert({
       conversation_id: conversationId,
       sender_type: 'agent',
