@@ -24,6 +24,7 @@ import Campaigns from './pages/Campaigns'
 import Inbox from './pages/Inbox'
 import Account from './pages/Account'
 import Ryan from './pages/Ryan'
+import RyanAssistant from './pages/RyanAssistant'
 import RyanSettings from './pages/RyanSettings'
 import KnowledgeBase from './pages/KnowledgeBase'
 import HandoffRequests from './pages/HandoffRequests'
@@ -59,6 +60,7 @@ function RyanPageShell() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-ink-900/10 bg-white p-3 shadow-sm">
         <span className="mr-auto text-sm font-semibold text-ink-950">إدارة Ryan</span>
+        <Link to="/ryan/assistant" className="rounded-xl bg-gold-500 px-4 py-2 text-sm font-semibold text-ink-950 transition hover:bg-gold-400">المساعد الداخلي</Link>
         <Link to="/ryan/settings" className="rounded-xl bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-800">إعدادات Ryan</Link>
         <Link to="/ryan/knowledge" className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50">قاعدة المعرفة</Link>
         <Link to="/ryan/handoff" className="rounded-xl border border-ink-900/10 bg-white px-4 py-2 text-sm font-semibold text-ink-900 transition hover:bg-ink-50">طلبات التحويل</Link>
@@ -92,6 +94,7 @@ export default function App() {
               <Route path="/campaigns" element={<FeatureRoute feature="campaigns" featureName="الحملات التسويقية"><Campaigns /></FeatureRoute>} />
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/ryan" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanPageShell /></FeatureRoute>} />
+              <Route path="/ryan/assistant" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanAssistant /></FeatureRoute>} />
               <Route path="/ryan/settings" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanSettings /></FeatureRoute>} />
               <Route path="/ryan/knowledge" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><KnowledgeBase /></FeatureRoute>} />
               <Route path="/ryan/handoff" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><HandoffRequests /></FeatureRoute>} />
