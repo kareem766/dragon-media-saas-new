@@ -54,7 +54,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const CONFIG_ID = ${JSON.stringify(escapeHtml(configId))};
     const GRAPH_VERSION = ${JSON.stringify(escapeHtml(graphVersion))};
     const QUERY_STATE = ${JSON.stringify(escapeHtml(queryState))};
-    const REDIRECT_URI = window.location.origin + window.location.pathname;
 
     const statusEl = document.getElementById('status');
     const button = document.getElementById('connect');
@@ -157,11 +156,13 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       }
       button.disabled = true;
       setStatus('جاري فتح نافذة WhatsApp الرسمية من Meta...');
+      // Do not pass redirect_uri here. Meta's JS SDK Embedded Signup uses its
+      // own OAuth dialog redirect (facebook.com/connect/login_success.html).
+      // The backend must exchange the returned code using that exact URI.
       window.FB.login(fbLoginCallback, {
         config_id: CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
-        redirect_uri: REDIRECT_URI,
         extras: { setup: {}, sessionInfoVersion: '3' },
       });
     }
