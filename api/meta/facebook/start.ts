@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { createHmac, randomBytes } from 'node:crypto'
 
-const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/facebook/callback'
+const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 
