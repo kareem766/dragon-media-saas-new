@@ -2,18 +2,15 @@ import React from 'react'
 import { HashRouter, Routes, Route, Link } from 'react-router-dom'
 import { AuthProvider } from './lib/AuthContext'
 import { ToastProvider } from './lib/ToastContext'
-
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
-
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import Support from './pages/Support'
-
 import Dashboard from './pages/Dashboard'
 import CRM from './pages/CRM'
 import CustomerDetail from './pages/CustomerDetail'
@@ -29,7 +26,6 @@ import RyanSettings from './pages/RyanSettings'
 import KnowledgeBase from './pages/KnowledgeBase'
 import HandoffRequests from './pages/HandoffRequests'
 import Automations from './pages/Automations'
-
 import AdminDashboard from './pages/AdminDashboard'
 import AdminPayments from './pages/AdminPayments'
 import AdminAuditLogs from './pages/AdminAuditLogs'
@@ -37,9 +33,9 @@ import AdminSettings from './pages/AdminSettings'
 import AdminBranding from './pages/AdminBranding'
 import AdminOrganizations from './pages/AdminOrganizations'
 import AdminPlans from './pages/AdminPlans'
+import AdminRyanPackages from './pages/AdminRyanPackages'
 import AdminRoles from './pages/AdminRoles'
 import AdminTickets from './pages/AdminTickets'
-
 import Tickets from './pages/Tickets'
 import Search from './pages/Search'
 import Plans from './pages/Plans'
@@ -82,7 +78,6 @@ export default function App() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/support" element={<Support />} />
-
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/crm" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute>} />
@@ -110,7 +105,6 @@ export default function App() {
               <Route path="/account" element={<Account />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/integrations/meta" element={<MetaConnections />} />
-
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="/admin/organizations" element={<AdminRoute><AdminOrganizations /></AdminRoute>} />
               <Route path="/admin/payments" element={<AdminRoute><AdminPayments /></AdminRoute>} />
@@ -118,6 +112,7 @@ export default function App() {
               <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
               <Route path="/admin/branding" element={<AdminRoute><AdminBranding /></AdminRoute>} />
               <Route path="/admin/plans" element={<AdminRoute><AdminPlans /></AdminRoute>} />
+              <Route path="/admin/ryan-credits" element={<AdminRoute><AdminRyanPackages /></AdminRoute>} />
               <Route path="/admin/roles" element={<AdminRoute><AdminRoles /></AdminRoute>} />
               <Route path="/admin/tickets" element={<AdminRoute><AdminTickets /></AdminRoute>} />
             </Route>
