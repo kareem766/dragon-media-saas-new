@@ -1,13 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-}
+const META_WHATSAPP_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
@@ -18,7 +11,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const configId = process.env.META_WHATSAPP_EMBEDDED_CONFIG_ID
   const appId = process.env.META_APP_ID
   const graphVersion = process.env.META_GRAPH_API_VERSION || 'v23.0'
-  const redirectUri = process.env.META_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
   const queryState = typeof req.query.state === 'string' ? req.query.state : ''
 
   if (!configId || !appId) {
@@ -47,7 +39,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const APP_ID = ${JSON.stringify(appId)};
     const CONFIG_ID = ${JSON.stringify(configId)};
     const GRAPH_VERSION = ${JSON.stringify(graphVersion)};
-    const REDIRECT_URI = ${JSON.stringify(redirectUri)};
+    const REDIRECT_URI = ${JSON.stringify(META_WHATSAPP_REDIRECT_URI)};
     const QUERY_STATE = ${JSON.stringify(queryState)};
 
     const statusEl = document.getElementById('status');
@@ -151,8 +143,8 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       }
       button.disabled = true;
       setStatus('جاري فتح نافذة WhatsApp الرسمية من Meta...');
-      // The same registered redirect URI must be used when Meta issues the
-      // authorization code and when the backend exchanges that code.
+      // Keep the Embedded Signup dialog and backend token exchange on the
+      // exact same registered redirect URI.
       window.FB.login(fbLoginCallback, {
         config_id: CONFIG_ID,
         response_type: 'code',
