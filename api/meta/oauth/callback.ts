@@ -53,11 +53,19 @@ async function graph(path: string, token: string, init?: RequestInit) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'GET') return errorRedirect(res, 'طلب OAuth غير صالح.')
+  if (req.method !== 'GET' && req.method !== 'POST') return errorRedirect(res, 'طلب OAuth غير صالح.')
 
   try {
-    const code = String(req.query.code || '')
-    const state = String(req.query.state || '')
+    const body = req.method === 'POST'
+      ? (typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}))
+      : {}
+
+    const code = String(req.method === 'POST' ? body.code || '' : req.query.code || '')
+    const state = String(req.method === 'POST' ? body.state || '' : req.query.state || '')
+    const suppliedWabaId = String(req.method === 'POST' ? body.waba_id || '' : '')
+    const suppliedPhoneId = String(req.method === 'POST' ? body.phone_number_id || '' : '')
+    const suppliedBusinessId = String(req.method === 'POST' ? body.business_id || body.businessId || '' : '')
+
     if (!code || !state) return errorRedirect(res, 'Meta لم تُرجع authorization code صالحًا.')
 
     const stateData = verifyState(state)
@@ -90,74 +98,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const token = String(tokenData.access_token)
 
-    // Embedded Signup grants whatsapp_business_management on the WABA(s) selected
-    // by the business. Use debug_token to get the exact WABA target IDs instead of
-    // calling /me/businesses, which requires business_management and may not be
-    // granted by the selected Facebook Login for Business configuration.
-    const appAccessToken = `${appId}|${appSecret}`
-    const debugToken = await graph(`/debug_token?input_token=${encodeURIComponent(token)}`, appAccessToken)
-    const granularScopes = Array.isArray(debugToken?.data?.granular_scopes) ? debugToken.data.granular_scopes : []
-    const whatsappScope = granularScopes.find((item: any) => item?.scope === 'whatsapp_business_management')
-    const targetIds = Array.isArray(whatsappScope?.target_ids)
-      ? whatsappScope.target_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
-      : []
-
-    let selectedBusiness: any = null
     let selectedWaba: any = null
     let selectedPhone: any = null
+    let businessId = suppliedBusinessId
 
-    for (const wabaId of targetIds) {
-      try {
-        const waba = await graph(`/${encodeURIComponent(wabaId)}?fields=id,name,owner_business_info`, token)
-        const phones = await graph(`/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=50`, token)
-        if (phones.data?.[0]) {
-          selectedWaba = waba
-          selectedPhone = phones.data[0]
-          selectedBusiness = waba?.owner_business_info || null
-          break
+    // The Embedded Signup SDK sends the exact WABA and phone selected by the
+    // customer in the WA_EMBEDDED_SIGNUP session event. Prefer those IDs so we
+    // never require /me/businesses or the business_management permission here.
+    if (suppliedWabaId) {
+      selectedWaba = await graph(`/${encodeURIComponent(suppliedWabaId)}?fields=id,name`, token)
+      if (suppliedPhoneId) {
+        try {
+          selectedPhone = await graph(`/${encodeURIComponent(suppliedPhoneId)}?fields=id,display_phone_number,verified_name`, token)
+        } catch {
+          selectedPhone = null
         }
-      } catch {
-        // Try the next WABA target returned by Meta.
+      }
+      if (!selectedPhone) {
+        const phones = await graph(`/${encodeURIComponent(suppliedWabaId)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=50`, token)
+        selectedPhone = phones.data?.[0] || null
       }
     }
 
-    // Backward-compatible fallback for configurations that also grant business_management.
+    // OAuth/SDK fallback: Meta's Debug Token endpoint exposes WABA target IDs
+    // for whatsapp_business_management when the configuration grants them.
     if (!selectedWaba) {
-      const businesses = await graph('/me/businesses?fields=id,name&limit=50', token)
-      const businessList = Array.isArray(businesses.data) ? businesses.data : []
+      const appAccessToken = `${appId}|${appSecret}`
+      const debugToken = await graph(`/debug_token?input_token=${encodeURIComponent(token)}`, appAccessToken)
+      const granularScopes = Array.isArray(debugToken?.data?.granular_scopes) ? debugToken.data.granular_scopes : []
+      const whatsappScope = granularScopes.find((item: any) => item?.scope === 'whatsapp_business_management')
+      const targetIds = Array.isArray(whatsappScope?.target_ids)
+        ? whatsappScope.target_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+        : []
 
-      for (const business of businessList) {
-        const wabas = await graph(`/${encodeURIComponent(business.id)}/client_whatsapp_business_accounts?fields=id,name&limit=50`, token).catch(() => ({ data: [] }))
-        for (const waba of Array.isArray(wabas.data) ? wabas.data : []) {
-          const phones = await graph(`/${encodeURIComponent(waba.id)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=50`, token).catch(() => ({ data: [] }))
+      for (const wabaId of targetIds) {
+        try {
+          const waba = await graph(`/${encodeURIComponent(wabaId)}?fields=id,name`, token)
+          const phones = await graph(`/${encodeURIComponent(wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=50`, token)
           if (phones.data?.[0]) {
-            selectedBusiness = business
             selectedWaba = waba
             selectedPhone = phones.data[0]
             break
           }
+        } catch {
+          // Try the next WABA target returned by Meta.
         }
-        if (selectedWaba) break
       }
     }
 
-    if (!selectedWaba) {
-      throw new Error('تمت مصادقة Meta، لكن لم يتم العثور على WhatsApp Business Account أو رقم هاتف في صلاحيات الربط.')
+    if (!selectedWaba || !selectedPhone) {
+      throw new Error('Meta أكملت المصادقة، لكن لم تُرسل بيانات WABA/رقم WhatsApp إلى Dragon Media. تأكد أن الربط يتم من زر WhatsApp داخل Dragon Media.')
     }
 
     await graph(`/${encodeURIComponent(selectedWaba.id)}/subscribed_apps`, token, { method: 'POST' }).catch(() => null)
 
     const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const metadata = {
-      business_id: String(selectedBusiness?.id || ''),
-      business_name: String(selectedBusiness?.name || ''),
+      business_id: businessId,
+      business_name: '',
       waba_id: String(selectedWaba.id),
       waba_name: String(selectedWaba.name || ''),
       phone_number_id: String(selectedPhone.id),
       display_phone_number: String(selectedPhone.display_phone_number || ''),
       verified_name: String(selectedPhone.verified_name || ''),
       ready_for_messaging: true,
-      connected_via: 'meta_embedded_signup_oauth',
+      connected_via: 'meta_embedded_signup_sdk',
     }
 
     const { error: saveError } = await db.from('integrations').upsert({
@@ -175,9 +180,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (saveError) throw new Error('تمت مصادقة Meta لكن تعذر حفظ الاتصال في Dragon Media.')
 
+    if (req.method === 'POST') return res.status(200).json({ ok: true, connected: true })
     return res.redirect(302, 'https://dragon-media-saas-new.vercel.app/#/integrations/meta?meta_status=connected')
   } catch (error) {
     console.error('Meta OAuth callback failed', error)
+    if (req.method === 'POST') return res.status(400).json({ error: error instanceof Error ? error.message : 'فشل اتصال Meta.' })
     return errorRedirect(res, error instanceof Error ? error.message : 'فشل اتصال Meta.')
   }
 }
