@@ -107,8 +107,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       override_default_response_type: 'true',
     })
 
+    const url = `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`
+
+    // Keep both response keys for compatibility with the existing Settings UI
+    // and the newer MetaConnections flow.
     return json(res, 200, {
-      url: `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`,
+      url,
+      auth_url: url,
       redirect_uri: REDIRECT_URI,
     })
   } catch (error) {
