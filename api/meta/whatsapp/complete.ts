@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
-const REDIRECT_URI = process.env.META_REDIRECT_URI || 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 
 function env(name: string, fallbackNames: string[] = []) { for (const currentName of [name, ...fallbackNames]) { const value = process.env[currentName]; if (value) return value } throw new Error(`Missing environment variable: ${name}`) }
 function verifyState(state: string) {
@@ -25,10 +24,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const state = typeof req.query.state === 'string' ? req.query.state : ''; const code = typeof req.query.code === 'string' ? req.query.code : ''; const eventWabaId = typeof req.query.waba_id === 'string' ? req.query.waba_id : null; const eventPhoneNumberId = typeof req.query.phone_number_id === 'string' ? req.query.phone_number_id : null; const eventBusinessId = typeof req.query.business_id === 'string' ? req.query.business_id : null
     const stateData = state ? verifyState(state) : null; if (!stateData) return res.status(400).json({ error: 'Invalid or expired OAuth state', code: 'META_INVALID_STATE' }); if (!code) return res.status(400).json({ error: 'Meta did not return an authorization code', code: 'META_AUTH_CODE_MISSING' })
     const appId = env('META_APP_ID'); const appSecret = env('META_APP_SECRET')
-    const exchangeParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, code, redirect_uri: REDIRECT_URI })
+    const exchangeParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, code })
     const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body: exchangeParams.toString() })
     const exchangeData = await exchangeResponse.json().catch(() => null)
-    if (!exchangeResponse.ok || !exchangeData?.access_token) { console.error('WhatsApp Embedded Signup token exchange failed:', { status: exchangeResponse.status, error: exchangeData?.error, redirect_uri: REDIRECT_URI }); return res.status(502).json({ error: exchangeData?.error?.message || 'Meta authorization code exchange failed', code: 'META_TOKEN_EXCHANGE_FAILED' }) }
+    if (!exchangeResponse.ok || !exchangeData?.access_token) { console.error('WhatsApp Embedded Signup token exchange failed:', { status: exchangeResponse.status, error: exchangeData?.error }); return res.status(502).json({ error: exchangeData?.error?.message || 'Meta authorization code exchange failed', code: 'META_TOKEN_EXCHANGE_FAILED' }) }
     const accessToken = String(exchangeData.access_token); const debugParams = new URLSearchParams({ input_token: accessToken, access_token: `${appId}|${appSecret}` }); const debugResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/debug_token?${debugParams}`); const debugData = await debugResponse.json().catch(() => null); if (!debugResponse.ok || !debugData?.data?.is_valid) return res.status(502).json({ error: 'Meta returned an invalid WhatsApp access token.', code: 'META_TOKEN_INVALID' })
     const metaUserId = debugData.data.user_id ? String(debugData.data.user_id) : null; if (!metaUserId) return res.status(502).json({ error: 'Meta user ID was not returned.', code: 'META_USER_ID_MISSING' })
     const scopes = debugData.data.granular_scopes; const targetIds = extractTargetIds(scopes); let businessId = eventBusinessId; let wabaId = eventWabaId; let phoneNumberId = eventPhoneNumberId; let displayPhoneNumber = null; let verifiedName = null
