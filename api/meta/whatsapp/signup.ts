@@ -11,6 +11,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const graphVersion = process.env.META_GRAPH_API_VERSION || 'v23.0'
   const queryState = typeof req.query.state === 'string' ? req.query.state : ''
   const completeUrl = '/api/meta/whatsapp/complete'
+  const redirectUri = 'https://dragon-media-saas-new.vercel.app/api/meta/whatsapp/signup'
 
   if (!configId || !appId) {
     return res.status(500).send('WhatsApp Embedded Signup is not configured.')
@@ -41,6 +42,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const GRAPH_VERSION = ${JSON.stringify(graphVersion)};
     const STATE = ${JSON.stringify(queryState)};
     const COMPLETE_URL = ${JSON.stringify(completeUrl)};
+    const REDIRECT_URI = ${JSON.stringify(redirectUri)};
 
     const statusEl = document.getElementById('status');
     const button = document.getElementById('connect');
@@ -84,7 +86,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       if (completed) return;
       completed = true;
 
-      const params = new URLSearchParams({ state: STATE, code });
+      const params = new URLSearchParams({ state: STATE, code, redirect_uri: REDIRECT_URI });
       if (signupData.waba_id) params.set('waba_id', signupData.waba_id);
       if (signupData.phone_number_id) params.set('phone_number_id', signupData.phone_number_id);
       if (signupData.business_id) params.set('business_id', signupData.business_id);
@@ -135,6 +137,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         config_id: CONFIG_ID,
         response_type: 'code',
         override_default_response_type: true,
+        redirect_uri: REDIRECT_URI,
         extras: {
           setup: {},
           sessionInfoVersion: '3'
