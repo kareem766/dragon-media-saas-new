@@ -30,8 +30,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
     const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!appId || !configId || !stateSecret || !supabaseUrl || !serviceKey) {
-      return json(res, 500, { error: 'إعدادات Meta أو Supabase غير مكتملة على الخادم.' })
+    const missing: string[] = []
+    if (!appId) missing.push('META_APP_ID')
+    if (!configId) missing.push('META_CONFIG_ID')
+    if (!stateSecret) missing.push('META_STATE_SECRET or META_APP_SECRET')
+    if (!supabaseUrl) missing.push('SUPABASE_URL or VITE_SUPABASE_URL')
+    if (!serviceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
+
+    if (missing.length) {
+      console.error('Meta OAuth start missing production environment variables', missing)
+      return json(res, 500, {
+        error: 'إعدادات Meta أو Supabase غير مكتملة على الخادم.',
+        missing,
+      })
     }
 
     const authorization = String(req.headers.authorization || '')
