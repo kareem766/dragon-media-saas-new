@@ -115,10 +115,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
-    // Deliberately read OAuth state/code ONLY from the query string.
-    // Vercel's automatic req.body parser can throw "Invalid JSON" before
-    // handler code can inspect a form or JSON body, so this endpoint never
-    // touches req.body. The browser callback sends a POST with no request body.
     const state = typeof req.query.state === 'string' ? req.query.state : ''
     const code = typeof req.query.code === 'string' ? req.query.code : ''
     const eventWabaId = typeof req.query.waba_id === 'string' ? req.query.waba_id : null
@@ -133,13 +129,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const appId = env('META_APP_ID')
     const appSecret = env('META_APP_SECRET')
 
-    // IMPORTANT: this must be byte-for-byte identical to the redirect_uri
-    // supplied to FB.login in api/meta/whatsapp/signup.ts. Do NOT use the
-    // generic META_WHATSAPP_OAUTH_REDIRECT_URI here because an old value such
-    // as https://www.facebook.com/connect/login_success.html causes Meta code
-    // 191 / "domain isn't included in the app's domains" during token exchange.
-    // Embedded Signup is launched from our own canonical production domain.
-    const redirectUri = 'https://dragon-media-saas-new.vercel.app/api/meta/whatsapp/signup'
+    // Embedded Signup via the Meta JS SDK generates the authorization code
+    // against Meta's SDK login-success redirect. Do not invent a Dragon Media
+    // redirect URI for the code exchange; it must exactly match the URI used
+    // by Meta when the code was issued.
+    const redirectUri = 'https://www.facebook.com/connect/login_success.html'
 
     const exchangeParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: redirectUri, code })
     const exchangeResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/oauth/access_token?${exchangeParams.toString()}`)
@@ -208,10 +202,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const readyForMessaging = Boolean(wabaId && phoneNumberId)
     const subscriptionResult = wabaId ? await subscribeWaba(wabaId, accessToken) : { success: false, error: 'WABA ID not discovered' }
 
-    // SUPABASE_URL is the preferred server-side variable. Keep a safe fallback
-    // to the existing Vite project URL so this OAuth endpoint works on the
-    // current Vercel Hobby project without requiring a paid plan or exposing
-    // the service-role key to the browser.
     const supabaseUrl = env('SUPABASE_URL', ['VITE_SUPABASE_URL'])
     const supabase = createClient(supabaseUrl, env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false, autoRefreshToken: false } })
 
