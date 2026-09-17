@@ -24,9 +24,29 @@ const extractNameFromMessage=(value:string)=>{
 type Turn={role:'user'|'model';parts:{text:string}[]}
 
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string){
- const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700}})})
- const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error?.message||`Gemini ${r.status}`)
- const reply=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000);if(!reply)throw new Error('Gemini returned an empty response');return reply
+ const candidates=[model,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ let lastError='Gemini request failed'
+ for(const candidate of candidates){
+  for(let attempt=0;attempt<2;attempt++){
+   try{
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700}})})
+    const d=await r.json().catch(()=>({}))
+    if(r.ok){
+     const reply=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000)
+     if(reply)return reply
+     lastError=`Gemini ${candidate} returned an empty response`
+    }else{
+     lastError=d?.error?.message||`Gemini ${r.status}`
+     const retryable=r.status===429||r.status===408||r.status===500||r.status===502||r.status===503||r.status===504
+     if(!retryable)break
+    }
+   }catch(error:any){
+    lastError=text(error?.message,500)||'Gemini network error'
+   }
+   if(attempt===0)await new Promise(resolve=>setTimeout(resolve,350))
+  }
+ }
+ throw new Error(`Ryan Gemini fallback exhausted: ${lastError}`)
 }
 
 async function capturePriceInquiry(supabase:any,organizationId:string,customerId:string,name:string,phone:string,email:string,service:string,notes:string){
@@ -98,7 +118,6 @@ export default async function main(req:VercelRequest,res:VercelResponse){
       if(!nameConfirmed)reply='أكيد، عشان فريق Dragon Media يحدد السعر المناسب لحضرتك، ممكن أعرف اسم حضرتك؟'
       else reply='تمام، ممكن رقم الموبايل اللي فريق Dragon Media يقدر يتواصل مع حضرتك من خلاله؟'
     }else{
-      // Capture is allowed only after both values were explicitly collected from customer messages.
       await supabase.from('customers').update({name:collectedName,phone:collectedPhone,updated_at:new Date().toISOString()}).eq('id',customer.id).eq('organization_id',organizationId)
       priceData=await capturePriceInquiry(supabase,organizationId,customer.id,collectedName,collectedPhone,text(customer.email,160),current,'استفسار عن السعر؛ سيتم التواصل مع العميل لتحديد السعر المناسب.')
       priceCaptured=true
