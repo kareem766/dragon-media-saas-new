@@ -258,7 +258,7 @@ export default function Tasks() {
               title,
               value
             ),
-            users (
+            users!tasks_assigned_to_fkey (
               id,
               full_name,
               email
