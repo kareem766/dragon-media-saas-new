@@ -55,10 +55,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { error: error.message }
     }
-    if (!isEmailConfirmed(data.user)) {
+
+    const nextSession = confirmedSession(data.session)
+    if (!nextSession) {
       await supabase.auth.signOut()
       return { error: 'يجب تأكيد البريد الإلكتروني أولًا من الرسالة التي أرسلناها إليك.' }
     }
+
+    // Set the authenticated session immediately so ProtectedRoute cannot
+    // redirect back to /login before onAuthStateChange fires.
+    setSession(nextSession)
+
     return { error: null }
   }
 
