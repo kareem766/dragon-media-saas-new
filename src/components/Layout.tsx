@@ -18,6 +18,7 @@ const isAdminPath = (pathname: string) => adminPaths.some(path => pathname === p
 const getPageTheme = (pathname: string) => {
   if (pathname.startsWith('/admin')) return 'admin'
   if (pathname.startsWith('/crm') || pathname.startsWith('/pipeline') || pathname.startsWith('/customers') || pathname.startsWith('/leads')) return 'crm'
+  if (pathname.startsWith('/tasks')) return 'tasks'
   if (pathname.startsWith('/inbox') || pathname.startsWith('/tickets') || pathname.startsWith('/appointments')) return 'inbox'
   if (pathname.startsWith('/ryan') || pathname.startsWith('/automations')) return 'ai'
   if (pathname.startsWith('/campaigns')) return 'campaigns'
