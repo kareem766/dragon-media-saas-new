@@ -274,10 +274,15 @@ export default function Tasks() {
       if (dealsResult.error) console.warn('Tasks deals relation:', dealsResult.error)
       if (usersResult.error) console.warn('Tasks users relation:', usersResult.error)
 
-      const customersMap = new Map((customersResult.data ?? []).map((x: Customer) => [x.id, x]))
-      const leadsMap = new Map((leadsResult.data ?? []).map((x: Lead) => [x.id, x]))
-      const dealsMap = new Map((dealsResult.data ?? []).map((x: Deal) => [x.id, x]))
-      const usersMap = new Map((usersResult.data ?? []).map((x: User) => [x.id, x]))
+      const customerRows = (customersResult.data ?? []) as Customer[]
+      const leadRows = (leadsResult.data ?? []) as Lead[]
+      const dealRows = (dealsResult.data ?? []) as Deal[]
+      const userRows = (usersResult.data ?? []) as User[]
+
+      const customersMap = new Map<string, Customer>(customerRows.map(x => [x.id, x]))
+      const leadsMap = new Map<string, Lead>(leadRows.map(x => [x.id, x]))
+      const dealsMap = new Map<string, Deal>(dealRows.map(x => [x.id, x]))
+      const usersMap = new Map<string, User>(userRows.map(x => [x.id, x]))
 
       setCustomers(Array.from(customersMap.values()))
       setLeads(Array.from(leadsMap.values()))
