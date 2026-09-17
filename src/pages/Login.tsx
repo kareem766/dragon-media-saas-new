@@ -159,9 +159,7 @@ export default function Login() {
         return;
       }
 
-      navigate('/', {
-        replace: true,
-      });
+      // Redirect is driven by the authenticated session state.
     } catch (err) {
       setError(
         err instanceof Error
