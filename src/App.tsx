@@ -11,6 +11,7 @@ import Login from './pages/Login'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import Support from './pages/Support'
+import RefundPolicy from './pages/RefundPolicy'
 import Dashboard from './pages/Dashboard'
 import CRM from './pages/CRM'
 import CustomerDetail from './pages/CustomerDetail'
@@ -78,6 +79,7 @@ export default function App() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/support" element={<Support />} />
+            <Route path="/refund-policy" element={<RefundPolicy />} />
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/crm" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute>} />
