@@ -41,9 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    // Keep the session already established by signIn. In some desktop
-    // browsers INITIAL_SESSION can arrive after signInWithPassword; allowing
-    // it to overwrite a fresh session with null causes the redirect loop.
+    // INITIAL_SESSION can arrive after signInWithPassword in some browsers.
+    // Never let that initial event overwrite a fresh authenticated session.
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (event === 'INITIAL_SESSION' && sessionRef.current) {
         setLoading(false)
@@ -51,7 +50,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       updateSession(newSession)
-
       if (event === 'INITIAL_SESSION') setLoading(false)
     })
 
@@ -85,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (consent) {
       metadata.terms_accepted_at = consent.termsAcceptedAt
       metadata.terms_version = consent.termsVersion
-      metadata.privacy_policy_accepted_at = consent.privacyPolicyAcceptedAt ?? consent.privacyAcceptedAt
+      metadata.privacy_policy_accepted_at = consent.privacyAcceptedAt
       metadata.privacy_policy_version = consent.privacyVersion
     }
     const { data, error } = await supabase.auth.signUp({
