@@ -34,14 +34,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!supabase) { setLoading(false); return }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(confirmedSession(data.session))
+    if (!supabase) {
       setLoading(false)
-    })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(confirmedSession(newSession))
-    })
+      return
+    }
+
+    // Subscribe first and use Supabase's INITIAL_SESSION event as the
+    // authoritative initial state. Calling getSession() in parallel can
+    // race with a fast sign-in and overwrite the fresh session with the
+    // older storage snapshot — especially noticeable in desktop browsers.
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        setSession(confirmedSession(newSession))
+
+        if (event === 'INITIAL_SESSION') {
+          setLoading(false)
+        }
+      }
+    )
+
     return () => listener.subscription.unsubscribe()
   }, [])
 
