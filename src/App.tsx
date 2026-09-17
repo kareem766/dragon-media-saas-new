@@ -1,11 +1,12 @@
 import React from 'react'
-import { HashRouter, Routes, Route, Link } from 'react-router-dom'
+import { HashRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
 import { AuthProvider } from './lib/AuthContext'
 import { ToastProvider } from './lib/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
+import SiteFooter from './components/SiteFooter'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Privacy from './pages/Privacy'
@@ -51,6 +52,17 @@ import MetaConnections from './pages/MetaConnections'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
+function PublicShell() {
+  return (
+    <div dir="rtl" className="min-h-screen bg-sand-50 text-ink-950 flex flex-col">
+      <main className="flex-1">
+        <Outlet />
+      </main>
+      <SiteFooter />
+    </div>
+  )
+}
+
 function RyanPageShell() {
   return (
     <div className="space-y-4">
@@ -73,13 +85,17 @@ export default function App() {
         <HashRouter>
           <Routes>
             <Route path="/home" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/support" element={<Support />} />
-            <Route path="/refund-policy" element={<RefundPolicy />} />
+
+            <Route element={<PublicShell />}>
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
+            </Route>
+
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/crm" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute>} />
