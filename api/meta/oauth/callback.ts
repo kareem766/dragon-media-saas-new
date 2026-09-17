@@ -52,6 +52,52 @@ async function graph(path: string, token: string, init?: RequestInit) {
   return data
 }
 
+/**
+ * Subscribe the selected WhatsApp Business Account to this Meta app and then
+ * verify the subscription. We deliberately do not mark an integration ready
+ * when Meta rejects the subscription, because the inbound webhook path depends
+ * on this exact WABA-level subscription.
+ */
+async function subscribeWhatsAppWebhook(wabaId: string, token: string, appId: string) {
+  let subscribeResponse: any
+  try {
+    subscribeResponse = await graph(`/${encodeURIComponent(wabaId)}/subscribed_apps`, token, { method: 'POST' })
+  } catch (error) {
+    return {
+      subscribed: false,
+      error: error instanceof Error ? error.message : 'فشل اشتراك WhatsApp Webhook لدى Meta.',
+      response: null,
+    }
+  }
+
+  // Meta normally returns success=true here. A follow-up GET is used when
+  // available so the database reflects the actual WABA subscription state.
+  try {
+    const current = await graph(`/${encodeURIComponent(wabaId)}/subscribed_apps`, token)
+    const apps = Array.isArray(current?.data) ? current.data : []
+    const found = apps.some((item: any) => String(item?.id || item?.app_id || '') === String(appId))
+    if (found || subscribeResponse?.success === true) {
+      return { subscribed: true, error: null, response: subscribeResponse }
+    }
+    return {
+      subscribed: false,
+      error: 'تم تنفيذ طلب الاشتراك لكن Meta لم تؤكد اشتراك تطبيق Dragon Media على WABA.',
+      response: subscribeResponse,
+    }
+  } catch {
+    // A successful POST is sufficient when Meta does not expose the GET result
+    // for the granted token. Never convert a failed POST into a successful state.
+    if (subscribeResponse?.success === true) {
+      return { subscribed: true, error: null, response: subscribeResponse }
+    }
+    return {
+      subscribed: false,
+      error: 'تعذر التحقق من اشتراك WhatsApp Webhook لدى Meta بعد طلب الاشتراك.',
+      response: subscribeResponse,
+    }
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') return errorRedirect(res, 'طلب OAuth غير صالح.')
 
@@ -194,7 +240,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error('Meta أكملت المصادقة، لكن لم تُرسل بيانات WABA/رقم WhatsApp إلى Dragon Media. تأكد أن الربط يتم من زر WhatsApp داخل Dragon Media.')
     }
 
-    await graph(`/${encodeURIComponent(selectedWaba.id)}/subscribed_apps`, token, { method: 'POST' }).catch(() => null)
+    const webhook = await subscribeWhatsAppWebhook(String(selectedWaba.id), token, appId)
+    const now = new Date().toISOString()
 
     const metadata = {
       business_id: businessId,
@@ -204,7 +251,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phone_number_id: String(selectedPhone.id),
       display_phone_number: String(selectedPhone.display_phone_number || ''),
       verified_name: String(selectedPhone.verified_name || ''),
-      ready_for_messaging: true,
+      webhook_subscribed: webhook.subscribed,
+      ready_for_messaging: webhook.subscribed,
       connected_via: 'meta_embedded_signup_sdk',
     }
 
@@ -212,18 +260,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       organization_id: String(stateData.organizationId),
       provider: 'whatsapp',
       connected: true,
-      status: 'connected',
+      status: webhook.subscribed ? 'connected' : 'error',
       config: { access_token: encryptToken(token) },
       metadata,
-      connected_at: new Date().toISOString(),
-      last_verified_at: new Date().toISOString(),
-      error_message: null,
-      updated_at: new Date().toISOString(),
+      connected_at: now,
+      last_verified_at: now,
+      error_message: webhook.error,
+      updated_at: now,
     }, { onConflict: 'organization_id,provider' })
 
-    if (saveError) throw new Error('تمت مصادقة Meta لكن تعذر حفظ الاتصال في Dragon Media.')
+    if (saveError) throw new Error('تمت مصادقة Meta لكن تعذر حفظ اتصال WhatsApp في Dragon Media.')
 
-    if (req.method === 'POST') return res.status(200).json({ ok: true, connected: true })
+    if (!webhook.subscribed) {
+      throw new Error(`تم حفظ رقم WhatsApp، لكن Meta لم تُكمل اشتراك Webhook. ${webhook.error || ''}`.trim())
+    }
+
+    if (req.method === 'POST') return res.status(200).json({ ok: true, connected: true, provider: 'whatsapp' })
     return res.redirect(302, 'https://dragon-media-saas-new.vercel.app/#/integrations/meta?meta_status=connected')
   } catch (error) {
     console.error('Meta OAuth callback failed', error)
