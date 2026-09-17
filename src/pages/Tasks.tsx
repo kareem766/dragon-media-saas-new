@@ -239,7 +239,7 @@ export default function Tasks() {
         .select('*')
         .eq('organization_id', organizationId)
         .order('due_date', { ascending: true, nullsFirst: false })
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
 
       if (tasksError) {
         throw tasksError
