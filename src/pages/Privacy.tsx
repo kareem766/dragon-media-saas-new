@@ -1,30 +1,66 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
+
+const CONTACT_PHONE = '01096656281'
+const CONTACT_EMAIL = 'kalnoby0@gmail.com'
+const COMPANY_ADDRESS = 'الإسكندرية - مصر'
 
 export default function Privacy() {
   return (
-    <div dir="rtl" className="max-w-2xl mx-auto p-8 space-y-4 text-ink-900">
-      <h1 className="text-2xl font-bold">سياسة الخصوصية — Dragon Media</h1>
-      <p className="text-sm text-ink-900/60">آخر تحديث: 2026</p>
+    <div dir="rtl" className="min-h-screen bg-sand-50 text-ink-900 px-5 py-10 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto">
+        <div className="rounded-3xl border border-sand-200 bg-white shadow-sm overflow-hidden">
+          <div className="border-b border-sand-200 px-6 py-7 sm:px-8">
+            <p className="text-sm font-bold text-gold-600">Dragon Media</p>
+            <h1 className="text-2xl sm:text-3xl font-black mt-2">سياسة الخصوصية</h1>
+            <p className="text-sm text-ink-900/50 mt-2">آخر تحديث: 17 سبتمبر 2026</p>
+          </div>
 
-      <p>تحترم منصة Dragon Media خصوصية مستخدميها. توضح هذه السياسة كيفية جمعنا واستخدامنا وحمايتنا لبياناتك.</p>
+          <div className="px-6 py-7 sm:px-8 space-y-6 text-sm leading-8 text-ink-900/75">
+            <p>تحترم منصة Dragon Media خصوصية مستخدميها. توضح هذه السياسة كيفية جمعنا واستخدامنا وحمايتنا للبيانات المرتبطة باستخدام المنصة.</p>
 
-      <h2 className="font-bold text-lg mt-4">البيانات التي نجمعها</h2>
-      <p>اسم الشركة، بيانات التواصل، بيانات العملاء التي تُدخلها في النظام، وبيانات القنوات المتصلة (مثل صفحات فيسبوك وإنستجرام) عند ربطها اختياريًا.</p>
+            <section>
+              <h2 className="font-black text-lg text-ink-950">البيانات التي نجمعها</h2>
+              <p className="mt-2">قد نجمع اسم الشركة، بيانات التواصل، بيانات المستخدمين والعملاء التي يتم إدخالها في النظام، وبيانات القنوات المتصلة مثل فيسبوك وإنستجرام وواتساب عند ربطها اختياريًا.</p>
+            </section>
 
-      <h2 className="font-bold text-lg mt-4">كيف نستخدم بياناتك</h2>
-      <p>لتشغيل الخدمات داخل حسابك فقط (إدارة العملاء، المحادثات، الحملات)، ولا نبيع أو نشارك بياناتك مع أي طرف ثالث لأغراض تسويقية.</p>
+            <section>
+              <h2 className="font-black text-lg text-ink-950">كيف نستخدم بياناتك</h2>
+              <p className="mt-2">نستخدم البيانات لتشغيل وتحسين خدمات Dragon Media وإتاحة إدارة العملاء والمحادثات والحملات والأتمتة والتقارير والميزات المرتبطة بحسابك. لا نبيع بيانات العملاء أو بيانات حسابك لأغراض تسويقية.</p>
+            </section>
 
-      <h2 className="font-bold text-lg mt-4">عزل البيانات</h2>
-      <p>كل شركة مسجلة على المنصة لها بيانات معزولة تمامًا عن باقي الشركات، ولا يمكن لأي شركة الوصول لبيانات شركة أخرى.</p>
+            <section>
+              <h2 className="font-black text-lg text-ink-950">عزل البيانات وأمانها</h2>
+              <p className="mt-2">تُدار بيانات كل شركة داخل مساحة عملها المخصصة، مع تطبيق ضوابط وصول لحماية البيانات من الوصول غير المصرح به. يتم الاحتفاظ بالبيانات بالقدر اللازم لتقديم الخدمة أو وفق المتطلبات التشغيلية والقانونية ذات الصلة.</p>
+            </section>
 
-      <h2 className="font-bold text-lg mt-4">ربط حسابات التواصل الاجتماعي</h2>
-      <p>عند ربط حسابك على فيسبوك أو إنستجرام أو واتساب، نستخدم الصلاحيات الممنوحة فقط لعرض الرسائل والرد عليها داخل نظامك، ولا نقوم بأي نشاط آخر نيابة عنك.</p>
+            <section>
+              <h2 className="font-black text-lg text-ink-950">ربط حسابات التواصل الاجتماعي</h2>
+              <p className="mt-2">عند ربط حسابك على فيسبوك أو إنستجرام أو واتساب، نستخدم الصلاحيات الممنوحة واللازمة لتقديم الميزات التي طلبتها، مثل استقبال الرسائل وإرسال الردود وإدارة المحادثات. يمكنك إلغاء الربط من إعدادات الحساب أو من المنصة الخارجية وفق أدواتها المتاحة.</p>
+            </section>
 
-      <h2 className="font-bold text-lg mt-4">حذف البيانات</h2>
-      <p>يمكنك طلب حذف حسابك وكل بياناته في أي وقت عبر التواصل معنا.</p>
+            <section>
+              <h2 className="font-black text-lg text-ink-950">حذف البيانات</h2>
+              <p className="mt-2">يمكنك طلب حذف حسابك أو بياناتك المرتبطة بالخدمة عبر التواصل معنا. قد نحتفظ ببعض السجلات عندما يكون ذلك ضروريًا للمتطلبات المحاسبية أو القانونية أو لمنع إساءة الاستخدام.</p>
+            </section>
 
-      <h2 className="font-bold text-lg mt-4">التواصل</h2>
-      <p>لأي استفسار بخصوص هذه السياسة، يرجى التواصل عبر البريد الإلكتروني المسجل في إعدادات المنصة.</p>
+            <section>
+              <h2 className="font-black text-lg text-ink-950">التواصل</h2>
+              <div className="mt-2 space-y-2">
+                <div>مقر الشركة: {COMPANY_ADDRESS}</div>
+                <div>الهاتف: <a href={`tel:${CONTACT_PHONE}`} dir="ltr" className="font-semibold text-ink-950 hover:underline">{CONTACT_PHONE}</a></div>
+                <div>البريد الإلكتروني: <a href={`mailto:${CONTACT_EMAIL}`} dir="ltr" className="font-semibold text-ink-950 hover:underline">{CONTACT_EMAIL}</a></div>
+              </div>
+            </section>
+          </div>
+
+          <div className="border-t border-sand-200 px-6 py-5 sm:px-8 flex flex-wrap gap-4 text-sm">
+            <Link to="/terms" className="font-semibold text-ink-900 hover:underline">الشروط والأحكام</Link>
+            <Link to="/refund-policy" className="font-semibold text-ink-900 hover:underline">سياسة الاسترجاع</Link>
+            <Link to="/support" className="font-semibold text-ink-900 hover:underline">تواصل معنا</Link>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
