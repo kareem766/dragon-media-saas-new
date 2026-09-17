@@ -8,15 +8,18 @@ export default function Ryan() {
     let mounted = true
     ;(async () => {
       try {
-        const { data: auth } = await supabase.auth.getUser()
+        const client = supabase
+        if (!client) throw new Error('تعذر الاتصال بقاعدة البيانات')
+        const { data: auth } = await client.auth.getUser()
         if (!auth.user) throw new Error('يجب تسجيل الدخول')
-        const { data: user } = await supabase.from('users').select('organization_id').eq('id', auth.user.id).maybeSingle()
+        const { data: user, error: userError } = await client.from('users').select('organization_id').eq('id', auth.user.id).maybeSingle()
+        if (userError) throw userError
         if (!user?.organization_id) throw new Error('الحساب غير مرتبط بشركة')
-        const { data: agent, error: agentError } = await supabase.from('ai_agents').select('active,settings').eq('organization_id', user.organization_id).eq('name', 'Ryan').maybeSingle()
+        const { data: agent, error: agentError } = await client.from('ai_agents').select('id,active,settings').eq('organization_id', user.organization_id).eq('name', 'Ryan').maybeSingle()
         if (agentError) throw agentError
         const [{ count: memory }, { count: runs }] = await Promise.all([
-          supabase.from('ai_agent_memory').select('id', { count: 'exact', head: true }).eq('agent_id', (agent as any)?.id),
-          supabase.from('ai_agent_runs').select('id', { count: 'exact', head: true }).eq('agent_id', (agent as any)?.id),
+          agent?.id ? client.from('ai_agent_memory').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id) : Promise.resolve({ count: 0 }),
+          agent?.id ? client.from('ai_agent_runs').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id) : Promise.resolve({ count: 0 }),
         ])
         if (mounted) setState({ loading: false, active: Boolean(agent?.active), memory: memory || 0, runs: runs || 0, model: String((agent as any)?.settings?.model || 'gemini-2.5-flash'), error: '' })
       } catch (error: any) {
