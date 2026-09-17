@@ -27,12 +27,54 @@ async function getDb() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
-// WhatsApp handlers below remain isolated and unchanged in behavior.
 async function findIntegration(db: any, phoneNumberId: string, wabaId: string) {
   const { data: rows, error } = await db.from('integrations').select('id, organization_id, metadata').eq('provider', 'whatsapp').eq('connected', true)
   if (error) throw error
   return (rows || []).find((row: any) => { const metadata = row.metadata || {}; return String(metadata.phone_number_id || '') === phoneNumberId || String(metadata.waba_id || '') === wabaId }) || null
 }
+
+async function findOrCreateConversation(db: any, organizationId: string, customerId: string, channel: 'whatsapp' | 'facebook', metadata: Record<string, unknown>, now: string) {
+  // The database intentionally allows only one conversation per organization/customer/channel.
+  // Reuse that conversation even when it is closed, then reopen it for a new inbound message.
+  const { data: existing, error: lookupError } = await db.from('conversations')
+    .select('id, unread_count, handled_by, status')
+    .eq('organization_id', organizationId)
+    .eq('channel', channel)
+    .eq('customer_id', customerId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (lookupError) throw lookupError
+  if (existing) return { conversation: existing, existed: true }
+
+  const { data: created, error: createError } = await db.from('conversations').insert({
+    organization_id: organizationId,
+    customer_id: customerId,
+    channel,
+    handled_by: 'ai',
+    status: 'open',
+    unread_count: 1,
+    last_message_at: now,
+    updated_at: now,
+    metadata,
+  }).select('id, unread_count, handled_by, status').single()
+  if (createError) {
+    // Meta can retry the same delivery concurrently. If another request won the
+    // unique insert race, fetch that conversation instead of returning HTTP 500.
+    const { data: raced } = await db.from('conversations')
+      .select('id, unread_count, handled_by, status')
+      .eq('organization_id', organizationId)
+      .eq('channel', channel)
+      .eq('customer_id', customerId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (raced) return { conversation: raced, existed: true }
+    throw createError
+  }
+  return { conversation: created, existed: false }
+}
+
 async function handleMessage(db: any, organizationId: string, phoneNumberId: string, message: any, contact: any) {
   const externalId = String(message?.id || ''), from = normalizePhone(message?.from)
   if (!externalId || !from) return
@@ -47,24 +89,19 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
     if (error) throw error
     customer = createdCustomer
   }
-  const { data: conversation } = await db.from('conversations').select('id, unread_count, handled_by').eq('organization_id', organizationId).eq('channel', 'whatsapp').eq('customer_id', customer.id).in('status', ['open', 'pending']).order('updated_at', { ascending: false }).limit(1).maybeSingle()
-  const now = new Date().toISOString(); let activeConversation = conversation
-  if (!activeConversation) {
-    const { data: createdConversation, error } = await db.from('conversations').insert({ organization_id: organizationId, customer_id: customer.id, channel: 'whatsapp', handled_by: 'ai', status: 'open', unread_count: 1, last_message_at: now, updated_at: now, metadata: { whatsapp_phone_number_id: phoneNumberId, whatsapp_from: from } }).select('id, unread_count, handled_by').single()
-    if (error) throw error
-    activeConversation = createdConversation
-  }
+  const now = new Date().toISOString()
+  const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'whatsapp', { whatsapp_phone_number_id: phoneNumberId, whatsapp_from: from }, now)
   const messageType = String(message?.type || 'text')
   let content = ''
   if (messageType === 'text') content = String(message?.text?.body || '')
   else if (messageType === 'button') content = String(message?.button?.text || '')
   else if (messageType === 'interactive') content = String(message?.interactive?.button_reply?.title || message?.interactive?.list_reply?.title || '')
   else content = `[${messageType}]`
-  const { error: insertError } = await db.from('messages').insert({ conversation_id: activeConversation.id, sender_type: 'customer', content: content || `[${messageType}]`, external_id: externalId, metadata: { source: 'whatsapp_webhook', whatsapp_message_id: externalId, whatsapp_message_type: messageType, whatsapp_from: from, whatsapp_phone_number_id: phoneNumberId, timestamp: message?.timestamp || null }, created_at: message?.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : now })
+  const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content: content || `[${messageType}]`, external_id: externalId, metadata: { source: 'whatsapp_webhook', whatsapp_message_id: externalId, whatsapp_message_type: messageType, whatsapp_from: from, whatsapp_phone_number_id: phoneNumberId, timestamp: message?.timestamp || null }, created_at: message?.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : now })
   if (insertError) throw insertError
-  const nextUnread = Number(activeConversation.unread_count || 0) + (conversation ? 1 : 0)
-  await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: nextUnread, status: 'open' }).eq('id', activeConversation.id)
-  console.log('WhatsApp message stored', { organizationId, phoneNumberId, from, externalId, conversationId: activeConversation.id })
+  const nextUnread = Number(conversation.unread_count || 0) + (existed ? 1 : 0)
+  await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: nextUnread, status: 'open' }).eq('id', conversation.id)
+  console.log('WhatsApp message stored', { organizationId, phoneNumberId, from, externalId, conversationId: conversation.id })
 }
 async function handleStatus(db: any, organizationId: string, status: any) {
   const externalId = String(status?.id || ''), state = String(status?.status || '')
@@ -74,7 +111,6 @@ async function handleStatus(db: any, organizationId: string, status: any) {
   if (error) console.error('WhatsApp status update failed', { organizationId, externalId, error: error.message })
 }
 
-// Facebook-only webhook path. It does not alter the WhatsApp object path.
 async function handleFacebookWebhook(db: any, payload: any) {
   for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
     const pageId = String(entry?.id || '')
@@ -94,12 +130,10 @@ async function handleFacebookWebhook(db: any, payload: any) {
       const customer = customerExisting || (await db.from('customers').insert({ organization_id: organizationId, name: `Facebook ${senderId}`, phone: senderId, source: 'facebook' }).select('id,name,phone').single()).data
       if (!customer) continue
       const now = new Date().toISOString()
-      const { data: conversationExisting } = await db.from('conversations').select('id,unread_count').eq('organization_id', organizationId).eq('channel', 'facebook').eq('customer_id', customer.id).in('status', ['open','pending']).order('updated_at', { ascending: false }).limit(1).maybeSingle()
-      const conversation = conversationExisting || (await db.from('conversations').insert({ organization_id: organizationId, customer_id: customer.id, channel: 'facebook', handled_by: 'ai', status: 'open', unread_count: 1, last_message_at: now, updated_at: now, metadata: { facebook_page_id: pageId, facebook_psid: senderId } }).select('id,unread_count').single()).data
-      if (!conversation) continue
+      const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'facebook', { facebook_page_id: pageId, facebook_psid: senderId }, now)
       const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'facebook_webhook', facebook_page_id: pageId, facebook_psid: senderId, facebook_message_id: externalId }, created_at: now })
       if (insertError) throw insertError
-      await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: Number(conversation.unread_count || 0) + (conversationExisting ? 1 : 0), status: 'open' }).eq('id', conversation.id)
+      await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: Number(conversation.unread_count || 0) + (existed ? 1 : 0), status: 'open' }).eq('id', conversation.id)
       console.log('Facebook message stored', { organizationId, pageId, senderId, externalId, conversationId: conversation.id })
     }
   }
@@ -118,12 +152,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!verifySignature(req, rawBody)) return json(res, 401, { error: 'Invalid webhook signature.' })
     const payload = JSON.parse(rawBody)
     const db = await getDb()
-
     if (payload.object === 'page') {
       await handleFacebookWebhook(db, payload)
       return json(res, 200, { ok: true, provider: 'facebook' })
     }
-
     console.log('Meta WhatsApp webhook received', { object: payload?.object, entries: Array.isArray(payload?.entry) ? payload.entry.length : 0 })
     if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
     for (const entry of Array.isArray(payload.entry) ? payload.entry : []) {
