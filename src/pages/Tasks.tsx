@@ -232,144 +232,68 @@ export default function Tasks() {
     setError('')
 
     try {
-      const [
-        tasksResult,
-        customersResult,
-        leadsResult,
-        dealsResult,
-        usersResult,
-      ] = await Promise.all([
-        supabase
-          .from('tasks')
-          .select(`
-            *,
-            customers (
-              id,
-              name,
-              company
-            ),
-            leads (
-              id,
-              name,
-              company
-            ),
-            deals (
-              id,
-              title,
-              value
-            ),
-            users!tasks_assigned_to_fkey (
-              id,
-              full_name,
-              email
-            )
-          `)
-          .eq(
-            'organization_id',
-            organizationId
-          )
-          .order('due_date', {
-            ascending: true,
-            nullsFirst: false,
-          })
-          .order('created_at', {
-            ascending: false,
-          }),
+      // Load tasks independently. Related records are optional so an RLS
+      // restriction on one related table cannot break the whole page.
+      const { data: taskRows, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false })
 
-        supabase
-          .from('customers')
-          .select('id,name,company')
-          .eq(
-            'organization_id',
-            organizationId
-          )
-          .order('name'),
+      if (tasksError) {
+        throw tasksError
+      }
 
-        supabase
-          .from('leads')
-          .select('id,name,company')
-          .eq(
-            'organization_id',
-            organizationId
-          )
-          .is('deleted_at', null)
-          .order('name'),
+      const baseTasks = (taskRows ?? []) as DBTask[]
+      setTasks(baseTasks)
 
-        supabase
-          .from('deals')
-          .select('id,title,value')
-          .eq(
-            'organization_id',
-            organizationId
-          )
-          .order('created_at', {
-            ascending: false,
-          }),
+      const customerIds = [...new Set(baseTasks.map(t => t.customer_id).filter(Boolean))] as string[]
+      const leadIds = [...new Set(baseTasks.map(t => t.lead_id).filter(Boolean))] as string[]
+      const dealIds = [...new Set(baseTasks.map(t => t.deal_id).filter(Boolean))] as string[]
+      const userIds = [...new Set(baseTasks.map(t => t.assigned_to).filter(Boolean))] as string[]
 
-        supabase
-          .from('users')
-          .select(
-            'id,full_name,email'
-          )
-          .eq(
-            'organization_id',
-            organizationId
-          )
-          .eq('active', true)
-          .order('full_name'),
+      const [customersResult, leadsResult, dealsResult, usersResult] = await Promise.all([
+        customerIds.length
+          ? supabase.from('customers').select('id,name,company').in('id', customerIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        leadIds.length
+          ? supabase.from('leads').select('id,name,company').in('id', leadIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        dealIds.length
+          ? supabase.from('deals').select('id,title,value').in('id', dealIds)
+          : Promise.resolve({ data: [], error: null } as any),
+        userIds.length
+          ? supabase.from('users').select('id,full_name,email').in('id', userIds)
+          : Promise.resolve({ data: [], error: null } as any),
       ])
 
-      if (tasksResult.error) {
-        throw tasksResult.error
-      }
+      // Optional relation queries must never prevent the task list from rendering.
+      if (customersResult.error) console.warn('Tasks customers relation:', customersResult.error)
+      if (leadsResult.error) console.warn('Tasks leads relation:', leadsResult.error)
+      if (dealsResult.error) console.warn('Tasks deals relation:', dealsResult.error)
+      if (usersResult.error) console.warn('Tasks users relation:', usersResult.error)
 
-      if (customersResult.error) {
-        throw customersResult.error
-      }
+      const customersMap = new Map((customersResult.data ?? []).map((x: Customer) => [x.id, x]))
+      const leadsMap = new Map((leadsResult.data ?? []).map((x: Lead) => [x.id, x]))
+      const dealsMap = new Map((dealsResult.data ?? []).map((x: Deal) => [x.id, x]))
+      const usersMap = new Map((usersResult.data ?? []).map((x: User) => [x.id, x]))
 
-      if (leadsResult.error) {
-        throw leadsResult.error
-      }
+      setCustomers(Array.from(customersMap.values()))
+      setLeads(Array.from(leadsMap.values()))
+      setDeals(Array.from(dealsMap.values()))
+      setUsers(Array.from(usersMap.values()))
 
-      if (dealsResult.error) {
-        throw dealsResult.error
-      }
-
-      if (usersResult.error) {
-        throw usersResult.error
-      }
-
-      setTasks(
-        (tasksResult.data ?? []).map(
-          task => normalizeTask(task as DBTask)
-        )
-      )
-
-      setCustomers(
-        (customersResult.data ??
-          []) as Customer[]
-      )
-
-      setLeads(
-        (leadsResult.data ?? []) as Lead[]
-      )
-
-      setDeals(
-        (dealsResult.data ?? []) as Deal[]
-      )
-
-      setUsers(
-        (usersResult.data ?? []) as User[]
-      )
+      setTasks(baseTasks.map(task => ({
+        ...task,
+        customers: task.customer_id ? customersMap.get(task.customer_id) ?? null : null,
+        leads: task.lead_id ? leadsMap.get(task.lead_id) ?? null : null,
+        deals: task.deal_id ? dealsMap.get(task.deal_id) ?? null : null,
+        users: task.assigned_to ? usersMap.get(task.assigned_to) ?? null : null,
+      })))
     } catch (err) {
-      console.error(
-        'Tasks load error:',
-        err
-      )
-
-      setError(
-        'حدث خطأ أثناء تحميل المهام والمتابعات.'
-      )
+      console.error('Tasks load error:', err)
+      setError('حدث خطأ أثناء تحميل المهام والمتابعات.')
     } finally {
       setLoading(false)
     }
