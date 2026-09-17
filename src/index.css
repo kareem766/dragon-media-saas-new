@@ -22,12 +22,33 @@ button:not(:disabled):active { transform: translateY(1px); }
 @keyframes dm-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @keyframes dm-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @keyframes dm-pulse-soft { 0%,100% { box-shadow: 0 0 0 0 rgba(245,158,11,.10); } 50% { box-shadow: 0 0 0 8px rgba(245,158,11,0); } }
+@keyframes dm-shell-glow { 0%,100% { opacity: .32; transform: translate3d(0,0,0) scale(1); } 50% { opacity: .55; transform: translate3d(0,-8px,0) scale(1.02); } }
+@keyframes dm-content-reveal { from { opacity: 0; transform: translateY(8px) scale(.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
 .dm-page-enter { animation: dm-page-enter .42s cubic-bezier(.22,1,.36,1) both; }
 .dm-fade-up { animation: dm-fade-up .5s cubic-bezier(.22,1,.36,1) both; }
 .dm-float { animation: dm-float 4s ease-in-out infinite; }
 .dm-pulse-soft { animation: dm-pulse-soft 2.6s ease-in-out infinite; }
 .dm-shimmer { background-size: 200% 100%; animation: dm-shimmer 2.2s linear infinite; }
+
+/* Premium application shell: subtle depth without distracting motion. */
+.dm-app-shell { position: relative; isolation: isolate; }
+.dm-app-shell::before { content: ''; position: fixed; width: 34rem; height: 34rem; top: -18rem; inset-inline-end: -12rem; border-radius: 999px; pointer-events: none; background: radial-gradient(circle, rgba(245,158,11,.075), transparent 68%); animation: dm-shell-glow 7s ease-in-out infinite; z-index: -1; }
+.dm-app-shell::after { content: ''; position: fixed; width: 28rem; height: 28rem; bottom: -18rem; inset-inline-start: -10rem; border-radius: 999px; pointer-events: none; background: radial-gradient(circle, rgba(37,99,235,.045), transparent 70%); animation: dm-shell-glow 9s ease-in-out infinite reverse; z-index: -1; }
+.dm-main-stage { animation: dm-content-reveal .38s cubic-bezier(.22,1,.36,1) both; }
+.dm-page-content { will-change: opacity, transform; }
+.dm-page-content > * { animation: dm-content-reveal .46s cubic-bezier(.22,1,.36,1) both; }
+.dm-page-content > *:nth-child(2) { animation-delay: 45ms; }
+.dm-page-content > *:nth-child(3) { animation-delay: 90ms; }
+.dm-page-content > *:nth-child(4) { animation-delay: 135ms; }
+.dm-page-content > *:nth-child(5) { animation-delay: 180ms; }
+.dm-page-content > *:nth-child(6) { animation-delay: 225ms; }
+.dm-page-content > *:nth-child(7) { animation-delay: 270ms; }
+.dm-card-lift { transition: transform 220ms cubic-bezier(.22,1,.36,1), box-shadow 220ms ease, border-color 220ms ease; }
+.dm-card-lift:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(23,23,23,.075); }
+.dm-interactive { transition: transform 180ms cubic-bezier(.22,1,.36,1), box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease, opacity 180ms ease; }
+.dm-interactive:hover { transform: translateY(-1px); }
+.dm-interactive:active { transform: translateY(1px) scale(.99); }
 
 /* Subtle stagger for repeated cards/list rows. */
 .dm-stagger > * { animation: dm-fade-up .45s cubic-bezier(.22,1,.36,1) both; }
@@ -41,4 +62,4 @@ button:not(:disabled):active { transform: translateY(1px); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
-@media (max-width: 640px) { body { overflow-x: hidden; } }
+@media (max-width: 640px) { body { overflow-x: hidden; } .dm-app-shell::before, .dm-app-shell::after { display: none; } }
