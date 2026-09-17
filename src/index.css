@@ -63,3 +63,11 @@ button:not(:disabled):active { transform: translateY(1px); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 @media (max-width: 640px) { body { overflow-x: hidden; } .dm-app-shell::before, .dm-app-shell::after { display: none; } }
+
+/* Visibility guard: keep dark cards and their text readable across mobile browsers. */
+.bg-ink-950 { background-color: #102523 !important; }
+.bg-ink-950.text-sand-100 { color: #ffffff !important; }
+.bg-ink-950 .text-sand-100 { color: rgba(255,255,255,.82) !important; }
+.bg-ink-950 .text-sand-100\/60 { color: rgba(255,255,255,.72) !important; }
+.bg-ink-950 .text-sand-100\/70 { color: rgba(255,255,255,.82) !important; }
+.bg-ink-950 .text-sand-100\/50 { color: rgba(255,255,255,.62) !important; }
