@@ -10,13 +10,23 @@ interface SettingsData {
   support_whatsapp: string | null
 }
 
+const COMPANY_ADDRESS = 'الإسكندرية - مصر'
+
 export default function Support() {
   const [settings, setSettings] = useState<SettingsData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!supabase) return
-    supabase.from('platform_settings').select('support_phone, support_email, support_whatsapp').eq('id', 1).single()
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
+    supabase
+      .from('platform_settings')
+      .select('support_phone, support_email, support_whatsapp')
+      .eq('id', 1)
+      .single()
       .then(({ data }) => {
         setSettings(data as SettingsData)
         setLoading(false)
@@ -47,7 +57,7 @@ export default function Support() {
               </a>
             )}
             {settings?.support_whatsapp && (
-              <a href={`https://wa.me/2${settings.support_whatsapp}`} target="_blank" rel="noreferrer" className="flex items-center justify-between border border-sand-200 rounded-xl px-4 py-3.5 hover:bg-sand-50">
+              <a href={`https://wa.me/20${settings.support_whatsapp.replace(/^0/, '')}`} target="_blank" rel="noreferrer" className="flex items-center justify-between border border-sand-200 rounded-xl px-4 py-3.5 hover:bg-sand-50">
                 <span className="text-sm text-ink-900">واتساب</span>
                 <span className="text-sm font-semibold text-ink-950" dir="ltr">{settings.support_whatsapp}</span>
               </a>
@@ -58,8 +68,22 @@ export default function Support() {
                 <span className="text-sm font-semibold text-ink-950" dir="ltr">{settings.support_email}</span>
               </a>
             )}
+
+            <div className="border border-sand-200 rounded-xl px-4 py-3.5">
+              <div className="text-sm text-ink-900">مقر الشركة</div>
+              <div className="text-sm font-semibold text-ink-950 mt-1">{COMPANY_ADDRESS}</div>
+            </div>
           </div>
         )}
+
+        <div className="mt-6 pt-5 border-t border-sand-200 space-y-3">
+          <div className="text-xs font-bold text-ink-900/50">سياسات الموقع</div>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <Link to="/terms" className="text-ink-900/65 hover:text-ink-950 hover:underline">الشروط والأحكام</Link>
+            <Link to="/privacy" className="text-ink-900/65 hover:text-ink-950 hover:underline">سياسة الخصوصية</Link>
+            <Link to="/refund-policy" className="text-ink-900/65 hover:text-ink-950 hover:underline">استرداد الأموال</Link>
+          </div>
+        </div>
 
         <Link to="/login" className="block text-center text-sm text-ink-900/50 hover:underline mt-6">→ العودة لتسجيل الدخول</Link>
       </Card>
