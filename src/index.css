@@ -76,6 +76,7 @@ button:not(:disabled):active { transform: translateY(1px); }
 [data-page-theme="dashboard"] { --dm-page-bg: url('https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=2200&q=78'); }
 [data-page-theme="crm"] { --dm-page-bg: url('https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=2200&q=78'); }
 [data-page-theme="inbox"] { --dm-page-bg: url('https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=2200&q=78'); }
+[data-page-theme="tasks"] { --dm-page-bg: url('https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?auto=format&fit=crop&w=2200&q=78'); }
 [data-page-theme="ai"] { --dm-page-bg: url('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=2200&q=78'); }
 [data-page-theme="campaigns"] { --dm-page-bg: url('https://images.unsplash.com/photo-1553877522-43269d4ea984?auto=format&fit=crop&w=2200&q=78'); }
 [data-page-theme="reports"] { --dm-page-bg: url('https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=2200&q=78'); }
@@ -91,7 +92,7 @@ button:not(:disabled):active { transform: translateY(1px); }
 [data-page-theme] .dm-page-content > .flex-1::before { content: ''; position: absolute; inset: -1.5rem -1rem auto; height: 11rem; border-radius: 2rem; background: linear-gradient(135deg, rgba(250,248,244,.97), rgba(250,248,244,.84)); border: 1px solid rgba(37,99,235,.10); box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 18px 55px rgba(23,23,23,.08); pointer-events: none; z-index: -1; }
 
 /* Readability safety layer: keep existing dark text/components on a light, softly visible photo canvas. */
-[data-page-theme] .dm-main-stage { background: linear-gradient(180deg, rgba(250,248,244,.92) 0%, rgba(250,248,244,.965) 24%, rgba(250,248,244,.985) 100%); }
+[data-page-theme] .dm-main-stage { background: linear-gradient(180deg, rgba(250,248,244,.95) 0%, rgba(250,248,244,.975) 24%, rgba(250,248,244,.992) 100%); }
 [data-page-theme] .dm-page-content { text-shadow: none; }
 [data-page-theme] .dm-page-content h1,
 [data-page-theme] .dm-page-content h2,
