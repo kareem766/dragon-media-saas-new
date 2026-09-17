@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 
@@ -27,7 +27,13 @@ function isEmailConfirmed(user: User | null) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
+  const sessionRef = useRef<Session | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const updateSession = (next: Session | null) => {
+    sessionRef.current = next
+    setSession(next)
+  }
 
   useEffect(() => {
     if (!supabase) {
@@ -35,11 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    // Supabase's INITIAL_SESSION is the source of truth for the initial
-    // browser session. Do not run getSession() in parallel: on slower
-    // desktop browsers it can race with a fresh sign-in and overwrite it.
+    // Keep the session already established by signIn. In some desktop
+    // browsers INITIAL_SESSION can arrive after signInWithPassword; allowing
+    // it to overwrite a fresh session with null causes the redirect loop.
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession)
+      if (event === 'INITIAL_SESSION' && sessionRef.current) {
+        setLoading(false)
+        return
+      }
+
+      updateSession(newSession)
+
       if (event === 'INITIAL_SESSION') setLoading(false)
     })
 
@@ -58,14 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message }
     }
 
-    // signInWithPassword already rejects an unconfirmed account when email
-    // confirmation is required. Keep the returned session as-is so desktop
-    // browsers cannot lose it because of a stale/missing confirmation field.
     if (!data.session) {
       return { error: 'تعذر إنشاء جلسة تسجيل الدخول. حاول مرة أخرى.' }
     }
 
-    setSession(data.session)
+    updateSession(data.session)
+    setLoading(false)
     return { error: null }
   }
 
@@ -75,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (consent) {
       metadata.terms_accepted_at = consent.termsAcceptedAt
       metadata.terms_version = consent.termsVersion
-      metadata.privacy_policy_accepted_at = consent.privacyAcceptedAt
+      metadata.privacy_policy_accepted_at = consent.privacyPolicyAcceptedAt ?? consent.privacyAcceptedAt
       metadata.privacy_policy_version = consent.privacyVersion
     }
     const { data, error } = await supabase.auth.signUp({
@@ -97,7 +107,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? error.message : null }
   }
 
-  const signOut = async () => { if (supabase) await supabase.auth.signOut() }
+  const signOut = async () => {
+    if (supabase) await supabase.auth.signOut()
+    updateSession(null)
+  }
 
   return <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signIn, signUp, resendConfirmation, signOut }}>{children}</AuthContext.Provider>
 }
