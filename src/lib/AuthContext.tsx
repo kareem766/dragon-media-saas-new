@@ -25,10 +25,6 @@ function isEmailConfirmed(user: User | null) {
   return Boolean(user?.email_confirmed_at || user?.confirmed_at)
 }
 
-function confirmedSession(session: Session | null) {
-  return session && isEmailConfirmed(session.user) ? session : null
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
@@ -39,25 +35,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    // Subscribe first and use Supabase's INITIAL_SESSION event as the
-    // authoritative initial state. Calling getSession() in parallel can
-    // race with a fast sign-in and overwrite the fresh session with the
-    // older storage snapshot — especially noticeable in desktop browsers.
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
-        setSession(confirmedSession(newSession))
-
-        if (event === 'INITIAL_SESSION') {
-          setLoading(false)
-        }
-      }
-    )
+    // Supabase's INITIAL_SESSION is the source of truth for the initial
+    // browser session. Do not run getSession() in parallel: on slower
+    // desktop browsers it can race with a fresh sign-in and overwrite it.
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      setSession(newSession)
+      if (event === 'INITIAL_SESSION') setLoading(false)
+    })
 
     return () => listener.subscription.unsubscribe()
   }, [])
 
   const signIn = async (email: string, password: string) => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد' }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       const message = error.message.toLowerCase()
@@ -67,16 +58,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message }
     }
 
-    const nextSession = confirmedSession(data.session)
-    if (!nextSession) {
-      await supabase.auth.signOut()
-      return { error: 'يجب تأكيد البريد الإلكتروني أولًا من الرسالة التي أرسلناها إليك.' }
+    // signInWithPassword already rejects an unconfirmed account when email
+    // confirmation is required. Keep the returned session as-is so desktop
+    // browsers cannot lose it because of a stale/missing confirmation field.
+    if (!data.session) {
+      return { error: 'تعذر إنشاء جلسة تسجيل الدخول. حاول مرة أخرى.' }
     }
 
-    // Set the authenticated session immediately so ProtectedRoute cannot
-    // redirect back to /login before onAuthStateChange fires.
-    setSession(nextSession)
-
+    setSession(data.session)
     return { error: null }
   }
 
