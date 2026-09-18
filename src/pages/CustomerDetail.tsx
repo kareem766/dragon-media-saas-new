@@ -284,7 +284,7 @@ export default function CustomerDetail() {
        * that specific section, not the whole customer page.
        */
       const [
-        leadRes,
+        leadsRes,
         dealsRes,
         appointmentsRes,
         activitiesRes,
@@ -294,13 +294,11 @@ export default function CustomerDetail() {
       ] = await Promise.all([
         sb
           .from('leads')
-          .select('id,name,status,lead_score,source,follow_up_at')
+          .select('id,name,status,lead_score,source,follow_up_at,created_at')
           .eq('customer_id', id)
           .eq('organization_id', organizationId)
           .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
+          .order('created_at', { ascending: false }),
 
         sb
           .from('deals')
@@ -363,8 +361,8 @@ export default function CustomerDetail() {
        * Log secondary query errors for debugging,
        * but do not throw them.
        */
-      if (leadRes.error) {
-        console.error('CustomerDetail: lead link query failed', leadRes.error)
+      if (leadsRes.error) {
+        console.error('CustomerDetail: lead links query failed', leadsRes.error)
       }
 
       if (dealsRes.error) {
@@ -398,11 +396,13 @@ export default function CustomerDetail() {
         ? []
         : ((activitiesRes.data || []) as Activity[])
 
-      const linkedLeadId = leadRes.error
-        ? null
-        : (leadRes.data as LeadLink | null)?.id || null
+      const linkedLeads = leadsRes.error
+        ? []
+        : ((leadsRes.data || []) as (LeadLink & { created_at: string })[])
 
-      if (linkedLeadId) {
+      const linkedLeadIds = linkedLeads.map(lead => lead.id)
+
+      if (linkedLeadIds.length) {
         const { data: leadActivities, error: leadActivitiesError } =
           await sb
             .from('crm_activities')
@@ -410,10 +410,10 @@ export default function CustomerDetail() {
               'id,activity_type,title,description,created_at'
             )
             .eq('entity_type', 'lead')
-            .eq('entity_id', linkedLeadId)
+            .in('entity_id', linkedLeadIds)
             .eq('organization_id', organizationId)
             .order('created_at', { ascending: false })
-            .limit(20)
+            .limit(50)
 
         if (leadActivitiesError) {
           console.error(
@@ -461,7 +461,7 @@ export default function CustomerDetail() {
         )
       }
 
-      setLeadLink(leadRes.error ? null : (leadRes.data as LeadLink | null))
+      setLeadLink(linkedLeads[0] || null)
 
       setDeals(
         dealsRes.error
