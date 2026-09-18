@@ -62,15 +62,12 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  if(!secret||!secretRow?.value||!sameSecret(secret,String(secretRow.value)))return res.status(401).json({error:'Unauthorized'})
  const body=obj(req.body),organizationId=text(body.organization_id,100),conversationId=text(body.conversation_id,100),messageId=text(body.message_id,100)
  if(!organizationId||!conversationId||!messageId)return res.status(400).json({error:'Missing agent identifiers'})
- const {data:incoming}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
- if(!incoming||incoming.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const {data:claimed,error:claimError}=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId})
  if(claimError) return res.status(500).json({error:'Failed to claim incoming message',details:text(claimError.message,500)})
  if(!claimed)return res.status(200).json({ok:true,skipped:true,reason:'already_processing_or_processed'})
  const {data:incomingAfterClaim}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
  if(!incomingAfterClaim||incomingAfterClaim.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const incomingMetadata=obj(incomingAfterClaim.metadata)
- const incoming=incomingAfterClaim
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
  if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:agent}]=await Promise.all([
