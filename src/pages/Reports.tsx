@@ -272,7 +272,8 @@ export default function Reports() {
             count: 'exact',
             head: true,
           })
-          .eq('organization_id', organizationId),
+          .eq('organization_id', organizationId)
+          .is('deleted_at', null),
 
         supabase
           .from('customers')
