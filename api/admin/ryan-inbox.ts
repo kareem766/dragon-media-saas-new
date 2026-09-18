@@ -167,7 +167,7 @@ PERSONA: ${persona}`
     const handoffAt=new Date().toISOString()
     const handoffReply=text(a.reply,5000)
     const safeHandoffReply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
-    const {data:existingHandoff}=await supabase.from('human_handoff_requests').select('id,status').eq('organization_id',organizationId).eq('conversation_id',conversationId).in('status',['pending','open','assigned']).order('created_at',{ascending:false}).limit(1).maybeSingle()
+    const {data:existingHandoff}=await supabase.from('human_handoff_requests').select('id').eq('organization_id',organizationId).eq('conversation_id',conversationId).in('status',['pending','open','assigned']).order('created_at',{ascending:false}).limit(1).maybeSingle()
     let handoffRequest=existingHandoff
     if(!handoffRequest){
       const created=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:effectiveHandoffReason||'طلب تدخل بشري من العميل',status:'pending',conversation_id:conversationId}).select('id').single()
