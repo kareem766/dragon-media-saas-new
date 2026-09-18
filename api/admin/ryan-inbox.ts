@@ -49,10 +49,10 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  throw new Error(`Ryan Gemini fallback exhausted: ${lastError}`)
 }
 
-async function dispatchWhatsApp(organizationId:string,conversationId:string,messageId:string){
+async function dispatchWhatsApp(organizationId:string,conversationId:string,messageId:string,secret:string){
  const base=env('APP_BASE_URL','VERCEL_PROJECT_PRODUCTION_URL')||'https://dragon-media-saas-new.vercel.app'
  const normalized=base.startsWith('http')?base:`https://${base}`
- const response=await fetch(`${normalized}/api/meta/whatsapp/send`,{method:'POST',headers:{'Content-Type':'application/json','x-ryan-inbox-secret':env('RYAN_INBOX_WEBHOOK_SECRET','AI_AGENT_INBOX_SECRET')},body:JSON.stringify({organization_id:organizationId,conversation_id:conversationId,message_id:messageId})})
+ const response=await fetch(`${normalized}/api/meta/whatsapp/send`,{method:'POST',headers:{'Content-Type':'application/json','x-ryan-inbox-secret':secret},body:JSON.stringify({organization_id:organizationId,conversation_id:conversationId,message_id:messageId})})
  const payload=await response.json().catch(()=>({}))
  if(!response.ok) throw new Error(payload?.error||`WhatsApp outbound failed (${response.status})`)
  return payload
@@ -141,7 +141,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response')
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
   let outbound:any=null
-  try { outbound=await dispatchWhatsApp(organizationId,conversationId,saved.id) }
+  try { outbound=await dispatchWhatsApp(organizationId,conversationId,saved.id,secret) }
   catch(outboundError:any){
    await supabase.from('messages').update({metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured,outbound_status:'failed',outbound_error:text(outboundError?.message,500)}}).eq('id',saved.id).eq('conversation_id',conversationId)
    throw outboundError
