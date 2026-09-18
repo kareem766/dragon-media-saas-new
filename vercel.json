@@ -4,6 +4,10 @@
     {
       "path": "/api/automation-run",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/subscription-whatsapp-notifications",
+      "schedule": "15 0 * * *"
     }
   ]
 }
