@@ -131,7 +131,8 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  ])
  const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content)
  const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
- const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n')
+ const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('
+')
  const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.',current=text(incoming.content,3000)
  const conversationMetadata=obj(conversation.metadata)
  let priceCaptured=false
@@ -159,7 +160,9 @@ PERSONA: ${persona}`
    const needsHuman=a.needs_human===true||intent==='human_request'
    const handoffReason=text(a.handoff_reason,300)
    const deterministicHumanRequest=humanHandoffIntent(historyText+' '+current)
-   const effectiveNeedsHuman=needsHuman||deterministicHumanRequest\n   const effectiveHandoffReason=handoffReason|| (deterministicHumanRequest?'طلب العميل التواصل مع موظف بشري':'')\n   const reviewedState={intent,lead_intent:leadIntent,needs_human:effectiveNeedsHuman,handoff_reason:effectiveHandoffReason||null,missing:Array.isArray(a.missing)?a.missing.filter((x:any)=>typeof x==='string').slice(0,8):[],complete:a.complete===true,next_action:text(a.next_action,40)||'continue',updated_at:new Date().toISOString()}
+   const effectiveNeedsHuman=needsHuman||deterministicHumanRequest
+   const effectiveHandoffReason=handoffReason|| (deterministicHumanRequest?'طلب العميل التواصل مع موظف بشري':'')
+   const reviewedState={intent,lead_intent:leadIntent,needs_human:effectiveNeedsHuman,handoff_reason:effectiveHandoffReason||null,missing:Array.isArray(a.missing)?a.missing.filter((x:any)=>typeof x==='string').slice(0,8):[],complete:a.complete===true,next_action:text(a.next_action,40)||'continue',updated_at:new Date().toISOString()}
    await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:reviewedState}}).eq('id',conversationId).eq('organization_id',organizationId)
    if(effectiveNeedsHuman){
     const handoffAt=new Date().toISOString()
@@ -183,7 +186,17 @@ PERSONA: ${persona}`
     await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:{...reviewedState,handoff:true},ryan_handoff:{requested:true,request_id:handoffRequest.id,reason:effectiveHandoffReason||'طلب تدخل بشري',requested_at:handoffAt}},handled_by:'human',updated_at:handoffAt}).eq('id',conversationId).eq('organization_id',organizationId)
     reply=safeHandoffReply
    }else if(!leadIntent){
-    const system=`You are Ryan, the AI assistant inside Dragon Media.\nPERSONA:\n${persona}\nUse the complete conversation history and stored customer data. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Ask at most one useful question. Keep replies to one or two short sentences. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions.\nCUSTOMER:\nName: ${text(customer.name,120)||'غير معروف'}\nPhone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}\nSTORED MEMORY:\n${JSON.stringify(memory).slice(0,5000)}\nKNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
+    const system=`You are Ryan, the AI assistant inside Dragon Media.
+PERSONA:
+${persona}
+Use the complete conversation history and stored customer data. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Ask at most one useful question. Keep replies to one or two short sentences. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions.
+CUSTOMER:
+Name: ${text(customer.name,120)||'غير معروف'}
+Phone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}
+STORED MEMORY:
+${JSON.stringify(memory).slice(0,5000)}
+KNOWLEDGE BASE:
+${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
     reply=await callGemini(apiKey,model,system,history,current)
    }else{
     const isAd=a.is_advertising===true
@@ -221,7 +234,17 @@ PERSONA: ${persona}`
     }
    }
   }else{
-   const system=`You are Ryan, the AI assistant inside Dragon Media.\nPERSONA:\n${persona}\nUse the complete conversation history and stored customer data. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Ask at most one useful question. Keep replies to one or two short sentences. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions.\nCUSTOMER:\nName: ${text(customer.name,120)||'غير معروف'}\nPhone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}\nSTORED MEMORY:\n${JSON.stringify(memory).slice(0,5000)}\nKNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
+   const system=`You are Ryan, the AI assistant inside Dragon Media.
+PERSONA:
+${persona}
+Use the complete conversation history and stored customer data. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Ask at most one useful question. Keep replies to one or two short sentences. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions.
+CUSTOMER:
+Name: ${text(customer.name,120)||'غير معروف'}
+Phone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}
+STORED MEMORY:
+${JSON.stringify(memory).slice(0,5000)}
+KNOWLEDGE BASE:
+${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
    reply=await callGemini(apiKey,model,system,history,current)
   }
   // Final safety gate: never persist or send internal/model output to the customer.
