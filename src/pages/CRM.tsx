@@ -562,6 +562,7 @@ export default function CRM() {
             assigned_to,
             notes,
             follow_up_at,
+            lead_score,
             created_at
           `
         )
