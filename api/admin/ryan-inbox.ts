@@ -168,12 +168,13 @@ PERSONA: ${persona}`
     const handoffReply=text(a.reply,5000)
     const safeHandoffReply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
     const {data:existingHandoff}=await supabase.from('human_handoff_requests').select('id,status').eq('organization_id',organizationId).eq('conversation_id',conversationId).in('status',['pending','open','assigned']).order('created_at',{ascending:false}).limit(1).maybeSingle()
-    let handoffRequest=existingHandoff||null
+    let handoffRequest=existingHandoff
     if(!handoffRequest){
       const created=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:effectiveHandoffReason||'طلب تدخل بشري من العميل',status:'pending',conversation_id:conversationId}).select('id').single()
       if(created.error||!created.data)throw new Error(created.error?.message||'Failed to create human handoff request')
       handoffRequest=created.data
     }
+    if(!handoffRequest)throw new Error('Failed to resolve human handoff request')
     const activityResult=await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'customer',entity_id:customer.id,activity_type:'ai_handoff',title:'تحويل من Ryan إلى موظف',description:effectiveHandoffReason||'طلب العميل تدخل بشرياً',metadata:{source:'ryan',conversation_id:conversationId,handoff_request_id:handoffRequest.id,at:handoffAt}})
     if(activityResult.error)throw new Error(`Failed to create handoff activity: ${activityResult.error.message}`)
     const {data:notifyUsers,error:notifyUsersError}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true)
