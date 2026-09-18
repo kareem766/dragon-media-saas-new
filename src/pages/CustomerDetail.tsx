@@ -23,6 +23,15 @@ interface Customer {
   marketing_opt_out_at: string | null
 }
 
+interface LeadLink {
+  id: string
+  name: string
+  status: string | null
+  lead_score: number
+  source: string | null
+  follow_up_at: string | null
+}
+
 interface Deal {
   id: string
   title: string
@@ -170,6 +179,7 @@ export default function CustomerDetail() {
   const { organizationId, loading: orgLoading } = useOrganization()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
+  const [leadLink, setLeadLink] = useState<LeadLink | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
@@ -274,6 +284,7 @@ export default function CustomerDetail() {
        * that specific section, not the whole customer page.
        */
       const [
+        leadRes,
         dealsRes,
         appointmentsRes,
         activitiesRes,
@@ -281,6 +292,16 @@ export default function CustomerDetail() {
         conversationsRes,
         usersRes,
       ] = await Promise.all([
+        sb
+          .from('leads')
+          .select('id,name,status,lead_score,source,follow_up_at')
+          .eq('customer_id', id)
+          .eq('organization_id', organizationId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+
         sb
           .from('deals')
           .select('id,title,value,stage_id,pipeline_stages(name)')
@@ -342,6 +363,10 @@ export default function CustomerDetail() {
        * Log secondary query errors for debugging,
        * but do not throw them.
        */
+      if (leadRes.error) {
+        console.error('CustomerDetail: lead link query failed', leadRes.error)
+      }
+
       if (dealsRes.error) {
         console.error(
           'CustomerDetail: deals query failed',
@@ -383,6 +408,8 @@ export default function CustomerDetail() {
           usersRes.error
         )
       }
+
+      setLeadLink(leadRes.error ? null : (leadRes.data as LeadLink | null))
 
       setDeals(
         dealsRes.error
@@ -995,6 +1022,18 @@ export default function CustomerDetail() {
       className="space-y-6"
       dir="rtl"
     >
+      {/* Lead 360 link */}
+      {leadLink && (
+        <Link to="/crm" className="flex flex-col gap-3 rounded-2xl border border-gold-200 bg-gold-50/60 p-4 transition hover:bg-gold-50 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold text-gold-700">Lead 360</p>
+            <p className="mt-1 text-sm font-bold text-ink-950">هذا العميل مرتبط بـ Lead: {leadLink.name}</p>
+            <p className="mt-1 text-xs text-ink-500">الحالة: {leadLink.status || '—'} · درجة التأهيل: {leadLink.lead_score}/100{leadLink.source ? ' · المصدر: ' + leadLink.source : ''}</p>
+          </div>
+          <span className="shrink-0 rounded-xl bg-ink-950 px-4 py-2 text-xs font-bold text-white">العودة إلى CRM</span>
+        </Link>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <Link
