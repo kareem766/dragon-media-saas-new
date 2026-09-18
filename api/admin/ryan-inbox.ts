@@ -209,7 +209,7 @@ ${persona}`
     const ready=leadIntent&&!!name&&!!phone&&!!service&&(!isAd||!!budget)
     const nextMeta={active:true,name:name||null,phone:phone||null,service:service||null,budget:budget||null,goal:goal||null,business_activity:activity||null,is_ad:isAd,stage:ready?'ready':text(a.next_action,40)||'continue'}
     if(ready){
-      const notes=['بيانات تم جمعها بواسطة Ryan','الخدمة: '+service,activity?'النشاط: '+activity:'',goal?'الهدف: '+goal,isAd?'ميزانية الإعلان: '+budget:'','القناة: '+(conversation.channel||'غير محدد')].filter(Boolean).join(' | ')
+      const notes=['بيانات تم جمعها بواسطة Ryan','الخدمة: '+service,activity?'النشاط: '+activity:'',goal?'الهدف: '+goal:'',isAd?'ميزانية الإعلان: '+budget:'','القناة: '+(conversation.channel||'غير محدد')].filter(Boolean).join(' | ')
       priceData=await capturePriceInquiry(supabase,organizationId,customer.id,name,phone,text(customer.email,160),service,notes)
       priceCaptured=true
       await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...nextMeta,active:false,captured_at:new Date().toISOString(),lead_id:priceData?.lead_id||null,customer_id:priceData?.customer_id||customer.id}},handled_by:'human',updated_at:new Date().toISOString()}).eq('id',conversationId).eq('organization_id',organizationId)
