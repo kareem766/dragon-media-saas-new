@@ -625,6 +625,13 @@ export default function CRM() {
     )
 
     try {
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser()
+
+      if (authError) throw authError
+
+      const userId = authData.user?.id || null
+
       const { error } = await supabase
         .from('leads')
         .update({
@@ -635,6 +642,28 @@ export default function CRM() {
 
       if (error) {
         throw error
+      }
+
+      const { error: activityError } =
+        await supabase.from('crm_activities').insert({
+          organization_id: organizationId,
+          entity_type: 'lead',
+          entity_id: leadId,
+          activity_type: 'status_change',
+          title: 'تم تحديث حالة العميل المحتمل',
+          description: `تم تغيير الحالة إلى: ${status}`,
+          actor_id: userId,
+          metadata: {
+            source: 'crm',
+            new_status: status,
+          },
+        })
+
+      if (activityError) {
+        console.error(
+          'Failed to record lead status activity:',
+          activityError
+        )
       }
     } catch (error) {
       console.error('Update lead status error:', error)
