@@ -1177,7 +1177,7 @@ export default function CustomerDetail() {
           <button
             onClick={() => setShowDelete(true)}
             className="w-10 h-10 rounded-xl border border-red-100 bg-white text-red-500 hover:bg-red-50 transition-colors"
-            title="حذف العميل"
+            title="أرشفة العميل"
           >
             ×
           </button>
@@ -2538,11 +2538,11 @@ export default function CustomerDetail() {
             </div>
 
             <h2 className="text-xl font-bold text-ink-950 mt-5">
-              حذف العميل؟
+              أرشفة العميل؟
             </h2>
 
             <p className="text-sm leading-6 text-ink-900/55 mt-2">
-              سيتم حذف العميل من قائمة العملاء. تأكد من رغبتك في تنفيذ هذا الإجراء.
+              سيتم إيقاف العميل وأرشفته بدلًا من حذفه نهائيًا، مع الحفاظ على سجل CRM والبيانات المرتبطة به.
             </p>
 
             <div className="flex gap-3 mt-6">
@@ -2552,8 +2552,8 @@ export default function CustomerDetail() {
                 className="flex-1 rounded-xl bg-red-600 text-white px-4 py-3 text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
               >
                 {saving
-                  ? 'جاري الحذف...'
-                  : 'نعم، حذف العميل'}
+                  ? 'جاري الأرشفة...'
+                  : 'نعم، أرشفة العميل'}
               </button>
 
               <button
