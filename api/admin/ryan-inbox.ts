@@ -178,6 +178,7 @@ Return ONLY valid JSON:
 Rules:
 - Understand Egyptian Arabic, dialect, slang, spelling variations, Arabic digits, indirect wording and natural conversation.
 - Extract only information actually established by the conversation. Never invent.
+- PHONE IS STRICT: return phone only when the customer explicitly provided a real phone number in the conversation. Never treat Facebook PSID, Messenger ID, WhatsApp ID, external_user_id, page ID, message ID, account ID or any other platform identifier as a phone number. If no phone was explicitly provided, phone must be null.
 - Normalize number meanings when clear: "3 الاف", "٣ آلاف", "تلات تلاف", "3000", "3k" can all mean 3000 جنيه.
 - Never ask again for information already answered.
 - Classify the conversation intent. Use human_request when the customer asks to speak to a person/manager, or the issue clearly requires human handling.
@@ -220,7 +221,10 @@ ${persona}`
     } else {
     const isAd=a.is_advertising===true
     const name=text(a.name,120)||text(captureMeta.name,120)||(looksLikeName(text(customer.name,120))?text(customer.name,120):'')
-    const phone=cleanPhone(text(a.phone,80)||text(captureMeta.phone,80)||text(customer.phone,80))
+    const conversationPhone=phoneFromText(historyText+' '+current)
+    const storedPhone=validPhone(text(captureMeta.phone,80))?cleanPhone(text(captureMeta.phone,80)):''
+    const customerPhone=validPhone(text(customer.phone,80))?cleanPhone(text(customer.phone,80)):''
+    const phone=conversationPhone||storedPhone||customerPhone
     const service=text(a.service,160)||text(captureMeta.service,160)
     const budget=text(a.budget,120)||text(captureMeta.budget,120)
     const goal=text(a.goal,240)||text(captureMeta.goal,240)
