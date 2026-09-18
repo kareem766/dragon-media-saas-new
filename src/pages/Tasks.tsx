@@ -392,6 +392,59 @@ export default function Tasks() {
     }))
   }
 
+  const logTaskActivity = async (
+    task: {
+      id: string
+      title: string
+      customer_id: string | null
+      lead_id: string | null
+      deal_id: string | null
+    },
+    activityType: string,
+    title: string,
+    description: string,
+    metadata: Record<string, unknown> = {}
+  ) => {
+    if (!supabase || !organizationId) return
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    const targets = [
+      { entity_type: 'customer', entity_id: task.customer_id },
+      { entity_type: 'lead', entity_id: task.lead_id },
+      { entity_type: 'deal', entity_id: task.deal_id },
+    ].filter(
+      target => Boolean(target.entity_id)
+    )
+
+    if (!targets.length) return
+
+    const { error } = await supabase
+      .from('crm_activities')
+      .insert(
+        targets.map(target => ({
+          organization_id: organizationId,
+          entity_type: target.entity_type,
+          entity_id: target.entity_id,
+          activity_type: activityType,
+          title,
+          description,
+          actor_id: user?.id ?? null,
+          metadata: {
+            ...metadata,
+            source: 'tasks',
+            task_id: task.id,
+          },
+        }))
+      )
+
+    if (error) {
+      console.error('Task CRM activity log error:', error)
+    }
+  }
+
   const saveTask = async () => {
     if (
       !supabase ||
@@ -485,6 +538,7 @@ export default function Tasks() {
         }
       } else {
         const {
+          data: createdTask,
           error: insertError,
         } = await supabase
           .from('tasks')
@@ -493,9 +547,49 @@ export default function Tasks() {
             created_by:
               user?.id ?? null,
           })
+          .select('id,title,customer_id,lead_id,deal_id')
+          .single()
 
         if (insertError) {
           throw insertError
+        }
+
+        if (createdTask) {
+          await logTaskActivity(
+            createdTask,
+            'task',
+            'تم إنشاء مهمة',
+            `تم إنشاء المهمة "${createdTask.title}".`
+          )
+        }
+      }
+
+      if (editingTask) {
+        const changedFields: string[] = []
+
+        if (editingTask.title !== payload.title) changedFields.push('العنوان')
+        if (editingTask.status !== payload.status) changedFields.push('الحالة')
+        if (editingTask.priority !== payload.priority) changedFields.push('الأولوية')
+        if (editingTask.assigned_to !== payload.assigned_to) changedFields.push('المسؤول')
+        if (editingTask.customer_id !== payload.customer_id) changedFields.push('العميل')
+        if (editingTask.lead_id !== payload.lead_id) changedFields.push('العميل المحتمل')
+        if (editingTask.deal_id !== payload.deal_id) changedFields.push('الصفقة')
+        if (editingTask.due_date !== payload.due_date) changedFields.push('موعد الاستحقاق')
+
+        if (changedFields.length) {
+          await logTaskActivity(
+            {
+              id: editingTask.id,
+              title: payload.title,
+              customer_id: payload.customer_id,
+              lead_id: payload.lead_id,
+              deal_id: payload.deal_id,
+            },
+            'task',
+            'تم تعديل مهمة',
+            `تم تعديل المهمة "${payload.title}" — الحقول المتغيرة: ${changedFields.join('، ')}.`,
+            { changed_fields: changedFields }
+          )
         }
       }
 
@@ -535,6 +629,14 @@ export default function Tasks() {
     }
 
     try {
+      await logTaskActivity(
+        task,
+        'task',
+        'تم حذف مهمة',
+        `تم حذف المهمة "${task.title}".`,
+        { action: 'delete' }
+      )
+
       const {
         error: deleteError,
       } = await supabase
@@ -589,6 +691,11 @@ export default function Tasks() {
         .from('tasks')
         .update({
           status,
+          completed_at:
+            status === 'مكتملة'
+              ? task.completed_at ?? new Date().toISOString()
+              : null,
+          updated_at: new Date().toISOString(),
         })
         .eq(
           'id',
@@ -602,6 +709,19 @@ export default function Tasks() {
       if (updateError) {
         throw updateError
       }
+
+      await logTaskActivity(
+        task,
+        'task',
+        status === 'مكتملة'
+          ? 'تم إكمال مهمة'
+          : 'تم تحديث حالة مهمة',
+        `تم تغيير حالة المهمة "${task.title}" من "${task.status || '—'}" إلى "${status}".`,
+        {
+          previous_status: task.status,
+          new_status: status,
+        }
+      )
 
       setTasks(prev =>
         prev.map(item =>
