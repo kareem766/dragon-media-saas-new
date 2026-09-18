@@ -22,7 +22,7 @@ export function useIsPlatformAdmin() {
 
     supabase
       .from('users')
-      .select('is_platform_admin')
+      .select('is_platform_admin, active')
       .eq('id', user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -35,7 +35,7 @@ export function useIsPlatformAdmin() {
           return
         }
 
-        setIsAdmin(Boolean(data?.is_platform_admin))
+        setIsAdmin(Boolean(data?.is_platform_admin && data?.active !== false))
         setLoading(false)
       })
 
