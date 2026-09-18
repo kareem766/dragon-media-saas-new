@@ -306,11 +306,22 @@ export default function DealDetail() {
     setSaveError(null)
 
     try {
+      const previousStage = currentStage?.name || '—'
+      const nextStage = selectedStageData?.name || '—'
+      const updatedAt = new Date().toISOString()
+
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser()
+
+      if (authError) throw authError
+
+      const userId = authData.user?.id || null
+
       const { error } = await supabase
         .from('deals')
         .update({
           stage_id: selectedStage,
-          updated_at: new Date().toISOString(),
+          updated_at: updatedAt,
         })
         .eq('id', id)
         .eq('organization_id', organizationId)
@@ -319,12 +330,68 @@ export default function DealDetail() {
         throw error
       }
 
+      /*
+       * Keep the Deal history and Customer 360 timeline in sync.
+       * The deal update itself is the source of truth; activity
+       * failures are logged but must not make a successful stage
+       * update look like it failed.
+       */
+      const activityMetadata = {
+        source: 'deal_detail',
+        deal_id: id,
+        previous_stage: previousStage,
+        new_stage: nextStage,
+      }
+
+      const { error: dealActivityError } =
+        await supabase.from('crm_activities').insert({
+          organization_id: organizationId,
+          entity_type: 'deal',
+          entity_id: id,
+          activity_type: 'deal',
+          title: 'تم تحديث مرحلة الصفقة',
+          description: `تم تغيير مرحلة الصفقة من ${previousStage} إلى ${nextStage}.`,
+          actor_id: userId,
+          metadata: activityMetadata,
+        })
+
+      if (dealActivityError) {
+        console.error(
+          'Failed to record deal stage activity:',
+          dealActivityError
+        )
+      }
+
+      if (deal?.customer_id) {
+        const { error: customerActivityError } =
+          await supabase.from('crm_activities').insert({
+            organization_id: organizationId,
+            entity_type: 'customer',
+            entity_id: deal.customer_id,
+            activity_type: 'deal',
+            title: 'تم تحديث مرحلة صفقة',
+            description: `تم تحديث صفقة "${deal.title}" من ${previousStage} إلى ${nextStage}.`,
+            actor_id: userId,
+            metadata: {
+              ...activityMetadata,
+              customer_id: deal.customer_id,
+            },
+          })
+
+        if (customerActivityError) {
+          console.error(
+            'Failed to record customer deal activity:',
+            customerActivityError
+          )
+        }
+      }
+
       setDeal((current) =>
         current
           ? {
               ...current,
               stage_id: selectedStage,
-              updated_at: new Date().toISOString(),
+              updated_at: updatedAt,
             }
           : current
       )
