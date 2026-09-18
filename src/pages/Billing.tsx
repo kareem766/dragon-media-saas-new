@@ -39,6 +39,15 @@ type Payment = {
   paid_at: string | null
 }
 
+type RyanPaymentMethod = {
+  id: string
+  method_key: string
+  name: string
+  details: Record<string, unknown> | null
+  enabled: boolean
+  display_order: number
+}
+
 const statusLabels: Record<string, { label: string; tone: Tone }> = {
   trialing: { label: 'فترة تجريبية', tone: 'success' },
   pending_payment: { label: 'بانتظار الدفع', tone: 'warning' },
@@ -145,6 +154,16 @@ export default function Billing() {
   const [payments, setPayments] = useState<Payment[]>([])
   const [dataLoading, setDataLoading] = useState(true)
   const [error, setError] = useState('')
+  const [ryanMethods, setRyanMethods] = useState<RyanPaymentMethod[]>([])
+  const [ryanMethod, setRyanMethod] = useState('')
+  const [ryanMessages, setRyanMessages] = useState('')
+  const [ryanAmount, setRyanAmount] = useState('')
+  const [ryanReference, setRyanReference] = useState('')
+  const [ryanPaymentDate, setRyanPaymentDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [ryanNote, setRyanNote] = useState('')
+  const [ryanSaving, setRyanSaving] = useState(false)
+  const [ryanSuccess, setRyanSuccess] = useState('')
+  const [ryanError, setRyanError] = useState('')
 
   const supabaseClient = supabase
 
@@ -159,7 +178,7 @@ export default function Billing() {
     setError('')
 
     try {
-      const [requestsResult, invoicesResult] = await Promise.all([
+      const [requestsResult, invoicesResult, ryanMethodsResult] = await Promise.all([
         supabaseClient
           .from('payment_requests')
           .select(`
@@ -188,6 +207,12 @@ export default function Billing() {
             due_date
           `)
           .order('due_date', { ascending: false }),
+
+        supabaseClient
+          .from('payment_methods')
+          .select('id, method_key, name, details, enabled, display_order')
+          .eq('enabled', true)
+          .order('display_order', { ascending: true }),
       ])
 
       if (requestsResult.error) {
@@ -199,6 +224,18 @@ export default function Billing() {
       }
 
       const loadedInvoices = (invoicesResult.data ?? []) as Invoice[]
+      const loadedRyanMethods = (ryanMethodsResult.data ?? []) as RyanPaymentMethod[]
+
+      if (ryanMethodsResult.error) {
+        console.warn('Ryan payment methods error:', ryanMethodsResult.error)
+      } else {
+        setRyanMethods(loadedRyanMethods)
+        setRyanMethod((current) =>
+          loadedRyanMethods.some((item) => item.method_key === current)
+            ? current
+            : loadedRyanMethods[0]?.method_key ?? ''
+        )
+      }
 
       setPaymentRequests(
         (requestsResult.data ?? []) as unknown as PaymentRequest[]
@@ -302,6 +339,72 @@ export default function Billing() {
       ),
     [paymentRequests]
   )
+
+  const submitRyanPurchase = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!supabaseClient) return
+
+    const messages = Number(ryanMessages)
+    const amount = Number(ryanAmount)
+
+    setRyanSuccess('')
+    setRyanError('')
+
+    if (!Number.isInteger(messages) || messages <= 0) {
+      setRyanError('أدخل عدد رسائل صحيحًا أكبر من صفر.')
+      return
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setRyanError('أدخل قيمة الدفع الصحيحة.')
+      return
+    }
+
+    if (!ryanMethod) {
+      setRyanError('اختر طريقة الدفع.')
+      return
+    }
+
+    if (!ryanReference.trim()) {
+      setRyanError('أدخل رقم العملية أو المرجع.')
+      return
+    }
+
+    if (!ryanPaymentDate) {
+      setRyanError('اختر تاريخ التحويل.')
+      return
+    }
+
+    setRyanSaving(true)
+    try {
+      const selectedMethod = ryanMethods.find((item) => item.method_key === ryanMethod)
+      const { error: rpcError } = await supabaseClient.rpc('create_ryan_credit_purchase', {
+        p_messages: messages,
+        p_amount: amount,
+        p_method: ryanMethod,
+        p_reference: ryanReference.trim(),
+        p_payment_date: ryanPaymentDate,
+        p_note: ryanNote.trim() || null,
+        p_payment_method_snapshot: selectedMethod
+          ? { method_key: selectedMethod.method_key, name: selectedMethod.name, details: selectedMethod.details ?? {} }
+          : {},
+      })
+
+      if (rpcError) throw rpcError
+
+      setRyanSuccess('تم إرسال طلب شراء رسائل Ryan بنجاح، وسيظهر للإدارة للمراجعة.')
+      setRyanMessages('')
+      setRyanAmount('')
+      setRyanReference('')
+      setRyanNote('')
+      await loadBillingData()
+    } catch (err) {
+      console.error('Ryan purchase error:', err)
+      setRyanError(err instanceof Error ? err.message : 'تعذر إرسال طلب شراء رسائل Ryan.')
+    } finally {
+      setRyanSaving(false)
+    }
+  }
 
   const totalPaid = useMemo(
     () =>
@@ -679,6 +782,127 @@ export default function Billing() {
           )}
         </Card>
       </div>
+
+      {/* Ryan credits */}
+      <Card className="p-6 border border-amber-200/70 bg-gradient-to-br from-white to-amber-50/40">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-5">
+          <div>
+            <div className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+              RYAN AI
+            </div>
+            <h2 className="text-lg font-bold text-ink-950 mt-2">شراء رسائل Ryan إضافية</h2>
+            <p className="text-xs text-ink-900/50 mt-1">
+              اختر عدد الرسائل وقيمة التحويل ثم أرسل الطلب للمراجعة. لن تتم إضافة الرصيد إلا بعد اعتماد الإدارة.
+            </p>
+          </div>
+          <div className="rounded-xl bg-ink-950 px-4 py-3 text-xs text-white/70">
+            الرصيد المشتَرى لا ينتهي مع التجديد الشهري
+          </div>
+        </div>
+
+        <form onSubmit={submitRyanPurchase} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-ink-900/50">عدد رسائل Ryan</label>
+            <input
+              required
+              type="number"
+              min="1"
+              step="1"
+              value={ryanMessages}
+              onChange={(e) => setRyanMessages(e.target.value)}
+              placeholder="مثال: 1000"
+              className="w-full mt-1 border border-amber-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-amber-500 bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-ink-900/50">قيمة التحويل</label>
+            <input
+              required
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={ryanAmount}
+              onChange={(e) => setRyanAmount(e.target.value)}
+              placeholder="بالجنيه المصري"
+              className="w-full mt-1 border border-amber-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-amber-500 bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-ink-900/50">طريقة الدفع</label>
+            <select
+              required
+              value={ryanMethod}
+              onChange={(e) => setRyanMethod(e.target.value)}
+              disabled={ryanMethods.length === 0}
+              className="w-full mt-1 border border-amber-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-amber-500 bg-white disabled:bg-ink-900/5"
+            >
+              {ryanMethods.length === 0 ? (
+                <option value="">لا توجد طرق دفع متاحة</option>
+              ) : (
+                ryanMethods.map((item) => (
+                  <option key={item.id} value={item.method_key}>{item.name}</option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-ink-900/50">رقم العملية / المرجع</label>
+            <input
+              required
+              value={ryanReference}
+              onChange={(e) => setRyanReference(e.target.value)}
+              placeholder="رقم العملية"
+              className="w-full mt-1 border border-amber-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-amber-500 bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-ink-900/50">تاريخ التحويل</label>
+            <input
+              required
+              type="date"
+              value={ryanPaymentDate}
+              onChange={(e) => setRyanPaymentDate(e.target.value)}
+              className="w-full mt-1 border border-amber-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-amber-500 bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-ink-900/50">ملاحظات (اختياري)</label>
+            <input
+              value={ryanNote}
+              onChange={(e) => setRyanNote(e.target.value)}
+              placeholder="أي ملاحظة للإدارة"
+              className="w-full mt-1 border border-amber-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-amber-500 bg-white"
+            />
+          </div>
+
+          <div className="md:col-span-2 rounded-xl bg-amber-100/70 border border-amber-200 p-3 text-xs leading-6 text-amber-900">
+            سيتم إنشاء طلب دفع مستقل لرسائل Ryan، وإشعار إدارة المنصة للمراجعة. بعد الموافقة فقط يتم اعتماد الرصيد.
+          </div>
+
+          {ryanError && (
+            <div className="md:col-span-2 rounded-lg border border-red-100 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+              {ryanError}
+            </div>
+          )}
+
+          {ryanSuccess && (
+            <div className="md:col-span-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700">
+              {ryanSuccess}
+            </div>
+          )}
+
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={ryanSaving || ryanMethods.length === 0} className="w-full md:w-auto">
+              {ryanSaving ? 'جاري إرسال الطلب...' : 'إرسال طلب شراء رسائل Ryan'}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
       {/* Invoices */}
       <Card className="p-6">
