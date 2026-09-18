@@ -64,29 +64,34 @@ const items: SidebarItem[] = [
     to: '/services',
     label: 'الخدمات',
     icon: IconLayers,
+    resource: 'services',
   },
   {
     to: '/campaigns',
     label: 'الحملات التسويقية',
     icon: IconMegaphone,
     feature: 'campaigns',
+    resource: 'campaigns',
   },
   {
     to: '/inbox',
     label: 'صندوق المحادثات',
     icon: IconChat,
+    resource: 'inbox',
   },
   {
     to: '/ryan',
     label: 'RYAN AI',
     icon: IconSpark,
     feature: 'ryan',
+    resource: 'ryan',
   },
   {
     to: '/automations',
     label: 'الأتمتة',
     icon: IconSettings,
     feature: 'automations',
+    resource: 'automations',
   },
   {
     to: '/tasks',
@@ -104,12 +109,14 @@ const items: SidebarItem[] = [
     to: '/billing',
     label: 'الفواتير والاشتراكات',
     icon: IconCard,
+    resource: 'billing',
   },
   {
     to: '/reports',
     label: 'التقارير',
     icon: IconChart,
     feature: 'advanced_reports',
+    resource: 'reports',
   },
   {
     to: '/users',
@@ -121,6 +128,7 @@ const items: SidebarItem[] = [
     to: '/tickets',
     label: 'الدعم الفني',
     icon: IconChat,
+    resource: 'tickets',
   },
   {
     to: '/settings',
