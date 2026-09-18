@@ -44,14 +44,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
       organizationId = String(body.organizationId || '')
     }
+    let membership: { id: string; organization_id: string; active: boolean; role: string } | null = null
     if (!organizationId) {
-      const { data: membership, error } = await db.from('users').select('organization_id,active').eq('id', userData.user.id).maybeSingle()
+      const { data, error } = await db
+        .from('users')
+        .select('id,organization_id,active,role')
+        .eq('id', userData.user.id)
+        .maybeSingle()
       if (error) return json(res, 500, { error: 'تعذر التحقق من الشركة المرتبطة بالحساب.' })
+      membership = data as typeof membership
       organizationId = String(membership?.organization_id || '')
-      if (!organizationId || membership?.active === false) return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
     } else {
-      const { data: membership } = await db.from('users').select('id,organization_id,active').eq('id', userData.user.id).eq('organization_id', organizationId).maybeSingle()
-      if (!membership || membership.active === false) return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
+      const { data } = await db
+        .from('users')
+        .select('id,organization_id,active,role')
+        .eq('id', userData.user.id)
+        .eq('organization_id', organizationId)
+        .maybeSingle()
+      membership = data as typeof membership
+    }
+
+    if (!membership || membership.active === false || !membership.organization_id) {
+      return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
+    }
+
+    const { data: permission } = await db
+      .from('role_permissions')
+      .select('can_edit')
+      .eq('role', membership.role)
+      .eq('resource', 'settings')
+      .maybeSingle()
+
+    if (!permission?.can_edit) {
+      return json(res, 403, { error: 'ربط Meta متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.' })
     }
 
     if (provider === 'facebook') {
