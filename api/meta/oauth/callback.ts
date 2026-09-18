@@ -125,6 +125,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
     if (!appId || !appSecret || !supabaseUrl || !serviceKey) return errorRedirect(res, 'إعدادات Meta على الخادم غير مكتملة.')
 
+    const stateUserId = typeof stateData.userId === 'string' ? stateData.userId : ''
+    if (!stateUserId) return errorRedirect(res, 'جلسة Meta غير مرتبطة بمستخدم صالح.')
+
+    if (req.method === 'POST') {
+      const authorization = String(req.headers.authorization || '')
+      const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
+      if (!accessToken) return res.status(401).json({ error: 'جلسة الدخول غير موجودة.' })
+      const authDb = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+      const { data: authUser, error: authError } = await authDb.auth.getUser(accessToken)
+      if (authError || !authUser.user || authUser.user.id !== stateUserId) {
+        return res.status(403).json({ error: 'جلسة الربط لا تطابق المستخدم الحالي.' })
+      }
+    }
+
+    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    const { data: membership, error: membershipError } = await db
+      .from('users')
+      .select('id,organization_id,active,role')
+      .eq('id', stateUserId)
+      .eq('organization_id', String(stateData.organizationId))
+      .maybeSingle()
+
+    if (membershipError || !membership || membership.active === false) {
+      return errorRedirect(res, 'المستخدم غير مرتبط بهذه الشركة أو حسابه غير نشط.')
+    }
+
+    const { data: permission } = await db
+      .from('role_permissions')
+      .select('can_edit')
+      .eq('role', membership.role)
+      .eq('resource', 'settings')
+      .maybeSingle()
+
+    if (!permission?.can_edit) {
+      return errorRedirect(res, 'ربط Meta متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.')
+    }
+
     const tokenParams = new URLSearchParams({
       client_id: appId,
       client_secret: appSecret,
@@ -143,8 +180,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const token = String(tokenData.access_token)
-    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
-
     // Facebook uses this same already-whitelisted callback, distinguished by
     // the signed provider value in state. Keep the WhatsApp branch below intact.
     if (stateData.provider === 'facebook') {
