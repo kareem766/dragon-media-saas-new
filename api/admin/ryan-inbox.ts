@@ -73,7 +73,13 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  if(!organizationId||!conversationId||!messageId)return res.status(400).json({error:'Missing agent identifiers'})
  const {data:incoming}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
  if(!incoming||incoming.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
- const incomingMetadata=obj(incoming.metadata);if(incomingMetadata.ai_agent_processed_at)return res.status(200).json({ok:true,skipped:true})
+ const {data:claimed,error:claimError}=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId})
+ if(claimError) return res.status(500).json({error:'Failed to claim incoming message',details:text(claimError.message,500)})
+ if(!claimed)return res.status(200).json({ok:true,skipped:true,reason:'already_processing_or_processed'})
+ const {data:incomingAfterClaim}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
+ if(!incomingAfterClaim||incomingAfterClaim.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
+ const incomingMetadata=obj(incomingAfterClaim.metadata)
+ const incoming=incomingAfterClaim
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
  if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:agent}]=await Promise.all([
@@ -147,5 +153,9 @@ export default async function main(req:VercelRequest,res:VercelResponse){
    throw outboundError
   }
   return res.status(200).json({ok:true,reply,message_id:saved.id,price_inquiry:priceCaptured,price_data:priceCaptured?priceData:null,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,outbound})
- }catch(error:any){console.error('Ryan error',error);return res.status(502).json({error:'Ryan request failed',details:text(error?.message,500)})}
+ }catch(error:any){
+  await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processing_at:null}}).eq('id',messageId).eq('conversation_id',conversationId)
+  console.error('Ryan error',error)
+  return res.status(502).json({error:'Ryan request failed',details:text(error?.message,500)})
+ }
 }
