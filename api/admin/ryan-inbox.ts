@@ -34,7 +34,7 @@ const serviceFromText=(value:string,services:any[])=>{
  for(const [re,name] of aliases)if(re.test(v))return name
  return ''
 }
-const salesIntent=(value:string)=>/(?:عايز|عاوز|محتاج|محتاجة|عايزه|عاوزة|مهتم|محتاجين|نبدأ|نبداء|ابدأ|ابدء|اشتغل|شغل|خدمة|خدمات|إعلان|اعلان|حملة|تصميم|محتوى|سوشيال|صفحة|صفحات|تسويق|ماركتنج|website|موقع|متجر)/iu.test(value)
+const salesIntent=(value:string)=>/(?:عايز|عاوز|محتاج|محتاجة|عايزه|عاوزة|مهتم|محتاجين|نبدأ|نبداء|ابدأ|ابدء|اشتغل|شغل|خدمة|خدمات|إعلان|اعلان|حملة|تصميم|محتوى|سوشيال|صفحة|صفحات|تسويق|ماركتنج|website|موقع|متجر)/iu.test(value)\nconst humanHandoffIntent=(value:string)=>/(?:موظف|موظفه|موظفة|موظفين|حد من الفريق|حد من الشركة|الفريق|الشركة|اتكلم مع حد|اكلم حد|أكلم حد|كلموني|كلمني|اتصلوا بيا|يتصل بيا|تواصلوا معايا|تواصل معايا|خدمة عملاء|بشر(?:ي|ى)|human|agent|support agent)/iu.test(value)
 const nameStopWords=/^(?:عايز|عاوز|عاوزه|عايزه|محتاج|محتاجة|ممكن|قولي|قولى|قول|اعرف|أعرف|عايز\s+اعرف|عاوز\s+اعرف|السعر|سعر|تكلفة|التكلفة|التكلفه|بكام|بكم|كام|فلوس|الإعلان|اعلان|إعلان|اعمل|نعمل|خدمة|خدمات|حملة|الحملة|تفاصيل|معلومات|ممكنة|هل|هو|هي|ايه|إيه|ازاي|إزاي|عاوزين|نريد|اريد|أريد|اه|أه|ايوه|أيوه|تمام|حاضر|ماشي|نعم|yes|ok)$/iu
 const isPlaceholderName=(value:string)=>{const v=value.trim();return !v||/^(?:عميل جديد|غير معروف|unknown|whatsapp\s*\d+|facebook\s*\d+)$/iu.test(v)}
 const looksLikeName=(value:string)=>{const v=value.trim().replace(/\s+/g,' ');if(isPlaceholderName(v)||phoneFromText(v))return false;if(v.length<2||v.length>80)return false;if(/https?:\/\//i.test(v)||/[?؟]/.test(v))return false;const words=v.split(' ').filter(Boolean);if(words.length>4)return false;if(words.some(w=>nameStopWords.test(w)))return false;return /^[\p{L}][\p{L}\u064B-\u065F\s.'’-]{1,79}$/u.test(v)}
@@ -157,12 +157,12 @@ PERSONA: ${persona}`
    const intent=text(a.intent,40)||'other'
    const needsHuman=a.needs_human===true||intent==='human_request'
    const handoffReason=text(a.handoff_reason,300)
-   const reviewedState={intent,lead_intent:leadIntent,needs_human:needsHuman,handoff_reason:handoffReason||null,missing:Array.isArray(a.missing)?a.missing.filter((x:any)=>typeof x==='string').slice(0,8):[],complete:a.complete===true,next_action:text(a.next_action,40)||'continue',updated_at:new Date().toISOString()}
+   const deterministicHumanRequest=humanHandoffIntent(historyText+' '+current)\n   const effectiveNeedsHuman=needsHuman||deterministicHumanRequest\n   const effectiveHandoffReason=handoffReason|| (deterministicHumanRequest?'طلب العميل التواصل مع موظف بشري':'')\n   const reviewedState={intent,lead_intent:leadIntent,needs_human:effectiveNeedsHuman,handoff_reason:effectiveHandoffReason||null,missing:Array.isArray(a.missing)?a.missing.filter((x:any)=>typeof x==='string').slice(0,8):[],complete:a.complete===true,next_action:text(a.next_action,40)||'continue',updated_at:new Date().toISOString()}
    await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:reviewedState}}).eq('id',conversationId).eq('organization_id',organizationId)
-   if(needsHuman){
+   if(effectiveNeedsHuman){
     const handoffAt=new Date().toISOString()
     const handoffReply=text(a.reply,5000)
-    reply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
+    reply=safeHandoffReply
     const {data:handoffRequest,error:handoffError}=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:handoffReason||'طلب تدخل بشري من العميل',status:'pending',conversation_id:conversationId}).select('id').single()
     if(handoffError||!handoffRequest)throw new Error(handoffError?.message||'Failed to create human handoff request')
     await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'customer',entity_id:customer.id,activity_type:'ai_handoff',title:'تحويل من Ryan إلى موظف',description:handoffReason||'طلب العميل تدخل بشرياً',metadata:{source:'ryan',conversation_id:conversationId,handoff_request_id:handoffRequest.id,at:handoffAt}})
