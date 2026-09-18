@@ -208,6 +208,13 @@ PERSONA: ${persona}`
    const system=`You are Ryan, the AI assistant inside Dragon Media.\nPERSONA:\n${persona}\nUse the complete conversation history and stored customer data. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Ask at most one useful question. Keep replies to one or two short sentences. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions.\nCUSTOMER:\nName: ${text(customer.name,120)||'غير معروف'}\nPhone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}\nSTORED MEMORY:\n${JSON.stringify(memory).slice(0,5000)}\nKNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
    reply=await callGemini(apiKey,model,system,history,current)
   }
+  // Final safety gate: never persist or send internal/model output to the customer.
+  if(containsInternalLeak(reply)){
+   reply=priceCaptured
+    ? 'تمام، تم تسجيل بيانات حضرتك، وفريق Dragon Media هيتواصل مع حضرتك في أقرب وقت.'
+    : 'تمام، خلينا نكمل مع بعض. قولي محتاج مساعدة في إيه؟'
+  }
+  reply=text(reply,1200)
   const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured}}).select('id').single()
   if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response')
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
