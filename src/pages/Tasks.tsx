@@ -629,14 +629,6 @@ export default function Tasks() {
     }
 
     try {
-      await logTaskActivity(
-        task,
-        'task',
-        'تم حذف مهمة',
-        `تم حذف المهمة "${task.title}".`,
-        { action: 'delete' }
-      )
-
       const {
         error: deleteError,
       } = await supabase
@@ -654,6 +646,14 @@ export default function Tasks() {
       if (deleteError) {
         throw deleteError
       }
+
+      await logTaskActivity(
+        task,
+        'task',
+        'تم حذف مهمة',
+        `تم حذف المهمة "${task.title}".`,
+        { action: 'delete' }
+      )
 
       setTasks(prev =>
         prev.filter(
