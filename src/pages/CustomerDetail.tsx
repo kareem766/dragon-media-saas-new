@@ -66,6 +66,8 @@ interface Task {
   status: string | null
   assigned_to?: string | null
   customer_id?: string | null
+  lead_id?: string | null
+  deal_id?: string | null
   created_at?: string | null
   completed_at?: string | null
 }
@@ -330,7 +332,7 @@ export default function CustomerDetail() {
         sb
           .from('tasks')
           .select(
-            'id,title,description,due_date,reminder_at,priority,status,assigned_to,customer_id,created_at,completed_at'
+            'id,title,description,due_date,reminder_at,priority,status,assigned_to,customer_id,lead_id,deal_id,created_at,completed_at'
           )
           .eq('organization_id', organizationId)
           .eq('customer_id', id)
