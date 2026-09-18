@@ -65,12 +65,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const outboundSecret = String(req.headers['x-dragon-outbound-secret'] || '').trim()
 
       if (ryanSecret) {
-        const { data: secretRow } = await admin
+        const { data: secretRows } = await admin
           .from('system_secrets')
-          .select('value')
-          .eq('key', 'ryan_inbox_webhook_secret')
-          .maybeSingle()
-        internalAuthorized = Boolean(secretRow?.value && sameSecret(ryanSecret, String(secretRow.value)))
+          .select('key, value')
+          .in('key', ['ai_agent_inbox_secret', 'ryan_inbox_webhook_secret'])
+        internalAuthorized = (secretRows || []).some((row: any) =>
+          row?.value && sameSecret(ryanSecret, String(row.value))
+        )
       }
 
       if (!internalAuthorized && outboundSecret) {
