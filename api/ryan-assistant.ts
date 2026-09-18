@@ -133,7 +133,7 @@ ${knowledgeText}
     const geminiKey = env('GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY')
     if (geminiKey) {
       const configured = env('RYAN_GEMINI_MODEL')
-      const candidates = [configured, 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'].filter((v, i, a) => v && a.indexOf(v) === i)
+      const candidates = [configured, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'].filter((v, i, a) => v && a.indexOf(v) === i)
 
       const contents = [
         { role: 'user', parts: [{ text: internalPrompt }] },
