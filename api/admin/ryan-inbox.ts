@@ -163,9 +163,10 @@ PERSONA: ${persona}`
     const handoffAt=new Date().toISOString()
     const handoffReply=text(a.reply,5000)
     reply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
-    await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:handoffReason||'طلب تدخل بشري من العميل',status:'pending',conversation_id:conversationId})
-    await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'customer',entity_id:customer.id,activity_type:'ai_handoff',title:'تحويل من Ryan إلى موظف',description:handoffReason||'طلب العميل تدخل بشرياً',metadata:{source:'ryan',conversation_id:conversationId,at:handoffAt}})
-    await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:{...reviewedState,handoff:true},ryan_handoff:{requested:true,reason:handoffReason||'طلب تدخل بشري',requested_at:handoffAt}},handled_by:'human',updated_at:handoffAt}).eq('id',conversationId).eq('organization_id',organizationId)
+    const {data:handoffRequest,error:handoffError}=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:handoffReason||'طلب تدخل بشري من العميل',status:'pending',conversation_id:conversationId}).select('id').single()
+    if(handoffError||!handoffRequest)throw new Error(handoffError?.message||'Failed to create human handoff request')
+    await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'customer',entity_id:customer.id,activity_type:'ai_handoff',title:'تحويل من Ryan إلى موظف',description:handoffReason||'طلب العميل تدخل بشرياً',metadata:{source:'ryan',conversation_id:conversationId,handoff_request_id:handoffRequest.id,at:handoffAt}})
+    await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:{...reviewedState,handoff:true},ryan_handoff:{requested:true,request_id:handoffRequest.id,reason:handoffReason||'طلب تدخل بشري',requested_at:handoffAt}},handled_by:'human',updated_at:handoffAt}).eq('id',conversationId).eq('organization_id',organizationId)
    }else if(!leadIntent){
     const system=`You are Ryan, the AI assistant inside Dragon Media.\nPERSONA:\n${persona}\nUse the complete conversation history and stored customer data. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Ask at most one useful question. Keep replies to one or two short sentences. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions.\nCUSTOMER:\nName: ${text(customer.name,120)||'غير معروف'}\nPhone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}\nSTORED MEMORY:\n${JSON.stringify(memory).slice(0,5000)}\nKNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
     reply=await callGemini(apiKey,model,system,history,current)
@@ -211,7 +212,7 @@ PERSONA: ${persona}`
   // Final safety gate: never persist or send internal/model output to the customer.
   if(containsInternalLeak(reply)){
    reply=priceCaptured
-    ? 'تمام، تم تسجيل بيانات حضرتك، وفريق Dragon Media هيتواصل مع حضرتك في أقرب وقت.'
+    ? 'تمام، بيانات حضرتك اتسجلت عندنا، وهنكمل معاك من هنا.'
     : 'تمام، خلينا نكمل مع بعض. قولي محتاج مساعدة في إيه؟'
   }
   reply=text(reply,1200)
