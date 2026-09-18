@@ -5,6 +5,7 @@ import organizations from '../_server/admin/organizations.js'
 import overview from '../_server/admin/overview.js'
 import payments from '../_server/admin/payments.js'
 import tickets from '../_server/admin/tickets.js'
+import ryanAssistant from '../_server/admin/ryan-assistant.js'
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 
@@ -15,6 +16,7 @@ const handlers: Record<string, Handler> = {
   overview,
   payments,
   tickets,
+  'ryan-assistant': ryanAssistant,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
