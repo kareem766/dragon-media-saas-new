@@ -32,7 +32,9 @@ const PLATFORM_GUIDE = `
 3. إذا لم تكن متأكدًا من ميزة، قل ذلك بدل اختلاقها.
 4. لا تكشف أسرارًا أو بيانات مستخدمين آخرين.
 5. لا تنفذ تغييرات إدارية حساسة؛ دورك الإرشاد.
-6. اجعل الرد مختصرًا وعمليًا.
+6. اجعل الرد مختصرًا وعمليًا، لكن لا تختصر الخطوات المطلوبة بشكل يقطع المعنى.
+7. إذا بدأت قائمة خطوات أو نقاط، أكملها كاملة حتى النهاية ولا تتوقف في منتصف خطوة.
+8. لا تبدأ أو تنهي الرد بتنسيق Markdown غير مكتمل. استخدم نصًا واضحًا، ويمكن استخدام الترقيم العادي مثل 1. 2. 3. بدون رموز تنسيق غير ضرورية.
 `
 
 const env = (...names: string[]) => names.map((n) => process.env[n]).find((v) => v?.trim())?.trim() || ''
@@ -121,7 +123,8 @@ ${knowledgeText}
 
 المستخدم الحالي: ${clean(authData.user.user_metadata?.full_name || authData.user.email, 200)} | الدور: ${clean(user.role, 100)}
 
-أجب عن سؤال المستخدم الحالي مباشرة. إذا طلب خطوات تنفيذ، أعطه الخطوات بالترتيب داخل Dragon Media.`
+أجب عن سؤال المستخدم الحالي مباشرة. إذا طلب خطوات تنفيذ، أعطه الخطوات بالترتيب داخل Dragon Media.
+يجب أن يكون الرد مكتملًا حتى لو احتاج عدة خطوات. لا تقطع الرد بسبب الاختصار، ولا تترك خطوة أو جملة غير مكتملة. لا تستخدم Markdown معقدًا؛ الترقيم العادي مناسب.`
 
     let reply = ''
     let usedModel = ''
@@ -142,12 +145,69 @@ ${knowledgeText}
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
-          body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: 700, temperature: 0.25 } }),
+          body: JSON.stringify({
+            contents,
+            generationConfig: {
+              maxOutputTokens: 1400,
+              temperature: 0.25,
+            },
+          }),
         })
         const data: any = await readJson(response)
         if (response.ok) {
-          reply = (data?.candidates?.[0]?.content?.parts || []).map((p: any) => String(p?.text || '')).join('').trim()
-          if (reply) { usedModel = candidate; break }
+          const candidateItem = data?.candidates?.[0]
+          reply = (candidateItem?.content?.parts || [])
+            .map((p: any) => String(p?.text || ''))
+            .join('')
+            .trim()
+
+          const finishReason = String(candidateItem?.finishReason || '')
+          if (reply && finishReason !== 'MAX_TOKENS') {
+            usedModel = candidate
+            break
+          }
+
+          // Gemini can legally return text with MAX_TOKENS. Retry once with a larger
+          // output budget so a step-by-step answer is not returned half-finished.
+          if (reply && finishReason === 'MAX_TOKENS') {
+            const retryResponse = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
+                body: JSON.stringify({
+                  contents: [
+                    ...contents,
+                    {
+                      role: 'user',
+                      parts: [{
+                        text: 'أكمل الإجابة كاملة من البداية في رد واحد، مع إنهاء جميع الخطوات والجمل وعدم ترك أي قائمة أو تنسيق غير مكتمل.'
+                      }],
+                    },
+                  ],
+                  generationConfig: {
+                    maxOutputTokens: 2200,
+                    temperature: 0.2,
+                  },
+                }),
+              },
+            )
+
+            const retryData: any = await readJson(retryResponse)
+            if (retryResponse.ok) {
+              const retryCandidate = retryData?.candidates?.[0]
+              const retryReply = (retryCandidate?.content?.parts || [])
+                .map((p: any) => String(p?.text || ''))
+                .join('')
+                .trim()
+              const retryFinishReason = String(retryCandidate?.finishReason || '')
+              if (retryReply && retryFinishReason !== 'MAX_TOKENS') {
+                reply = retryReply
+                usedModel = candidate
+                break
+              }
+            }
+          }
         }
       }
     }
