@@ -103,27 +103,27 @@ export default function App() {
               <Route path="/crm/customer/:id" element={<PermissionRoute resource="customers"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CustomerDetail /></FeatureRoute></PermissionRoute>} />
               <Route path="/pipeline" element={<PermissionRoute resource="deals"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><Pipeline /></FeatureRoute></PermissionRoute>} />
               <Route path="/pipeline/deal/:id" element={<PermissionRoute resource="deals"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><DealDetail /></FeatureRoute></PermissionRoute>} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/campaigns" element={<FeatureRoute feature="campaigns" featureName="الحملات التسويقية"><Campaigns /></FeatureRoute>} />
-              <Route path="/inbox" element={<Inbox />} />
-              <Route path="/ryan" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanPageShell /></FeatureRoute>} />
-              <Route path="/ryan/assistant" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanAssistant /></FeatureRoute>} />
-              <Route path="/ryan/settings" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanSettings /></FeatureRoute>} />
-              <Route path="/ryan/knowledge" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><KnowledgeBase /></FeatureRoute>} />
-              <Route path="/ryan/handoff" element={<FeatureRoute feature="ryan" featureName="Ryan الذكي"><HandoffRequests /></FeatureRoute>} />
-              <Route path="/automations" element={<FeatureRoute feature="automations" featureName="الأتمتة"><Automations /></FeatureRoute>} />
-              <Route path="/tickets" element={<Tickets />} />
+              <Route path="/services" element={<PermissionRoute resource="services"><Services /></PermissionRoute>} />
+              <Route path="/campaigns" element={<PermissionRoute resource="campaigns"><FeatureRoute feature="campaigns" featureName="الحملات التسويقية"><Campaigns /></FeatureRoute></PermissionRoute>} />
+              <Route path="/inbox" element={<PermissionRoute resource="inbox"><Inbox /></PermissionRoute>} />
+              <Route path="/ryan" element={<PermissionRoute resource="ryan"><FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanPageShell /></FeatureRoute></PermissionRoute>} />
+              <Route path="/ryan/assistant" element={<PermissionRoute resource="ryan"><FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanAssistant /></FeatureRoute></PermissionRoute>} />
+              <Route path="/ryan/settings" element={<PermissionRoute resource="settings"><FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanSettings /></FeatureRoute></PermissionRoute>} />
+              <Route path="/ryan/knowledge" element={<PermissionRoute resource="knowledge_base"><FeatureRoute feature="ryan" featureName="Ryan الذكي"><KnowledgeBase /></FeatureRoute></PermissionRoute>} />
+              <Route path="/ryan/handoff" element={<PermissionRoute resource="handoff"><FeatureRoute feature="ryan" featureName="Ryan الذكي"><HandoffRequests /></FeatureRoute></PermissionRoute>} />
+              <Route path="/automations" element={<PermissionRoute resource="automations"><FeatureRoute feature="automations" featureName="الأتمتة"><Automations /></FeatureRoute></PermissionRoute>} />
+              <Route path="/tickets" element={<PermissionRoute resource="tickets"><Tickets /></PermissionRoute>} />
               <Route path="/search" element={<Search />} />
-              <Route path="/plans" element={<Plans />} />
-              <Route path="/billing/pay" element={<PaymentRequest />} />
+              <Route path="/plans" element={<PermissionRoute resource="billing"><Plans /></PermissionRoute>} />
+              <Route path="/billing/pay" element={<PermissionRoute resource="billing"><PaymentRequest /></PermissionRoute>} />
               <Route path="/tasks" element={<PermissionRoute resource="tasks"><Tasks /></PermissionRoute>} />
               <Route path="/appointments" element={<PermissionRoute resource="appointments"><Appointments /></PermissionRoute>} />
-              <Route path="/billing" element={<Billing />} />
-              <Route path="/reports" element={<FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute>} />
+              <Route path="/billing" element={<PermissionRoute resource="billing"><Billing /></PermissionRoute>} />
+              <Route path="/reports" element={<PermissionRoute resource="reports"><FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute></PermissionRoute>} />
               <Route path="/users" element={<PermissionRoute resource="users"><Users /></PermissionRoute>} />
               <Route path="/account" element={<Account />} />
               <Route path="/settings" element={<PermissionRoute resource="settings"><Settings /></PermissionRoute>} />
-              <Route path="/integrations/meta" element={<MetaConnections />} />
+              <Route path="/integrations/meta" element={<PermissionRoute resource="integrations"><MetaConnections /></PermissionRoute>} />
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="/admin/organizations" element={<AdminRoute><AdminOrganizations /></AdminRoute>} />
               <Route path="/admin/payments" element={<AdminRoute><AdminPayments /></AdminRoute>} />
