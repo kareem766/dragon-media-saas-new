@@ -33,11 +33,11 @@ export default async function handler(req: any, res: any) {
 
   const { data: callerRow, error: callerError } = await admin
     .from('users')
-    .select('is_platform_admin')
+    .select('is_platform_admin, active')
     .eq('id', authData.user.id)
     .single()
 
-  if (callerError || !callerRow?.is_platform_admin) {
+  if (callerError || !callerRow?.is_platform_admin || callerRow.active === false) {
     res.status(403).json({
       error: 'هذه الصفحة مخصصة لمدير المنصة فقط',
     })
