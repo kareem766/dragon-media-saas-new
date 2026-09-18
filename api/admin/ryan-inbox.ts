@@ -49,15 +49,6 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  throw new Error(`Ryan Gemini fallback exhausted: ${lastError}`)
 }
 
-async function dispatchWhatsApp(organizationId:string,conversationId:string,messageId:string,secret:string){
- const base=env('APP_BASE_URL','VERCEL_PROJECT_PRODUCTION_URL')||'https://dragon-media-saas-new.vercel.app'
- const normalized=base.startsWith('http')?base:`https://${base}`
- const response=await fetch(`${normalized}/api/meta/whatsapp/send`,{method:'POST',headers:{'Content-Type':'application/json','x-ryan-inbox-secret':secret},body:JSON.stringify({organization_id:organizationId,conversation_id:conversationId,message_id:messageId})})
- const payload=await response.json().catch(()=>({}))
- if(!response.ok) throw new Error(payload?.error||`WhatsApp outbound failed (${response.status})`)
- return payload
-}
-
 async function capturePriceInquiry(supabase:any,organizationId:string,customerId:string,name:string,phone:string,email:string,service:string,notes:string){
  const {data,error}=await supabase.rpc('ryan_capture_price_inquiry',{p_organization_id:organizationId,p_customer_id:customerId||null,p_name:name||null,p_phone:phone||null,p_email:email||null,p_company:null,p_service:service||null,p_notes:notes||null,p_source:'ryan'})
  if(error)throw new Error(error.message)
@@ -146,13 +137,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured}}).select('id').single()
   if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response')
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
-  let outbound:any=null
-  try { outbound=await dispatchWhatsApp(organizationId,conversationId,saved.id,secret) }
-  catch(outboundError:any){
-   await supabase.from('messages').update({metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured,outbound_status:'failed',outbound_error:text(outboundError?.message,500)}}).eq('id',saved.id).eq('conversation_id',conversationId)
-   throw outboundError
-  }
-  return res.status(200).json({ok:true,reply,message_id:saved.id,price_inquiry:priceCaptured,price_data:priceCaptured?priceData:null,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,outbound})
+  return res.status(200).json({ok:true,reply,message_id:saved.id,price_inquiry:priceCaptured,price_data:priceCaptured?priceData:null,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,outbound:'database_trigger'})
  }catch(error:any){
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processing_at:null}}).eq('id',messageId).eq('conversation_id',conversationId)
   console.error('Ryan error',error)
