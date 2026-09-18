@@ -1121,15 +1121,15 @@ export default function CRM() {
                         <span>
                           <span className="font-semibold text-ink-700">
                             درجة التأهيل:
-                            {' '}
-                            <span className={`font-bold ${lead.lead_score >= 70 ? 'text-green-600' : lead.lead_score >= 40 ? 'text-amber-600' : 'text-ink-600'}`}>
-                              {lead.lead_score}/100
-                            </span>
+                          </span>{' '}
+                          <span className={`font-bold ${lead.lead_score >= 70 ? 'text-green-600' : lead.lead_score >= 40 ? 'text-amber-600' : 'text-ink-600'}`}>
+                            {lead.lead_score}/100
                           </span>
+                        </span>
 
-                          <span>
-                            <span className="font-semibold text-ink-700">
-                              أضيف:
+                        <span>
+                          <span className="font-semibold text-ink-700">
+                            أضيف:
                           </span>{' '}
                           {formatShortDate(lead.created_at)}
                         </span>
