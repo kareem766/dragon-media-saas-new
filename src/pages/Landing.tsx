@@ -231,7 +231,7 @@ export default function Landing() {
             <div className="max-w-4xl mx-auto text-center">
               <div className="inline-flex items-center gap-2 rounded-full border border-sand-200 bg-white/80 px-4 py-2 text-xs sm:text-sm text-ink-900/65 shadow-sm mb-7">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                منصة واحدة لإدارة دورة عملائك بالكامل
+                منصة متكاملة لإدارة العملاء والمبيعات والتسويق
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black tracking-tight leading-[1.08]">
@@ -405,7 +405,7 @@ export default function Landing() {
               </span>
 
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black mt-3">
-                منصة كاملة لإدارة نشاطك
+                كل ما يحتاجه نشاطك في مكان واحد
               </h2>
 
               <p className="text-ink-900/55 mt-5 leading-8">
@@ -540,7 +540,7 @@ export default function Landing() {
               </span>
 
               <h2 className="text-3xl sm:text-4xl font-black mt-3">
-                من الفوضى إلى نظام واضح
+                حوّل عملياتك اليومية إلى نظام واضح
               </h2>
 
               <p className="text-ink-900/55 leading-8 mt-5">
@@ -586,7 +586,7 @@ export default function Landing() {
                 />
 
                 <h2 className="text-3xl sm:text-4xl font-black mt-6">
-                  جاهز تدير نشاطك بشكل أذكى؟
+                  جاهز تنقل إدارة نشاطك لمستوى أفضل؟
                 </h2>
 
                 <p className="text-white/55 leading-7 mt-4 max-w-xl mx-auto">
