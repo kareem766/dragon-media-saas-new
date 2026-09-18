@@ -14,6 +14,7 @@ type Lead = {
   assigned_to: string | null
   notes: string | null
   follow_up_at: string | null
+  lead_score: number
   created_at: string
 }
 
@@ -393,6 +394,7 @@ export default function CRM() {
               assigned_to,
               notes,
               follow_up_at,
+              lead_score,
               created_at
             `
           )
@@ -1118,7 +1120,16 @@ export default function CRM() {
 
                         <span>
                           <span className="font-semibold text-ink-700">
-                            أضيف:
+                            درجة التأهيل:
+                            {' '}
+                            <span className={`font-bold ${lead.lead_score >= 70 ? 'text-green-600' : lead.lead_score >= 40 ? 'text-amber-600' : 'text-ink-600'}`}>
+                              {lead.lead_score}/100
+                            </span>
+                          </span>
+
+                          <span>
+                            <span className="font-semibold text-ink-700">
+                              أضيف:
                           </span>{' '}
                           {formatShortDate(lead.created_at)}
                         </span>
