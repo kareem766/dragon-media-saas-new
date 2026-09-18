@@ -72,7 +72,8 @@ export default async function handler(req: any, res: any) {
     const { data: authData, error: authError } = await userClient.auth.getUser()
     if (authError || !authData?.user?.id) return json(res, 401, { error: 'جلسة الدخول غير صالحة' })
 
-    const { data: user, error: userError } = await userClient
+    const admin = adminClient()
+    const { data: user, error: userError } = await admin
       .from('users')
       .select('id, organization_id, role, full_name, email, active')
       .eq('id', authData.user.id)
@@ -93,7 +94,6 @@ export default async function handler(req: any, res: any) {
         .filter((item: any) => item.content)
       : []
 
-    const admin = adminClient()
     const [{ data: organization }, { data: services }, { data: knowledge }] = await Promise.all([
       admin.from('organizations').select('name,business_type,address,phone,email,timezone').eq('id', user.organization_id).maybeSingle(),
       admin.from('services').select('name,description,category,price').eq('organization_id', user.organization_id).order('name').limit(80),
