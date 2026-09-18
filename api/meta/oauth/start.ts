@@ -52,8 +52,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('id', userData.user.id)
         .maybeSingle()
       if (error) return json(res, 500, { error: 'تعذر التحقق من الشركة المرتبطة بالحساب.' })
-      membership = data as typeof membership
-      organizationId = String(membership?.organization_id || '')
+      const row = data as unknown as { id: string; organization_id: string; active: boolean; role: string } | null
+      membership = row
+      organizationId = String(row?.organization_id || '')
     } else {
       const { data } = await db
         .from('users')
@@ -61,17 +62,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('id', userData.user.id)
         .eq('organization_id', organizationId)
         .maybeSingle()
-      membership = data as typeof membership
+      const row = data as unknown as { id: string; organization_id: string; active: boolean; role: string } | null
+      membership = row
     }
 
-    if (!membership || membership.active === false || !membership.organization_id) {
+    if (!membership) {
+      return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
+    }
+    const membershipRecord = membership as { id: string; organization_id: string; active: boolean; role: string }
+    if (membershipRecord.active === false || !membershipRecord.organization_id) {
       return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
     }
 
     const { data: permission } = await db
       .from('role_permissions')
       .select('can_edit')
-      .eq('role', membership.role)
+      .eq('role', membershipRecord.role)
       .eq('resource', 'settings')
       .maybeSingle()
 
