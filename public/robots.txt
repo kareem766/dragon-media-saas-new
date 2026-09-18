@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://dragon-media-saas-new.vercel.app/sitemap.xml
