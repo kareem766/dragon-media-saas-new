@@ -55,7 +55,7 @@ export default function RyanAssistant() {
       const { data, error: sessionError } = await supabase.auth.getSession()
       if (sessionError || !data.session?.access_token) throw new Error('انتهت جلسة الدخول، سجل الدخول مرة أخرى.')
 
-      const response = await fetch('/api/ryan-assistant-v2', {
+      const response = await fetch('/api/ryan-assistant', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
