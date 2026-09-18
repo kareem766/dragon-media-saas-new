@@ -38,7 +38,7 @@ const salesIntent=(value:string)=>/(?:عايز|عاوز|محتاج|محتاجة|
 const nameStopWords=/^(?:عايز|عاوز|عاوزه|عايزه|محتاج|محتاجة|ممكن|قولي|قولى|قول|اعرف|أعرف|عايز\s+اعرف|عاوز\s+اعرف|السعر|سعر|تكلفة|التكلفة|التكلفه|بكام|بكم|كام|فلوس|الإعلان|اعلان|إعلان|اعمل|نعمل|خدمة|خدمات|حملة|الحملة|تفاصيل|معلومات|ممكنة|هل|هو|هي|ايه|إيه|ازاي|إزاي|عاوزين|نريد|اريد|أريد|اه|أه|ايوه|أيوه|تمام|حاضر|ماشي|نعم|yes|ok)$/iu
 const isPlaceholderName=(value:string)=>{const v=value.trim();return !v||/^(?:عميل جديد|غير معروف|unknown|whatsapp\s*\d+|facebook\s*\d+)$/iu.test(v)}
 const looksLikeName=(value:string)=>{const v=value.trim().replace(/\s+/g,' ');if(isPlaceholderName(v)||phoneFromText(v))return false;if(v.length<2||v.length>80)return false;if(/https?:\/\//i.test(v)||/[?؟]/.test(v))return false;const words=v.split(' ').filter(Boolean);if(words.length>4)return false;if(words.some(w=>nameStopWords.test(w)))return false;return /^[\p{L}][\p{L}\u064B-\u065F\s.'’-]{1,79}$/u.test(v)}
-const containsInternalLeak=(value:string)=>/(?:^|\\b)(?:formulation|analysis|reasoning|chain\\s*of\\s*thought|system\\s*(?:prompt|message)|developer\\s*(?:message|instruction)|json|internal\\s*(?:note|instruction|analysis)|customer[- ]facing reply|reply\\s*[:=]|assistant\\s*analysis|prompt injection)(?:\\b|\\s*[:=])/iu.test(value)\nconst extractNameFromMessage=(value:string)=>{
+const containsInternalLeak=(value:string)=>/(?:^|\b)(?:formulation|analysis|reasoning|chain\s*of\s*thought|system\s*(?:prompt|message)|developer\s*(?:message|instruction)|json|internal\s*(?:note|instruction|analysis)|customer[- ]facing reply|reply\s*[:=]|assistant\s*analysis|prompt injection)(?:\b|\s*[:=])/iu.test(value)\nconst extractNameFromMessage=(value:string)=>{
  const v=value.trim().replace(/\s+/g,' ')
  const explicit=v.match(/(?:^|\s)(?:أنا\s+اسمي|انا\s+اسمي|اسمي|my\s+name\s+is)\s+(.+?)(?:\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم|و)?\s*(?:01[0125]\s*\d{8}|\+?20\s*01[0125]\s*\d{8})\b|$)/iu)
  if(explicit&&looksLikeName(explicit[1]))return text(explicit[1],120)
@@ -160,7 +160,8 @@ PERSONA: ${persona}`
    await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:reviewedState}}).eq('id',conversationId).eq('organization_id',organizationId)
    if(needsHuman){
     const handoffAt=new Date().toISOString()
-    const handoffReply=text(a.reply,5000)\n    reply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
+    const handoffReply=text(a.reply,5000)
+    reply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
     await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:handoffReason||'طلب تدخل بشري من العميل',status:'pending',conversation_id:conversationId})
     await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'customer',entity_id:customer.id,activity_type:'ai_handoff',title:'تحويل من Ryan إلى موظف',description:handoffReason||'طلب العميل تدخل بشرياً',metadata:{source:'ryan',conversation_id:conversationId,at:handoffAt}})
     await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:{...reviewedState,handoff:true},ryan_handoff:{requested:true,reason:handoffReason||'طلب تدخل بشري',requested_at:handoffAt}},handled_by:'human',updated_at:handoffAt}).eq('id',conversationId).eq('organization_id',organizationId)
@@ -195,7 +196,8 @@ PERSONA: ${persona}`
      const fallback:Record<string,string>={ask_name:'أهلاً بحضرتك، ممكن أعرف اسم حضرتك؟',ask_phone:'تمام، ممكن رقم الموبايل اللي فريق Dragon Media يقدر يتواصل مع حضرتك عليه؟',ask_service:'تمام، إيه الخدمة اللي محتاجها تحديدًا؟',ask_budget:'تمام، وميزانية الإعلان المتوقعة كام تقريبًا؟'}
      const nextAction=nextActionOverride
      const knownCapture={name:!!name,phone:!!phone,service:!!service,budget:!!budget}
-     const safeReply=text(a.reply,5000)\n     const safeStructuredReply=!containsInternalLeak(safeReply)?safeReply:''
+     const safeReply=text(a.reply,5000)
+     const safeStructuredReply=!containsInternalLeak(safeReply)?safeReply:''
      const repeatedKnownQuestion=(nextAction==='ask_name'&&knownCapture.name)||(nextAction==='ask_phone'&&knownCapture.phone)||(nextAction==='ask_service'&&knownCapture.service)||(nextAction==='ask_budget'&&knownCapture.budget)
      reply=!repeatedKnownQuestion&&safeStructuredReply?safeStructuredReply:(fallback[nextAction]||'تمام، قولي تفاصيل أكتر عن اللي محتاجه وهنكمل معاك.')
      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:reviewedState,ryan_lead_capture:nextMeta}}).eq('id',conversationId).eq('organization_id',organizationId)
