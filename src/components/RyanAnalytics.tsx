@@ -106,7 +106,7 @@ export default function RyanAnalytics({ organizationId }: { organizationId: stri
         <div className="h-5 w-48 animate-pulse rounded bg-sand-100" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((item) => (
-            <Card key={item} className="h-28 animate-pulse border-sand-200/70 bg-sand-50" />
+            <div key={item} className="h-28 animate-pulse rounded-2xl border border-sand-200/70 bg-sand-50" />
           ))}
         </div>
       </section>
