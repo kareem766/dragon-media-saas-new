@@ -24,7 +24,7 @@ const extractNameFromMessage=(value:string)=>{
 type Turn={role:'user'|'model';parts:{text:string}[]}
 
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string){
- const candidates=[model,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-3.6-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let lastError='Gemini request failed'
  for(const candidate of candidates){
   for(let attempt=0;attempt<2;attempt++){
