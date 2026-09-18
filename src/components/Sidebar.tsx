@@ -20,6 +20,7 @@ import {
 
 import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 import { useSubscription } from '../lib/useSubscription'
+import { usePermissions } from '../lib/usePermissions'
 import { useBranding } from '../hooks/useBranding'
 
 type FeatureKey =
@@ -35,6 +36,7 @@ type SidebarItem = {
   icon: React.ComponentType<{ className?: string }>
   end?: boolean
   feature?: FeatureKey
+  resource?: string
 }
 
 const items: SidebarItem[] = [
@@ -49,12 +51,14 @@ const items: SidebarItem[] = [
     label: 'إدارة العملاء (CRM)',
     icon: IconUsers,
     feature: 'crm',
+    resource: 'customers',
   },
   {
     to: '/pipeline',
     label: 'مسار المبيعات',
     icon: IconFunnel,
     feature: 'crm',
+    resource: 'deals',
   },
   {
     to: '/services',
@@ -88,11 +92,13 @@ const items: SidebarItem[] = [
     to: '/tasks',
     label: 'المهام والمتابعات',
     icon: IconCheck,
+    resource: 'tasks',
   },
   {
     to: '/appointments',
     label: 'المواعيد',
     icon: IconCalendar,
+    resource: 'appointments',
   },
   {
     to: '/billing',
@@ -109,6 +115,7 @@ const items: SidebarItem[] = [
     to: '/users',
     label: 'المستخدمون والصلاحيات',
     icon: IconShield,
+    resource: 'users',
   },
   {
     to: '/tickets',
@@ -119,6 +126,7 @@ const items: SidebarItem[] = [
     to: '/settings',
     label: 'الإعدادات',
     icon: IconSettings,
+    resource: 'settings',
   },
 ]
 
@@ -247,6 +255,7 @@ export default function Sidebar({
   const { pathname } = location
 
   const { isAdmin } = useIsPlatformAdmin()
+  const { can, loading: permissionsLoading } = usePermissions()
   const { branding, logoUrl } = useBranding()
 
   const {
@@ -430,7 +439,9 @@ export default function Sidebar({
               icon: Icon,
               end,
               feature,
+              resource,
             }) => {
+              if (resource && !permissionsLoading && !isAdmin && !can(resource, 'view')) return null
               const locked = isFeatureLocked(feature)
 
               return (
