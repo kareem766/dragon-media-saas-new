@@ -1016,21 +1016,66 @@ export default function CustomerDetail() {
     setError(null)
 
     try {
-      const { error: deleteError } =
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser()
+
+      if (authError) throw authError
+
+      const userId = authData.user?.id || null
+
+      /*
+       * Customers are part of the permanent CRM history.
+       * Archive instead of hard-delete so linked leads, deals,
+       * tasks, conversations and the activity timeline are not
+       * destroyed or detached.
+       */
+      const { data, error: archiveError } =
         await supabase
           .from('customers')
-          .delete()
+          .update({
+            status: 'غير نشط',
+            updated_at: new Date().toISOString(),
+          })
           .eq('id', id)
           .eq('organization_id', organizationId)
+          .select('*')
+          .single()
 
-      if (deleteError) throw deleteError
+      if (archiveError) throw archiveError
 
+      const { error: activityError } =
+        await supabase.from('crm_activities').insert({
+          organization_id: organizationId,
+          entity_type: 'customer',
+          entity_id: id,
+          activity_type: 'status_change',
+          title: 'تم أرشفة العميل',
+          description:
+            'تم إيقاف العميل بدلًا من حذفه نهائيًا للحفاظ على سجل CRM والبيانات المرتبطة به.',
+          actor_id: userId,
+          metadata: {
+            source: 'customer_detail',
+            action: 'archive',
+            previous_status: customer?.status || null,
+            new_status: 'غير نشط',
+          },
+        })
+
+      if (activityError) {
+        console.error(
+          'Failed to record customer archive activity:',
+          activityError
+        )
+      }
+
+      setCustomer(data as Customer)
+      setShowDelete(false)
       navigate('/crm')
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'تعذر حذف العميل'
+          : 'تعذر أرشفة العميل'
       )
       setSaving(false)
     }
