@@ -122,7 +122,9 @@ export default async function main(req:VercelRequest,res:VercelResponse){
 
  try{
   const captureMeta=obj(conversationMetadata.ryan_lead_capture)
-  const activeCapture=captureMeta.active===true || salesIntent(current) || pendingPriceInquiry || priceIntent(current)
+  const historyText=history.map((item:any)=>text(item?.content,800)).join(' | ')
+  const leadContext=salesIntent(current) || salesIntent(historyText) || pendingPriceInquiry || priceIntent(current) || captureMeta.service || captureMeta.name || captureMeta.phone || captureMeta.budget
+  const activeCapture=captureMeta.active===true || !!leadContext
   const parsedName=extractNameFromMessage(current)
   const parsedPhone=phoneFromText(current)
   const parsedService=serviceFromText(current,services||[])
