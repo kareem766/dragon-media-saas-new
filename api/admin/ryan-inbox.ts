@@ -93,7 +93,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  if(!incomingAfterClaim||incomingAfterClaim.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const incoming=obj(incomingAfterClaim)
  const incomingMetadata=obj(incomingAfterClaim.metadata)
- const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
+ const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
  if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:services},{data:agent}]=await Promise.all([
   supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),
