@@ -148,7 +148,8 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   const captureMeta=obj(conversationMetadata.ryan_lead_capture)
   const historyText=history.map((item:any)=>text(item?.parts?.[0]?.text,800)).join(' | ')
   const hasPreviousCapture=!!captureMeta.captured_at && captureMeta.active!==true
-  const existingLeadIntent=captureMeta.active===true || salesIntent(historyText) || salesIntent(current) || pendingPriceInquiry || priceIntent(current)
+  // Gemini is the primary conversation-understanding engine. Do not gate lead detection with fixed keyword rules.
+  const existingLeadIntent=true
 
   if(existingLeadIntent && !hasPreviousCapture){
     const analysisSystem=`You are Ryan's conversation understanding engine inside Dragon Media.
@@ -199,6 +200,11 @@ PERSONA:
 ${persona}`
     const a=obj(await analyzeConversation(apiKey,model,analysisSystem,history,current))
     const leadIntent=a.lead_intent===true
+    // If Gemini determines this is not a lead conversation, let the normal Gemini persona answer naturally.
+    if(!leadIntent){
+      const system=`You are Ryan, the AI assistant inside Dragon Media.\n\nPERSONA:\n${persona}\n\nUse the complete conversation history and stored customer data. Continue naturally.\nBe warm, cheerful, confident and helpful in natural Egyptian Arabic.\nNever repeat a question already answered. Ask at most one useful question.\nKeep replies to one or two short sentences.\nNever claim data was saved, registered, booked or completed unless the application actually did it.\nNever invent company-specific facts; use the knowledge base for those.\nReturn only the customer-facing reply.\n\nCUSTOMER:\nName: ${text(customer.name,120)||'غير معروف'}\nPhone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}\nSTORED MEMORY:\n${JSON.stringify(memory).slice(0,5000)}\nKNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
+      reply=await callGemini(apiKey,model,system,history,current)
+    } else {
     const isAd=a.is_advertising===true
     const name=text(a.name,120)||text(captureMeta.name,120)||(looksLikeName(text(customer.name,120))?text(customer.name,120):'')
     const phone=cleanPhone(text(a.phone,80)||text(captureMeta.phone,80)||text(customer.phone,80))
@@ -218,6 +224,7 @@ ${persona}`
       const fallback:Record<string,string>={ask_name:'أهلاً بحضرتك، ممكن أعرف اسم حضرتك؟',ask_phone:'تمام، ممكن رقم الموبايل اللي فريق Dragon Media يقدر يتواصل مع حضرتك عليه؟',ask_service:'تمام، إيه الخدمة اللي محتاجها تحديدًا؟',ask_budget:'تمام، وميزانية الإعلان المتوقعة كام تقريبًا؟'}
       reply=text(a.reply,5000)||fallback[text(a.next_action,40)]||'تمام، قولي تفاصيل أكتر عن اللي محتاجه وهنكمل معاك.'
       await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:nextMeta}}).eq('id',conversationId).eq('organization_id',organizationId)
+    }
     }
   }else{
     const system=`You are Ryan, the AI assistant inside Dragon Media.
