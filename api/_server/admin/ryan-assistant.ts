@@ -133,7 +133,7 @@ ${knowledgeText}
     const geminiKey = env('GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY')
     if (geminiKey) {
       const configured = env('RYAN_GEMINI_MODEL')
-      const candidates = [configured, 'gemini-3.6-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'].filter((v, i, a) => v && a.indexOf(v) === i)
+      const candidates = [configured, 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'].filter((v, i, a) => v && a.indexOf(v) === i)
 
       const contents = [
         { role: 'user', parts: [{ text: internalPrompt }] },
@@ -143,6 +143,7 @@ ${knowledgeText}
       ]
 
       for (const candidate of candidates) {
+        for (let attempt = 0; attempt < 2; attempt++) {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
@@ -172,7 +173,7 @@ ${knowledgeText}
           // output budget so a step-by-step answer is not returned half-finished.
           if (reply && finishReason === 'MAX_TOKENS') {
             const retryResponse = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent`,
+              `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
@@ -209,11 +210,22 @@ ${knowledgeText}
               }
             }
           }
+        } else {
+          lastGeminiError = clean(data?.error?.message || `Gemini ${response.status}`, 500)
+          const retryable = [408, 429, 500, 502, 503, 504].includes(response.status)
+          if (!retryable) break
         }
+        if (reply) break
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 350))
+        }
+        if (reply) break
       }
     }
 
-    if (!reply) throw new Error('خدمة Ryan غير متاحة حاليًا. تحقق من إعدادات Gemini وموديل Ryan.')
+    if (!reply) {
+      console.error('Ryan internal assistant Gemini unavailable', { model: env('RYAN_GEMINI_MODEL') || 'default', reason: lastGeminiError || 'no response' })
+      reply = 'معلش، حصل تأخير بسيط في تشغيل Ryan. جرّب تبعت سؤالك مرة تانية، ولو المشكلة استمرت هتقدر تكمل من أقسام المنصة مباشرة.'
+    }
 
     if (/^\s*[\[{]/.test(reply) || /functionCall|functionResponse|service_name/.test(reply)) {
       reply = 'ممكن توضّح لي إيه المهمة اللي عايز تعرف تعملها داخل Dragon Media؟'
