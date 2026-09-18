@@ -388,6 +388,58 @@ export default function CustomerDetail() {
         )
       }
 
+      /*
+       * Ryan qualification activities are attached to the Lead,
+       * while the Customer 360 timeline is customer-scoped.
+       * Load the linked Lead timeline too, then merge it without
+       * duplicating the same activity.
+       */
+      let mergedActivities: Activity[] = activitiesRes.error
+        ? []
+        : ((activitiesRes.data || []) as Activity[])
+
+      const linkedLeadId = leadRes.error
+        ? null
+        : (leadRes.data as LeadLink | null)?.id || null
+
+      if (linkedLeadId) {
+        const { data: leadActivities, error: leadActivitiesError } =
+          await sb
+            .from('crm_activities')
+            .select(
+              'id,activity_type,title,description,created_at'
+            )
+            .eq('entity_type', 'lead')
+            .eq('entity_id', linkedLeadId)
+            .eq('organization_id', organizationId)
+            .order('created_at', { ascending: false })
+            .limit(20)
+
+        if (leadActivitiesError) {
+          console.error(
+            'CustomerDetail: linked lead activities query failed',
+            leadActivitiesError
+          )
+        } else {
+          const existingIds = new Set(
+            mergedActivities.map(activity => activity.id)
+          )
+
+          mergedActivities = [
+            ...mergedActivities,
+            ...((leadActivities || []) as Activity[]).filter(
+              activity => !existingIds.has(activity.id)
+            ),
+          ]
+            .sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            )
+            .slice(0, 20)
+        }
+      }
+
       if (tasksRes.error) {
         console.error(
           'CustomerDetail: tasks query failed',
@@ -423,11 +475,7 @@ export default function CustomerDetail() {
           : ((appointmentsRes.data || []) as unknown as Appointment[])
       )
 
-      setActivities(
-        activitiesRes.error
-          ? []
-          : ((activitiesRes.data || []) as Activity[])
-      )
+      setActivities(mergedActivities)
 
       setTasks(
         tasksRes.error
