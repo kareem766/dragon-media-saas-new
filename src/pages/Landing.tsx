@@ -243,6 +243,12 @@ export default function Landing() {
                 </span>
               </h1>
 
+              <div className="max-w-3xl mx-auto mt-6 rounded-2xl border border-sand-200 bg-white/70 px-5 py-4 text-sm sm:text-base leading-7 text-ink-900/65">
+                <strong className="text-ink-950">Dragon Media</strong> هي منصة SaaS عربية لإدارة الأعمال والمبيعات وخدمة العملاء،
+                موجهة للشركات والأنشطة التجارية في مصر والأسواق العربية. تجمع CRM، إدارة العملاء والصفقات،
+                صندوق المحادثات الموحد، الحملات، الأتمتة، والتعامل مع العملاء بالذكاء الاصطناعي من خلال <strong className="text-ink-950">RYAN AI</strong>.
+              </div>
+
               <p className="max-w-2xl mx-auto mt-7 text-base sm:text-lg lg:text-xl leading-8 text-ink-900/60">
                 {description} اجمع عملائك، نظّم مبيعاتك،
                 تابع حملاتك، وأتمت عملياتك من منصة واحدة
