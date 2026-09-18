@@ -4,6 +4,7 @@ import { AuthProvider } from './lib/AuthContext'
 import { ToastProvider } from './lib/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
+import PermissionRoute from './components/PermissionRoute'
 import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
 import SiteFooter from './components/SiteFooter'
@@ -98,10 +99,10 @@ export default function App() {
 
             <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/crm" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute>} />
-              <Route path="/crm/customer/:id" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CustomerDetail /></FeatureRoute>} />
-              <Route path="/pipeline" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><Pipeline /></FeatureRoute>} />
-              <Route path="/pipeline/deal/:id" element={<FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><DealDetail /></FeatureRoute>} />
+              <Route path="/crm" element={<PermissionRoute resource="customers"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute></PermissionRoute>} />
+              <Route path="/crm/customer/:id" element={<PermissionRoute resource="customers"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CustomerDetail /></FeatureRoute></PermissionRoute>} />
+              <Route path="/pipeline" element={<PermissionRoute resource="deals"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><Pipeline /></FeatureRoute></PermissionRoute>} />
+              <Route path="/pipeline/deal/:id" element={<PermissionRoute resource="deals"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><DealDetail /></FeatureRoute></PermissionRoute>} />
               <Route path="/services" element={<Services />} />
               <Route path="/campaigns" element={<FeatureRoute feature="campaigns" featureName="الحملات التسويقية"><Campaigns /></FeatureRoute>} />
               <Route path="/inbox" element={<Inbox />} />
@@ -115,13 +116,13 @@ export default function App() {
               <Route path="/search" element={<Search />} />
               <Route path="/plans" element={<Plans />} />
               <Route path="/billing/pay" element={<PaymentRequest />} />
-              <Route path="/tasks" element={<Tasks />} />
-              <Route path="/appointments" element={<Appointments />} />
+              <Route path="/tasks" element={<PermissionRoute resource="tasks"><Tasks /></PermissionRoute>} />
+              <Route path="/appointments" element={<PermissionRoute resource="appointments"><Appointments /></PermissionRoute>} />
               <Route path="/billing" element={<Billing />} />
               <Route path="/reports" element={<FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute>} />
-              <Route path="/users" element={<Users />} />
+              <Route path="/users" element={<PermissionRoute resource="users"><Users /></PermissionRoute>} />
               <Route path="/account" element={<Account />} />
-              <Route path="/settings" element={<Settings />} />
+              <Route path="/settings" element={<PermissionRoute resource="settings"><Settings /></PermissionRoute>} />
               <Route path="/integrations/meta" element={<MetaConnections />} />
               <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
               <Route path="/admin/organizations" element={<AdminRoute><AdminOrganizations /></AdminRoute>} />
