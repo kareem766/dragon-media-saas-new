@@ -111,6 +111,8 @@ const activityIcon = (type: string) => {
     message: '◌',
     marketing_consent: '✓',
     marketing_opt_out: '×',
+    ai_qualified: '★',
+    ai_handoff: '↗',
   }
 
   return icons[type] || '•'
