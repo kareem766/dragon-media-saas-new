@@ -17,6 +17,20 @@ const quickQuestions = [
   'إزاي أوصل WhatsApp أو Facebook؟',
 ]
 
+async function readResponse(response: Response): Promise<Record<string, any>> {
+  const body = await response.text()
+  try {
+    const parsed = body ? JSON.parse(body) : {}
+    return parsed && typeof parsed === 'object' ? parsed : { error: String(parsed) }
+  } catch {
+    return {
+      error: body?.trim()
+        ? `الخادم أرسل استجابة غير صالحة. (${response.status})`
+        : `تعذر الاتصال بالخادم. (${response.status})`,
+    }
+  }
+}
+
 export default function RyanAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -52,9 +66,11 @@ export default function RyanAssistant() {
           history: messages.slice(-12),
         }),
       })
-      const result = await response.json()
+
+      const result = await readResponse(response)
       if (!response.ok) throw new Error(result?.error || 'تعذر الاتصال بـ Ryan')
-      setMessages([...nextMessages, { role: 'model', text: result.reply }])
+      if (!result?.reply) throw new Error('Ryan لم يُرجع ردًا صالحًا.')
+      setMessages([...nextMessages, { role: 'model', text: String(result.reply) }])
     } catch (err: any) {
       setError(err?.message || 'حدث خطأ أثناء الاتصال بـ Ryan')
     } finally {
