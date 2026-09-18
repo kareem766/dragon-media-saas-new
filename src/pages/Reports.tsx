@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Card } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import RyanAnalytics from '../components/RyanAnalytics'
 
 interface Counts {
   leads: number
@@ -799,6 +800,8 @@ export default function Reports() {
           </div>
         </Card>
       </section>
+
+      <RyanAnalytics organizationId={organizationId} />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-sand-200/80 p-5">
