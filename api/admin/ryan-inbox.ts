@@ -12,13 +12,22 @@ const cleanPhone=(value:string)=>value.replace(/[^0-9+]/g,'').trim()
 const phoneFromText=(value:string)=>{const m=value.match(/(?:\+?20\s*)?(01[0125]\s*\d{8})\b/);return m?cleanPhone(m[0]):''}
 
 const budgetFromText=(value:string)=>{
- const v=value.replace(/[,،]/g,' ')
- const m=v.match(/(?:ميزاني(?:ة|ه)|ميزانيه|budget|بميزاني(?:ة|ه))[^0-9]{0,20}([0-9]{2,7}(?:\.[0-9]+)?)/iu) || v.match(/([0-9]{2,7}(?:\.[0-9]+)?)\s*(?:جنيه|ج|EGP|الف|ألف)/iu)
- if(!m)return ''
- const raw=String(m[1]).trim(),n=Number(raw)
- return Number.isFinite(n)?String(n)+' جنيه':raw
+  const normalizeDigits=(s:string)=>s.replace(/[٠-٩]/g,(d)=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+  const v=normalizeDigits(value).replace(/[,،]/g,' ').replace(/\s+/g,' ').trim()
+  const parse=(raw:string,unit:string)=>{
+    const n=Number(raw)
+    if(!Number.isFinite(n))return ''
+    const u=unit.toLowerCase()
+    const multiplier=/(?:ألف|الف|آلاف|الاف|k)\\b/iu.test(u)?1000:/(?:مليون|million)\\b/iu.test(u)?1000000:1
+    return String(Math.round(n*multiplier))+' جنيه'
+  }
+  const direct=v.match(/(?:ميزاني(?:ة|ه)|ميزانيه|budget|بميزاني(?:ة|ه))[^0-9]{0,30}([0-9]+(?:\\.[0-9]+)?)\\s*(جنيه|ج|EGP|ألف|الف|آلاف|الاف|k|مليون|million)?/iu)
+  const compact=v.match(/([0-9]+(?:\\.[0-9]+)?)\\s*(جنيه|ج|EGP|ألف|الف|آلاف|الاف|k|مليون|million)/iu)
+  const m=direct||compact
+  if(!m)return ''
+  return parse(String(m[1]),String(m[2]||''))
 }
-const serviceFromText=(value:string,services:any[])=>{
+const serviceFromText(value:string,services:any[])=>{
  const v=value.trim().toLowerCase()
  for(const service of services){
   const name=text(service?.name,160)
