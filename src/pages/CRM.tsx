@@ -501,9 +501,15 @@ export default function CRM() {
   }, [customers, search])
 
   const stats = useMemo(() => {
-    const followUps = [...leads, ...customers].filter(
-      (item) => item.follow_up_at
-    ).length
+    const followUps = [
+      ...leads.filter(
+        (lead) =>
+          lead.follow_up_at &&
+          lead.status !== 'تم التعاقد' &&
+          lead.status !== 'خسرنا'
+      ),
+      ...customers.filter((customer) => customer.follow_up_at),
+    ].length
 
     return {
       leads: leads.length,
