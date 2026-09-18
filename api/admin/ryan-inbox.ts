@@ -186,7 +186,8 @@ PERSONA: ${persona}`
      const notes=['بيانات تم جمعها بواسطة Ryan','الخدمة: '+service,activity?'النشاط: '+activity:'',goal?'الهدف: '+goal:'',isAd?'ميزانية الإعلان: '+budget:'','القناة: '+(conversation.channel||'غير محدد')].filter(Boolean).join(' | ')
      priceData=await capturePriceInquiry(supabase,organizationId,customer.id,name,phone,text(customer.email,160),service,notes)
      priceCaptured=true
-     const score=Math.min(100,40+(phone?20:0)+(service?15:0)+(budget?15:0)+(goal?10:0))
+     const {data:qualifiedLead}=await supabase.from('leads').select('lead_score').eq('id',priceData?.lead_id).eq('organization_id',organizationId).maybeSingle()
+     const score=Number(qualifiedLead?.lead_score)||0
      await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'lead',entity_id:priceData?.lead_id,activity_type:'ai_qualified',title:'Lead مؤهل بواسطة Ryan',description:'تم جمع بيانات العميل وتأهيله تلقائياً',metadata:{source:'ryan',score,service,budget:budget||null,goal:goal||null,business_activity:activity||null,conversation_id:conversationId}})
      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...nextMeta,active:false,captured_at:new Date().toISOString(),lead_id:priceData?.lead_id||null,customer_id:priceData?.customer_id||customer.id}},handled_by:'human',updated_at:new Date().toISOString()}).eq('id',conversationId).eq('organization_id',organizationId)
      reply='تمام، تم تسجيل بيانات حضرتك، وفريق Dragon Media هيتواصل مع حضرتك في أقرب وقت.'
