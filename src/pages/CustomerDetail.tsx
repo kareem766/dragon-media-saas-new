@@ -881,6 +881,35 @@ export default function CustomerDetail() {
         prev.filter(item => item.id !== task.id)
       )
 
+      const { data: authData } =
+        await supabase.auth.getUser()
+
+      const userId = authData.user?.id || null
+
+      const { error: activityError } =
+        await supabase.from('crm_activities').insert({
+          organization_id: organizationId,
+          entity_type: 'customer',
+          entity_id: id,
+          activity_type: 'task',
+          title: 'تم حذف مهمة',
+          description: `تم حذف المهمة: ${task.title}`,
+          actor_id: userId,
+          metadata: {
+            task_id: task.id,
+            task_title: task.title,
+            previous_status: task.status,
+            source: 'customer_detail',
+          },
+        })
+
+      if (activityError) {
+        console.error(
+          'Failed to record task deletion activity:',
+          activityError
+        )
+      }
+
       await loadCustomer()
     } catch (err) {
       setTaskError(
