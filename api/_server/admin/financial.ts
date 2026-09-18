@@ -99,13 +99,13 @@ export default async function handler(req: any, res: any) {
     error: callerError,
   } = await admin
     .from('users')
-    .select('is_platform_admin')
+    .select('is_platform_admin, active')
     .eq('id', authData.user.id)
     .single()
 
   if (
     callerError ||
-    !callerRow?.is_platform_admin
+    !callerRow?.is_platform_admin || callerRow.active === false
   ) {
     res.status(403).json({
       error:
