@@ -1,0 +1,40 @@
+# Dragon Media
+
+> Dragon Media is an Arabic SaaS platform for business management, sales, customer service, CRM, marketing operations, automation, and AI-assisted customer conversations.
+
+## Official website
+
+https://dragon-media-saas-new.vercel.app/
+
+## Identity
+
+- Name: Dragon Media
+- Market: Egypt and Arabic-speaking markets
+- Product type: Web SaaS / Business Application
+- Primary language: Arabic (RTL)
+- Core positioning: one workspace for customers, sales, conversations, campaigns, automation, and business reporting
+
+## Core capabilities
+
+- CRM: customers, leads, opportunities, deals, pipeline, tasks, notes, and activity
+- Unified inbox for customer conversations
+- Marketing campaigns and customer follow-up
+- Workflow automation
+- Sales and performance reports
+- Customer service workflows
+- Meta / WhatsApp integrations
+- RYAN AI: an AI sales and customer-service assistant designed to qualify leads, collect relevant customer information, support conversations, and help turn conversations into sales opportunities
+
+## RYAN AI
+
+RYAN AI is the AI assistant inside Dragon Media. It is designed for practical sales and customer-service conversations in Arabic, including lead qualification, collecting relevant information, answering customer questions, and escalating conversations to a human team member when appropriate.
+
+## Public sources
+
+- Website: https://dragon-media-saas-new.vercel.app/
+- Sitemap: https://dragon-media-saas-new.vercel.app/sitemap.xml
+- Robots: https://dragon-media-saas-new.vercel.app/robots.txt
+
+## Important distinction
+
+Dragon Media is a SaaS software platform. It should not be confused with unrelated organizations or companies using the name "Dragon Media".
