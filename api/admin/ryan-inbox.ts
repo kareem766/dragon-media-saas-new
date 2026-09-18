@@ -67,6 +67,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  if(!claimed)return res.status(200).json({ok:true,skipped:true,reason:'already_processing_or_processed'})
  const {data:incomingAfterClaim}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
  if(!incomingAfterClaim||incomingAfterClaim.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
+ const incoming=obj(incomingAfterClaim)
  const incomingMetadata=obj(incomingAfterClaim.metadata)
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
  if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
