@@ -10,6 +10,7 @@ const sameSecret=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);r
 const priceIntent=(value:string)=>/(السعر|سع(?:ر|رة)|تكلف(?:ة|ه)|بكام|بكم|كام|الفلوس|الفلوس كام|التكلفه|التكلفة|price|cost|pricing|how much)/iu.test(value)
 const cleanPhone=(value:string)=>value.replace(/[^0-9+]/g,'').trim()
 const phoneFromText=(value:string)=>{const m=value.match(/(?:\+?20\s*)?(01[0125]\s*\d{8})\b/);return m?cleanPhone(m[0]):''}
+const validPhone=(value:string)=>{const p=cleanPhone(value).replace(/^\+/,'');return /^(?:01[0125]\d{8}|20(10|11|12|15)\d{8})$/.test(p)}
 
 const budgetFromText=(value:string)=>{
  const v=value.replace(/[,،]/g,' ')
