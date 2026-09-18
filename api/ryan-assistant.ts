@@ -74,7 +74,7 @@ export default async function handler(req: any, res: any) {
 
     const { data: user, error: userError } = await userClient
       .from('users')
-      .select('id, organization_id, role, name, email, active')
+      .select('id, organization_id, role, full_name, email, active')
       .eq('id', authData.user.id)
       .maybeSingle()
 
@@ -119,7 +119,7 @@ ${serviceText}
 قاعدة المعرفة الحالية للشركة:
 ${knowledgeText}
 
-المستخدم الحالي: ${clean(user.name || user.email, 200)} | الدور: ${clean(user.role, 100)}
+المستخدم الحالي: ${clean(user.full_name || user.email, 200)} | الدور: ${clean(user.role, 100)}
 
 أجب عن سؤال المستخدم الحالي مباشرة. إذا طلب خطوات تنفيذ، أعطه الخطوات بالترتيب داخل Dragon Media.`
 
