@@ -63,51 +63,74 @@ export default async function handler(req: any, res: any) {
     || candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED')
   if (!template) return json(res, 409, { success: false, error: 'قالب إشعار التجديد غير موجود أو غير معتمد في Meta، أو لغة القالب مختلفة.', templateName, requestedLanguage: language, available: candidates.map((item: any) => ({ language: item?.language, status: item?.status, category: item?.category })) })
 
-  const cleanText = (value: unknown) => String(value ?? '').replace(/[\\r\\n\\t]/g, ' ').trim()
-  const variableIndexes = (value: unknown) => Array.from(String(value || '').matchAll(/\{\{(\d+)\}\}/g)).map((match: any) => Number(match[1]))
-  const distinctVariableCount = (value: unknown) => new Set(variableIndexes(value)).size
+  const cleanText = cleanValue
+  const distinctVariableCount = variableCount
   const exampleValues = (value: unknown) => Array.isArray(value) ? value.map(cleanText) : []
   const fallbackValues = [cleanText(org.name || 'عميلنا'), 'اختبار التجديد', 'يوم واحد', new Date().toISOString().slice(0, 10), String(organizationId)]
+  const namedExampleValues = (component: any, key: string) =>
+    Array.isArray(component?.example?.[key])
+      ? component.example[key].map((item: any) => cleanText(item?.example ?? item))
+      : []
   const components: any[] = []
 
   const headerComponent = (template.components || []).find((component: any) => component?.type === 'HEADER')
   const headerCount = distinctVariableCount(headerComponent?.text)
   if (headerCount > 0) {
+    const tokens = variableTokens(headerComponent?.text)
     const examples = exampleValues(headerComponent?.example?.header_text?.[0])
-    const values = examples.length >= headerCount ? examples : fallbackValues
-    components.push({ type: 'header', parameters: values.slice(0, headerCount).map((text) => ({ type: 'text', text: cleanText(text) })) })
+    const namedExamples = namedExampleValues(headerComponent, 'header_text_named_params')
+    const values = examples.length >= headerCount ? examples : namedExamples.length >= headerCount ? namedExamples : fallbackValues
+    components.push({
+      type: 'header',
+      parameters: tokens.slice(0, headerCount).map((token, index) => ({
+        type: 'text',
+        text: cleanText(values[index] || fallbackValues[index] || 'اختبار'),
+        ...( /^\d+$/.test(token) ? {} : { parameter_name: token }),
+      })),
+    })
   }
 
   const bodyComponent = (template.components || []).find((component: any) => component?.type === 'BODY')
   const bodyCount = distinctVariableCount(bodyComponent?.text)
   if (bodyCount > 0) {
+    const tokens = variableTokens(bodyComponent?.text)
     const examples = exampleValues(bodyComponent?.example?.body_text?.[0])
-    const values = examples.length >= bodyCount ? examples : fallbackValues
-    components.push({ type: 'body', parameters: values.slice(0, bodyCount).map((text) => ({ type: 'text', text: cleanText(text) })) })
+    const namedExamples = namedExampleValues(bodyComponent, 'body_text_named_params')
+    const values = examples.length >= bodyCount ? examples : namedExamples.length >= bodyCount ? namedExamples : fallbackValues
+    components.push({
+      type: 'body',
+      parameters: tokens.slice(0, bodyCount).map((token, index) => ({
+        type: 'text',
+        text: cleanText(values[index] || fallbackValues[index] || 'اختبار'),
+        ...( /^\d+$/.test(token) ? {} : { parameter_name: token }),
+      })),
+    })
   }
 
   const buttonsComponent = (template.components || []).find((component: any) => component?.type === 'BUTTONS')
   const buttons = Array.isArray(buttonsComponent?.buttons) ? buttonsComponent.buttons : []
   buttons.forEach((button: any, buttonIndex: number) => {
     if (String(button?.type || '').toUpperCase() !== 'URL') return
-    const count = distinctVariableCount(button?.url)
+    const tokens = variableTokens(button?.url)
+    const count = new Set(tokens).size
     if (count <= 0) return
     const examples = exampleValues(button?.example)
-    let values = examples.length >= count ? examples : fallbackValues
     const templateUrl = String(button?.url || '')
-    const marker = templateUrl.indexOf('{{1}}')
-    if (marker >= 0) {
-      const prefix = templateUrl.slice(0, marker)
-      const candidate = String(examples[0] || '')
-      let suffix = candidate.startsWith(prefix) ? candidate.slice(prefix.length) : `test-${String(organizationId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'renewal'}`
-      if (/\{\{[^}]+\}\}/.test(suffix)) suffix = `test-${String(organizationId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'renewal'}`
-      values = [suffix, ...values.slice(1)]
+    const token = tokens[0]
+    const marker = token ? templateUrl.indexOf('{{' + token + '}}') : -1
+    const prefix = marker >= 0 ? templateUrl.slice(0, marker) : ''
+    const candidate = String(examples[0] || '')
+    let suffix = candidate.startsWith(prefix) ? candidate.slice(prefix.length) : `test-${String(organizationId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'renewal'}`
+    if (!suffix || /\{\{[^}]+\}\}/.test(suffix) || /^(https?:\/\/|www\.)/i.test(suffix)) {
+      suffix = `test-${String(organizationId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'renewal'}`
     }
+    const buttonParameter: any = { type: 'text', text: cleanText(suffix) }
+    if (token && !/^\d+$/.test(token)) buttonParameter.parameter_name = token
     components.push({
       type: 'button',
       sub_type: 'url',
       index: String(buttonIndex),
-      parameters: values.slice(0, count).map((text) => ({ type: 'text', text: cleanText(text) })),
+      parameters: [buttonParameter],
     })
   })
 
