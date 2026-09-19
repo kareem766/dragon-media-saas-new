@@ -1605,7 +1605,7 @@ export default function AdminOrganizations() {
         </Button>
       </div>
 
-      {/* Subscription WhatsApp Test */}
+      {/* Subscription WhatsApp Test — only organizations with an active WhatsApp connection are selectable. */}
       <Card className="overflow-hidden border border-emerald-200 bg-gradient-to-l from-emerald-50 to-white p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
