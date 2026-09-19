@@ -472,6 +472,16 @@ export default function Campaigns() {
       return
     }
 
+    if (form.channel === 'whatsapp' && !form.templateName.trim()) {
+      setError('حملات WhatsApp التسويقية يجب أن تستخدم قالب WhatsApp معتمد من Meta. اختر القالب المعتمد من القائمة.')
+      return
+    }
+
+    if (form.channel === 'whatsapp' && form.templateName === 'subscription_expiry_reminder') {
+      setError('قالب تنبيه انتهاء الباقة مخصص لتنبيهات الاشتراك، وليس للحملات التسويقية. اختر قالبًا من فئة Marketing.')
+      return
+    }
+
     setSaving(true)
     setError(null)
     setSuccess(null)
