@@ -667,6 +667,7 @@ export default async function handler(
       customersRes,
       leadsRes,
       subscriptionsRes,
+      whatsappRes,
     ] =
       await Promise.all([
         ids.length
@@ -745,6 +746,18 @@ export default async function handler(
           : Promise.resolve({
               data: [],
             }),
+
+
+        ids.length
+          ? admin
+              .from('integrations')
+              .select('organization_id, provider, connected, status, metadata')
+              .eq('provider', 'whatsapp')
+              .eq('connected', true)
+              .in('organization_id', ids)
+          : Promise.resolve({
+              data: [],
+            }),
       ])
 
     const users =
@@ -758,6 +771,24 @@ export default async function handler(
 
     const subscriptions =
       subscriptionsRes.data ?? []
+
+    const whatsappIntegrations =
+      whatsappRes.data ?? []
+
+    const whatsappOrganizationIds =
+      new Set(
+        whatsappIntegrations
+          .filter((integration: AnyRecord) =>
+            Boolean(
+              integration?.connected &&
+                integration?.metadata?.phone_number_id &&
+                integration?.metadata?.waba_id &&
+                integration?.metadata?.ready_for_messaging !== false,
+            ),
+          )
+          .map((integration: AnyRecord) => integration.organization_id)
+          .filter(Boolean),
+      )
 
     const result =
       orgs.map(
@@ -869,6 +900,9 @@ export default async function handler(
               subscription?.plan ??
               org.plan ??
               null,
+
+            whatsapp_connected:
+              whatsappOrganizationIds.has(org.id),
           }
         },
       )
