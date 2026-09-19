@@ -309,6 +309,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
       }
 
       let token = ''
+      let whatsappWabaId = ''
       let pageId = ''
       let instagramBusinessId = ''
 
@@ -322,6 +323,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
         if (integrationError) throw integrationError
         if (!integration?.connected || integration.status !== 'connected') throw new Error('WhatsApp غير متصل.')
         token = decryptMetaToken(integration.config?.access_token)
+        whatsappWabaId = String(integration.metadata?.waba_id || '')
       } else {
         const { data: integration, error: integrationError } = await admin
           .from('integrations')
@@ -339,6 +341,45 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
           instagramBusinessId = String(page?.instagram_business_account?.id || '')
           if (!instagramBusinessId) throw new Error('لا يوجد Instagram Business مرتبط بصفحة Facebook المتصلة.')
         }
+      }
+
+      async function loadApprovedTemplate(name: string, language: string) {
+        if (!whatsappWabaId) throw new Error('WhatsApp WABA ID غير موجود.')
+        const data = await metaGet('/' + encodeURIComponent(whatsappWabaId) + '/message_templates?limit=100', token)
+        const templates = Array.isArray(data?.data) ? data.data : []
+        return templates.find((item: any) =>
+          String(item?.name || '') === name &&
+          String(item?.language || '') === language &&
+          String(item?.status || '').toUpperCase() === 'APPROVED'
+        ) || null
+      }
+
+      function buildTemplateComponents(template: any, customer: any, messageBody: string) {
+        const components: any[] = []
+        const values = [
+          String(customer?.name ?? ''),
+          String(customer?.company ?? ''),
+          String(messageBody || ''),
+          String(customer?.phone ?? ''),
+        ]
+
+        for (const component of Array.isArray(template?.components) ? template.components : []) {
+          const type = String(component?.type || '').toUpperCase()
+          const text = String(component?.text || '')
+          const matches = [...text.matchAll(/\{\{(\d+)\}\}/g)]
+          if (!matches.length) continue
+
+          const parameters = matches.map((match: RegExpMatchArray) => {
+            const index = Math.max(1, Number(match[1])) - 1
+            return { type: 'text', text: values[index] ?? '' }
+          })
+
+          if (type === 'HEADER' || type === 'BODY') {
+            components.push({ type: type.toLowerCase(), parameters })
+          }
+        }
+
+        return components
       }
 
       let sent = 0
@@ -380,14 +421,24 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
             if (!phoneNumberId) throw new Error('WhatsApp Phone Number ID غير موجود.')
 
             if (campaign.template_name) {
-              const components = Array.isArray(campaign.template_components) ? campaign.template_components : []
+              const language = String(campaign.template_language || 'ar')
+              const approvedTemplate = await loadApprovedTemplate(String(campaign.template_name), language)
+              if (!approvedTemplate) {
+                throw new Error('قالب WhatsApp غير موجود أو غير معتمد من Meta بنفس الاسم واللغة.')
+              }
+
+              const storedComponents = Array.isArray(campaign.template_components) ? campaign.template_components : []
+              const components = storedComponents.length
+                ? storedComponents
+                : buildTemplateComponents(approvedTemplate, customer, String(row.message_body || ''))
+
               payload = {
                 messaging_product: 'whatsapp',
                 to: recipient,
                 type: 'template',
                 template: {
                   name: campaign.template_name,
-                  language: { code: campaign.template_language || 'ar' },
+                  language: { code: language },
                   ...(components.length ? { components } : {}),
                 },
               }
