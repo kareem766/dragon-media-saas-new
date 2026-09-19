@@ -483,6 +483,12 @@ export default function AdminOrganizations() {
   const [toast, setToast] =
     useState<string | null>(null)
 
+  const [testOrganizationId, setTestOrganizationId] =
+    useState('')
+
+  const [testSending, setTestSending] =
+    useState(false)
+
   const [search, setSearch] =
     useState('')
 
@@ -774,6 +780,72 @@ export default function AdminOrganizations() {
   useEffect(() => {
     void loadData()
   }, [])
+
+  useEffect(() => {
+    if (!testOrganizationId && organizations.length > 0) {
+      const firstActive = organizations.find(org => !org.suspended) || organizations[0]
+      setTestOrganizationId(firstActive?.id || '')
+    }
+  }, [organizations, testOrganizationId])
+
+  const sendSubscriptionWhatsappTest = async () => {
+    if (!supabase || !testOrganizationId) {
+      setToast('اختر شركة لإرسال الاختبار')
+      return
+    }
+
+    const organization = organizations.find(org => org.id === testOrganizationId)
+    if (!organization) {
+      setToast('الشركة المحددة غير موجودة')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `سيتم إرسال رسالة WhatsApp تجريبية إلى رقم الشركة "${organization.name}". هل تريد المتابعة؟`,
+    )
+
+    if (!confirmed) return
+
+    setTestSending(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('جلسة الدخول غير صالحة')
+
+      const response = await fetch('/api/admin/test-subscription-whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          organizationId: testOrganizationId,
+        }),
+      })
+
+      let json: any = {}
+      try {
+        json = await response.json()
+      } catch {
+        json = {}
+      }
+
+      if (!response.ok) {
+        throw new Error(json.error || 'تعذر إرسال اختبار WhatsApp')
+      }
+
+      setToast(
+        json.externalId
+          ? `تم إرسال اختبار إشعار التجديد بنجاح — رقم الرسالة: ${json.externalId}`
+          : 'تم إرسال اختبار إشعار التجديد بنجاح',
+      )
+    } catch (err: any) {
+      console.error('Subscription WhatsApp test error:', err)
+      setToast(err?.message || 'تعذر إرسال اختبار WhatsApp')
+    } finally {
+      setTestSending(false)
+    }
+  }
 
   useEffect(() => {
     if (!toast) return
@@ -1531,6 +1603,50 @@ export default function AdminOrganizations() {
           </span>
         </Button>
       </div>
+
+      {/* Subscription WhatsApp Test */}
+      <Card className="overflow-hidden border border-emerald-200 bg-gradient-to-l from-emerald-50 to-white p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-bold text-ink-950 sm:text-lg">
+                اختبار إشعار تجديد WhatsApp
+              </h2>
+              <Badge tone="success">للمدير فقط</Badge>
+            </div>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-ink-900/55 sm:text-sm">
+              أرسل رسالة تجريبية حقيقية للتأكد من أن قالب تجديد الاشتراك واتصال WhatsApp يعملان قبل الاعتماد على الإشعار المجدول.
+            </p>
+          </div>
+
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:min-w-[430px]">
+            <select
+              value={testOrganizationId}
+              onChange={e => setTestOrganizationId(e.target.value)}
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-950 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/15"
+              aria-label="شركة اختبار إشعار التجديد"
+            >
+              <option value="">اختر الشركة</option>
+              {organizations
+                .filter(org => !org.suspended)
+                .map(org => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+            </select>
+
+            <Button
+              type="button"
+              disabled={!testOrganizationId || testSending}
+              onClick={() => void sendSubscriptionWhatsappTest()}
+              className="min-h-11 bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {testSending ? 'جاري الإرسال...' : 'إرسال اختبار WhatsApp'}
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {/* Main Stats */}
 
