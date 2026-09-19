@@ -48,9 +48,14 @@ async function isCampaignWorker(req: VercelRequest, admin: any) {
 }
 
 async function getOrganizationId(admin: any, userId: string) {
-  const { data: profile, error } = await admin.from('profiles').select('organization_id').eq('id', userId).maybeSingle()
+  const { data: member, error } = await admin
+    .from('users')
+    .select('organization_id, active')
+    .eq('id', userId)
+    .eq('active', true)
+    .maybeSingle()
   if (error) throw error
-  return profile?.organization_id || null
+  return member?.organization_id || null
 }
 
 function interpolate(template: string, customer: Record<string, unknown>) {
@@ -103,13 +108,13 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
       const { data: rows, error } = await admin.from('campaign_messages').select('status').eq('campaign_id', campaignId).eq('organization_id', organizationId)
       if (error) throw error
       const counts = (rows || []).reduce((acc: Record<string, number>, row: { status: string | null }) => { const key = row.status || 'unknown'; acc[key] = (acc[key] || 0) + 1; return acc }, {})
-      const { error: updateError } = await admin.from('campaigns').update({ total_recipients: rows?.length || 0, queued_count: counts['قيد الإرسال'] || counts.queued || counts.pending || 0, sent_count: counts['تم الإرسال'] || counts.sent || 0, delivered_count: counts['تم التسليم'] || counts.delivered || 0, failed_count: counts['فشل'] || counts.failed || 0, skipped_count: counts['متخطى'] || counts.skipped || 0, updated_at: new Date().toISOString(), last_run_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
+      const { error: updateError } = await admin.from('campaigns').update({ total_recipients: rows?.length || 0, queued_count: counts['قيد الإرسال'] || counts.queued || counts.pending || 0, sent_count: counts['تم الإرسال'] || counts.sent || 0, delivered_count: counts['تم التسليم'] || counts.delivered || 0, failed_count: counts['فشلت'] || counts.failed || 0, skipped_count: counts['متخطى'] || counts.skipped || 0, updated_at: new Date().toISOString(), last_run_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
       if (updateError) throw updateError
       return json(res, 200, { message: 'تم تحديث إحصائيات الحملة.' })
     }
 
     if (action === 'retry_failed') {
-      const { error } = await admin.from('campaign_messages').update({ status: 'قيد الإرسال', error_message: null, failed_at: null, queued_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('campaign_id', campaignId).eq('organization_id', organizationId).eq('status', 'فشل')
+      const { error } = await admin.from('campaign_messages').update({ status: 'قيد الإرسال', error_message: null, failed_at: null, queued_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('campaign_id', campaignId).eq('organization_id', organizationId).eq('status', 'فشلت')
       if (error) throw error
       return json(res, 200, { message: 'تمت إعادة تجهيز الرسائل الفاشلة.' })
     }
