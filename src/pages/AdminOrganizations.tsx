@@ -53,6 +53,7 @@ interface Organization {
 
   plan_id: string | null
   plan_name: string | null
+  whatsapp_connected: boolean
 }
 
 interface UsageMetric {
@@ -783,8 +784,8 @@ export default function AdminOrganizations() {
 
   useEffect(() => {
     if (!testOrganizationId && organizations.length > 0) {
-      const firstActive = organizations.find(org => !org.suspended) || organizations[0]
-      setTestOrganizationId(firstActive?.id || '')
+      const firstWhatsapp = organizations.find(org => !org.suspended && org.whatsapp_connected) || null
+      setTestOrganizationId(firstWhatsapp?.id || '')
     }
   }, [organizations, testOrganizationId])
 
@@ -1615,7 +1616,7 @@ export default function AdminOrganizations() {
               <Badge tone="success">للمدير فقط</Badge>
             </div>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-ink-900/55 sm:text-sm">
-              أرسل رسالة تجريبية حقيقية للتأكد من أن قالب تجديد الاشتراك واتصال WhatsApp يعملان قبل الاعتماد على الإشعار المجدول.
+              أرسل رسالة تجريبية حقيقية إلى شركة لديها اتصال WhatsApp نشط للتأكد من أن قالب تجديد الاشتراك يعمل قبل الاعتماد على الإشعار المجدول.
             </p>
           </div>
 
@@ -1626,9 +1627,9 @@ export default function AdminOrganizations() {
               className="min-h-11 min-w-0 flex-1 rounded-xl border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-950 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/15"
               aria-label="شركة اختبار إشعار التجديد"
             >
-              <option value="">اختر الشركة</option>
+              <option value="">{organizations.some(org => !org.suspended && org.whatsapp_connected) ? 'اختر الشركة المتصلة بـ WhatsApp' : 'لا توجد شركة متصلة بـ WhatsApp'}</option>
               {organizations
-                .filter(org => !org.suspended)
+                .filter(org => !org.suspended && org.whatsapp_connected)
                 .map(org => (
                   <option key={org.id} value={org.id}>
                     {org.name}
@@ -1638,7 +1639,7 @@ export default function AdminOrganizations() {
 
             <Button
               type="button"
-              disabled={!testOrganizationId || testSending}
+              disabled={!testOrganizationId || testSending || !organizations.some(org => org.id === testOrganizationId && org.whatsapp_connected)}
               onClick={() => void sendSubscriptionWhatsappTest()}
               className="min-h-11 bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
