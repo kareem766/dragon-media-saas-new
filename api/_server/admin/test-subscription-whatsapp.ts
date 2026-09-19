@@ -33,9 +33,9 @@ export default async function handler(req: any, res: any) {
   const { organizationId } = req.body || {}
   if (!organizationId) return json(res, 400, { error: 'organizationId مطلوب' })
 
-  const templateName = String(process.env.WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE || '').trim()
+  const templateName = String(process.env.WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE || 'subscription_expiry_reminder').trim()
   const language = String(process.env.WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE_LANGUAGE || 'ar').trim()
-  if (!templateName) return json(res, 409, { error: 'WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE غير مضبوط' })
+  if (!templateName) return json(res, 500, { error: 'قالب إشعار التجديد غير مضبوط' })
 
   const { data: org } = await admin.from('organizations').select('id,name,phone,suspended').eq('id', organizationId).single()
   if (!org || org.suspended) return json(res, 404, { error: 'المنظمة غير موجودة أو موقوفة' })
@@ -66,7 +66,7 @@ export default async function handler(req: any, res: any) {
   })
 
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) return json(res, 502, { success: false, error: data?.error?.message || `Meta send failed (${response.status})` })
+  if (!response.ok) return json(res, 502, { success: false, error: data?.error?.message || `Meta send failed (${response.status})`, metaError: data?.error ? { code: data.error.code, type: data.error.type, subcode: data.error.error_subcode } : undefined, templateName })
 
   return json(res, 200, {
     success: true,
