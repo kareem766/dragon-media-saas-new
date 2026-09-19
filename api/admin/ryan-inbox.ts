@@ -207,6 +207,8 @@ PERSONA: ${persona}`
    const handoffReason=text(a.handoff_reason,300)
    const action=text(a.action,40)||text(a.next_action,40)||'continue'
    let actionResult:any=null
+   const needsHuman=a.needs_human===true||intent==='human_request'
+   const handoffReason=text(a.handoff_reason,300)
    if(!needsHuman){
     const actionData={
      name:text(a.name,120),
