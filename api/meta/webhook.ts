@@ -112,12 +112,20 @@ async function handleStatus(db: any, organizationId: string, status: any) {
   }
   if (state === 'delivered' || state === 'read') {
     messagePatch.delivered_at = timestamp
-    if (state === 'read') messagePatch.opened_at = timestamp
   }
   if (state === 'failed') {
-    messagePatch.failed_at = timestamp
-    messagePatch.error_message = status?.errors?.[0]?.title || status?.errors?.[0]?.message || 'WhatsApp delivery failed.'
+    messagePatch.metadata = {
+      whatsapp_status: state,
+      whatsapp_status_timestamp: timestamp,
+      whatsapp_status_errors: status?.errors || null,
+    }
   }
+  console.log('WhatsApp status received', {
+    organizationId,
+    externalId,
+    state,
+    errors: status?.errors || [],
+  })
   const { error } = await db.from('messages').update(messagePatch).eq('external_id', externalId)
   if (error) console.error('WhatsApp status update failed', { organizationId, externalId, state, error: error.message })
 
