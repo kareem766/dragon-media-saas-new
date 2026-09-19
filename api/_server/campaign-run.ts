@@ -422,7 +422,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
           sent++
         } catch (error) {
           const message = error instanceof Error ? error.message : 'فشل الإرسال.'
-          await markMessage(row.id, 'فشل', { error_message: message })
+          await markMessage(row.id, 'فشلت', { error_message: message })
           failed++
         }
       }
