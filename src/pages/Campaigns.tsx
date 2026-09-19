@@ -1400,7 +1400,7 @@ export default function Campaigns() {
                   <div className="grid lg:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-semibold text-ink-900/60">
-                        قيمة العرض / الخدمة ({{3}})
+                        قيمة العرض / الخدمة ({'{{3}}'})
                       </label>
                       <input
                         required
@@ -1410,7 +1410,7 @@ export default function Campaigns() {
                         className="w-full mt-1.5 border border-sand-200 bg-white rounded-xl px-3.5 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                       />
                       <div className="text-[11px] text-ink-900/40 mt-2">
-                        {{1}} = اسم العميل · {{2}} = اسم الشركة · {{3}} = القيمة التي تدخلها هنا
+                        {'{{1}}'} = اسم العميل · {'{{2}}'} = اسم الشركة · {'{{3}}'} = القيمة التي تدخلها هنا
                       </div>
                     </div>
 
