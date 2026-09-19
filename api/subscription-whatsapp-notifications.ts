@@ -26,7 +26,7 @@ function decryptToken(value: any) {
   ]).toString('utf8')
 }
 
-async function sendTemplate(phoneNumberId: string, token: string, to: string, templateName: string, language: string, parameters: string[]) {
+async function sendTemplate(phoneNumberId: string, token: string, to: string, templateName: string, language: string, parameters: string[], buttonParameter?: string) {
   const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -38,10 +38,10 @@ async function sendTemplate(phoneNumberId: string, token: string, to: string, te
       template: {
         name: templateName,
         language: { code: language },
-        components: [{
-          type: 'body',
-          parameters: parameters.map((text) => ({ type: 'text', text })),
-        }],
+        components: [
+          { type: 'body', parameters: parameters.map((text) => ({ type: 'text', text })) },
+          ...(buttonParameter ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: buttonParameter }] }] : []),
+        ],
       },
     }),
   })
@@ -179,6 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         templateName,
         templateLanguage,
         [String(organization.name || 'عميلنا'), planName, daysText, expiresAt],
+        String(subscription.id),
       )
       const externalId = String(message?.messages?.[0]?.id || '')
 
