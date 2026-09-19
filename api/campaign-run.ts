@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'\nimport { createDecipheriv, createHash } from 'node:crypto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -109,7 +109,235 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'run') {
-      return json(res, 501, { message: 'تم تجهيز Queue الحملات، لكن موصل الإرسال للقناة يحتاج استخدام اتصال القناة الحالي قبل الإرسال الفعلي. لم يتم إرسال أي رسالة.' })
+      const channel = String(campaign.channel || '').toLowerCase()
+      if (!['whatsapp', 'messenger', 'instagram'].includes(channel)) {
+        return json(res, 422, { message: 'قناة الحملة غير مدعومة حالياً. اختر WhatsApp أو Messenger أو Instagram.' })
+      }
+
+      const { data: queuedRows, error: queueError } = await admin
+        .from('campaign_messages')
+        .select('id, customer_id, message_body, attempts, status')
+        .eq('campaign_id', campaignId)
+        .eq('organization_id', organizationId)
+        .eq('channel', channel)
+        .eq('status', 'قيد الإرسال')
+        .order('queued_at', { ascending: true })
+        .limit(20)
+      if (queueError) throw queueError
+
+      if (!queuedRows?.length) {
+        await admin.from('campaigns').update({
+          status: 'مكتملة',
+          completed_at: new Date().toISOString(),
+          last_run_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq('id', campaignId).eq('organization_id', organizationId).neq('status', 'ملغاة')
+        return json(res, 200, { message: 'لا توجد رسائل جاهزة للإرسال.', sent: 0, failed: 0, remaining: 0 })
+      }
+
+      const ids = queuedRows.map((row: any) => row.id)
+      const { data: claimedRows, error: claimError } = await admin
+        .from('campaign_messages')
+        .update({ status: 'قيد التنفيذ', attempts: (queuedRows[0]?.attempts || 0) + 1, updated_at: new Date().toISOString() })
+        .eq('organization_id', organizationId)
+        .eq('campaign_id', campaignId)
+        .in('id', ids)
+        .eq('status', 'قيد الإرسال')
+        .select('id, customer_id, message_body, attempts')
+      if (claimError) throw claimError
+      if (!claimedRows?.length) return json(res, 409, { message: 'الحملة قيد التنفيذ بالفعل. حاول التحديث بعد لحظات.' })
+
+      const customerIds = [...new Set(claimedRows.map((row: any) => row.customer_id).filter(Boolean))]
+      const { data: customers, error: customersError } = await admin
+        .from('customers')
+        .select('id, name, company, phone, marketing_opt_in')
+        .eq('organization_id', organizationId)
+        .in('id', customerIds)
+      if (customersError) throw customersError
+      const customerMap = new Map((customers || []).map((customer: any) => [String(customer.id), customer]))
+
+      async function markMessage(id: string, status: string, patch: Record<string, unknown> = {}) {
+        const now = new Date().toISOString()
+        await admin.from('campaign_messages').update({
+          status,
+          updated_at: now,
+          ...(status === 'تم الإرسال' ? { sent_at: now } : {}),
+          ...(status === 'فشل' ? { failed_at: now } : {}),
+          ...patch,
+        }).eq('id', id).eq('organization_id', organizationId)
+      }
+
+      function decryptMetaToken(value: any) {
+        if (!value?.iv || !value?.tag || !value?.data) throw new Error('Meta access token غير متاح.')
+        const seed = process.env.META_TOKEN_ENCRYPTION_KEY || process.env.META_APP_SECRET
+        if (!seed) throw new Error('إعداد تشفير Meta غير موجود.')
+        const key = createHash('sha256').update(seed).digest()
+        const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(String(value.iv), 'base64'))
+        decipher.setAuthTag(Buffer.from(String(value.tag), 'base64'))
+        return Buffer.concat([decipher.update(Buffer.from(String(value.data), 'base64')), decipher.final()]).toString('utf8')
+      }
+
+      async function metaPost(path: string, token: string, body: unknown) {
+        const response = await fetch('https://graph.facebook.com/' + (process.env.META_GRAPH_API_VERSION || 'v23.0') + path, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.error?.message || 'Meta رفض الإرسال.')
+        return payload
+      }
+
+      async function metaGet(path: string, token: string) {
+        const response = await fetch('https://graph.facebook.com/' + (process.env.META_GRAPH_API_VERSION || 'v23.0') + path, {
+          headers: { Authorization: 'Bearer ' + token },
+        })
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.error?.message || 'Meta رفض طلب البيانات.')
+        return payload
+      }
+
+      let token = ''
+      let pageId = ''
+      let instagramBusinessId = ''
+
+      if (channel === 'whatsapp') {
+        const { data: integration, error: integrationError } = await admin
+          .from('integrations')
+          .select('config,metadata,connected,status')
+          .eq('organization_id', organizationId)
+          .eq('provider', 'whatsapp')
+          .maybeSingle()
+        if (integrationError) throw integrationError
+        if (!integration?.connected || integration.status !== 'connected') throw new Error('WhatsApp غير متصل.')
+        token = decryptMetaToken(integration.config?.access_token)
+      } else {
+        const { data: integration, error: integrationError } = await admin
+          .from('integrations')
+          .select('config,metadata,connected,status')
+          .eq('organization_id', organizationId)
+          .eq('provider', 'facebook')
+          .maybeSingle()
+        if (integrationError) throw integrationError
+        if (!integration?.connected || integration.status !== 'connected') throw new Error('اتصال Facebook غير جاهز. اربط Facebook أولاً.')
+        token = decryptMetaToken(integration.config?.access_token)
+        pageId = String(integration.metadata?.facebook_page_id || '')
+        if (!pageId) throw new Error('Facebook Page ID غير موجود.')
+        if (channel === 'instagram') {
+          const page = await metaGet('/' + encodeURIComponent(pageId) + '?fields=instagram_business_account', token)
+          instagramBusinessId = String(page?.instagram_business_account?.id || '')
+          if (!instagramBusinessId) throw new Error('لا يوجد Instagram Business مرتبط بصفحة Facebook المتصلة.')
+        }
+      }
+
+      let sent = 0
+      let failed = 0
+
+      for (const row of claimedRows as any[]) {
+        try {
+          const customer = customerMap.get(String(row.customer_id))
+          if (!customer || customer.marketing_opt_in !== true) {
+            await markMessage(row.id, 'تم التخطي', { skipped_at: new Date().toISOString(), skipped_reason: 'العميل غير مشترك في الرسائل التسويقية.' })
+            continue
+          }
+
+          let recipient = ''
+          let conversation: any = null
+          if (channel === 'whatsapp') {
+            recipient = String(customer.phone || '').replace(/[^0-9]/g, '')
+            if (!recipient) throw new Error('رقم WhatsApp غير موجود للعميل.')
+          } else {
+            const { data: conversationRows, error: conversationError } = await admin
+              .from('conversations')
+              .select('id,metadata,channel,last_message_at')
+              .eq('organization_id', organizationId)
+              .eq('customer_id', customer.id)
+              .in('channel', channel === 'messenger' ? ['facebook', 'messenger'] : ['instagram'])
+              .order('last_message_at', { ascending: false })
+              .limit(1)
+            if (conversationError) throw conversationError
+            conversation = conversationRows?.[0]
+            recipient = String(conversation?.metadata?.external_user_id || conversation?.metadata?.instagram_user_id || conversation?.metadata?.facebook_user_id || '')
+            if (!recipient) throw new Error('لا يوجد معرّف محادثة صالح لهذه القناة للعميل.')
+          }
+
+          let payload: any
+          let externalId = ''
+
+          if (channel === 'whatsapp') {
+            const phoneNumberId = String((await admin.from('integrations').select('metadata').eq('organization_id', organizationId).eq('provider', 'whatsapp').maybeSingle()).data?.metadata?.phone_number_id || '')
+            if (!phoneNumberId) throw new Error('WhatsApp Phone Number ID غير موجود.')
+
+            if (campaign.template_name) {
+              const components = Array.isArray(campaign.template_components) ? campaign.template_components : []
+              payload = {
+                messaging_product: 'whatsapp',
+                to: recipient,
+                type: 'template',
+                template: {
+                  name: campaign.template_name,
+                  language: { code: campaign.template_language || 'ar' },
+                  ...(components.length ? { components } : {}),
+                },
+              }
+            } else {
+              payload = {
+                messaging_product: 'whatsapp',
+                to: recipient,
+                type: 'text',
+                text: { preview_url: false, body: String(row.message_body || '') },
+              }
+            }
+            const result = await metaPost('/' + encodeURIComponent(phoneNumberId) + '/messages', token, payload)
+            externalId = String(result?.messages?.[0]?.id || '')
+          } else if (channel === 'messenger') {
+            const result = await metaPost('/' + encodeURIComponent(pageId) + '/messages', token, {
+              recipient: { id: recipient },
+              message: { text: String(row.message_body || '') },
+            })
+            externalId = String(result?.message_id || result?.messages?.[0]?.id || '')
+          } else {
+            const result = await metaPost('/' + encodeURIComponent(instagramBusinessId) + '/messages', token, {
+              recipient: { id: recipient },
+              message: { text: String(row.message_body || '') },
+            })
+            externalId = String(result?.message_id || result?.messages?.[0]?.id || '')
+          }
+
+          await markMessage(row.id, 'تم الإرسال', {
+            external_id: externalId || null,
+            error_message: null,
+          })
+          sent++
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'فشل الإرسال.'
+          await markMessage(row.id, 'فشل', { error_message: message })
+          failed++
+        }
+      }
+
+      const { count: remaining } = await admin
+        .from('campaign_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId)
+        .eq('organization_id', organizationId)
+        .eq('status', 'قيد الإرسال')
+
+      const newStatus = (remaining || 0) > 0 ? 'قيد الإرسال' : (failed > 0 ? 'مكتملة مع أخطاء' : 'مكتملة')
+      await admin.from('campaigns').update({
+        status: newStatus,
+        started_at: campaign.started_at || new Date().toISOString(),
+        completed_at: (remaining || 0) > 0 ? null : new Date().toISOString(),
+        last_run_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', campaignId).eq('organization_id', organizationId)
+
+      return json(res, 200, {
+        message: `تم إرسال الدفعة: ${sent}، فشل: ${failed}، المتبقي: ${remaining || 0}.`,
+        sent,
+        failed,
+        remaining: remaining || 0,
+      })
     }
 
     return json(res, 400, { message: 'إجراء غير معروف.' })
