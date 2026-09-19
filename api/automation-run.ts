@@ -4,7 +4,7 @@ import type {
 } from '@vercel/node'
 
 import { createClient } from '@supabase/supabase-js'
-import { handleCampaignRequest } from './_server/campaign-run'
+import { handleCampaignRequest } from './_server/campaign-run.js'
 
 type Automation = {
   id: string
