@@ -76,12 +76,14 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
       if (!organizationId) return json(res, 403, { message: 'لم يتم العثور على مساحة العمل.' })
     }
 
-    const { data: campaign, error: campaignError } = await admin
+    let campaignQuery = admin
       .from('campaigns')
       .select('*')
       .eq('id', campaignId)
-      .eq('organization_id', organizationId)
-      .maybeSingle()
+
+    if (organizationId) campaignQuery = campaignQuery.eq('organization_id', organizationId)
+
+    const { data: campaign, error: campaignError } = await campaignQuery.maybeSingle()
     if (campaignError) throw campaignError
     if (!campaign) return json(res, 404, { message: 'الحملة غير موجودة.' })
     if (!organizationId) organizationId = String(campaign.organization_id || '')
