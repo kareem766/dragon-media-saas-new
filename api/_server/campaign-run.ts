@@ -367,14 +367,12 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
           const type = String(component?.type || '').toUpperCase()
           const text = String(component?.text || '')
           const matches = [...text.matchAll(/\{\{(\d+)\}\}/g)]
-          if (!matches.length) continue
 
-          const parameters = matches.map((match: RegExpMatchArray) => {
-            const index = Math.max(1, Number(match[1])) - 1
-            return { type: 'text', text: values[index] ?? '' }
-          })
-
-          if (type === 'HEADER' || type === 'BODY') {
+          if ((type === 'HEADER' || type === 'BODY') && matches.length) {
+            const parameters = matches.map((match: RegExpMatchArray) => {
+              const index = Math.max(1, Number(match[1])) - 1
+              return { type: 'text', text: values[index] ?? '' }
+            })
             components.push({ type: type.toLowerCase(), parameters })
           }
 
@@ -453,10 +451,11 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
                 .eq('organization_id', organizationId)
               if (templateSyncError) throw templateSyncError
 
-              const storedComponents = Array.isArray(campaign.template_components) ? campaign.template_components : []
-              const components = storedComponents.length
-                ? storedComponents
-                : buildTemplateComponents(approvedTemplate, customer, String(row.message_body || ''))
+              const components = buildTemplateComponents(
+                approvedTemplate,
+                customer,
+                String(row.message_body || '')
+              )
 
               payload = {
                 messaging_product: 'whatsapp',
