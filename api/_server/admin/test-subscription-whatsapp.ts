@@ -62,10 +62,11 @@ export default async function handler(req: any, res: any) {
     || candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED')
   if (!template) return json(res, 409, { success: false, error: 'قالب إشعار التجديد غير موجود أو غير معتمد في Meta، أو لغة القالب مختلفة.', templateName, requestedLanguage: language, available: candidates.map((item: any) => ({ language: item?.language, status: item?.status, category: item?.category })) })
 
+  const cleanText = (value: unknown) => String(value ?? '').replace(/[\\r\\n\\t]/g, ' ').trim()
   const variableIndexes = (value: unknown) => Array.from(String(value || '').matchAll(/\{\{(\d+)\}\}/g)).map((match: any) => Number(match[1]))
   const distinctVariableCount = (value: unknown) => new Set(variableIndexes(value)).size
-  const exampleValues = (value: unknown) => Array.isArray(value) ? value.map((item) => String(item ?? '')) : []
-  const fallbackValues = [String(org.name || 'عميلنا'), 'اختبار التجديد', 'يوم واحد', new Date().toISOString().slice(0, 10), String(organizationId)]
+  const exampleValues = (value: unknown) => Array.isArray(value) ? value.map(cleanText) : []
+  const fallbackValues = [cleanText(org.name || 'عميلنا'), 'اختبار التجديد', 'يوم واحد', new Date().toISOString().slice(0, 10), String(organizationId)]
   const components: any[] = []
 
   const headerComponent = (template.components || []).find((component: any) => component?.type === 'HEADER')
@@ -73,7 +74,7 @@ export default async function handler(req: any, res: any) {
   if (headerCount > 0) {
     const examples = exampleValues(headerComponent?.example?.header_text?.[0])
     const values = examples.length >= headerCount ? examples : fallbackValues
-    components.push({ type: 'header', parameters: values.slice(0, headerCount).map((text) => ({ type: 'text', text })) })
+    components.push({ type: 'header', parameters: values.slice(0, headerCount).map((text) => ({ type: 'text', text: cleanText(text) })) })
   }
 
   const bodyComponent = (template.components || []).find((component: any) => component?.type === 'BODY')
@@ -81,7 +82,7 @@ export default async function handler(req: any, res: any) {
   if (bodyCount > 0) {
     const examples = exampleValues(bodyComponent?.example?.body_text?.[0])
     const values = examples.length >= bodyCount ? examples : fallbackValues
-    components.push({ type: 'body', parameters: values.slice(0, bodyCount).map((text) => ({ type: 'text', text })) })
+    components.push({ type: 'body', parameters: values.slice(0, bodyCount).map((text) => ({ type: 'text', text: cleanText(text) })) })
   }
 
   const buttonsComponent = (template.components || []).find((component: any) => component?.type === 'BUTTONS')
@@ -91,12 +92,19 @@ export default async function handler(req: any, res: any) {
     const count = distinctVariableCount(button?.url)
     if (count <= 0) return
     const examples = exampleValues(button?.example)
-    const values = examples.length >= count ? examples : fallbackValues
+    let values = examples.length >= count ? examples : fallbackValues
+    const templateUrl = String(button?.url || '')
+    const marker = templateUrl.indexOf('{{1}}')
+    if (marker >= 0 && examples.length > 0) {
+      const prefix = templateUrl.slice(0, marker)
+      const candidate = String(examples[0] || '')
+      if (candidate.startsWith(prefix)) values = [candidate.slice(prefix.length), ...values.slice(1)]
+    }
     components.push({
       type: 'button',
       sub_type: 'url',
       index: String(buttonIndex),
-      parameters: values.slice(0, count).map((text) => ({ type: 'text', text })),
+      parameters: values.slice(0, count).map((text) => ({ type: 'text', text: cleanText(text) })),
     })
   })
 
