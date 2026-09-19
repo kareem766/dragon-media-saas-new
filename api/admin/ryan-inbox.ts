@@ -203,7 +203,8 @@ PERSONA: ${persona}`
    const a=obj(await analyzeConversation(apiKey,model,analysisSystem,history,current))
    const leadIntent=a.lead_intent===true
    const intent=text(a.intent,40)||'other'
-   const needsHuman=a.needs_human===true||intent==='human_request'
+   const explicitHumanRequest=humanHandoffIntent(historyText+' '+current)
+   const needsHuman=explicitHumanRequest||a.needs_human===true||intent==='human_request'
    const handoffReason=text(a.handoff_reason,300)
    const action=text(a.action,40)||text(a.next_action,40)||'continue'
    let actionResult:any=null
