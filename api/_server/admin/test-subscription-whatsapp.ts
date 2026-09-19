@@ -68,9 +68,9 @@ export default async function handler(req: any, res: any) {
   const values = [String(org.name || 'عميلنا'), 'اختبار التجديد', 'يوم واحد', new Date().toISOString().slice(0, 10)]
   const components: any[] = []
   if (bodyVariableCount > 0) components.push({ type: 'body', parameters: values.slice(0, bodyVariableCount).map((text) => ({ type: 'text', text })) })
-  const urlButton = (template.components || []).find((component: any) => component?.type === 'BUTTONS' && Array.isArray(component?.buttons) && component.buttons.some((button: any) => button?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(button?.url || ''))))
+  const urlButton = (template.components || []).find((component: any) => component?.type === 'BUTTONS' && Array.isArray(component?.buttons) && component.buttons.some((button: any) => button?.type === 'URL' && /\{\{\d+\}\}/.test(String(button?.url || ''))))
   if (urlButton) {
-    const button = urlButton.buttons.find((item: any) => item?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(item?.url || '')))
+    const button = urlButton.buttons.find((item: any) => item?.type === 'URL' && /\{\{\d+\}\}/.test(String(item?.url || '')))
     components.push({ type: 'button', sub_type: 'url', index: String((urlButton.buttons || []).indexOf(button)), parameters: [{ type: 'text', text: String(organizationId) }] })
   }
 
@@ -80,13 +80,8 @@ export default async function handler(req: any, res: any) {
     body: JSON.stringify({
       messaging_product: 'whatsapp', recipient_type: 'individual', to: phone, type: 'template',
       template: {
-        name: templateName, language: { code: language },
-        components: [{ type: 'body', parameters: [
-          { type: 'text', text: String(org.name || 'عميلنا') },
-          { type: 'text', text: 'اختبار التجديد' },
-          { type: 'text', text: 'يوم واحد' },
-          { type: 'text', text: new Date().toISOString().slice(0, 10) },
-        ] }],
+        name: templateName, language: { code: String(template.language || language) },
+        components,
       },
     }),
   })
