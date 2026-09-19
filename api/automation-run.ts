@@ -4,6 +4,7 @@ import type {
 } from '@vercel/node'
 
 import { createClient } from '@supabase/supabase-js'
+import { handleCampaignRequest } from './_server/campaign-run.js'
 
 type Automation = {
   id: string
@@ -762,6 +763,10 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
+  if (req.method === 'POST') {
+    return handleCampaignRequest(req, res)
+  }
+
   /**
    * =======================================================
    * 1. METHOD PROTECTION

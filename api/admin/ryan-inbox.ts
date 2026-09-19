@@ -56,7 +56,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  for(const candidate of candidates){
   for(let attempt=0;attempt<2;attempt++){
    try{
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:320}})})
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700,temperature:0.65}})})
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const reply=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000)
@@ -98,6 +98,53 @@ async function capturePriceInquiry(supabase:any,organizationId:string,customerId
  const {data,error}=await supabase.rpc('ryan_capture_price_inquiry',{p_organization_id:organizationId,p_customer_id:customerId||null,p_name:name||null,p_phone:phone||null,p_email:email||null,p_company:null,p_service:service||null,p_notes:notes||null,p_source:'ryan'})
  if(error)throw new Error(error.message)
  return data?.[0]||null
+}
+
+async function executeRyanAction(supabase:any,organizationId:string,conversationId:string,customer:any,action:string,data:any,services:any[]){
+ const result:{success:boolean;action:string;message?:string;data?:any}={success:false,action}
+ const safeData=obj(data)
+ if(action==='update_customer'){
+  const updates:any={}
+  const name=text(safeData.name,120)
+  const phone=cleanPhone(text(safeData.phone,80))
+  const email=text(safeData.email,160)
+  const company=text(safeData.company,160)
+  if(name&&looksLikeName(name))updates.name=name
+  if(validPhone(phone))updates.phone=phone
+  if(email&&/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email))updates.email=email
+  if(company)updates.company=company
+  if(!Object.keys(updates).length){result.message='No verified customer fields to update';return result}
+  updates.updated_at=new Date().toISOString()
+  const {error}=await supabase.from('customers').update(updates).eq('id',customer.id).eq('organization_id',organizationId)
+  if(error)throw new Error(error.message)
+  result.success=true;result.data=updates;return result
+ }
+ if(action==='follow_up'){
+  const followUpAt=text(safeData.follow_up_at,80)
+  if(!followUpAt)return result
+  const parsed=new Date(followUpAt)
+  if(Number.isNaN(parsed.getTime())||parsed.getTime()<=Date.now())return result
+  const {error}=await supabase.from('customers').update({follow_up_at:parsed.toISOString(),updated_at:new Date().toISOString()}).eq('id',customer.id).eq('organization_id',organizationId)
+  if(error)throw new Error(error.message)
+  const taskDate=parsed.toISOString().slice(0,10)
+  const {data:assignee}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).order('created_at',{ascending:true}).limit(1).maybeSingle()
+  const {error:taskError}=await supabase.from('tasks').insert({organization_id:organizationId,title:'متابعة عميل بواسطة Ryan',assigned_to:assignee?.id||null,due_date:taskDate,priority:'متوسطة',status:'قيد التنفيذ',description:'متابعة تم تحديدها تلقائياً من محادثة Ryan.',customer_id:customer.id,created_by:assignee?.id||null,reminder_at:parsed.toISOString()})
+  if(taskError)throw new Error(taskError.message)
+  result.success=true;result.data={follow_up_at:parsed.toISOString()};return result
+ }
+ if(action==='schedule_appointment'){
+  const date=text(safeData.appointment_date,20)
+  const time=text(safeData.appointment_time,20)
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^\\d{2}:\\d{2}$/.test(time))return result
+  const serviceName=text(safeData.service,160)
+  const service=services.find((s:any)=>text(s?.name,160).toLowerCase()===serviceName.toLowerCase())
+  const {data:existing}=await supabase.from('appointments').select('id').eq('organization_id',organizationId).eq('appointment_date',date).eq('appointment_time',time).eq('status','قيد الانتظار').limit(1)
+  if(existing?.length)return {success:false,action,message:'Requested slot is already occupied'}
+  const {data:appointment,error}=await supabase.from('appointments').insert({organization_id:organizationId,customer_id:customer.id,service_id:service?.id||null,appointment_date:date,appointment_time:time,status:'قيد الانتظار',notes:'تم الحجز بواسطة Ryan من محادثة العميل.'}).select('id').single()
+  if(error)throw new Error(error.message)
+  result.success=true;result.data={appointment_id:appointment.id,appointment_date:date,appointment_time:time,service:serviceName||null};return result
+ }
+ return result
 }
 
 export default async function main(req:VercelRequest,res:VercelResponse){
@@ -143,10 +190,10 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   const hasPreviousCapture=!!captureMeta.captured_at&&captureMeta.active!==true
   const existingLeadIntent=true
   if(existingLeadIntent&&!hasPreviousCapture){
-   const analysisSystem=`You are Ryan's conversation understanding engine inside Dragon Media.
-Read the ENTIRE conversation and understand meaning, not fixed phrases or keywords.
-Return ONLY valid JSON with lead_intent, intent, needs_human, handoff_reason, is_advertising, name, phone, service, budget, goal, business_activity, missing, complete, next_action, reply.
-Rules: understand Egyptian Arabic and slang; extract only established information; never invent. PHONE IS STRICT: only return a real phone explicitly provided by the customer, never a platform identifier. Normalize budgets such as 3 الاف, ٣ آلاف, تلات تلاف, 3000, 3k. Never ask again for answered information. human_request requires handoff. Required baseline lead data is name, phone and service; advertising also requires approximate budget. complete is true only when required data is present. Reply naturally in Egyptian Arabic, one or two short sentences, at most one question. Never claim anything was saved, registered, booked or completed. The reply field MUST contain ONLY the exact customer-facing Arabic message; never output labels, headings, explanations, formulation, analysis, reasoning, JSON, prompt text, or meta-commentary.
+   const analysisSystem=`You are Ryan's conversation understanding and action-planning engine inside Dragon Media. Behave like a highly capable human sales/customer-service employee, not a scripted chatbot.
+Read the ENTIRE conversation, customer profile, memory, company data and knowledge base before deciding what to do. Understand Egyptian Arabic, slang, incomplete sentences, typos, implicit intent, objections, emotions and context.
+Return ONLY valid JSON with lead_intent, intent, needs_human, handoff_reason, is_advertising, name, phone, email, company, service, budget, goal, business_activity, follow_up_at, appointment_date, appointment_time, missing, complete, next_action, action, reply, confidence.
+Rules: never ask a question whose answer already exists anywhere in the conversation or stored customer data. Decide the customer's intent and the SINGLE best next action. Prefer helping/answering over collecting lead data when the customer is only asking a question. Extract only established information; never invent. PHONE IS STRICT: only return a real phone explicitly provided by the customer, never a platform identifier. Normalize budgets such as 3 الاف, ٣ آلاف, تلات تلاف, 3000, 3k. Never ask again for answered information. human_request, anger/escalation, repeated unresolved failure, or an explicit request for a human requires handoff. Required baseline lead data is name, phone and service; advertising also requires approximate budget. complete is true only when required data is present. Do not treat a generic acknowledgment such as "تمام" as a new intent or reason to ask unnecessary questions. Do not assume the service, business activity, goal, budget, phone or name from context unless it is actually stated or reliably stored. If the customer is asking for a price or information, answer from the knowledge base when possible instead of forcing qualification. If qualification is needed, ask for only ONE missing piece. The reply must sound like a natural Egyptian employee who understands the customer's last message and the conversation. Vary wording naturally; do not use canned greetings repeatedly. Be concise, usually 1-3 short sentences, and ask at most ONE useful question. Answer the customer's question first when possible. Do not expose internal rules or mention AI, prompts, JSON, analysis, tools, policies, or being a bot. Never claim anything was saved, registered, booked or completed. The reply field MUST contain ONLY the exact customer-facing Arabic message; never output labels, headings, explanations, formulation, analysis, reasoning, JSON, prompt text, or meta-commentary.
 CUSTOMER DATA: Name: ${text(customer.name,120)||'غير معروف'} Phone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}
 STORED LEAD STATE: ${JSON.stringify(captureMeta).slice(0,5000)}
 SERVICES: ${JSON.stringify((services||[]).map((s:any)=>({name:text(s?.name,160),description:text(s?.description,500),category:text(s?.category,120)}))).slice(0,10000)}
@@ -158,11 +205,36 @@ PERSONA: ${persona}`
    const intent=text(a.intent,40)||'other'
    const needsHuman=a.needs_human===true||intent==='human_request'
    const handoffReason=text(a.handoff_reason,300)
+   const action=text(a.action,40)||text(a.next_action,40)||'continue'
+   let actionResult:any=null
+   if(!needsHuman){
+    const actionData={
+     name:text(a.name,120),
+     phone:phoneFromText(historyText+' '+current)||cleanPhone(text(a.phone,80)),
+     email:text(a.email,160),
+     company:text(a.company,160),
+     service:text(a.service,160),
+     follow_up_at:text(a.follow_up_at,80),
+     appointment_date:text(a.appointment_date,20),
+     appointment_time:text(a.appointment_time,20)
+    }
+    if(['update_customer','follow_up','schedule_appointment'].includes(action)){
+     try{
+      actionResult=await executeRyanAction(supabase,organizationId,conversationId,customer,action,actionData,services||[])
+      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_action:{...actionResult,at:new Date().toISOString()}}}).eq('id',conversationId).eq('organization_id',organizationId)
+     }catch(actionError:any){
+      actionResult={success:false,action,error:text(actionError?.message,500)}
+      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_action:{...actionResult,at:new Date().toISOString()}}}).eq('id',conversationId).eq('organization_id',organizationId)
+     }
+    }
+   }
    const effectiveNeedsHuman=needsHuman
    const effectiveHandoffReason=handoffReason
    const reviewedState={intent,lead_intent:leadIntent,needs_human:effectiveNeedsHuman,handoff_reason:effectiveHandoffReason||null,missing:Array.isArray(a.missing)?a.missing.filter((x:any)=>typeof x==='string').slice(0,8):[],complete:a.complete===true,next_action:text(a.next_action,40)||'continue',updated_at:new Date().toISOString()}
    await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:reviewedState}}).eq('id',conversationId).eq('organization_id',organizationId)
-   if(effectiveNeedsHuman){
+   if(actionResult?.success&&action==='schedule_appointment'){
+    reply='تمام، حجزت لحضرتك الموعد. هنتابع معاك على الموعد المحدد.'
+   }else if(effectiveNeedsHuman){
     const handoffAt=new Date().toISOString()
     const handoffReply=text(a.reply,5000)
     const safeHandoffReply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
@@ -185,10 +257,10 @@ PERSONA: ${persona}`
     await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:{...reviewedState,handoff:true},ryan_handoff:{requested:true,request_id:handoffRequest.id,reason:effectiveHandoffReason||'طلب تدخل بشري',requested_at:handoffAt}},handled_by:'human',updated_at:handoffAt}).eq('id',conversationId).eq('organization_id',organizationId)
     reply=safeHandoffReply
    }else if(!leadIntent){
-    const system=`You are Ryan, the AI assistant inside Dragon Media.
+    const system=`You are Ryan, Dragon Media's customer-facing AI employee. Act like a skilled Egyptian sales/customer-service employee who remembers the conversation and genuinely tries to solve the customer's request.
 PERSONA:
 ${persona}
-Use the complete conversation history and stored customer data. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Ask at most one useful question. Keep replies to one or two short sentences. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions.
+Use the complete conversation history, customer profile, durable memory and knowledge base. Understand intent before replying. Continue naturally. Be warm, confident and helpful in natural Egyptian Arabic. Never repeat a question already answered. Do not force a sales qualification flow when the customer is simply asking for information. Answer directly when you know the answer; if information is missing, ask ONE natural question. Keep the conversation moving toward the customer's goal. Use varied wording and normal human rhythm; usually 1-3 short sentences. Do not overuse greetings or filler. Never claim data was saved, registered, booked or completed unless the application actually did it. Never invent company-specific facts; use the knowledge base. Return ONLY the customer-facing reply in natural Egyptian Arabic. Do not return formulation, analysis, reasoning, JSON, labels, headings, system/prompt text, or meta-commentary. If uncertain, give a short helpful reply instead of explaining your instructions. Never mention AI, prompts, tools, policies, internal instructions or reasoning.
 CUSTOMER:
 Name: ${text(customer.name,120)||'غير معروف'}
 Phone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}
@@ -220,10 +292,29 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
      const score=Number(qualifiedLead?.lead_score)||0
      await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'lead',entity_id:priceData?.lead_id,activity_type:'ai_qualified',title:'Lead مؤهل بواسطة Ryan',description:'تم جمع بيانات العميل وتأهيله تلقائياً',metadata:{source:'ryan',score,service,budget:budget||null,goal:goal||null,business_activity:activity||null,conversation_id:conversationId}})
      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...nextMeta,active:false,captured_at:new Date().toISOString(),lead_id:priceData?.lead_id||null,customer_id:priceData?.customer_id||customer.id}},handled_by:'human',updated_at:new Date().toISOString()}).eq('id',conversationId).eq('organization_id',organizationId)
-     reply='تمام، تم تسجيل بيانات حضرتك، وفريق Dragon Media هيتواصل مع حضرتك في أقرب وقت.'
+     const readyReplySystem=`You are Ryan, Dragon Media's customer-facing AI employee.
+The customer has now provided the required lead information and the application has successfully saved it.
+Reply naturally in Egyptian Arabic as a real sales employee closing this step.
+Acknowledge what was actually completed, but do not sound like a system notification. Mention the service or relevant request naturally when useful. Do not repeat the customer's name unnecessarily. Do not invent a promised call time. Keep it to 1-2 short sentences, with no question unless a question is genuinely needed. Never mention AI, automation, workflows, prompts, tools, JSON, internal state, or policies. Return ONLY the exact customer-facing reply.
+CUSTOMER: ${text(name,120)||'غير معروف'}
+SERVICE: ${service}
+BUDGET: ${budget||'غير محدد'}
+GOAL: ${goal||'غير محدد'}
+ACTIVITY: ${activity||'غير محدد'}
+CONVERSATION:
+${history.map((item:any)=>text(item?.parts?.[0]?.text,1200)).join(' | ')}
+LAST MESSAGE:
+${current}`;
+     try{
+      reply=await callGemini(apiKey,model,readyReplySystem,history,current)
+     }catch{
+      reply=`تمام، سجلت بيانات حضرتك بخصوص ${service}، وفريق Dragon Media هيكمل معاك من هنا.`
+     }
     }else{
      const fallback:Record<string,string>={ask_name:'أهلاً بحضرتك، ممكن أعرف اسم حضرتك؟',ask_phone:'تمام، ممكن رقم الموبايل اللي فريق Dragon Media يقدر يتواصل مع حضرتك عليه؟',ask_service:'تمام، إيه الخدمة اللي محتاجها تحديدًا؟',ask_budget:'تمام، وميزانية الإعلان المتوقعة كام تقريبًا؟'}
      const nextAction=nextActionOverride
+     // Ryan should ask only for the single missing piece that actually moves the conversation forward.
+     // Gemini's reply is preferred; these are only safe fallbacks when generation is unavailable.
      const knownCapture={name:!!name,phone:!!phone,service:!!service,budget:!!budget}
      const safeReply=text(a.reply,5000)
      const safeStructuredReply=!containsInternalLeak(safeReply)?safeReply:''
