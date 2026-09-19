@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
 import { useSubscription } from '../lib/useSubscription'
 import FeatureLocked from '../components/FeatureLocked'
+import CampaignTemplatePreview from '../components/CampaignTemplatePreview'
 
 interface AudienceFilter {
   status?: string
@@ -48,6 +49,8 @@ interface WhatsAppTemplate {
   status: string
   category?: string | null
   components?: unknown[]
+  variables?: Array<{ index: number; component: string; example: string }>
+  hasButtons?: boolean
 }
 
 interface QueueStats {
@@ -231,6 +234,11 @@ export default function Campaigns() {
   const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplate[]>([])
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [templatesError, setTemplatesError] = useState<string | null>(null)
+
+  const selectedWhatsAppTemplate = useMemo(
+    () => whatsappTemplates.find(template => template.name === form.templateName && template.language === form.templateLanguage) ?? null,
+    [whatsappTemplates, form.templateName, form.templateLanguage]
+  )
 
   const [form, setForm] = useState({
     name: '',
@@ -1378,30 +1386,63 @@ export default function Campaigns() {
             )}
 
             <div className="sm:col-span-2">
-              <label className="text-xs font-semibold text-ink-900/60">
-                نص الرسالة
-              </label>
+              {selectedWhatsAppTemplate ? (
+                <>
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 mb-4">
+                    <div className="text-sm font-bold text-emerald-900">القالب المعتمد جاهز للحملة</div>
+                    <div className="text-xs text-emerald-800/70 mt-1">
+                      اسم العميل والشركة سيتم ربطهما تلقائيًا، والقيمة الثالثة تكتبها أنت حسب العرض أو الخدمة.
+                    </div>
+                  </div>
 
-              <textarea
-                required
-                rows={5}
-                value={form.messageBody}
-                onChange={e =>
-                  setForm({
-                    ...form,
-                    messageBody:
-                      e.target.value,
-                  })
-                }
-                placeholder="اكتب الرسالة هنا... يمكنك استخدام {name} و {company}"
-                className="w-full mt-1.5 border border-sand-200 bg-white rounded-xl px-3.5 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 resize-y min-h-[130px]"
-              />
+                  <div className="grid lg:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-ink-900/60">
+                        قيمة العرض / الخدمة ({{3}})
+                      </label>
+                      <input
+                        required
+                        value={form.messageBody}
+                        onChange={e => setForm({ ...form, messageBody: e.target.value })}
+                        placeholder="مثال: إدارة الحملات الإعلانية"
+                        className="w-full mt-1.5 border border-sand-200 bg-white rounded-xl px-3.5 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                      />
+                      <div className="text-[11px] text-ink-900/40 mt-2">
+                        {{1}} = اسم العميل · {{2}} = اسم الشركة · {{3}} = القيمة التي تدخلها هنا
+                      </div>
+                    </div>
+
+                    <CampaignTemplatePreview
+                      template={selectedWhatsAppTemplate}
+                      values={{
+                        1: 'أحمد',
+                        2: 'Dragon Media',
+                        3: form.messageBody || 'الخدمة أو العرض',
+                      }}
+                      fallbackText={form.messageBody}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label className="text-xs font-semibold text-ink-900/60">
+                    نص الرسالة
+                  </label>
+                  <textarea
+                    required
+                    rows={5}
+                    value={form.messageBody}
+                    onChange={e => setForm({ ...form, messageBody: e.target.value })}
+                    placeholder="اكتب الرسالة هنا..."
+                    className="w-full mt-1.5 border border-sand-200 bg-white rounded-xl px-3.5 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 resize-y min-h-[130px]"
+                  />
+                </>
+              )}
 
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                 <span className="text-xs text-ink-900/40">
-                  المتغيرات المتاحة: {'{name}'} و {'{company}'}
+                  القالب المعتمد من Meta هو الذي يحدد النص والأزرار النهائية.
                 </span>
-
                 <span className="text-[11px] text-ink-900/35">
                   Opt-in فقط
                 </span>
