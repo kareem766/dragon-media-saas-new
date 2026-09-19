@@ -100,7 +100,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
       const { data: rows, error } = await admin.from('campaign_messages').select('status').eq('campaign_id', campaignId).eq('organization_id', organizationId)
       if (error) throw error
       const counts = (rows || []).reduce((acc: Record<string, number>, row: { status: string | null }) => { const key = row.status || 'unknown'; acc[key] = (acc[key] || 0) + 1; return acc }, {})
-      const { error: updateError } = await admin.from('campaigns').update({ total_recipients: rows?.length || 0, queued_count: counts['قيد الإرسال'] || counts.queued || counts.pending || 0, sent_count: counts['تم الإرسال'] || counts.sent || 0, delivered_count: counts['تم التسليم'] || counts.delivered || 0, failed_count: counts['فشل'] || counts.failed || 0, skipped_count: counts['متخطى'] || counts.skipped || 0, updated_at: new Date().toISOString(), last_run_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
+      const { error: updateError } = await admin.from('campaigns').update({ total_recipients: rows?.length || 0, queued_count: counts['قيد الإرسال'] || counts.queued || counts.pending || 0, sent_count: counts['تم الإرسال'] || counts.sent || 0, delivered_count: counts['تم التسليم'] || counts.delivered || 0, failed_count: counts['فشل'] || counts['فشلت'] || counts.failed || 0, skipped_count: counts['متخطى'] || counts.skipped || 0, updated_at: new Date().toISOString(), last_run_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
       if (updateError) throw updateError
       return json(res, 200, { message: 'تم تحديث إحصائيات الحملة.' })
     }
@@ -132,7 +132,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
         const { error: insertError } = await admin.from('campaign_messages').insert(rows)
         if (insertError) throw insertError
       }
-      const { error: updateError } = await admin.from('campaigns').update({ status: 'جاهزة', total_recipients: eligible.length, queued_count: eligible.length, audience_preview_count: eligible.length, last_run_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
+      const { error: updateError } = await admin.from('campaigns').update({ status: 'جاهزة للإرسال', total_recipients: eligible.length, queued_count: eligible.length, audience_preview_count: eligible.length, last_run_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
       if (updateError) throw updateError
       return json(res, 200, { message: `تم تجهيز الحملة واستهداف ${eligible.length} عميل.` })
     }
