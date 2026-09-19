@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { createClient } from '@supabase/supabase-js'\nimport { createDecipheriv, createHash } from 'node:crypto'
+import { createClient } from '@supabase/supabase-js'
+import { createDecipheriv, createHash } from 'node:crypto'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -24,7 +25,7 @@ async function getUser(req: VercelRequest) {
   return data.user
 }
 
-async function getOrganizationId(admin: ReturnType<typeof createClient>, userId: string) {
+async function getOrganizationId(admin: any, userId: string) {
   const { data: profile, error } = await admin.from('profiles').select('organization_id').eq('id', userId).maybeSingle()
   if (error) throw error
   return profile?.organization_id || null
