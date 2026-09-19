@@ -239,3 +239,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return json(res, 500, { error: error instanceof Error ? error.message : 'Webhook processing failed.' })
   }
 }
+
+// Trigger deployment after WhatsApp status diagnostics fix.
