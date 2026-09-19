@@ -268,13 +268,14 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
 
       async function markMessage(id: string, status: string, patch: Record<string, unknown> = {}) {
         const now = new Date().toISOString()
-        await admin.from('campaign_messages').update({
+        const { error } = await admin.from('campaign_messages').update({
           status,
           updated_at: now,
           ...(status === 'تم الإرسال' ? { sent_at: now } : {}),
-          ...(status === 'فشل' ? { failed_at: now } : {}),
+          ...(status === 'فشلت' ? { failed_at: now } : {}),
           ...patch,
         }).eq('id', id).eq('organization_id', organizationId)
+        if (error) throw error
       }
 
       function decryptMetaToken(value: any) {
