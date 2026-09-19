@@ -837,93 +837,52 @@ export default async function handler(
 
   /**
    * =======================================================
-   * 2. CRON SECRET
+   * 2. SERVER CONFIGURATION
    * =======================================================
    */
 
-  const cronSecret =
-    process.env.CRON_SECRET
+  const cronSecret = String(process.env.CRON_SECRET || '')
+  const authorization = String(req.headers.authorization || '')
+  const workerSecret = String(req.headers['x-campaign-worker-secret'] || '')
 
-  if (!cronSecret) {
-    console.error(
-      '[automation-run] CRON_SECRET is not configured'
-    )
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY
 
-    return jsonError(
-      res,
-      500,
-      'Cron authentication is not configured'
-    )
+  if (!supabaseUrl || !supabaseServiceKey) {
+    console.error('[automation-run] Missing Supabase server configuration')
+    return jsonError(res, 500, 'Server configuration error')
   }
 
   /**
    * =======================================================
-   * 3. AUTHORIZATION
+   * 3. SERVICE ROLE CLIENT + AUTHORIZATION
    * =======================================================
    */
 
-  const authorization =
-    req.headers.authorization
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 
-  if (
-    !authorization ||
-    authorization !==
-      `Bearer ${cronSecret}`
-  ) {
-    return jsonError(
-      res,
-      401,
-      'Unauthorized'
-    )
+  let authorized = Boolean(cronSecret && authorization === `Bearer ${cronSecret}`)
+
+  if (!authorized && workerSecret) {
+    const { data: secretRow, error: secretError } = await supabase
+      .from('system_secrets')
+      .select('value')
+      .eq('key', 'campaign_worker_webhook_secret')
+      .maybeSingle()
+
+    if (secretError) {
+      console.error('[automation-run] Failed to validate worker secret:', secretError)
+      return jsonError(res, 500, 'Worker authentication check failed')
+    }
+
+    authorized = Boolean(secretRow?.value && workerSecret === String(secretRow.value))
   }
 
-  /**
-   * =======================================================
-   * 4. SERVER CONFIGURATION
-   * =======================================================
-   */
-
-  const supabaseUrl =
-    process.env.VITE_SUPABASE_URL
-
-  const supabaseServiceKey =
-    process.env.SUPABASE_SERVICE_KEY
-
-  if (
-    !supabaseUrl ||
-    !supabaseServiceKey
-  ) {
-    console.error(
-      '[automation-run] Missing Supabase server configuration'
-    )
-
-    return jsonError(
-      res,
-      500,
-      'Server configuration error'
-    )
+  if (!authorized) {
+    return jsonError(res, 401, 'Unauthorized')
   }
-
-  /**
-   * =======================================================
-   * 5. SERVICE ROLE CLIENT
-   * =======================================================
-   */
-
-  const supabase =
-    createClient(
-      supabaseUrl,
-      supabaseServiceKey,
-      {
-        auth: {
-          autoRefreshToken:
-            false,
-
-          persistSession:
-            false,
-        },
-      }
-    )
 
   try {
     const campaignResults = await runDueCampaigns(supabase)
