@@ -5,6 +5,14 @@ import { createDecipheriv, createHash } from 'node:crypto'
 const json = (res: any, status: number, body: unknown) => res.status(status).json(body)
 const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '')
 
+const variableTokens = (value: unknown) =>
+  Array.from(String(value || '').matchAll(/\{\{([^}]+)\}\}/g))
+    .map((match: any) => String(match[1] || '').trim())
+    .filter(Boolean)
+
+const variableCount = (value: unknown) => new Set(variableTokens(value)).size
+const cleanValue = (value: unknown) => String(value ?? '').replace(/[\r\n\t]/g, ' ').trim()
+
 function decryptToken(value: any) {
   if (!value?.iv || !value?.tag || !value?.data) throw new Error('WhatsApp access token is unavailable.')
   const seed = String(process.env.META_TOKEN_ENCRYPTION_KEY || process.env.META_APP_SECRET || '').trim()
