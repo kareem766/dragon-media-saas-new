@@ -377,6 +377,24 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
           if (type === 'HEADER' || type === 'BODY') {
             components.push({ type: type.toLowerCase(), parameters })
           }
+
+          if (type === 'BUTTONS' && Array.isArray(component?.buttons)) {
+            component.buttons.forEach((button: any, buttonIndex: number) => {
+              const buttonUrl = String(button?.url || '')
+              const urlMatches = [...buttonUrl.matchAll(/\{\{(\\d+)\}\}/g)]
+              if (String(button?.type || '').toUpperCase() === 'URL' && urlMatches.length) {
+                components.push({
+                  type: 'button',
+                  sub_type: 'url',
+                  index: String(buttonIndex),
+                  parameters: [{
+                    type: 'text',
+                    text: `campaign-${String(customer?.id || 'test')}`,
+                  }],
+                })
+              }
+            })
+          }
         }
 
         return components
