@@ -223,6 +223,7 @@ export default function Campaigns() {
   const [form, setForm] = useState({
     name: '',
     channel: 'whatsapp',
+    templateName: '',
     messageBody: '',
     audienceStatus: 'نشط',
     tag: '',
@@ -251,6 +252,7 @@ export default function Campaigns() {
             status,
             scheduled_at,
             message_body,
+            template_name,
             audience_filter,
             total_recipients,
             queued_count,
@@ -340,7 +342,7 @@ export default function Campaigns() {
         item.delivered++
       }
 
-      if (message.status === 'فشلت') {
+      if (message.status === 'فشل' || message.status === 'فشلت') {
         item.failed++
       }
 
@@ -466,6 +468,11 @@ export default function Campaigns() {
         message_body:
           trimmedMessage,
 
+        template_name:
+          form.channel === 'whatsapp' && form.templateName.trim()
+            ? form.templateName.trim()
+            : null,
+
         audience_filter: {
           status:
             form.audienceStatus,
@@ -494,6 +501,7 @@ export default function Campaigns() {
     setForm({
       name: '',
       channel: 'whatsapp',
+      templateName: '',
       messageBody: '',
       audienceStatus: 'نشط',
       tag: '',
@@ -616,6 +624,29 @@ export default function Campaigns() {
       )
     } finally {
       setPreparingId(null)
+    }
+  }
+
+  const runCampaign = async (campaign: DBCampaign) => {
+    const confirmed = window.confirm(
+      `سيتم بدء إرسال حملة «${campaign.name}» عبر ${channelLabels[campaign.channel] ?? campaign.channel} على دفعات. هل تريد المتابعة؟`
+    )
+    if (!confirmed) return
+
+    setActionId(campaign.id)
+    setActionType('run')
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const result = await callCampaignApi(campaign.id, 'run')
+      setSuccess(result.message ?? 'تم تنفيذ دفعة الإرسال.')
+      await loadData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'تعذر تشغيل الحملة.')
+    } finally {
+      setActionId(null)
+      setActionType(null)
     }
   }
 
@@ -1206,6 +1237,23 @@ export default function Campaigns() {
               />
             </div>
 
+            {form.channel === 'whatsapp' && (
+              <div>
+                <label className="text-xs font-semibold text-ink-900/60">
+                  اسم قالب WhatsApp (اختياري)
+                </label>
+                <input
+                  value={form.templateName}
+                  onChange={e => setForm({ ...form, templateName: e.target.value })}
+                  placeholder="مثال: dragon_offer"
+                  className="w-full mt-1.5 border border-sand-200 bg-white rounded-xl px-3.5 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                />
+                <p className="text-[11px] text-ink-900/40 mt-1.5">
+                  استخدم اسم قالب معتمد من Meta إذا كانت الرسالة تحتاج Template.
+                </p>
+              </div>
+            )}
+
             <div className="sm:col-span-2">
               <label className="text-xs font-semibold text-ink-900/60">
                 نص الرسالة
@@ -1523,6 +1571,16 @@ export default function Campaigns() {
 
                       <td className="py-4 px-3 min-w-[290px]">
                         <div className="flex flex-wrap gap-2">
+
+                          {['جاهزة', 'قيد الإرسال', 'قيد التنفيذ'].includes(campaign.status) && (
+                            <Button
+                              disabled={isBusy || preparingId === campaign.id}
+                              onClick={() => runCampaign(campaign)}
+                              className="bg-ink-950 text-white"
+                            >
+                              {isBusy && actionType === 'run' ? 'جاري الإرسال...' : 'بدء الإرسال'}
+                            </Button>
+                          )}
 
                           {canPrepare && (
                             <Button
