@@ -87,7 +87,33 @@ export default async function handler(req: any, res: any) {
   })
 
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) return json(res, 502, { success: false, error: data?.error?.message || `Meta send failed (${response.status})`, metaError: data?.error ? { code: data.error.code, type: data.error.type, subcode: data.error.error_subcode } : undefined, templateName })
+  if (!response.ok) {
+    const metaError = data?.error ? {
+      code: data.error.code,
+      type: data.error.type,
+      subcode: data.error.error_subcode,
+      message: data.error.message,
+      errorUserTitle: data.error.error_user_title,
+      errorUserMsg: data.error.error_user_msg,
+      fbtraceId: data.error.fbtrace_id,
+    } : undefined
+    console.error('[subscription-whatsapp-test] Meta send rejected', {
+      status: response.status,
+      templateName,
+      templateLanguage: template.language,
+      templateStatus: template.status,
+      templateCategory: template.category,
+      components,
+      metaError,
+    })
+    return json(res, 502, {
+      success: false,
+      error: data?.error?.message || `Meta send failed (${response.status})`,
+      metaError,
+      templateName,
+      templateLanguage: template.language,
+    })
+  }
 
   return json(res, 200, {
     success: true,
