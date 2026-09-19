@@ -192,6 +192,7 @@ async function handleFacebookWebhook(db: any, payload: any) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
+    if (String(req.query.renew || '') === '1') return res.redirect(302, '/#/billing')
     const mode = String(req.query['hub.mode'] || ''), token = String(req.query['hub.verify_token'] || ''), challenge = String(req.query['hub.challenge'] || '')
     const verifyToken = env('META_WEBHOOK_VERIFY_TOKEN', 'META_STATE_SECRET')
     if (mode === 'subscribe' && verifyToken && token === verifyToken) return res.status(200).send(challenge)
