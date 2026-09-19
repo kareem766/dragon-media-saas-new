@@ -385,6 +385,12 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
     return json(res, 400, { message: 'إجراء غير معروف.' })
   } catch (error) {
     console.error('campaign-run error', error)
-    return json(res, 500, { message: error instanceof Error ? error.message : 'تعذر تنفيذ الحملة.' })
+    const message =
+      error instanceof Error
+        ? error.message
+        : (error && typeof error === 'object' && 'message' in error)
+          ? String((error as any).message)
+          : 'تعذر تنفيذ الحملة.'
+    return json(res, 500, { message })
   }
 }
