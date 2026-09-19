@@ -133,7 +133,6 @@ export default async function handler(req: any, res: any) {
       suffix = `test-${String(organizationId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24) || 'renewal'}`
     }
     const buttonParameter: any = { type: 'text', text: cleanText(suffix) }
-    if (token && !/^\d+$/.test(token)) buttonParameter.parameter_name = token
     components.push({
       type: 'button',
       sub_type: 'url',
