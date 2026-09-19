@@ -28,6 +28,22 @@ async function graph(path: string, token: string) {
   return data
 }
 
+function extractVariables(components: any[]) {
+  const variables: Array<{ index: number; component: string; example: string }> = []
+  for (const component of components) {
+    const type = String(component?.type || '').toUpperCase()
+    const text = String(component?.text || '')
+    const matches = [...text.matchAll(/\{\{(\d+)\}\}/g)]
+    for (const match of matches) {
+      const index = Number(match[1])
+      if (!variables.some((item) => item.index === index && item.component === type)) {
+        variables.push({ index, component: type, example: '' })
+      }
+    }
+  }
+  return variables.sort((a, b) => a.index - b.index)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed.' })
 
@@ -76,21 +92,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = await graph(`/${encodeURIComponent(wabaId)}/message_templates?limit=100`, accessToken)
 
     const templates = Array.isArray(data?.data) ? data.data : []
-    const approved = templates.filter((template: any) => String(template?.status || '').toUpperCase() === 'APPROVED')
+    const approvedMarketing = templates.filter((template: any) =>
+      String(template?.status || '').toUpperCase() === 'APPROVED' &&
+      String(template?.category || '').toUpperCase() === 'MARKETING'
+    )
 
     return json(res, 200, {
       ok: true,
       waba_id: wabaId,
-      templates: approved.map((template: any) => ({
-        id: template.id || null,
-        name: template.name || '',
-        language: template.language || '',
-        status: template.status || '',
-        category: template.category || '',
-        components: Array.isArray(template.components) ? template.components : [],
-      })),
+      templates: approvedMarketing.map((template: any) => {
+        const components = Array.isArray(template.components) ? template.components : []
+        return {
+          id: template.id || null,
+          name: template.name || '',
+          language: template.language || '',
+          status: template.status || '',
+          category: template.category || '',
+          components,
+          variables: extractVariables(components),
+          hasButtons: components.some((component: any) => String(component?.type || '').toUpperCase() === 'BUTTONS'),
+        }
+      }),
       paging: data?.paging || null,
-      total: approved.length,
+      total: approvedMarketing.length,
     })
   } catch (error) {
     console.error('WhatsApp templates fetch failed', error)
