@@ -146,6 +146,61 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
     }
 
     if (action === 'run') {
+      // The Supabase campaign dispatcher locks scheduled campaigns as
+      // "قيد الإرسال" before calling this worker. If no queue exists yet,
+      // build the queue here so scheduled/worker campaigns cannot be
+      // completed with zero recipients.
+      const { count: existingMessageCount } = await admin
+        .from('campaign_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('campaign_id', campaignId)
+        .eq('organization_id', organizationId)
+
+      if ((existingMessageCount || 0) === 0 && campaign.status === 'قيد الإرسال') {
+        const filter = campaign.audience_filter || {}
+        let audienceQuery = admin.from('customers').select('*').eq('organization_id', organizationId)
+        if (campaign.audience && campaign.audience !== 'كل العملاء المشتركين') {
+          audienceQuery = audienceQuery.eq('status', campaign.audience)
+        }
+        if (filter.tag) audienceQuery = audienceQuery.contains('tags', [filter.tag])
+        const { data: audienceCustomers, error: audienceError } = await audienceQuery
+        if (audienceError) throw audienceError
+
+        const eligible = (audienceCustomers || []).filter(
+          (customer: Record<string, unknown>) =>
+            customer.marketing_opt_in !== false && customer.opt_in !== false
+        )
+
+        const rows = eligible.map((customer: Record<string, unknown>) => ({
+          campaign_id: campaignId,
+          customer_id: customer.id,
+          organization_id: organizationId,
+          channel: campaign.channel,
+          message_body: interpolate(campaign.message_body || '', customer),
+          status: 'قيد الإرسال',
+          opt_in: true,
+          queued_at: new Date().toISOString(),
+        }))
+
+        if (rows.length) {
+          const { error: insertError } = await admin.from('campaign_messages').insert(rows)
+          if (insertError) throw insertError
+        }
+
+        const { error: queueUpdateError } = await admin
+          .from('campaigns')
+          .update({
+            total_recipients: eligible.length,
+            queued_count: eligible.length,
+            audience_preview_count: eligible.length,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', campaignId)
+          .eq('organization_id', organizationId)
+
+        if (queueUpdateError) throw queueUpdateError
+      }
+
       const channel = String(campaign.channel || '').toLowerCase()
       if (!['whatsapp', 'messenger', 'instagram'].includes(channel)) {
         return json(res, 422, { message: 'قناة الحملة غير مدعومة حالياً. اختر WhatsApp أو Messenger أو Instagram.' })
