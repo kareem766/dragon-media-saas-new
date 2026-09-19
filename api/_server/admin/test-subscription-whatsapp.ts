@@ -62,35 +62,42 @@ export default async function handler(req: any, res: any) {
     || candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED')
   if (!template) return json(res, 409, { success: false, error: 'قالب إشعار التجديد غير موجود أو غير معتمد في Meta، أو لغة القالب مختلفة.', templateName, requestedLanguage: language, available: candidates.map((item: any) => ({ language: item?.language, status: item?.status, category: item?.category })) })
 
-  const values = [String(org.name || 'عميلنا'), 'اختبار التجديد', 'يوم واحد', new Date().toISOString().slice(0, 10), String(organizationId)]
-  const variableCount = (value: unknown) => Math.max(0, ...Array.from(String(value || '').matchAll(/\{\{(\d+)\}\}/g)).map((match: any) => Number(match[1])))
+  const variableIndexes = (value: unknown) => Array.from(String(value || '').matchAll(/\{\{(\d+)\}\}/g)).map((match: any) => Number(match[1]))
+  const distinctVariableCount = (value: unknown) => new Set(variableIndexes(value)).size
+  const exampleValues = (value: unknown) => Array.isArray(value) ? value.map((item) => String(item ?? '')) : []
+  const fallbackValues = [String(org.name || 'عميلنا'), 'اختبار التجديد', 'يوم واحد', new Date().toISOString().slice(0, 10), String(organizationId)]
   const components: any[] = []
 
   const headerComponent = (template.components || []).find((component: any) => component?.type === 'HEADER')
-  const headerVariableCount = variableCount(headerComponent?.text)
-  if (headerVariableCount > 0) {
-    components.push({ type: 'header', parameters: values.slice(0, headerVariableCount).map((text) => ({ type: 'text', text })) })
+  const headerCount = distinctVariableCount(headerComponent?.text)
+  if (headerCount > 0) {
+    const examples = exampleValues(headerComponent?.example?.header_text?.[0])
+    const values = examples.length >= headerCount ? examples : fallbackValues
+    components.push({ type: 'header', parameters: values.slice(0, headerCount).map((text) => ({ type: 'text', text })) })
   }
 
   const bodyComponent = (template.components || []).find((component: any) => component?.type === 'BODY')
-  const bodyVariableCount = variableCount(bodyComponent?.text)
-  if (bodyVariableCount > 0) {
-    components.push({ type: 'body', parameters: values.slice(0, bodyVariableCount).map((text) => ({ type: 'text', text })) })
+  const bodyCount = distinctVariableCount(bodyComponent?.text)
+  if (bodyCount > 0) {
+    const examples = exampleValues(bodyComponent?.example?.body_text?.[0])
+    const values = examples.length >= bodyCount ? examples : fallbackValues
+    components.push({ type: 'body', parameters: values.slice(0, bodyCount).map((text) => ({ type: 'text', text })) })
   }
 
   const buttonsComponent = (template.components || []).find((component: any) => component?.type === 'BUTTONS')
   const buttons = Array.isArray(buttonsComponent?.buttons) ? buttonsComponent.buttons : []
   buttons.forEach((button: any, buttonIndex: number) => {
     if (String(button?.type || '').toUpperCase() !== 'URL') return
-    const count = variableCount(button?.url)
-    if (count > 0) {
-      components.push({
-        type: 'button',
-        sub_type: 'url',
-        index: String(buttonIndex),
-        parameters: values.slice(0, count).map((text) => ({ type: 'text', text })),
-      })
-    }
+    const count = distinctVariableCount(button?.url)
+    if (count <= 0) return
+    const examples = exampleValues(button?.example)
+    const values = examples.length >= count ? examples : fallbackValues
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: String(buttonIndex),
+      parameters: values.slice(0, count).map((text) => ({ type: 'text', text })),
+    })
   })
 
   const response = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(phoneNumberId)}/messages`, {
