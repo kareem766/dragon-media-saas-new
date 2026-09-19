@@ -427,6 +427,14 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
                 throw new Error('قالب WhatsApp غير موجود أو غير معتمد من Meta بنفس الاسم واللغة.')
               }
 
+              const templateDefinition = Array.isArray(approvedTemplate.components) ? approvedTemplate.components : []
+              const { error: templateSyncError } = await admin
+                .from('campaigns')
+                .update({ template_components: templateDefinition, updated_at: new Date().toISOString() })
+                .eq('id', campaignId)
+                .eq('organization_id', organizationId)
+              if (templateSyncError) throw templateSyncError
+
               const storedComponents = Array.isArray(campaign.template_components) ? campaign.template_components : []
               const components = storedComponents.length
                 ? storedComponents
