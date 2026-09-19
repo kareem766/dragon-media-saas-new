@@ -13,6 +13,18 @@ function normalizePhone(value: unknown) {
   return String(value || '').replace(/[\u200e\u200f\u202a-\u202e\s+]/g, '').replace(/[^0-9]/g, '')
 }
 
+
+const variableTokens = (value: unknown) =>
+  Array.from(String(value || '').matchAll(/\{\{([^}]+)\}\}/g))
+    .map((match: any) => String(match[1] || '').trim())
+    .filter(Boolean)
+
+const variableNames = (value: unknown) => variableTokens(value).filter((token) => !/^\d+$/.test(token))
+const numericVariableIndexes = (value: unknown) =>
+  variableTokens(value).filter((token) => /^\d+$/.test(token)).map(Number)
+const variableCount = (value: unknown) => new Set(variableTokens(value)).size
+const cleanValue = (value: unknown) => String(value ?? '').replace(/[\r\n\t]/g, ' ').trim()
+
 function decryptToken(value: any) {
   if (!value?.iv || !value?.tag || !value?.data) throw new Error('WhatsApp access token is unavailable.')
   const seed = String(process.env.META_TOKEN_ENCRYPTION_KEY || process.env.META_APP_SECRET || '').trim()
@@ -35,16 +47,47 @@ async function sendTemplate(phoneNumberId: string, token: string, to: string, te
   const template = candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED' && String(item?.language || '') === language)
     || candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED')
   if (!template) throw new Error('WhatsApp subscription template is missing or not approved in Meta, or its language differs.')
-  const bodyComponent = (template.components || []).find((component: any) => component?.type === 'BODY')
-  const bodyText = String(bodyComponent?.text || '')
-  const bodyVariableCount = Math.max(0, ...Array.from(bodyText.matchAll(/\\{\\{(\\d+)\\}\\}/g)).map((match: any) => Number(match[1])))
   const components: any[] = []
-  if (bodyVariableCount > 0) components.push({ type: 'body', parameters: parameters.slice(0, bodyVariableCount).map((text) => ({ type: 'text', text })) })
-  const buttonComponent = (template.components || []).find((component: any) => component?.type === 'BUTTONS' && Array.isArray(component?.buttons) && component.buttons.some((button: any) => button?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(button?.url || ''))))
-  if (buttonComponent && buttonParameter) {
-    const button = buttonComponent.buttons.find((item: any) => item?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(item?.url || '')))
-    components.push({ type: 'button', sub_type: 'url', index: String((buttonComponent.buttons || []).indexOf(button)), parameters: [{ type: 'text', text: buttonParameter }] })
+  const fallbackValues = parameters.length ? parameters : ['عميلنا', 'الباقة الحالية', 'يوم واحد', new Date().toISOString().slice(0, 10)]
+  const bodyComponent = (template.components || []).find((component: any) => component?.type === 'BODY')
+  const bodyTokens = variableTokens(bodyComponent?.text)
+  if (bodyTokens.length) {
+    const namedExamples = Array.isArray(bodyComponent?.example?.body_text_named_params)
+      ? bodyComponent.example.body_text_named_params.map((item: any) => String(item?.example ?? '').trim())
+      : []
+    const positionalExamples = Array.isArray(bodyComponent?.example?.body_text?.[0])
+      ? bodyComponent.example.body_text[0].map((item: any) => String(item ?? '').trim())
+      : []
+    const values = positionalExamples.length >= bodyTokens.length ? positionalExamples : namedExamples.length >= bodyTokens.length ? namedExamples : fallbackValues
+    components.push({
+      type: 'body',
+      parameters: bodyTokens.map((token, index) => ({
+        type: 'text',
+        text: String(values[index] || fallbackValues[index] || 'اختبار').replace(/[\r\n\t]/g, ' ').trim(),
+        ...( /^\d+$/.test(token) ? {} : { parameter_name: token }),
+      })),
+    })
   }
+  const buttonComponents = (template.components || []).filter((component: any) => component?.type === 'BUTTONS' && Array.isArray(component?.buttons))
+  for (const buttonsComponent of buttonComponents) {
+    for (let buttonIndex = 0; buttonIndex < buttonsComponent.buttons.length; buttonIndex++) {
+      const button = buttonsComponent.buttons[buttonIndex]
+      if (String(button?.type || '').toUpperCase() !== 'URL') continue
+      const tokens = variableTokens(button?.url)
+      if (!tokens.length || !buttonParameter) continue
+      const token = tokens[0]
+      const templateUrl = String(button?.url || '')
+      const marker = templateUrl.indexOf('{{' + token + '}}')
+      const prefix = marker >= 0 ? templateUrl.slice(0, marker) : ''
+      const example = Array.isArray(button?.example) ? String(button.example[0] || '') : ''
+      let suffix = example.startsWith(prefix) ? example.slice(prefix.length) : buttonParameter
+      if (!suffix || /\{\{[^}]+\}\}/.test(suffix) || /^(https?:\/\/|www\.)/i.test(suffix)) suffix = buttonParameter
+      const parameter: any = { type: 'text', text: suffix }
+      if (!/^\d+$/.test(token)) parameter.parameter_name = token
+      components.push({ type: 'button', sub_type: 'url', index: String(buttonIndex), parameters: [parameter] })
+    }
+  }
+
   const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
