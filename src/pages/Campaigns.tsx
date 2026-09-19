@@ -69,7 +69,6 @@ const channelLabels: Record<string, string> = {
   whatsapp: 'واتساب',
   messenger: 'ماسنجر',
   instagram: 'إنستجرام',
-  email: 'بريد إلكتروني',
 }
 
 function percentage(value: number, total: number) {
@@ -1162,10 +1161,6 @@ export default function Campaigns() {
 
                 <option value="instagram">
                   إنستجرام
-                </option>
-
-                <option value="email">
-                  بريد إلكتروني
                 </option>
               </select>
             </div>
