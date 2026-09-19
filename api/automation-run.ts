@@ -753,6 +753,53 @@ async function executeAutomation(
   }
 }
 
+
+async function runDueCampaigns(supabase: SupabaseClient) {
+  const now = new Date().toISOString()
+  const { data: campaigns, error } = await supabase
+    .from('campaigns')
+    .select('id,status,scheduled_at,organization_id')
+    .in('status', ['مجدولة', 'جاهزة', 'قيد الإرسال'])
+    .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
+    .order('scheduled_at', { ascending: true, nullsFirst: true })
+    .limit(20)
+
+  if (error) throw error
+
+  const results: any[] = []
+  const workerSecret = String(process.env.CRON_SECRET || '')
+
+  for (const campaign of campaigns || []) {
+    const actions = campaign.status === 'مجدولة' ? ['prepare', 'run'] : ['run']
+
+    for (const action of actions) {
+      const state: any = { statusCode: 200, body: null }
+      const response: any = {
+        status(code: number) { state.statusCode = code; return response },
+        json(body: unknown) { state.body = body; return response },
+        setHeader() { return response },
+      }
+
+      await handleCampaignRequest({
+        method: 'POST',
+        headers: { 'x-campaign-worker-secret': workerSecret },
+        body: { campaignId: String(campaign.id), action },
+      } as any, response)
+
+      results.push({
+        campaign_id: campaign.id,
+        action,
+        status_code: state.statusCode,
+        response: state.body,
+      })
+
+      if (state.statusCode >= 400) break
+    }
+  }
+
+  return results
+}
+
 /**
  * =========================================================
  * VERCEL HANDLER
@@ -879,6 +926,8 @@ export default async function handler(
     )
 
   try {
+    const campaignResults = await runDueCampaigns(supabase)
+
     /**
      * =====================================================
      * 6. LOAD ACTIVE AUTOMATIONS
@@ -1195,6 +1244,7 @@ export default async function handler(
         skippedNotifications,
 
       results,
+      campaign_results: campaignResults,
     })
   } catch (error) {
     console.error(
