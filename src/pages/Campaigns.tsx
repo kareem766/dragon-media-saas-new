@@ -235,11 +235,6 @@ export default function Campaigns() {
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [templatesError, setTemplatesError] = useState<string | null>(null)
 
-  const selectedWhatsAppTemplate = useMemo(
-    () => whatsappTemplates.find(template => template.name === form.templateName && template.language === form.templateLanguage) ?? null,
-    [whatsappTemplates, form.templateName, form.templateLanguage]
-  )
-
   const [form, setForm] = useState({
     name: '',
     channel: 'whatsapp',
@@ -250,6 +245,13 @@ export default function Campaigns() {
     tag: '',
     scheduledAt: '',
   })
+
+
+  const selectedWhatsAppTemplate = useMemo(
+    () => whatsappTemplates.find(template => template.name === form.templateName && template.language === form.templateLanguage) ?? null,
+    [whatsappTemplates, form.templateName, form.templateLanguage]
+  )
+
 
   const loadData = async () => {
     if (!supabase || !organizationId) {
