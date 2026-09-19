@@ -355,3 +355,5 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   return res.status(502).json({error:'Ryan request failed',details:text(error?.message,500)})
  }
 }
+
+// Deployment trigger: deterministic human handoff detection.
