@@ -41,6 +41,15 @@ interface CampaignMessage {
   status: string
 }
 
+interface WhatsAppTemplate {
+  id: string
+  name: string
+  language: string
+  status: string
+  category?: string | null
+  components?: unknown[]
+}
+
 interface QueueStats {
   total: number
   queued: number
@@ -219,6 +228,10 @@ export default function Campaigns() {
   const [success, setSuccess] =
     useState<string | null>(null)
 
+  const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplate[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(false)
+  const [templatesError, setTemplatesError] = useState<string | null>(null)
+
   const [form, setForm] = useState({
     name: '',
     channel: 'whatsapp',
@@ -305,6 +318,43 @@ export default function Campaigns() {
     if (organizationId) {
       loadData()
     }
+  }, [organizationId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadWhatsAppTemplates = async () => {
+      if (!supabase || !organizationId) return
+
+      setTemplatesLoading(true)
+      setTemplatesError(null)
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const accessToken = sessionData.session?.access_token
+        if (!accessToken) throw new Error('انتهت جلسة الدخول.')
+
+        const response = await fetch(
+          '/api/meta/whatsapp/templates?organizationId=' + encodeURIComponent(organizationId),
+          { headers: { Authorization: 'Bearer ' + accessToken } }
+        )
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(result.error || 'تعذر تحميل قوالب WhatsApp المعتمدة.')
+
+        if (cancelled) return
+        setWhatsappTemplates(Array.isArray(result.templates) ? result.templates as WhatsAppTemplate[] : [])
+      } catch (err) {
+        if (!cancelled) {
+          setWhatsappTemplates([])
+          setTemplatesError(err instanceof Error ? err.message : 'تعذر تحميل قوالب WhatsApp.')
+        }
+      } finally {
+        if (!cancelled) setTemplatesLoading(false)
+      }
+    }
+
+    loadWhatsAppTemplates()
+    return () => { cancelled = true }
   }, [organizationId])
 
   const messageStats = useMemo(() => {
@@ -1277,17 +1327,37 @@ export default function Campaigns() {
             {form.channel === 'whatsapp' && (
               <div>
                 <label className="text-xs font-semibold text-ink-900/60">
-                  اسم قالب WhatsApp (اختياري)
+                  قالب WhatsApp المعتمد من Meta
                 </label>
-                <input
+                <select
                   value={form.templateName}
-                  onChange={e => setForm({ ...form, templateName: e.target.value })}
-                  placeholder="مثال: dragon_offer"
+                  onChange={e => {
+                    const selected = whatsappTemplates.find(item => item.name === e.target.value)
+                    setForm({ ...form, templateName: selected?.name ?? '' })
+                  }}
                   className="w-full mt-1.5 border border-sand-200 bg-white rounded-xl px-3.5 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
-                />
-                <p className="text-[11px] text-ink-900/40 mt-1.5">
-                  استخدم اسم قالب معتمد من Meta إذا كانت الرسالة تحتاج Template.
-                </p>
+                  disabled={templatesLoading}
+                >
+                  <option value="">
+                    {templatesLoading ? 'جاري تحميل القوالب المعتمدة...' : 'إرسال رسالة عادية بدون Template'}
+                  </option>
+                  {whatsappTemplates.map(template => (
+                    <option key={template.id || template.name} value={template.name}>
+                      {template.name} — {template.language}
+                    </option>
+                  ))}
+                </select>
+                {templatesError ? (
+                  <p className="text-[11px] text-red-600 mt-1.5">{templatesError}</p>
+                ) : whatsappTemplates.length ? (
+                  <p className="text-[11px] text-emerald-700 mt-1.5">
+                    تم العثور على {whatsappTemplates.length} قالب معتمد من Meta.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-ink-900/40 mt-1.5">
+                    لا يوجد قالب معتمد متاح لهذه المساحة حالياً.
+                  </p>
+                )}
               </div>
             )}
 
