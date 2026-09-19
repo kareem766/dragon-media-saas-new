@@ -48,9 +48,35 @@ export default async function handler(req: any, res: any) {
   if (!integration || !phoneNumberId || !integration.config?.access_token) return json(res, 409, { error: 'WhatsApp غير متصل لهذه المنظمة' })
 
   const graphVersion = process.env.META_GRAPH_API_VERSION || 'v23.0'
+  const token = decryptToken(integration.config.access_token)
+  const wabaId = String(integration?.metadata?.waba_id || '')
+  if (!wabaId) return json(res, 409, { error: 'WhatsApp WABA ID غير موجود' })
+
+  const templatesResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(wabaId)}/message_templates?name=${encodeURIComponent(templateName)}&limit=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const templatesData = await templatesResponse.json().catch(() => ({}))
+  if (!templatesResponse.ok) return json(res, 502, { success: false, error: templatesData?.error?.message || `Meta template lookup failed (${templatesResponse.status})`, templateName })
+  const candidates = Array.isArray(templatesData?.data) ? templatesData.data : []
+  const template = candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED' && String(item?.language || '') === language)
+    || candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED')
+  if (!template) return json(res, 409, { success: false, error: 'قالب إشعار التجديد غير موجود أو غير معتمد في Meta، أو لغة القالب مختلفة.', templateName, requestedLanguage: language, available: candidates.map((item: any) => ({ language: item?.language, status: item?.status, category: item?.category })) })
+
+  const bodyComponent = (template.components || []).find((component: any) => component?.type === 'BODY')
+  const bodyText = String(bodyComponent?.text || '')
+  const bodyVariableCount = Math.max(0, ...Array.from(bodyText.matchAll(/\\{\\{(\\d+)\\}\\}/g)).map((match: any) => Number(match[1])))
+  const values = [String(org.name || 'عميلنا'), 'اختبار التجديد', 'يوم واحد', new Date().toISOString().slice(0, 10)]
+  const components: any[] = []
+  if (bodyVariableCount > 0) components.push({ type: 'body', parameters: values.slice(0, bodyVariableCount).map((text) => ({ type: 'text', text })) })
+  const urlButton = (template.components || []).find((component: any) => component?.type === 'BUTTONS' && Array.isArray(component?.buttons) && component.buttons.some((button: any) => button?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(button?.url || ''))))
+  if (urlButton) {
+    const button = urlButton.buttons.find((item: any) => item?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(item?.url || '')))
+    components.push({ type: 'button', sub_type: 'url', index: String((urlButton.buttons || []).indexOf(button)), parameters: [{ type: 'text', text: String(organizationId) }] })
+  }
+
   const response = await fetch(`https://graph.facebook.com/${graphVersion}/${encodeURIComponent(phoneNumberId)}/messages`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${decryptToken(integration.config.access_token)}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messaging_product: 'whatsapp', recipient_type: 'individual', to: phone, type: 'template',
       template: {
