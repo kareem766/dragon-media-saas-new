@@ -130,6 +130,7 @@ export default async function handler(req: any, res: any) {
       errorUserTitle: data.error.error_user_title,
       errorUserMsg: data.error.error_user_msg,
       fbtraceId: data.error.fbtrace_id,
+      details: data.error?.error_data?.details,
     } : undefined
     console.error('[subscription-whatsapp-test] Meta send rejected', {
       status: response.status,
