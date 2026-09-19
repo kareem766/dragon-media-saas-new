@@ -26,7 +26,25 @@ function decryptToken(value: any) {
   ]).toString('utf8')
 }
 
-async function sendTemplate(phoneNumberId: string, token: string, to: string, templateName: string, language: string, parameters: string[], buttonParameter?: string) {
+async function sendTemplate(phoneNumberId: string, token: string, to: string, templateName: string, language: string, parameters: string[], buttonParameter?: string, wabaId?: string) {
+  if (!wabaId) throw new Error('WhatsApp WABA ID is missing.')
+  const templatesResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(wabaId)}/message_templates?name=${encodeURIComponent(templateName)}&limit=100`, { headers: { Authorization: `Bearer ${token}` } })
+  const templatesData = await templatesResponse.json().catch(() => ({}))
+  if (!templatesResponse.ok) throw new Error(templatesData?.error?.message || `Meta template lookup failed (${templatesResponse.status})`)
+  const candidates = Array.isArray(templatesData?.data) ? templatesData.data : []
+  const template = candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED' && String(item?.language || '') === language)
+    || candidates.find((item: any) => String(item?.name || '') === templateName && String(item?.status || '').toUpperCase() === 'APPROVED')
+  if (!template) throw new Error('WhatsApp subscription template is missing or not approved in Meta, or its language differs.')
+  const bodyComponent = (template.components || []).find((component: any) => component?.type === 'BODY')
+  const bodyText = String(bodyComponent?.text || '')
+  const bodyVariableCount = Math.max(0, ...Array.from(bodyText.matchAll(/\\{\\{(\\d+)\\}\\}/g)).map((match: any) => Number(match[1])))
+  const components: any[] = []
+  if (bodyVariableCount > 0) components.push({ type: 'body', parameters: parameters.slice(0, bodyVariableCount).map((text) => ({ type: 'text', text })) })
+  const buttonComponent = (template.components || []).find((component: any) => component?.type === 'BUTTONS' && Array.isArray(component?.buttons) && component.buttons.some((button: any) => button?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(button?.url || ''))))
+  if (buttonComponent && buttonParameter) {
+    const button = buttonComponent.buttons.find((item: any) => item?.type === 'URL' && /\\{\\{\\d+\\}\\}/.test(String(item?.url || '')))
+    components.push({ type: 'button', sub_type: 'url', index: String((buttonComponent.buttons || []).indexOf(button)), parameters: [{ type: 'text', text: buttonParameter }] })
+  }
   const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -37,11 +55,8 @@ async function sendTemplate(phoneNumberId: string, token: string, to: string, te
       type: 'template',
       template: {
         name: templateName,
-        language: { code: language },
-        components: [
-          { type: 'body', parameters: parameters.map((text) => ({ type: 'text', text })) },
-          ...(buttonParameter ? [{ type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: buttonParameter }] }] : []),
-        ],
+        language: { code: template.language || language },
+        components,
       },
     }),
   })
@@ -156,6 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle()
 
     const integration = integrationResult.data
+    const wabaId = String(integration?.metadata?.waba_id || '')
     const phoneNumberId = String(integration?.metadata?.phone_number_id || '')
     if (!integration || !phoneNumberId || !integration.config?.access_token) {
       await admin.from('whatsapp_subscription_notifications').update({
@@ -180,6 +196,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         templateLanguage,
         [String(organization.name || 'عميلنا'), planName, daysText, expiresAt],
         String(subscription.id),
+        wabaId,
       )
       const externalId = String(message?.messages?.[0]?.id || '')
 
