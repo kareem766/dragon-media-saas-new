@@ -1,7 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/ryan-assistant", "destination": "/api/admin/ryan-assistant?route=ryan-assistant" }
+    { "source": "/api/ryan-assistant", "destination": "/api/admin/ryan-assistant?route=ryan-assistant" },
+    { "source": "/renew/:token", "destination": "/api/meta/webhook?renew=1&token=:token" }
   ],
   "crons": [
     {
