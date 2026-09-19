@@ -30,6 +30,20 @@ async function getUser(req: VercelRequest) {
   return data.user
 }
 
+async function isCampaignWorker(req: VercelRequest, admin: any) {
+  const supplied = String(req.headers['x-campaign-worker-secret'] || '')
+  if (!supplied) return false
+
+  const { data, error } = await admin
+    .from('system_secrets')
+    .select('value')
+    .eq('key', 'campaign_worker_webhook_secret')
+    .maybeSingle()
+
+  if (error) throw error
+  return Boolean(data?.value) && supplied === String(data.value)
+}
+
 async function getOrganizationId(admin: any, userId: string) {
   const { data: profile, error } = await admin.from('profiles').select('organization_id').eq('id', userId).maybeSingle()
   if (error) throw error
@@ -47,15 +61,20 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
   if (!supabaseUrl || !serviceRoleKey) return json(res, 500, { message: 'Supabase server configuration is missing.' })
 
   try {
-    const user = await getUser(req)
-    if (!user) return json(res, 401, { message: 'يجب تسجيل الدخول أولاً.' })
-
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
-    const organizationId = await getOrganizationId(admin, user.id)
-    if (!organizationId) return json(res, 403, { message: 'لم يتم العثور على مساحة العمل.' })
+    const workerRequest = await isCampaignWorker(req, admin)
+    const user = workerRequest ? null : await getUser(req)
+    if (!workerRequest && !user) return json(res, 401, { message: 'يجب تسجيل الدخول أولاً.' })
 
-    const { campaignId, action } = req.body || {}
-    if (!campaignId || !action) return json(res, 400, { message: 'بيانات الحملة غير مكتملة.' })
+    const { campaignId, action: requestedAction } = req.body || {}
+    if (!campaignId || !requestedAction) return json(res, 400, { message: 'بيانات الحملة غير مكتملة.' })
+    const action = requestedAction === 'worker' ? 'run' : requestedAction
+
+    let organizationId = ''
+    if (user) {
+      organizationId = await getOrganizationId(admin, user.id)
+      if (!organizationId) return json(res, 403, { message: 'لم يتم العثور على مساحة العمل.' })
+    }
 
     const { data: campaign, error: campaignError } = await admin
       .from('campaigns')
@@ -65,6 +84,8 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
       .maybeSingle()
     if (campaignError) throw campaignError
     if (!campaign) return json(res, 404, { message: 'الحملة غير موجودة.' })
+    if (!organizationId) organizationId = String(campaign.organization_id || '')
+    if (!organizationId) return json(res, 403, { message: 'لم يتم العثور على مساحة العمل.' })
 
     if (action === 'cancel') {
       const { error } = await admin.from('campaigns').update({ status: 'ملغاة', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
@@ -141,17 +162,27 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
         return json(res, 200, { message: 'لا توجد رسائل جاهزة للإرسال.', sent: 0, failed: 0, remaining: 0 })
       }
 
-      const ids = queuedRows.map((row: any) => row.id)
-      const { data: claimedRows, error: claimError } = await admin
-        .from('campaign_messages')
-        .update({ status: 'قيد التنفيذ', attempts: (queuedRows[0]?.attempts || 0) + 1, updated_at: new Date().toISOString() })
-        .eq('organization_id', organizationId)
-        .eq('campaign_id', campaignId)
-        .in('id', ids)
-        .eq('status', 'قيد الإرسال')
-        .select('id, customer_id, message_body, attempts')
-      if (claimError) throw claimError
-      if (!claimedRows?.length) return json(res, 409, { message: 'الحملة قيد التنفيذ بالفعل. حاول التحديث بعد لحظات.' })
+      const claimedRows: any[] = []
+      for (const row of queuedRows as any[]) {
+        const { data: claimed, error: claimError } = await admin
+          .from('campaign_messages')
+          .update({
+            status: 'قيد التنفيذ',
+            attempts: Number(row.attempts || 0) + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('organization_id', organizationId)
+          .eq('campaign_id', campaignId)
+          .eq('id', row.id)
+          .eq('status', 'قيد الإرسال')
+          .select('id, customer_id, message_body, attempts')
+          .maybeSingle()
+
+        if (claimError) throw claimError
+        if (claimed) claimedRows.push(claimed)
+      }
+
+      if (!claimedRows.length) return json(res, 409, { message: 'الحملة قيد التنفيذ بالفعل. حاول التحديث بعد لحظات.' })
 
       const customerIds = [...new Set(claimedRows.map((row: any) => row.customer_id).filter(Boolean))]
       const { data: customers, error: customersError } = await admin
