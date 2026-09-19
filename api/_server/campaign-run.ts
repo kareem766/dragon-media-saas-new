@@ -146,6 +146,14 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
         return json(res, 422, { message: 'قناة الحملة غير مدعومة حالياً. اختر WhatsApp أو Messenger أو Instagram.' })
       }
 
+      const staleBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      await admin.from('campaign_messages')
+        .update({ status: 'قيد الإرسال', updated_at: new Date().toISOString() })
+        .eq('campaign_id', campaignId)
+        .eq('organization_id', organizationId)
+        .eq('status', 'جاهزة')
+        .lt('updated_at', staleBefore)
+
       const { data: queuedRows, error: queueError } = await admin
         .from('campaign_messages')
         .select('id, customer_id, message_body, attempts, status')
@@ -172,7 +180,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
         const { data: claimed, error: claimError } = await admin
           .from('campaign_messages')
           .update({
-            status: 'قيد التنفيذ',
+            status: 'جاهزة',
             attempts: Number(row.attempts || 0) + 1,
             updated_at: new Date().toISOString(),
           })
