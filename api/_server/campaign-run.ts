@@ -45,7 +45,7 @@ async function isCampaignWorker(req: VercelRequest, admin: any) {
 }
 
 async function getOrganizationId(admin: any, userId: string) {
-  const { data: profile, error } = await admin.from('profiles').select('organization_id').eq('id', userId).maybeSingle()
+  const { data: profile, error } = await admin.from('users').select('organization_id').eq('id', userId).maybeSingle()
   if (error) throw error
   return profile?.organization_id || null
 }
