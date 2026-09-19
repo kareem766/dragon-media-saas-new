@@ -6,7 +6,10 @@ import { createDecipheriv, createHash } from 'node:crypto'
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
 
-function json(res: VercelResponse, status: number, body: unknown) {
+function json(res: VercelResponse, status: number, body: Record<string, unknown>) {
+  if (status >= 400 && typeof body.message === 'string' && !body.error) {
+    body = { ...body, error: body.message }
+  }
   return res.status(status).json(body)
 }
 
