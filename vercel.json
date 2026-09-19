@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/automation-run",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/subscription-whatsapp-notifications",
