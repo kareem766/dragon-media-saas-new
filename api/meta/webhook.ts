@@ -104,11 +104,62 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
   console.log('WhatsApp message stored', { organizationId, phoneNumberId, from, externalId, conversationId: conversation.id })
 }
 async function handleStatus(db: any, organizationId: string, status: any) {
-  const externalId = String(status?.id || ''), state = String(status?.status || '')
+  const externalId = String(status?.id || ''), state = String(status?.status || '').toLowerCase()
   if (!externalId) return
   const timestamp = status?.timestamp ? new Date(Number(status.timestamp) * 1000).toISOString() : new Date().toISOString()
-  const { error } = await db.from('messages').update({ metadata: { whatsapp_status: state, whatsapp_status_timestamp: timestamp }, ...(state === 'delivered' || state === 'read' ? { delivered_at: timestamp } : {}) }).eq('external_id', externalId)
-  if (error) console.error('WhatsApp status update failed', { organizationId, externalId, error: error.message })
+  const messagePatch: Record<string, unknown> = {
+    metadata: { whatsapp_status: state, whatsapp_status_timestamp: timestamp, whatsapp_status_errors: status?.errors || null },
+  }
+  if (state === 'delivered' || state === 'read') {
+    messagePatch.delivered_at = timestamp
+    if (state === 'read') messagePatch.opened_at = timestamp
+  }
+  if (state === 'failed') {
+    messagePatch.failed_at = timestamp
+    messagePatch.error_message = status?.errors?.[0]?.title || status?.errors?.[0]?.message || 'WhatsApp delivery failed.'
+  }
+  const { error } = await db.from('messages').update(messagePatch).eq('external_id', externalId)
+  if (error) console.error('WhatsApp status update failed', { organizationId, externalId, state, error: error.message })
+
+  const { data: campaignRows, error: campaignLookupError } = await db
+    .from('campaign_messages')
+    .select('id, campaign_id')
+    .eq('external_id', externalId)
+    .eq('organization_id', organizationId)
+  if (campaignLookupError) {
+    console.error('WhatsApp campaign status lookup failed', { organizationId, externalId, state, error: campaignLookupError.message })
+    return
+  }
+
+  for (const row of campaignRows || []) {
+    const patch: Record<string, unknown> = { updated_at: timestamp }
+    if (state === 'delivered' || state === 'read') {
+      patch.status = 'تم التسليم'
+      patch.delivered_at = timestamp
+    } else if (state === 'failed') {
+      patch.status = 'فشلت'
+      patch.failed_at = timestamp
+      patch.error_message = status?.errors?.[0]?.title || status?.errors?.[0]?.message || 'WhatsApp delivery failed.'
+    }
+    const { error: updateError } = await db.from('campaign_messages').update(patch).eq('id', row.id).eq('organization_id', organizationId)
+    if (updateError) console.error('WhatsApp campaign message status update failed', { organizationId, campaignId: row.campaign_id, externalId, state, error: updateError.message })
+
+    const { data: rows } = await db.from('campaign_messages').select('status').eq('campaign_id', row.campaign_id).eq('organization_id', organizationId)
+    const counts = (rows || []).reduce((acc: Record<string, number>, item: any) => {
+      const key = String(item.status || '')
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+    await db.from('campaigns').update({
+      sent_count: counts['تم الإرسال'] || 0,
+      delivered_count: counts['تم التسليم'] || 0,
+      failed_count: counts['فشلت'] || 0,
+      queued_count: counts['قيد الإرسال'] || 0,
+      skipped_count: counts['تم التخطي'] || 0,
+      total_recipients: rows?.length || 0,
+      updated_at: new Date().toISOString(),
+    }).eq('id', row.campaign_id).eq('organization_id', organizationId)
+  }
 }
 
 async function handleFacebookWebhook(db: any, payload: any) {
