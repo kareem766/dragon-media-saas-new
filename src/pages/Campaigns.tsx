@@ -236,6 +236,7 @@ export default function Campaigns() {
     name: '',
     channel: 'whatsapp',
     templateName: '',
+    templateLanguage: '',
     messageBody: '',
     audienceStatus: 'نشط',
     tag: '',
@@ -520,6 +521,11 @@ export default function Campaigns() {
         template_name:
           form.channel === 'whatsapp' && form.templateName.trim()
             ? form.templateName.trim()
+            : null,
+
+        template_language:
+          form.channel === 'whatsapp' && form.templateName.trim()
+            ? form.templateLanguage || 'ar'
             : null,
 
         audience_filter: {
@@ -1333,7 +1339,7 @@ export default function Campaigns() {
                   value={form.templateName}
                   onChange={e => {
                     const selected = whatsappTemplates.find(item => item.name === e.target.value)
-                    setForm({ ...form, templateName: selected?.name ?? '' })
+                    setForm({ ...form, templateName: selected?.name ?? '', templateLanguage: selected?.language ?? '' })
                   }}
                   className="w-full mt-1.5 border border-sand-200 bg-white rounded-xl px-3.5 py-3 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                   disabled={templatesLoading}
