@@ -5,6 +5,10 @@
   ],
   "crons": [
     {
+      "path": "/api/campaign-worker",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/automation-run",
       "schedule": "0 0 * * *"
     },
