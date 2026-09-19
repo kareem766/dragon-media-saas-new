@@ -357,3 +357,4 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
 }
 
 // Deployment trigger: deterministic human handoff detection.
+// Deployment retrigger: Ryan contextual human handoff support.
