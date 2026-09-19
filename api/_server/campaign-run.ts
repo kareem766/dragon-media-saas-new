@@ -34,6 +34,9 @@ async function isCampaignWorker(req: VercelRequest, admin: any) {
   const supplied = String(req.headers['x-campaign-worker-secret'] || '')
   if (!supplied) return false
 
+  const cronSecret = String(process.env.CRON_SECRET || '')
+  if (cronSecret && supplied === cronSecret) return true
+
   const { data, error } = await admin
     .from('system_secrets')
     .select('value')
