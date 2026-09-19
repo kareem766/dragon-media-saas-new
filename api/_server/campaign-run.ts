@@ -310,6 +310,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
 
       let token = ''
       let whatsappWabaId = ''
+      let whatsappSubscriptionValues: string[] = []
       let pageId = ''
       let instagramBusinessId = ''
 
@@ -324,6 +325,31 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
         if (!integration?.connected || integration.status !== 'connected') throw new Error('WhatsApp غير متصل.')
         token = decryptMetaToken(integration.config?.access_token)
         whatsappWabaId = String(integration.metadata?.waba_id || '')
+
+        const { data: subscription } = await admin
+          .from('subscriptions')
+          .select('plan_id, expires_at, plan, organizations(name), plans(name)')
+          .eq('organization_id', organizationId)
+          .order('expires_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (subscription?.expires_at) {
+          const expiry = new Date(String(subscription.expires_at) + 'T00:00:00')
+          const today = new Date()
+          const days = Math.max(0, Math.ceil((expiry.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86400000))
+          const day = String(expiry.getDate()).padStart(2, '0')
+          const month = String(expiry.getMonth() + 1).padStart(2, '0')
+          const year = expiry.getFullYear()
+          const organizationName = String((subscription as any)?.organizations?.name || 'Dragon Media SaaS')
+          const planName = String((subscription as any)?.plans?.name || (subscription as any)?.plan || 'الباقة الحالية')
+          whatsappSubscriptionValues = [
+            organizationName,
+            planName,
+            days === 1 ? 'يوم واحد' : days + ' يوم',
+            day + '/' + month + '/' + year,
+          ]
+        }
       } else {
         const { data: integration, error: integrationError } = await admin
           .from('integrations')
@@ -356,12 +382,15 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
 
       function buildTemplateComponents(template: any, customer: any, messageBody: string) {
         const components: any[] = []
-        const values = [
-          String(customer?.name ?? ''),
-          String(customer?.company ?? ''),
-          String(messageBody || ''),
-          String(customer?.phone ?? ''),
-        ]
+        const isSubscriptionReminder = String(template?.name || '') === 'subscription_expiry_reminder'
+        const values = isSubscriptionReminder && whatsappSubscriptionValues.length
+          ? whatsappSubscriptionValues
+          : [
+              String(customer?.name ?? ''),
+              String(customer?.company ?? ''),
+              String(messageBody || ''),
+              String(customer?.phone ?? ''),
+            ]
 
         for (const component of Array.isArray(template?.components) ? template.components : []) {
           const type = String(component?.type || '').toUpperCase()
