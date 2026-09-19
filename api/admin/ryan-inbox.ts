@@ -203,6 +203,8 @@ PERSONA: ${persona}`
    const a=obj(await analyzeConversation(apiKey,model,analysisSystem,history,current))
    const leadIntent=a.lead_intent===true
    const intent=text(a.intent,40)||'other'
+   const needsHuman=a.needs_human===true||intent==='human_request'
+   const handoffReason=text(a.handoff_reason,300)
    const action=text(a.action,40)||text(a.next_action,40)||'continue'
    let actionResult:any=null
    if(!needsHuman){
@@ -226,8 +228,6 @@ PERSONA: ${persona}`
      }
     }
    }
-   const needsHuman=a.needs_human===true||intent==='human_request'
-   const handoffReason=text(a.handoff_reason,300)
    const effectiveNeedsHuman=needsHuman
    const effectiveHandoffReason=handoffReason
    const reviewedState={intent,lead_intent:leadIntent,needs_human:effectiveNeedsHuman,handoff_reason:effectiveHandoffReason||null,missing:Array.isArray(a.missing)?a.missing.filter((x:any)=>typeof x==='string').slice(0,8):[],complete:a.complete===true,next_action:text(a.next_action,40)||'continue',updated_at:new Date().toISOString()}
