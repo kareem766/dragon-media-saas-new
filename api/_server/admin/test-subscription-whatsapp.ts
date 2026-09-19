@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createDecipheriv, createHash } from 'node:crypto'
 
+// Keep the shared admin handler deployment-triggerable without changing runtime behavior.
 const json = (res: any, status: number, body: unknown) => res.status(status).json(body)
 const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '')
 
