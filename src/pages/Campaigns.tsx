@@ -497,23 +497,65 @@ export default function Campaigns() {
       return
     }
 
-    setForm({
-      name: '',
-      channel: 'whatsapp',
-      templateName: '',
-      messageBody: '',
-      audienceStatus: 'نشط',
-      tag: '',
-      scheduledAt: '',
-    })
+    const createdCampaign = await client
+      .from('campaigns')
+      .select('id, name, channel, audience_filter, scheduled_at, status')
+      .eq('organization_id', organizationId)
+      .eq('name', trimmedName)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    setShowForm(false)
+    if (createdCampaign.error || !createdCampaign.data) {
+      setError(
+        'تم حفظ الحملة، لكن تعذر بدء الإرسال تلقائيًا. يمكنك فتح الحملة وتجهيزها من القائمة.'
+      )
+      await loadData()
+      return
+    }
 
-    setSuccess(
-      'تم إنشاء الحملة بنجاح.'
-    )
+    const savedCampaign = createdCampaign.data as DBCampaign
 
-    await loadData()
+    if (form.scheduledAt) {
+      setShowForm(false)
+      setSuccess('تم حفظ الحملة وجدولتها بنجاح. كل بيانات الحملة محفوظة ويمكنك متابعة حالتها من القائمة.')
+      await loadData()
+      return
+    }
+
+    setSaving(true)
+    setSuccess('تم حفظ الحملة. جاري تجهيز الجمهور وبدء الإرسال...')
+    setError(null)
+
+    try {
+      await callCampaignApi(
+        savedCampaign.id,
+        'prepare',
+        (savedCampaign.audience_filter as AudienceFilter | null) ?? {
+          status: form.audienceStatus,
+          tag: form.tag.trim() || null,
+          optedInOnly: true,
+        }
+      )
+
+      await callCampaignApi(
+        savedCampaign.id,
+        'run'
+      )
+
+      setShowForm(false)
+      setSuccess('تم حفظ الحملة وتجهيز الجمهور وبدء الإرسال. بيانات الحملة محفوظة ويمكنك متابعة النتائج من القائمة.')
+      await loadData()
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `تم حفظ الحملة، لكن لم يكتمل الإرسال تلقائيًا: ${err.message}`
+          : 'تم حفظ الحملة، لكن لم يكتمل الإرسال تلقائيًا. يمكنك إعادة المحاولة من القائمة.'
+      )
+      await loadData()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const callCampaignApi = async (
@@ -1105,8 +1147,8 @@ export default function Campaigns() {
                 </h2>
 
                 <p className="text-xs sm:text-sm text-ink-900/45 mt-1 leading-5">
-                  حدد القناة والجمهور والرسالة. سيتم استهداف العملاء
-                  الذين لديهم Marketing Opt-in فقط.
+                  املأ بيانات الحملة، اختر القناة والجمهور، ثم اضغط
+                  «حفظ وإرسال الحملة». سيتم حفظ الحملة أولًا، وبعدها تجهيز الجمهور وبدء الإرسال تلقائيًا.
                 </p>
               </div>
             </div>
@@ -1215,7 +1257,7 @@ export default function Campaigns() {
 
             <div>
               <label className="text-xs font-semibold text-ink-900/60">
-                الموعد اختياري
+                موعد الإرسال
               </label>
 
               <input
@@ -1287,8 +1329,10 @@ export default function Campaigns() {
                 className="w-full sm:w-auto"
               >
                 {saving
-                  ? 'جاري الحفظ...'
-                  : 'إنشاء الحملة'}
+                  ? 'جاري التجهيز والإرسال...'
+                  : form.scheduledAt
+                    ? 'حفظ وجدولة الحملة'
+                    : 'حفظ وإرسال الحملة'}
               </Button>
 
               <Button
