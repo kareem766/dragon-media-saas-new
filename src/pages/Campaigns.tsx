@@ -556,7 +556,7 @@ export default function Campaigns() {
 
     const response =
       await fetch(
-        '/api/campaign-run',
+        '/api/automation-run',
         {
           method: 'POST',
 
