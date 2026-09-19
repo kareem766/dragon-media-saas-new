@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createDecipheriv, createHash } from 'node:crypto'
 
 // Named Meta template parameters are supported; deployment trigger for the WhatsApp renewal fix.
+// Production trigger: verify the latest renewal-test payload fixes are deployed.
 const json = (res: any, status: number, body: unknown) => res.status(status).json(body)
 const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '')
 
