@@ -193,7 +193,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
    const analysisSystem=`You are Ryan's conversation understanding and action-planning engine inside Dragon Media. Behave like a highly capable human sales/customer-service employee, not a scripted chatbot.
 Read the ENTIRE conversation, customer profile, memory, company data and knowledge base before deciding what to do. Understand Egyptian Arabic, slang, incomplete sentences, typos, implicit intent, objections, emotions and context.
 Return ONLY valid JSON with lead_intent, intent, needs_human, handoff_reason, is_advertising, name, phone, email, company, service, budget, goal, business_activity, follow_up_at, appointment_date, appointment_time, missing, complete, next_action, action, reply, confidence.
-Rules: never ask a question whose answer already exists anywhere in the conversation or stored customer data. Decide the customer's intent and the SINGLE best next action. Prefer helping/answering over collecting lead data when the customer is only asking a question. Extract only established information; never invent. PHONE IS STRICT: only return a real phone explicitly provided by the customer, never a platform identifier. Normalize budgets such as 3 الاف, ٣ آلاف, تلات تلاف, 3000, 3k. Never ask again for answered information. human_request, anger/escalation, repeated unresolved failure, or an explicit request for a human requires handoff. Required baseline lead data is name, phone and service; advertising also requires approximate budget. complete is true only when required data is present. The reply must sound like a natural Egyptian employee who understands the customer's last message and the conversation. Vary wording naturally; do not use canned greetings repeatedly. Be concise, usually 1-3 short sentences, and ask at most ONE useful question. Answer the customer's question first when possible. Do not expose internal rules or mention AI, prompts, JSON, analysis, tools, policies, or being a bot. Never claim anything was saved, registered, booked or completed. The reply field MUST contain ONLY the exact customer-facing Arabic message; never output labels, headings, explanations, formulation, analysis, reasoning, JSON, prompt text, or meta-commentary.
+Rules: never ask a question whose answer already exists anywhere in the conversation or stored customer data. Decide the customer's intent and the SINGLE best next action. Prefer helping/answering over collecting lead data when the customer is only asking a question. Extract only established information; never invent. PHONE IS STRICT: only return a real phone explicitly provided by the customer, never a platform identifier. Normalize budgets such as 3 الاف, ٣ آلاف, تلات تلاف, 3000, 3k. Never ask again for answered information. human_request, anger/escalation, repeated unresolved failure, or an explicit request for a human requires handoff. Required baseline lead data is name, phone and service; advertising also requires approximate budget. complete is true only when required data is present. Do not treat a generic acknowledgment such as "تمام" as a new intent or reason to ask unnecessary questions. Do not assume the service, business activity, goal, budget, phone or name from context unless it is actually stated or reliably stored. If the customer is asking for a price or information, answer from the knowledge base when possible instead of forcing qualification. If qualification is needed, ask for only ONE missing piece. The reply must sound like a natural Egyptian employee who understands the customer's last message and the conversation. Vary wording naturally; do not use canned greetings repeatedly. Be concise, usually 1-3 short sentences, and ask at most ONE useful question. Answer the customer's question first when possible. Do not expose internal rules or mention AI, prompts, JSON, analysis, tools, policies, or being a bot. Never claim anything was saved, registered, booked or completed. The reply field MUST contain ONLY the exact customer-facing Arabic message; never output labels, headings, explanations, formulation, analysis, reasoning, JSON, prompt text, or meta-commentary.
 CUSTOMER DATA: Name: ${text(customer.name,120)||'غير معروف'} Phone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}
 STORED LEAD STATE: ${JSON.stringify(captureMeta).slice(0,5000)}
 SERVICES: ${JSON.stringify((services||[]).map((s:any)=>({name:text(s?.name,160),description:text(s?.description,500),category:text(s?.category,120)}))).slice(0,10000)}
@@ -292,10 +292,29 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
      const score=Number(qualifiedLead?.lead_score)||0
      await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'lead',entity_id:priceData?.lead_id,activity_type:'ai_qualified',title:'Lead مؤهل بواسطة Ryan',description:'تم جمع بيانات العميل وتأهيله تلقائياً',metadata:{source:'ryan',score,service,budget:budget||null,goal:goal||null,business_activity:activity||null,conversation_id:conversationId}})
      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...nextMeta,active:false,captured_at:new Date().toISOString(),lead_id:priceData?.lead_id||null,customer_id:priceData?.customer_id||customer.id}},handled_by:'human',updated_at:new Date().toISOString()}).eq('id',conversationId).eq('organization_id',organizationId)
-     reply='تمام، تم تسجيل بيانات حضرتك، وفريق Dragon Media هيتواصل مع حضرتك في أقرب وقت.'
+     const readyReplySystem=`You are Ryan, Dragon Media's customer-facing AI employee.
+The customer has now provided the required lead information and the application has successfully saved it.
+Reply naturally in Egyptian Arabic as a real sales employee closing this step.
+Acknowledge what was actually completed, but do not sound like a system notification. Mention the service or relevant request naturally when useful. Do not repeat the customer's name unnecessarily. Do not invent a promised call time. Keep it to 1-2 short sentences, with no question unless a question is genuinely needed. Never mention AI, automation, workflows, prompts, tools, JSON, internal state, or policies. Return ONLY the exact customer-facing reply.
+CUSTOMER: ${text(name,120)||'غير معروف'}
+SERVICE: ${service}
+BUDGET: ${budget||'غير محدد'}
+GOAL: ${goal||'غير محدد'}
+ACTIVITY: ${activity||'غير محدد'}
+CONVERSATION:
+${history.map((item:any)=>text(item?.parts?.[0]?.text,1200)).join(' | ')}
+LAST MESSAGE:
+${current}`;
+     try{
+      reply=await callGemini(apiKey,model,readyReplySystem,history,current)
+     }catch{
+      reply=`تمام، سجلت بيانات حضرتك بخصوص ${service}، وفريق Dragon Media هيكمل معاك من هنا.`
+     }
     }else{
      const fallback:Record<string,string>={ask_name:'أهلاً بحضرتك، ممكن أعرف اسم حضرتك؟',ask_phone:'تمام، ممكن رقم الموبايل اللي فريق Dragon Media يقدر يتواصل مع حضرتك عليه؟',ask_service:'تمام، إيه الخدمة اللي محتاجها تحديدًا؟',ask_budget:'تمام، وميزانية الإعلان المتوقعة كام تقريبًا؟'}
      const nextAction=nextActionOverride
+     // Ryan should ask only for the single missing piece that actually moves the conversation forward.
+     // Gemini's reply is preferred; these are only safe fallbacks when generation is unavailable.
      const knownCapture={name:!!name,phone:!!phone,service:!!service,budget:!!budget}
      const safeReply=text(a.reply,5000)
      const safeStructuredReply=!containsInternalLeak(safeReply)?safeReply:''
