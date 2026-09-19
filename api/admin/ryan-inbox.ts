@@ -359,3 +359,4 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
 // Deployment trigger: deterministic human handoff detection.
 // Deployment retrigger: Ryan contextual human handoff support.
 // Production trigger: verify latest Ryan handoff changes are deployed.
+// Final deployment trigger: includes latest WhatsApp renewal test changes.
