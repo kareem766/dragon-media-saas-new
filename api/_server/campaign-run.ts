@@ -408,7 +408,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
           if (type === 'BUTTONS' && Array.isArray(component?.buttons)) {
             component.buttons.forEach((button: any, buttonIndex: number) => {
               const buttonUrl = String(button?.url || '')
-              const urlMatches = [...buttonUrl.matchAll(/\{\{(\\d+)\}\}/g)]
+              const urlMatches = [...buttonUrl.matchAll(/\{\{(\d+)\}\}/g)]
               if (String(button?.type || '').toUpperCase() === 'URL' && urlMatches.length) {
                 components.push({
                   type: 'button',
