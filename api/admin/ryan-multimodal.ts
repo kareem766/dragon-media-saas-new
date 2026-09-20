@@ -2,6 +2,7 @@ const env=(...names:string[])=>names.map(n=>process.env[n]).find(v=>v?.trim())?.
 const text=(v:unknown,max=4000)=>typeof v==='string'?v.trim().slice(0,max):''
 const obj=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{}
 type GeminiPart={text?:string;inlineData?:{mimeType:string;data:string}}
+type FetchedAttachment={mime?:string;base64?:string;bytes?:number;error?:string}
 const MAX_INLINE_BYTES=15*1024*1024
 const SUPPORTED_INLINE=/^(?:image\/(?:png|jpe?g|webp|heic|heif|gif|avif)|audio\/(?:mpeg|mp3|wav|ogg|aac|flac|webm|mp4)|application\/pdf|text\/(?:plain|csv|markdown)|application\/json)$/iu
 
@@ -24,7 +25,7 @@ async function whatsappMediaUrl(supabase:any,organizationId:string,mediaId:strin
  return r.ok?text(data?.url,5000):''
 }
 
-async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
+async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any):Promise<FetchedAttachment>{
  const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase()
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
@@ -68,9 +69,9 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
    const fetched=await fetchAttachment(supabase,organizationId,channel,attachment)
    if(fetched.error){summaries.push({type:'unsupported',reason:fetched.error});continue}
    if(!fetched.mime||!SUPPORTED_INLINE.test(fetched.mime)){summaries.push({type:'unsupported',mime:fetched.mime});continue}
-   if(fetched.bytes>MAX_INLINE_BYTES){summaries.push({type:'too_large',mime:fetched.mime,bytes:fetched.bytes});continue}
+   if((fetched.bytes||0)>MAX_INLINE_BYTES){summaries.push({type:'too_large',mime:fetched.mime,bytes:fetched.bytes});continue}
    if(/^audio\//iu.test(fetched.mime)){
-    try{const audioText=await transcribeAudio(apiKey,model,{mime:fetched.mime,base64:fetched.base64});transcript=[transcript,audioText].filter(Boolean).join('\n');summaries.push({type:'audio',mime:fetched.mime,transcribed:true})}
+    try{const audioText=await transcribeAudio(apiKey,model,{mime:fetched.mime||'',base64:fetched.base64||''});transcript=[transcript,audioText].filter(Boolean).join('\n');summaries.push({type:'audio',mime:fetched.mime,transcribed:true})}
     catch{parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}});summaries.push({type:'audio',mime:fetched.mime,transcribed:false})}
    }else{parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}});summaries.push({type:/^image\//iu.test(fetched.mime)?'image':fetched.mime==='application/pdf'?'pdf':'file',mime:fetched.mime})}
   }catch(error:any){summaries.push({type:'unsupported',reason:text(error?.message,200)||'attachment processing failed'})}
