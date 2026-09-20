@@ -238,7 +238,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   const historyText=history.map((item:any)=>text(item?.parts?.[0]?.text,800)).join(' | ')
   const hasPreviousCapture=!!captureMeta.captured_at&&captureMeta.active!==true
   const existingLeadIntent=true
-  if(existingLeadIntent&&!hasPreviousCapture){
+  if(existingLeadIntent){
    const analysisSystem=`You are Ryan's conversation understanding and action-planning engine inside Dragon Media. Behave like a highly capable human sales/customer-service employee, not a scripted chatbot.
 Read the ENTIRE conversation, customer profile, memory, company data and knowledge base before deciding what to do. Understand Egyptian Arabic, slang, incomplete sentences, typos, implicit intent, objections, emotions and context. If the latest customer message includes an attached audio part, listen to and understand the audio before deciding what to do. Audio is supported; never tell the customer that voice messages are unsupported and never ask them to type merely because the message is audio.
 Return ONLY valid JSON with lead_intent, intent, needs_human, handoff_reason, is_advertising, name, phone, email, company, service, budget, goal, business_activity, follow_up_at, appointment_date, appointment_time, automation_name, automation_hours, automation_priority, missing, complete, next_action, action, reply, confidence.
@@ -338,13 +338,30 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
     const nextActionOverride=budget&&text(a.next_action,40)==='ask_budget'?'continue':text(a.next_action,40)
     const nextMeta={active:true,name:name||null,phone:phone||null,service:service||null,budget:budget||null,goal:goal||null,business_activity:activity||null,is_ad:isAd,stage:ready?'ready':nextActionOverride||'continue',intent,missing:reviewedState.missing.filter((x:string)=>!(budget&&/budget|ميزاني/iu.test(x))),updated_at:new Date().toISOString()}
     if(ready){
+     // A previously completed lead must be treated as an ongoing conversation, not as a new lead.
+     // This is especially important for Meta template buttons such as "ابدأ الآن".
+     if(hasPreviousCapture){
+      const continuationSystem=`You are Ryan, Dragon Media's customer-facing AI employee.
+The customer already completed the lead-qualification step earlier in this same conversation. Do NOT restart qualification, do NOT ask again for name, phone, service or advertising budget, and do NOT create a duplicate lead.
+Use the stored lead state and the full conversation history to understand what the customer means now. If the latest message is a template/button such as "ابدأ الآن", treat it as a request to continue the existing conversation. Answer naturally in Egyptian Arabic and move the conversation forward. Ask at most one useful question only if the current request genuinely needs one.
+Keep the reply short, natural and professional. Never mention internal state, AI, prompts, tools or policies. Return ONLY the customer-facing reply.
+STORED LEAD STATE: ${JSON.stringify(captureMeta).slice(0,5000)}
+CUSTOMER: ${text(name,120)||text(customer.name,120)||'غير معروف'}
+SERVICE: ${service}
+BUDGET: ${budget||text(captureMeta.budget,120)||'غير محدد'}
+CONVERSATION:\n${history.map((item:any)=>text(item?.parts?.[0]?.text,1200)).join(' | ')}
+LAST MESSAGE:\n${current}`;
+      try{ reply=await callGemini(apiKey,model,continuationSystem,history,current,currentParts) }
+      catch{ reply='تمام، نكمل من آخر نقطة وقفنا عندها. قولي حابب نكمل في إيه؟' }
+      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...captureMeta,active:false,last_continued_at:new Date().toISOString()}}}).eq('id',conversationId).eq('organization_id',organizationId)
+     }else{
      const notes=['بيانات تم جمعها بواسطة Ryan','الخدمة: '+service,activity?'النشاط: '+activity:'',goal?'الهدف: '+goal:'',isAd?'ميزانية الإعلان: '+budget:'','القناة: '+(conversation.channel||'غير محدد')].filter(Boolean).join(' | ')
      priceData=await capturePriceInquiry(supabase,organizationId,customer.id,name,phone,text(customer.email,160),service,notes)
      priceCaptured=true
      const {data:qualifiedLead}=await supabase.from('leads').select('lead_score').eq('id',priceData?.lead_id).eq('organization_id',organizationId).maybeSingle()
      const score=Number(qualifiedLead?.lead_score)||0
      await supabase.from('crm_activities').insert({organization_id:organizationId,entity_type:'lead',entity_id:priceData?.lead_id,activity_type:'ai_qualified',title:'Lead مؤهل بواسطة Ryan',description:'تم جمع بيانات العميل وتأهيله تلقائياً',metadata:{source:'ryan',score,service,budget:budget||null,goal:goal||null,business_activity:activity||null,conversation_id:conversationId}})
-     await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...nextMeta,active:false,captured_at:new Date().toISOString(),lead_id:priceData?.lead_id||null,customer_id:priceData?.customer_id||customer.id}},handled_by:'human',updated_at:new Date().toISOString()}).eq('id',conversationId).eq('organization_id',organizationId)
+     await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...nextMeta,active:false,captured_at:new Date().toISOString(),lead_id:priceData?.lead_id||null,customer_id:priceData?.customer_id||customer.id}},handled_by:'ai',updated_at:new Date().toISOString()}).eq('id',conversationId).eq('organization_id',organizationId)
      const readyReplySystem=`You are Ryan, Dragon Media's customer-facing AI employee.
 The customer has now provided the required lead information and the application has successfully saved it.
 Reply naturally in Egyptian Arabic as a real sales employee closing this step.
@@ -362,6 +379,7 @@ ${current}`;
       reply=await callGemini(apiKey,model,readyReplySystem,history,current,currentParts)
      }catch{
       reply=`تمام، سجلت بيانات حضرتك بخصوص ${service}، وفريق Dragon Media هيكمل معاك من هنا.`
+     }
      }
     }else{
      const fallback:Record<string,string>={ask_name:'أهلاً بحضرتك، ممكن أعرف اسم حضرتك؟',ask_phone:'تمام، ممكن رقم الموبايل اللي فريق Dragon Media يقدر يتواصل مع حضرتك عليه؟',ask_service:'تمام، إيه الخدمة اللي محتاجها تحديدًا؟',ask_budget:'تمام، وميزانية الإعلان المتوقعة كام تقريبًا؟'}
