@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
+// Normalize Ryan multimodal import before the Vercel TypeScript build.
 const path = 'api/admin/ryan-inbox.ts'
 const source = readFileSync(path, 'utf8')
 const from = "import { prepareRyanMultimodal } from '../_server/admin/ryan-multimodal'"
