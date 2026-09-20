@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'node:crypto'
+import { prepareRyanMultimodal } from './ryan-multimodal'
 
 const env=(...names:string[])=>names.map(n=>process.env[n]).find(v=>v?.trim())?.trim()||''
 const db=()=>createClient(env('VITE_SUPABASE_URL','SUPABASE_URL'),env('SUPABASE_SECRET_KEY','SUPABASE_SERVICE_ROLE_KEY'),{auth:{persistSession:false,autoRefreshToken:false}})
@@ -68,13 +69,13 @@ async function callGrok(key:string,model:string,system:string,history:Turn[],cur
  return reply
 }
 
-async function callGemini(key:string,model:string,system:string,history:Turn[],current:string){
+async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
  const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let lastError='Gemini request failed'
  for(const candidate of candidates){
   for(let attempt=0;attempt<2;attempt++){
    try{
-     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
+     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
     const d=await r.json().catch(()=>({}))
     if(r.ok){const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),12000);if(raw){try{const parsed=obj(JSON.parse(raw));const structuredReply=text(parsed.reply||parsed.response||parsed.message||parsed.text,5000);if(structuredReply)return structuredReply}catch{};return raw.slice(0,5000)}lastError=`Gemini ${candidate} returned an empty response`}
     else{lastError=d?.error?.message||`Gemini ${r.status}`;if(![408,429,500,502,503,504].includes(r.status))break}
@@ -86,10 +87,9 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  if(grokKey){
   try{return await callGrok(grokKey,'grok-4.6',system,history,current)}catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback failed: ${text(error?.message,500)||'request failed'}`)}
  }
- throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)
-}
+ throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)}
 
-async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string){
+async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
  const errors:string[]=[]
  try{
   const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
@@ -216,11 +216,13 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   supabase.from('messages').select('id,sender_type,content,created_at').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(historyLimit),
   settings.use_knowledge_base===false?Promise.resolve({data:[] as any[]}):supabase.from('knowledge_base').select('title,content').eq('organization_id',organizationId).limit(knowledgeLimit),
   supabase.from('ai_agent_memory').select('memory,summary').eq('agent_id',agent.id).eq('customer_id',customer.id).maybeSingle()
- ])
- const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content)
+ ]) const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content)
  const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
  const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n')
- const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.',current=text(incoming.content,3000)
+ const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
+ const multimodal=await prepareRyanMultimodal(supabase,organizationId,incomingMetadata,apiKey,model)
+ const current=text(incoming.content,3000)+(multimodal.currentText||'')
+ const currentParts=multimodal.parts||[]
  const conversationMetadata=obj(conversation.metadata)
  let priceCaptured=false
  let priceData:any=null
@@ -241,7 +243,7 @@ SERVICES: ${JSON.stringify((services||[]).map((s:any)=>({name:text(s?.name,160),
 STORED MEMORY: ${JSON.stringify(memory).slice(0,5000)}
 KNOWLEDGE BASE: ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}
 PERSONA: ${persona}`
-   const a=obj(await analyzeConversation(apiKey,model,analysisSystem,history,current))
+   const a=obj(await analyzeConversation(apiKey,model,analysisSystem,history,current,currentParts))
    const leadIntent=a.lead_intent===true
    const intent=text(a.intent,40)||'other'
    const explicitHumanRequest=humanHandoffIntent(historyText+' '+current)
@@ -313,7 +315,7 @@ STORED MEMORY:
 ${JSON.stringify(memory).slice(0,5000)}
 KNOWLEDGE BASE:
 ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
-    reply=await callGemini(apiKey,model,system,history,current)
+    reply=await callGemini(apiKey,model,system,history,current,currentParts)
    }else{
     const isAd=a.is_advertising===true
     const name=text(a.name,120)||text(captureMeta.name,120)||(looksLikeName(text(customer.name,120))?text(customer.name,120):'')
@@ -351,7 +353,7 @@ ${history.map((item:any)=>text(item?.parts?.[0]?.text,1200)).join(' | ')}
 LAST MESSAGE:
 ${current}`;
      try{
-      reply=await callGemini(apiKey,model,readyReplySystem,history,current)
+      reply=await callGemini(apiKey,model,readyReplySystem,history,current,currentParts)
      }catch{
       reply=`تمام، سجلت بيانات حضرتك بخصوص ${service}، وفريق Dragon Media هيكمل معاك من هنا.`
      }
