@@ -184,12 +184,23 @@ export default async function handler(req: any, res: any) {
     })
   }
 
+  const externalId = String(data?.messages?.[0]?.id || '')
+  if (!externalId) return json(res, 502, { success: false, error: 'Meta قبلت الطلب بدون إرجاع رقم رسالة.' })
+
+  const { error: trackingError } = await admin.from('whatsapp_test_messages').insert({ organization_id: organizationId, phone, template_name: templateName, template_language: String(template.language || language), external_id: externalId, status: 'accepted', sent_at: new Date().toISOString() })
+  if (trackingError) {
+    console.error('[subscription-whatsapp-test] tracking insert failed', trackingError)
+    return json(res, 500, { success: false, error: 'تم إرسال الرسالة إلى Meta لكن تعذر حفظ حالة التتبع.', externalId })
+  }
+
   return json(res, 200, {
     success: true,
     test: true,
     organizationId,
     phoneMasked: phone.length > 4 ? `${phone.slice(0, 3)}****${phone.slice(-2)}` : '****',
-    externalId: String(data?.messages?.[0]?.id || ''),
+    externalId,
     templateName,
+    deliveryStatus: 'accepted',
+    message: 'تم قبول الرسالة من Meta وجاري انتظار حالة التسليم من WhatsApp.',
   })
 }
