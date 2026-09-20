@@ -87,12 +87,76 @@ async function handleStatus(db: any, organizationId: string, status: any) {
   const { data: testRows, error: testLookupError } = await db.from('whatsapp_test_messages').select('id').eq('external_id', externalId).eq('organization_id', organizationId).limit(1)
   if (testLookupError) console.error('WhatsApp test tracking lookup failed', { externalId, state, error: testLookupError.message })
   for (const testRow of testRows || []) { await db.from('whatsapp_test_messages').update(testPatch).eq('id', testRow.id); console.log('WhatsApp test message status', { organizationId, externalId, state, errors: status?.errors || null }) }
-  const { data: campaignRows } = await db.from('campaign_messages').select('id, campaign_id').eq('external_id', externalId).eq('organization_id', organizationId)
+  // Persist every WhatsApp delivery event so campaign state can be reconciled
+  // even when the status webhook arrives after the send request completes.
+  if (['sent', 'delivered', 'read', 'failed'].includes(state)) {
+    await db.from('meta_delivery_events').upsert({
+      organization_id: organizationId,
+      channel: 'whatsapp',
+      external_id: externalId,
+      state,
+      occurred_at: timestamp,
+      payload: status || null,
+    }, { onConflict: 'channel,external_id,state' })
+  }
+
+  const { data: campaignRows } = await db.from('campaign_messages')
+    .select('id, campaign_id')
+    .eq('external_id', externalId)
+    .eq('organization_id', organizationId)
+
   for (const row of campaignRows || []) {
     const patch: Record<string, unknown> = { updated_at: timestamp }
-    if (state === 'delivered' || state === 'read') { patch.status = 'تم التسليم'; patch.delivered_at = timestamp }
-    else if (state === 'failed') { patch.status = 'فشلت'; patch.failed_at = timestamp; patch.error_message = status?.errors?.[0]?.title || status?.errors?.[0]?.message || 'WhatsApp delivery failed.' }
+    if (state === 'delivered' || state === 'read') {
+      patch.status = 'تم التسليم'
+      patch.delivered_at = timestamp
+      patch.error_message = null
+    } else if (state === 'failed') {
+      const error = status?.errors?.[0] || {}
+      patch.status = 'فشلت'
+      patch.failed_at = timestamp
+      patch.error_message = error?.title || error?.message || 'WhatsApp delivery failed.'
+    } else if (state === 'sent') {
+      patch.status = 'تم الإرسال'
+      patch.sent_at = timestamp
+    }
+
     await db.from('campaign_messages').update(patch).eq('id', row.id).eq('organization_id', organizationId)
+
+    // Recalculate the parent campaign from the actual message rows. This is
+    // essential because Meta delivery/failure webhooks arrive asynchronously.
+    const { data: all } = await db.from('campaign_messages')
+      .select('status')
+      .eq('campaign_id', row.campaign_id)
+      .eq('organization_id', organizationId)
+
+    const counts = (all || []).reduce((acc: Record<string, number>, item: any) => {
+      const key = String(item.status || '')
+      acc[key] = (acc[key] || 0) + 1
+      return acc
+    }, {})
+
+    const total = all?.length || 0
+    const pending = counts['قيد الإرسال'] || counts['جاهزة'] || 0
+    const failed = counts['فشلت'] || 0
+    const delivered = counts['تم التسليم'] || 0
+    const sent = counts['تم الإرسال'] || 0
+    const skipped = counts['تم التخطي'] || counts['متخطى'] || 0
+    const final = pending === 0 && total > 0
+
+    await db.from('campaigns').update({
+      total_recipients: total,
+      queued_count: pending,
+      sent_count: sent,
+      delivered_count: delivered,
+      failed_count: failed,
+      skipped_count: skipped,
+      status: final ? (failed > 0 ? 'مكتملة مع أخطاء' : 'مكتملة') : 'قيد الإرسال',
+      completed_at: final ? timestamp : null,
+      updated_at: timestamp,
+      last_run_at: timestamp,
+      error_message: failed > 0 ? 'يوجد فشل في تسليم رسالة واحدة أو أكثر.' : null,
+    }).eq('id', row.campaign_id).eq('organization_id', organizationId)
   }
 }
 async function updateFacebookCampaignStatus(db: any, organizationId: string, externalId: string, state: 'sent' | 'delivered') {
