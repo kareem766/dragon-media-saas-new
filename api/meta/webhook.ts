@@ -78,6 +78,17 @@ async function handleStatus(db: any, organizationId: string, status: any) {
   if (state === 'delivered' || state === 'read') messagePatch.delivered_at = timestamp
   const { error } = await db.from('messages').update(messagePatch).eq('external_id', externalId)
   if (error) console.error('WhatsApp status update failed', { organizationId, externalId, state, error: error.message })
+
+  const testPatch: Record<string, unknown> = { status: state, meta_error: status?.errors || null }
+  if (state === 'sent' || state === 'delivered' || state === 'read') testPatch.sent_at = timestamp
+  if (state === 'delivered' || state === 'read') testPatch.delivered_at = timestamp
+  if (state === 'read') testPatch.read_at = timestamp
+  const { data: testRows, error: testLookupError } = await db.from('whatsapp_test_messages').select('id').eq('external_id', externalId).eq('organization_id', organizationId).limit(1)
+  if (testLookupError) console.error('WhatsApp test tracking lookup failed', { externalId, state, error: testLookupError.message })
+  for (const testRow of testRows || []) {
+    await db.from('whatsapp_test_messages').update(testPatch).eq('id', testRow.id)
+    console.log('WhatsApp test message status', { organizationId, externalId, state, errors: status?.errors || null })
+  }
   const { data: campaignRows } = await db.from('campaign_messages').select('id, campaign_id').eq('external_id', externalId).eq('organization_id', organizationId)
   for (const row of campaignRows || []) {
     const patch: Record<string, unknown> = { updated_at: timestamp }
