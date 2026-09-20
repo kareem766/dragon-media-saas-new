@@ -457,7 +457,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
             recipient = String(conversation?.metadata?.external_user_id || conversation?.metadata?.instagram_user_id || conversation?.metadata?.facebook_user_id || '')
             if (!recipient) throw new Error('لا يوجد معرّف محادثة صالح لهذه القناة للعميل.')
 
-            // Meta's standard Messenger/Instagram Send API only allows
+            // Campaign eligibility: Meta's standard Messenger/Instagram Send API only allows
             // ordinary messages while the customer's messaging window is open.
             // Skip stale recipients before calling Meta so campaigns do not
             // repeatedly fail with a policy error.
