@@ -138,13 +138,20 @@ async function handleFacebookWebhook(db: any, payload: any) {
       const { data: existing } = await db.from('messages').select('id').eq('external_id', externalId).maybeSingle()
       if (existing) continue
       const content = String(event?.message?.text || event?.postback?.title || event?.postback?.payload || '').trim()
-      if (!content) continue
+      const attachments = Array.isArray(event?.message?.attachments) ? event.message.attachments : []
+      const attachmentPayload = attachments.slice(0,4).map((a:any) => ({
+        type: String(a?.type || ''),
+        url: String(a?.payload?.url || ''),
+        mime_type: String(a?.payload?.mime_type || (String(a?.type || '').toLowerCase()==='audio' ? 'audio/mpeg' : 'application/octet-stream')),
+        source: 'facebook',
+      })).filter((a:any)=>a.url)
+      if (!content && !attachmentPayload.length) continue
       const { data: customerExisting } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('phone', senderId).maybeSingle()
       const customer = customerExisting || (await db.from('customers').insert({ organization_id: organizationId, name: `Facebook ${senderId}`, phone: senderId, source: 'facebook' }).select('id,name,phone').single()).data
       if (!customer) continue
       const now = new Date().toISOString()
       const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'facebook', { facebook_page_id: pageId, facebook_psid: senderId }, now)
-      const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'facebook_webhook', facebook_page_id: pageId, facebook_psid: senderId, facebook_message_id: externalId }, created_at: now })
+      const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'facebook_webhook', facebook_page_id: pageId, facebook_psid: senderId, facebook_message_id: externalId, attachments: attachmentPayload }, created_at: now })
       if (insertError) throw insertError
       await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: Number(conversation.unread_count || 0) + (existed ? 1 : 0), status: 'open' }).eq('id', conversation.id)
     }
