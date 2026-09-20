@@ -1,5 +1,3 @@
-import { createClient } from '@supabase/supabase-js'
-
 const env=(...names:string[])=>names.map(n=>process.env[n]).find(v=>v?.trim())?.trim()||''
 const text=(v:unknown,max=4000)=>typeof v==='string'?v.trim().slice(0,max):''
 const obj=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{}
