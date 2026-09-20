@@ -70,7 +70,7 @@ async function callGrok(key:string,model:string,system:string,history:Turn[],cur
 }
 
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
- const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let lastError='Gemini request failed'
  for(const candidate of candidates){
   for(let attempt=0;attempt<2;attempt++){
@@ -205,7 +205,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle()
  ])
  if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
- const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.8-flash',apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY'),grokKey=env('XAI_API_KEY','GROK_API_KEY')
+ const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.6-flash',apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY'),grokKey=env('XAI_API_KEY','GROK_API_KEY')
  if(!apiKey&&!grokKey)return res.status(500).json({error:'No AI provider is configured'})
  const historyLimit=Math.min(Math.max(Number(settings.max_history_messages)||80,1),80),knowledgeLimit=Math.min(Math.max(Number(settings.max_knowledge_items)||50,1),50)
  const [{data:messages},{data:knowledge},{data:memoryRow}]=await Promise.all([
