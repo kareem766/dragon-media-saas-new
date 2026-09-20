@@ -79,3 +79,4 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
  const attachmentText=summaries.length?'\n[مرفقات العميل: '+summaries.map(x=>x.type+(x.mime?' ('+x.mime+')':'')).join('، ')+']':''
  return {currentText:transcript?transcript+attachmentText:attachmentText,parts,attachmentSummary:summaries,transcript}
 }
+// Production deployment trigger: Ryan multimodal support is ready for verification.
