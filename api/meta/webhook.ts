@@ -87,6 +87,7 @@ async function handleStatus(db: any, organizationId: string, status: any) {
   }
 }
 async function updateFacebookCampaignStatus(db: any, organizationId: string, externalId: string, state: 'sent' | 'delivered') {
+  console.log('Messenger campaign status event', { organizationId, externalId, state })
   if (!externalId) return
   const { data: rows, error } = await db.from('campaign_messages').select('id,campaign_id').eq('organization_id', organizationId).eq('external_id', externalId).eq('channel', 'messenger')
   if (error) { console.error('Messenger campaign lookup failed', error); return }
