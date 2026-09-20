@@ -86,8 +86,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  const grokKey=env('XAI_API_KEY','GROK_API_KEY')
  if(grokKey){
   try{return await callGrok(grokKey,'grok-4.6',system,history,current)}catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback failed: ${text(error?.message,500)||'request failed'}`)}
- } throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)}
-async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
+ } throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)}async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
  const errors:string[]=[]
  try{
   const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
@@ -216,9 +215,12 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   supabase.from('ai_agent_memory').select('memory,summary').eq('agent_id',agent.id).eq('customer_id',customer.id).maybeSingle()
  ]) const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content) const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
  const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n') const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
- const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model)
- const current=text(incoming.content,3000)+(multimodal.currentText||'')
+ const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model) const current=text(incoming.content,3000)+(multimodal.currentText||'')
  const currentParts=multimodal.parts||[]
+ if(multimodal.transcript||multimodal.attachmentSummary?.length){
+  const storedContent=multimodal.transcript?((text(incoming.content,3000)?text(incoming.content,3000)+'\n':'')+multimodal.transcript):text(incoming.content,3000)
+  await supabase.from('messages').update({content:storedContent,metadata:{...incomingMetadata,ryan_multimodal:multimodal.attachmentSummary||[],ryan_transcript:multimodal.transcript||null}}).eq('id',messageId).eq('conversation_id',conversationId)
+ }
  const conversationMetadata=obj(conversation.metadata)
  let priceCaptured=false
  let priceData:any=null
