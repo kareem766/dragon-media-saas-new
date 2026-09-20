@@ -58,6 +58,16 @@ const extractNameFromMessage=(value:string)=>{
 }
 type Turn={role:'user'|'model';parts:{text:string}[]}
 
+async function callGrok(key:string,model:string,system:string,history:Turn[],current:string,structured=false){
+ const messages=[{role:'system',content:system},...history.map((t:any)=>({role:t.role==='model'?'assistant':'user',content:text(t.parts?.map((p:any)=>p?.text||'').join(''),4000)})),{role:'user',content:current}]
+ const r=await fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},body:JSON.stringify({model:model||'grok-4.6',messages,max_tokens:700,...(structured?{response_format:{type:'json_object'}}:{})})})
+ const d=await r.json().catch(()=>({}))
+ if(!r.ok)throw new Error(d?.error?.message||`Grok ${r.status}`)
+ const reply=text(d?.choices?.[0]?.message?.content,12000)
+ if(!reply)throw new Error('Grok returned an empty response')
+ return reply
+}
+
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string){
  const candidates=[model,'gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let lastError='Gemini request failed'
@@ -66,42 +76,44 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    try{
     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700}})})
     const d=await r.json().catch(()=>({}))
-    if(r.ok){
-     const reply=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000)
-     if(reply)return reply
-     lastError=`Gemini ${candidate} returned an empty response`
-    }else{
-     lastError=d?.error?.message||`Gemini ${r.status}`
-     const retryable=r.status===429||r.status===408||r.status===500||r.status===502||r.status===503||r.status===504
-     if(!retryable)break
-    }
+    if(r.ok){const reply=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000);if(reply)return reply;lastError=`Gemini ${candidate} returned an empty response`}
+    else{lastError=d?.error?.message||`Gemini ${r.status}`;if(![408,429,500,502,503,504].includes(r.status))break}
    }catch(error:any){lastError=text(error?.message,500)||'Gemini network error'}
    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,350))
   }
  }
- throw new Error(`Ryan Gemini fallback exhausted: ${lastError}`)
+ const grokKey=env('XAI_API_KEY','GROK_API_KEY')
+ if(grokKey){
+  try{return await callGrok(grokKey,'grok-4.6',system,history,current)}catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback failed: ${text(error?.message,500)||'request failed'}`)}
+ }
+ throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)
 }
 
-async function analyzeConversation(key:string,model:string,system:string,history:Turn[],current:string){
- const candidates=[model,'gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string){
  const errors:string[]=[]
- let lastError='Gemini analysis failed'
- for(const candidate of candidates){
+ try{
+  const candidates=[model,'gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+  for(const candidate of candidates){
+   try{
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(geminiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})})
+    const d=await r.json().catch(()=>({}))
+    if(r.ok){
+     const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),12000).replace(/^\\s*\\`\\`\\`(?:json)?\\s*/i,'').replace(/\\s*\\`\\`\\`\\s*$/,'')
+     try{const data=obj(JSON.parse(raw));if(Object.keys(data).length)return data}catch{}
+     errors.push(`Gemini ${candidate}: invalid JSON`)
+    }else errors.push(`Gemini ${candidate}: ${d?.error?.message||`HTTP ${r.status}`}`)
+   }catch(error:any){errors.push(`Gemini ${candidate}: ${text(error?.message,500)||'request failed'}`)}
+  }
+ }catch(error:any){errors.push(`Gemini: ${text(error?.message,500)||'request failed'}`)}
+ const grokKey=env('XAI_API_KEY','GROK_API_KEY')
+ if(grokKey){
   try{
-   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})})
-   const d=await r.json().catch(()=>({}))
-   if(r.ok){
-    const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),12000).replace(/^\s*\`\`\`(?:json)?\s*/i,'').replace(/\s*\`\`\`\s*$/,'')
-    try{const data=obj(JSON.parse(raw));if(Object.keys(data).length)return data}catch{}
-    lastError=`Gemini ${candidate} returned invalid JSON`
-   }else{
-    lastError=d?.error?.message||`Gemini ${r.status}`
-    errors.push(`${candidate}: ${lastError}`)
-    if(![408,429,500,502,503,504].includes(r.status))break
-   }
-  }catch(error:any){lastError=text(error?.message,500)||'Gemini network error';errors.push(`${candidate}: ${lastError}`)}
- }
- throw new Error(`Ryan Gemini analysis exhausted: ${errors.join(' | ')||lastError}`)
+   const raw=await callGrok(grokKey,'grok-4.6',system,history,current,true)
+   const data=obj(JSON.parse(raw));if(Object.keys(data).length)return data
+   errors.push('Grok: invalid JSON')
+  }catch(error:any){errors.push(`Grok: ${text(error?.message,500)||'request failed'}`)}
+ }else errors.push('Grok: XAI_API_KEY is not configured')
+ throw new Error(`Ryan AI analysis exhausted: ${errors.join(' | ')}`)
 }
 
 async function capturePriceInquiry(supabase:any,organizationId:string,customerId:string,name:string,phone:string,email:string,service:string,notes:string){
@@ -195,8 +207,8 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle()
  ])
  if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
- const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.6-flash',apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
- if(!apiKey)return res.status(500).json({error:'Gemini is not configured'})
+ const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.8-flash',apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY'),grokKey=env('XAI_API_KEY','GROK_API_KEY')
+ if(!apiKey&&!grokKey)return res.status(500).json({error:'No AI provider is configured'})
  const historyLimit=Math.min(Math.max(Number(settings.max_history_messages)||80,1),80),knowledgeLimit=Math.min(Math.max(Number(settings.max_knowledge_items)||50,1),50)
  const [{data:messages},{data:knowledge},{data:memoryRow}]=await Promise.all([
   supabase.from('messages').select('id,sender_type,content,created_at').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(historyLimit),
