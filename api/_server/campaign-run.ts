@@ -299,7 +299,12 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
           body: JSON.stringify(body),
         })
         const payload = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(payload?.error?.message || 'Meta رفض الإرسال.')
+        if (!response.ok) {
+          const metaError = payload?.error
+          const detail = metaError?.error_data?.details
+          const code = metaError?.code ? ` [Meta ${metaError.code}]` : ''
+          throw new Error(`${metaError?.message || 'Meta رفض الإرسال.'}${code}${detail ? `: ${detail}` : ''}`)
+        }
         return payload
       }
 
@@ -412,9 +417,25 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
 
           if (type === 'BUTTONS' && Array.isArray(component?.buttons)) {
             component.buttons.forEach((button: any, buttonIndex: number) => {
+              const buttonType = String(button?.type || '').toUpperCase()
               const buttonUrl = String(button?.url || '')
               const urlMatches = [...buttonUrl.matchAll(/\{\{(\d+)\}\}/g)]
-              if (String(button?.type || '').toUpperCase() === 'URL' && urlMatches.length) {
+
+              // Meta requires an explicit button component for QUICK_REPLY
+              // template buttons at send time. Omitting it can cause 131008.
+              if (buttonType === 'QUICK_REPLY') {
+                components.push({
+                  type: 'button',
+                  sub_type: 'quick_reply',
+                  index: String(buttonIndex),
+                  parameters: [{
+                    type: 'payload',
+                    payload: String(button?.payload || `campaign-${String(customer?.id || 'test')}-${buttonIndex}`),
+                  }],
+                })
+              }
+
+              if (buttonType === 'URL' && urlMatches.length) {
                 components.push({
                   type: 'button',
                   sub_type: 'url',
