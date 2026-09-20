@@ -521,6 +521,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
             const result = await metaPost('/' + encodeURIComponent(phoneNumberId) + '/messages', token, payload)
             externalId = String(result?.messages?.[0]?.id || '')
           } else if (channel === 'messenger') {
+            await metaPost('/' + encodeURIComponent(pageId) + '/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,messaging_deliveries', token, {})
             const result = await metaPost('/' + encodeURIComponent(pageId) + '/messages', token, {
               recipient: { id: recipient },
               message: { text: String(row.message_body || '') },
