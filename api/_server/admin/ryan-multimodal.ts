@@ -31,21 +31,22 @@ async function whatsappMediaUrl(supabase:any,organizationId:string,mediaId:strin
  return r.ok?text(data?.url,5000):''
 }
 
+async function metaAccessToken(supabase:any,organizationId:string,channel:string){
+ const provider=/^instagram$/iu.test(channel)?'instagram':/^whatsapp$/iu.test(channel)?'whatsapp':'facebook'
+ const {data:integration}=await supabase.from('integrations').select('config').eq('organization_id',organizationId).eq('provider',provider).eq('connected',true).maybeSingle()
+ return decryptMetaToken(obj(integration?.config).access_token)
+}
 async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
  const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase().split(';')[0].trim()
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
- if(!url&&mediaId&&(/^whatsapp$/iu.test(channel)||/^whatsapp$/iu.test(text(attachment.channel)||'')))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
- if(!url&&mediaId&&/^whatsapp$/iu.test(text(attachment.source)||''))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
+ if(!url&&mediaId&&/^whatsapp$/iu.test(channel))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
  let base64=text(attachment.base64||attachment.data,30000000).replace(/^data:[^;]+;base64,/i,'')
  if(base64)return {mime:mime||'application/octet-stream',base64,bytes:Math.floor(base64.length*0.75)}
  if(!url)return {error:'missing_media_url'}
  const headers:Record<string,string>={}
- if(mediaId&&/graph\.facebook\.com/iu.test(url)){
-  const {data:integration}=await supabase.from('integrations').select('config').eq('organization_id',organizationId).eq('provider','whatsapp').eq('connected',true).maybeSingle()
-  const token=decryptMetaToken(obj(integration?.config).access_token)
-  if(token)headers.Authorization='Bearer '+token
- }
+ const token=await metaAccessToken(supabase,organizationId,channel)
+ if(token&&/^(whatsapp|facebook|messenger|instagram)$/iu.test(channel))headers.Authorization='Bearer '+token
  const r=await fetch(url,{headers})
  if(!r.ok)return {error:'media_fetch_'+r.status}
  const buffer=Buffer.from(await r.arrayBuffer())
@@ -54,7 +55,7 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
 }
 
 async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;base64:string}){
- const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=['gemini-2.5-flash',model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='audio transcription failed'
  for(const candidate of candidates){
   const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(apiKey),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:'استمع للتسجيل الصوتي جيداً. اكتب فقط النص المنطوق كما قاله العميل، بنفس اللغة قدر الإمكان، بدون شرح أو تلخيص أو علامات مثل النص.'},{inlineData:{mimeType:audio.mime,data:audio.base64}}]}],generationConfig:{maxOutputTokens:1200}})})
