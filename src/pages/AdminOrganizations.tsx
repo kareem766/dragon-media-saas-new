@@ -1616,7 +1616,7 @@ export default function AdminOrganizations() {
               <Badge tone="success">للمدير فقط</Badge>
             </div>
             <p className="mt-1 max-w-2xl text-xs leading-5 text-ink-900/55 sm:text-sm">
-              أرسل رسالة تجريبية حقيقية إلى شركة لديها اتصال WhatsApp نشط للتأكد من أن قالب تجديد الاشتراك يعمل قبل الاعتماد على الإشعار المجدول.
+              أرسل رسالة تجريبية حقيقية. اترك رقم الاختبار فارغًا لاستخدام رقم الشركة، أو أدخل رقم WhatsApp آخر بصيغة دولية لاختبار التسليم.
             </p>
           </div>
 
@@ -1636,6 +1636,16 @@ export default function AdminOrganizations() {
                   </option>
                 ))}
             </select>
+
+            <input
+              type="tel"
+              inputMode="tel"
+              value={testPhone}
+              onChange={e => setTestPhone(e.target.value)}
+              placeholder="رقم اختبار اختياري: 2010XXXXXXXX"
+              className="min-h-11 min-w-0 flex-1 rounded-xl border border-sand-200 bg-white px-3 py-2.5 text-sm text-ink-950 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/15"
+              aria-label="رقم WhatsApp للاختبار"
+            />
 
             <Button
               type="button"
