@@ -490,6 +490,9 @@ export default function AdminOrganizations() {
   const [testSending, setTestSending] =
     useState(false)
 
+  const [testPhone, setTestPhone] =
+    useState('')
+
   const [search, setSearch] =
     useState('')
 
@@ -821,6 +824,7 @@ export default function AdminOrganizations() {
         },
         body: JSON.stringify({
           organizationId: testOrganizationId,
+          testPhone: testPhone.trim() || undefined,
         }),
       })
 
