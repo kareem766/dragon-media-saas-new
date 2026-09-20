@@ -32,7 +32,7 @@ async function whatsappMediaUrl(supabase:any,organizationId:string,mediaId:strin
 }
 
 async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
- const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase()
+ const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase().split(';')[0].trim()
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
  if(!url&&mediaId&&(/^whatsapp$/iu.test(channel)||/^whatsapp$/iu.test(text(attachment.channel)||'')))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
@@ -43,7 +43,7 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  const headers:Record<string,string>={}
  if(mediaId&&/graph\.facebook\.com/iu.test(url)){
   const {data:integration}=await supabase.from('integrations').select('config').eq('organization_id',organizationId).eq('provider','whatsapp').eq('connected',true).maybeSingle()
-  const token=text(obj(integration?.config).access_token,5000)
+  const token=decryptMetaToken(obj(integration?.config).access_token)
   if(token)headers.Authorization='Bearer '+token
  }
  const r=await fetch(url,{headers})
