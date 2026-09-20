@@ -68,8 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message }
     }
 
-    if (!data.session) {
+    if (!data.session || !data.user) {
       return { error: 'تعذر إنشاء جلسة تسجيل الدخول. حاول مرة أخرى.' }
+    }
+
+    if (!isEmailConfirmed(data.user)) {
+      await supabase.auth.signOut()
+      updateSession(null)
+      setLoading(false)
+      return { error: 'البريد الإلكتروني غير مؤكد. افتح رسالة التأكيد ثم حاول تسجيل الدخول مرة أخرى.' }
     }
 
     updateSession(data.session)
@@ -92,8 +99,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     if (error) return { error: error.message, needsEmailConfirmation: false }
     const needsEmailConfirmation = Boolean(data.user && !isEmailConfirmed(data.user))
-    if (needsEmailConfirmation && data.session) await supabase.auth.signOut()
-    return { error: null, needsEmailConfirmation }
+
+    // Signup must never leave an authenticated session behind. The only
+    // supported path into the workspace is: signup -> email confirmation -> login.
+    if (data.session) {
+      await supabase.auth.signOut()
+    }
+    updateSession(null)
+    setLoading(false)
+
+    if (!data.user) {
+      return { error: 'تعذر إنشاء حساب المستخدم. حاول مرة أخرى.', needsEmailConfirmation: false }
+    }
+
+    return { error: null, needsEmailConfirmation: true }
   }
 
   const resendConfirmation = async (email: string) => {
