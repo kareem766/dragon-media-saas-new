@@ -538,6 +538,10 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
             external_id: externalId || null,
             error_message: null,
           })
+          if (externalId) {
+            const { data: pendingDelivery } = await admin.from('meta_delivery_events').select('occurred_at').eq('organization_id', organizationId).eq('channel', 'messenger').eq('external_id', externalId).eq('state', 'delivered').maybeSingle()
+            if (pendingDelivery) await markMessage(row.id, 'تم التسليم', { delivered_at: pendingDelivery.occurred_at, updated_at: pendingDelivery.occurred_at })
+          }
           sent++
         } catch (error) {
           const message = error instanceof Error ? error.message : 'فشل الإرسال.'
