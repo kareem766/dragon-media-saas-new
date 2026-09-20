@@ -80,17 +80,13 @@ async function handleStatus(db: any, organizationId: string, status: any) {
   if (state === 'delivered' || state === 'read') messagePatch.delivered_at = timestamp
   const { error } = await db.from('messages').update(messagePatch).eq('external_id', externalId)
   if (error) console.error('WhatsApp status update failed', { organizationId, externalId, state, error: error.message })
-
   const testPatch: Record<string, unknown> = { status: state, meta_error: status?.errors || null }
   if (state === 'sent' || state === 'delivered' || state === 'read') testPatch.sent_at = timestamp
   if (state === 'delivered' || state === 'read') testPatch.delivered_at = timestamp
   if (state === 'read') testPatch.read_at = timestamp
   const { data: testRows, error: testLookupError } = await db.from('whatsapp_test_messages').select('id').eq('external_id', externalId).eq('organization_id', organizationId).limit(1)
   if (testLookupError) console.error('WhatsApp test tracking lookup failed', { externalId, state, error: testLookupError.message })
-  for (const testRow of testRows || []) {
-    await db.from('whatsapp_test_messages').update(testPatch).eq('id', testRow.id)
-    console.log('WhatsApp test message status', { organizationId, externalId, state, errors: status?.errors || null })
-  }
+  for (const testRow of testRows || []) { await db.from('whatsapp_test_messages').update(testPatch).eq('id', testRow.id); console.log('WhatsApp test message status', { organizationId, externalId, state, errors: status?.errors || null }) }
   const { data: campaignRows } = await db.from('campaign_messages').select('id, campaign_id').eq('external_id', externalId).eq('organization_id', organizationId)
   for (const row of campaignRows || []) {
     const patch: Record<string, unknown> = { updated_at: timestamp }
@@ -105,8 +101,7 @@ async function updateFacebookCampaignStatus(db: any, organizationId: string, ext
   const { data: rows, error } = await db.from('campaign_messages').select('id,campaign_id').eq('organization_id', organizationId).eq('external_id', externalId).eq('channel', 'messenger')
   if (error) { console.error('Messenger campaign lookup failed', error); return }
   for (const row of rows || []) {
-    const now = new Date().toISOString()
-    const patch: Record<string, unknown> = { updated_at: now }
+    const now = new Date().toISOString(), patch: Record<string, unknown> = { updated_at: now }
     if (state === 'sent') { patch.status = 'تم الإرسال'; patch.sent_at = now }
     if (state === 'delivered') { patch.status = 'تم التسليم'; patch.delivered_at = now }
     await db.from('campaign_messages').update(patch).eq('id', row.id).eq('organization_id', organizationId)
@@ -139,12 +134,7 @@ async function handleFacebookWebhook(db: any, payload: any) {
       if (existing) continue
       const content = String(event?.message?.text || event?.postback?.title || event?.postback?.payload || '').trim()
       const attachments = Array.isArray(event?.message?.attachments) ? event.message.attachments : []
-      const attachmentPayload = attachments.slice(0,4).map((a:any) => ({
-        type: String(a?.type || ''),
-        url: String(a?.payload?.url || ''),
-        mime_type: String(a?.payload?.mime_type || (String(a?.type || '').toLowerCase()==='audio' ? 'audio/mpeg' : 'application/octet-stream')),
-        source: 'facebook',
-      })).filter((a:any)=>a.url)
+      const attachmentPayload = attachments.slice(0, 4).map((a: any) => ({ type: String(a?.type || ''), url: String(a?.payload?.url || ''), mime_type: String(a?.payload?.mime_type || (String(a?.type || '').toLowerCase() === 'audio' ? 'audio/mpeg' : 'application/octet-stream')), source: 'facebook' })).filter((a: any) => a.url)
       if (!content && !attachmentPayload.length) continue
       const { data: customerExisting } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('phone', senderId).maybeSingle()
       const customer = customerExisting || (await db.from('customers').insert({ organization_id: organizationId, name: `Facebook ${senderId}`, phone: senderId, source: 'facebook' }).select('id,name,phone').single()).data
@@ -172,7 +162,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!verifySignature(req, rawBody)) return json(res, 401, { error: 'Invalid webhook signature.' })
     const payload = JSON.parse(rawBody)
     const db = await getDb()
-    if (payload.object === 'page') { await handleFacebookWebhook(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }\n    if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
+    if (payload.object === 'page') { await handleFacebookWebhook(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }
+    if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
     for (const entry of Array.isArray(payload.entry) ? payload.entry : []) {
       const wabaId = String(entry?.id || '')
       for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
