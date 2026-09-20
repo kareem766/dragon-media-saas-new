@@ -26,11 +26,11 @@ async function whatsappMediaUrl(supabase:any,organizationId:string,mediaId:strin
  return r.ok?text(data?.url,5000):''
 }
 
-async function fetchAttachment(supabase:any,organizationId:string,attachment:any){
+async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
  const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase()
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
- if(!url&&mediaId&&/^whatsapp$/iu.test(text(attachment.channel)||''))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
+ if(!url&&mediaId&&(/^whatsapp$/iu.test(channel)||/^whatsapp$/iu.test(text(attachment.channel)||'')))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
  if(!url&&mediaId&&/^whatsapp$/iu.test(text(attachment.source)||''))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
  let base64=text(attachment.base64||attachment.data,30000000).replace(/^data:[^;]+;base64,/i,'')
  if(base64)return {mime:mime||'application/octet-stream',base64,bytes:Math.floor(base64.length*0.75)}
@@ -59,14 +59,14 @@ async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;bas
  throw new Error(last)
 }
 
-export async function prepareRyanMultimodal(supabase:any,organizationId:string,metadata:any,apiKey:string,model:string){
+export async function prepareRyanMultimodal(supabase:any,organizationId:string,channel:string,metadata:any,apiKey:string,model:string){
  const attachments=attachmentList(metadata)
  if(!attachments.length)return {currentText:'',parts:[] as GeminiPart[],attachmentSummary:[] as any[],transcript:''}
  const parts:GeminiPart[]=[]
  const summaries:any[]=[]
  let transcript=''
  for(const attachment of attachments.slice(0,4)){
-  const fetched=await fetchAttachment(supabase,organizationId,attachment)
+  const fetched=await fetchAttachment(supabase,organizationId,channel,attachment)
   if(fetched.error){summaries.push({type:'unsupported',reason:fetched.error});continue}
   if(!fetched.mime||!SUPPORTED_INLINE.test(fetched.mime)){summaries.push({type:'unsupported',mime:fetched.mime});continue}
   if(fetched.bytes>MAX_INLINE_BYTES){summaries.push({type:'too_large',mime:fetched.mime,bytes:fetched.bytes});continue}
