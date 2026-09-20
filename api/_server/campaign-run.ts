@@ -456,6 +456,20 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
             conversation = conversationRows?.[0]
             recipient = String(conversation?.metadata?.external_user_id || conversation?.metadata?.instagram_user_id || conversation?.metadata?.facebook_user_id || '')
             if (!recipient) throw new Error('لا يوجد معرّف محادثة صالح لهذه القناة للعميل.')
+
+            // Meta's standard Messenger/Instagram Send API only allows
+            // ordinary messages while the customer's messaging window is open.
+            // Skip stale recipients before calling Meta so campaigns do not
+            // repeatedly fail with a policy error.
+            const lastInboundAt = conversation?.last_message_at ? new Date(String(conversation.last_message_at)).getTime() : 0
+            const messagingWindowMs = 24 * 60 * 60 * 1000
+            if (!lastInboundAt || Date.now() - lastInboundAt > messagingWindowMs) {
+              await markMessage(row.id, 'تم التخطي', {
+                skipped_at: new Date().toISOString(),
+                skipped_reason: 'انتهت نافذة مراسلة Messenger المسموح بها من Meta (24 ساعة من آخر تفاعل للعميل).',
+              })
+              continue
+            }
           }
 
           let payload: any
