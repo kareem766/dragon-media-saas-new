@@ -83,7 +83,8 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
 }
 
 async function analyzeConversation(key:string,model:string,system:string,history:Turn[],current:string){
- const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-2.5-flash','gemini-3.5-flash-lite'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const errors:string[]=[]
  let lastError='Gemini analysis failed'
  for(const candidate of candidates){
   try{
@@ -95,11 +96,12 @@ async function analyzeConversation(key:string,model:string,system:string,history
     lastError=`Gemini ${candidate} returned invalid JSON`
    }else{
     lastError=d?.error?.message||`Gemini ${r.status}`
+    errors.push(`${candidate}: ${lastError}`)
     if(![408,429,500,502,503,504].includes(r.status))break
    }
-  }catch(error:any){lastError=text(error?.message,500)||'Gemini network error'}
+  }catch(error:any){lastError=text(error?.message,500)||'Gemini network error';errors.push(`${candidate}: ${lastError}`)}
  }
- throw new Error(`Ryan Gemini analysis exhausted: ${lastError}`)
+ throw new Error(`Ryan Gemini analysis exhausted: ${errors.join(' | ')||lastError}`)
 }
 
 async function capturePriceInquiry(supabase:any,organizationId:string,customerId:string,name:string,phone:string,email:string,service:string,notes:string){
