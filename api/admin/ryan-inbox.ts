@@ -212,9 +212,11 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   supabase.from('messages').select('id,sender_type,content,created_at').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(historyLimit),
   settings.use_knowledge_base===false?Promise.resolve({data:[] as any[]}):supabase.from('knowledge_base').select('title,content').eq('organization_id',organizationId).limit(knowledgeLimit),
   supabase.from('ai_agent_memory').select('memory,summary').eq('agent_id',agent.id).eq('customer_id',customer.id).maybeSingle()
- ]) const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content) const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
+ ])
+ const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content) const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
  const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n') const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
- const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model) const current=text(incoming.content,3000)+(multimodal.currentText||'')
+ const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model)
+ const current=text(incoming.content,3000)+(multimodal.currentText||'')
  const currentParts=multimodal.parts||[]
  if(multimodal.transcript||multimodal.attachmentSummary?.length){
   const storedContent=multimodal.transcript?((text(incoming.content,3000)?text(incoming.content,3000)+'\n':'')+multimodal.transcript):text(incoming.content,3000)
