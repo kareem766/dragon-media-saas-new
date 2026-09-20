@@ -86,8 +86,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  const grokKey=env('XAI_API_KEY','GROK_API_KEY')
  if(grokKey){
   try{return await callGrok(grokKey,'grok-4.6',system,history,current)}catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback failed: ${text(error?.message,500)||'request failed'}`)}
- } throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)}async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
- const errors:string[]=[]
+ } throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)}async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){ const errors:string[]=[]
  try{
   const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
   for(const candidate of candidates){
@@ -216,8 +215,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  ]) const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content) const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
  const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n') const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
  const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model) const current=text(incoming.content,3000)+(multimodal.currentText||'')
- const currentParts=multimodal.parts||[]
- if(multimodal.transcript||multimodal.attachmentSummary?.length){
+ const currentParts=multimodal.parts||[] if(multimodal.transcript||multimodal.attachmentSummary?.length){
   const storedContent=multimodal.transcript?((text(incoming.content,3000)?text(incoming.content,3000)+'\n':'')+multimodal.transcript):text(incoming.content,3000)
   await supabase.from('messages').update({content:storedContent,metadata:{...incomingMetadata,ryan_multimodal:multimodal.attachmentSummary||[],ryan_transcript:multimodal.transcript||null}}).eq('id',messageId).eq('conversation_id',conversationId)
  }
@@ -380,7 +378,7 @@ STORED MEMORY:
 ${JSON.stringify(memory).slice(0,5000)}
 KNOWLEDGE BASE:
 ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
-   reply=await callGemini(apiKey,model,system,history,current)
+   reply=await callGemini(apiKey,model,system,history,current,currentParts)
   }
   // Final safety gate: never persist or send internal/model output to the customer.
   if(containsInternalLeak(reply)){
@@ -395,7 +393,7 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
    if(fallbackRyanTask.error)console.error('Ryan lead task lookup failed',fallbackRyanTask.error)
    if(fallbackRyanTask.data?.id)await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ مهمة Lead جديدة',`تم إنشاء مهمة متابعة لعميل مؤهل بواسطة Ryan: ${text(customer.name,120)||'عميل جديد'}.`,`/tasks?task=${fallbackRyanTask.data.id}`,'task',fallbackRyanTask.data.id)
   }
-  const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured}}).select('id').single()
+  const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured,multimodal:multimodal.attachmentSummary||[]}}).select('id').single()
   if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response')
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
   return res.status(200).json({ok:true,reply,message_id:saved.id,price_inquiry:priceCaptured,price_data:priceCaptured?priceData:null,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,outbound:'database_trigger'})
