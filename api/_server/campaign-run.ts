@@ -137,7 +137,9 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
       const existingIds = new Set((existing.data || []).map((r: { customer_id: string }) => r.customer_id))
       const rows = eligible.filter((customer: Record<string, unknown>) => !existingIds.has(String(customer.id))).map((customer: Record<string, unknown>) => ({ campaign_id: campaignId, customer_id: customer.id, organization_id: organizationId, channel: campaign.channel, message_body: interpolate(campaign.message_body || '', customer), status: 'قيد الإرسال', opt_in: true, queued_at: new Date().toISOString() }))
       if (rows.length) {
-        const { error: insertError } = await admin.from('campaign_messages').insert(rows)
+        const { error: insertError } = await admin
+          .from('campaign_messages')
+          .upsert(rows, { onConflict: 'campaign_id,customer_id', ignoreDuplicates: true })
         if (insertError) throw insertError
       }
       const { error: updateError } = await admin.from('campaigns').update({ status: 'جاهزة', total_recipients: eligible.length, queued_count: eligible.length, audience_preview_count: eligible.length, last_run_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
@@ -183,7 +185,9 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
         }))
 
         if (rows.length) {
-          const { error: insertError } = await admin.from('campaign_messages').insert(rows)
+          const { error: insertError } = await admin
+            .from('campaign_messages')
+            .upsert(rows, { onConflict: 'campaign_id,customer_id', ignoreDuplicates: true })
           if (insertError) throw insertError
         }
 
@@ -400,7 +404,8 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
           if ((type === 'HEADER' || type === 'BODY') && matches.length) {
             const parameters = matches.map((match: RegExpMatchArray) => {
               const index = Math.max(1, Number(match[1])) - 1
-              return { type: 'text', text: values[index] ?? '' }
+              const value = String(values[index] ?? '').trim()
+              return { type: 'text', text: value || '-' }
             })
             components.push({ type: type.toLowerCase(), parameters })
           }
