@@ -69,7 +69,7 @@ async function callGrok(key:string,model:string,system:string,history:Turn[],cur
 }
 
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string){
- const candidates=[model,'gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let lastError='Gemini request failed'
  for(const candidate of candidates){
   for(let attempt=0;attempt<2;attempt++){
@@ -92,7 +92,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
 async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string){
  const errors:string[]=[]
  try{
-  const candidates=[model,'gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+  const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
   for(const candidate of candidates){
    try{
      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(geminiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
