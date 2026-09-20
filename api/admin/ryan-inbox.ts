@@ -215,7 +215,8 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  ]) const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content) const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
  const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n') const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
  const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model) const current=text(incoming.content,3000)+(multimodal.currentText||'')
- const currentParts=multimodal.parts||[] if(multimodal.transcript||multimodal.attachmentSummary?.length){
+ const currentParts=multimodal.parts||[]
+ if(multimodal.transcript||multimodal.attachmentSummary?.length){
   const storedContent=multimodal.transcript?((text(incoming.content,3000)?text(incoming.content,3000)+'\n':'')+multimodal.transcript):text(incoming.content,3000)
   await supabase.from('messages').update({content:storedContent,metadata:{...incomingMetadata,ryan_multimodal:multimodal.attachmentSummary||[],ryan_transcript:multimodal.transcript||null}}).eq('id',messageId).eq('conversation_id',conversationId)
  }
@@ -261,7 +262,7 @@ PERSONA: ${persona}`
      appointment_date:text(a.appointment_date,20),
      appointment_time:text(a.appointment_time,20)
     }
-    if(['update_customer','follow_up','schedule_appointment'].includes(action)){
+    if(['update_customer','follow_up','schedule_appointment','create_automation'].includes(action)){
      try{
       actionResult=await executeRyanAction(supabase,organizationId,conversationId,customer,action,actionData,services||[])
       await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_action:{...actionResult,at:new Date().toISOString()}}}).eq('id',conversationId).eq('organization_id',organizationId)
