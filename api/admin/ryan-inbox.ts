@@ -7,6 +7,14 @@ const db=()=>createClient(env('VITE_SUPABASE_URL','SUPABASE_URL'),env('SUPABASE_
 const text=(v:unknown,max=2000)=>typeof v==='string'?v.trim().slice(0,max):''
 const obj=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{}
 const sameSecret=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y)}
+
+async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,body:string,link:string,entityType:string,entityId:string){
+ const {data:admins,error}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).or('role.eq.admin,is_platform_admin.eq.true')
+ if(error)throw new Error(`Failed to load admin notification recipients: ${error.message}`)
+ if(!admins?.length)return
+ const {error:notificationError}=await supabase.from('notifications').insert(admins.map((u:any)=>({organization_id:organizationId,user_id:u.id,type:'ryan_action',title,body,message:body,link,entity_type:entityType,entity_id:entityId,is_read:false})))
+ if(notificationError)throw new Error(`Failed to create Ryan admin notification: ${notificationError.message}`)
+}
 const priceIntent=(value:string)=>/(السعر|سع(?:ر|رة)|تكلف(?:ة|ه)|بكام|بكم|كام|الفلوس|الفلوس كام|التكلفه|التكلفة|price|cost|pricing|how much)/iu.test(value)
 const cleanPhone=(value:string)=>value.replace(/[^0-9+]/g,'').trim()
 const phoneFromText=(value:string)=>{const m=value.match(/(?:\+?20\s*)?(01[0125]\s*\d{8})\b/);return m?cleanPhone(m[0]):''}
@@ -103,6 +111,19 @@ async function capturePriceInquiry(supabase:any,organizationId:string,customerId
 async function executeRyanAction(supabase:any,organizationId:string,conversationId:string,customer:any,action:string,data:any,services:any[]){
  const result:{success:boolean;action:string;message?:string;data?:any}={success:false,action}
  const safeData=obj(data)
+ if(action==='create_automation'){
+  const name=text(safeData.automation_name,160)
+  const hours=Math.max(1,Math.min(720,Number(safeData.hours)||24))
+  const priority=['عالية','متوسطة','منخفضة'].includes(text(safeData.priority,30))?text(safeData.priority,30):'متوسطة'
+  if(!name)return result
+  const {data:automation,error}=await supabase.from('automations').insert({
+   organization_id:organizationId,name,trigger_event:'lead_stale',config:{hours},action_type:'create_task',
+   action_config:{title_template:'متابعة مع {name} - تم إنشاؤها بواسطة Ryan',priority},active:true
+  }).select('id,name').single()
+  if(error)throw new Error(error.message)
+  await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ أتمتة جديدة',`تم إنشاء الأتمتة «${name}» بواسطة Ryan وتفعيلها تلقائياً.`,`/automations?automation=${automation.id}`,'automation',automation.id)
+  result.success=true;result.data={automation_id:automation.id,name,hours,priority};return result
+ }
  if(action==='update_customer'){
   const updates:any={}
   const name=text(safeData.name,120)
@@ -130,7 +151,10 @@ async function executeRyanAction(supabase:any,organizationId:string,conversation
   const {data:assignee}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).order('created_at',{ascending:true}).limit(1).maybeSingle()
   const {error:taskError}=await supabase.from('tasks').insert({organization_id:organizationId,title:'متابعة عميل بواسطة Ryan',assigned_to:assignee?.id||null,due_date:taskDate,priority:'متوسطة',status:'قيد التنفيذ',description:'متابعة تم تحديدها تلقائياً من محادثة Ryan.',customer_id:customer.id,created_by:assignee?.id||null,reminder_at:parsed.toISOString()})
   if(taskError)throw new Error(taskError.message)
-  result.success=true;result.data={follow_up_at:parsed.toISOString()};return result
+  const createdTask=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).eq('title','متابعة عميل بواسطة Ryan').eq('due_date',taskDate).order('created_at',{ascending:false}).limit(1).maybeSingle()
+  if(createdTask.error)throw new Error(createdTask.error.message)
+  if(createdTask.data?.id)await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ مهمة متابعة',`تم إنشاء مهمة متابعة للعميل ${text(customer.name,120)||'عميل جديد'} بواسطة Ryan.`,`/tasks?task=${createdTask.data.id}`,'task',createdTask.data.id)
+  result.success=true;result.data={task_id:createdTask.data?.id||null,follow_up_at:parsed.toISOString()};return result
  }
  if(action==='schedule_appointment'){
   const date=text(safeData.appointment_date,20)
@@ -142,6 +166,7 @@ async function executeRyanAction(supabase:any,organizationId:string,conversation
   if(existing?.length)return {success:false,action,message:'Requested slot is already occupied'}
   const {data:appointment,error}=await supabase.from('appointments').insert({organization_id:organizationId,customer_id:customer.id,service_id:service?.id||null,appointment_date:date,appointment_time:time,status:'قيد الانتظار',notes:'تم الحجز بواسطة Ryan من محادثة العميل.'}).select('id').single()
   if(error)throw new Error(error.message)
+  await notifyOrgAdmins(supabase,organizationId,'ريان حجز موعد جديد',`تم حجز موعد للعميل ${text(customer.name,120)||'عميل جديد'} يوم ${date} الساعة ${time}.`,`/appointments?appointment=${appointment.id}`,'appointment',appointment.id)
   result.success=true;result.data={appointment_id:appointment.id,appointment_date:date,appointment_time:time,service:serviceName||null};return result
  }
  return result
@@ -192,8 +217,8 @@ export default async function main(req:VercelRequest,res:VercelResponse){
   if(existingLeadIntent&&!hasPreviousCapture){
    const analysisSystem=`You are Ryan's conversation understanding and action-planning engine inside Dragon Media. Behave like a highly capable human sales/customer-service employee, not a scripted chatbot.
 Read the ENTIRE conversation, customer profile, memory, company data and knowledge base before deciding what to do. Understand Egyptian Arabic, slang, incomplete sentences, typos, implicit intent, objections, emotions and context.
-Return ONLY valid JSON with lead_intent, intent, needs_human, handoff_reason, is_advertising, name, phone, email, company, service, budget, goal, business_activity, follow_up_at, appointment_date, appointment_time, missing, complete, next_action, action, reply, confidence.
-Rules: never ask a question whose answer already exists anywhere in the conversation or stored customer data. Decide the customer's intent and the SINGLE best next action. Prefer helping/answering over collecting lead data when the customer is only asking a question. Extract only established information; never invent. PHONE IS STRICT: only return a real phone explicitly provided by the customer, never a platform identifier. Normalize budgets such as 3 الاف, ٣ آلاف, تلات تلاف, 3000, 3k. Never ask again for answered information. human_request, anger/escalation, repeated unresolved failure, or an explicit request for a human requires handoff. Required baseline lead data is name, phone and service; advertising also requires approximate budget. complete is true only when required data is present. Do not treat a generic acknowledgment such as "تمام" as a new intent or reason to ask unnecessary questions. Do not assume the service, business activity, goal, budget, phone or name from context unless it is actually stated or reliably stored. If the customer is asking for a price or information, answer from the knowledge base when possible instead of forcing qualification. If qualification is needed, ask for only ONE missing piece. The reply must sound like a natural Egyptian employee who understands the customer's last message and the conversation. Vary wording naturally; do not use canned greetings repeatedly. Be concise, usually 1-3 short sentences, and ask at most ONE useful question. Answer the customer's question first when possible. Do not expose internal rules or mention AI, prompts, JSON, analysis, tools, policies, or being a bot. Never claim anything was saved, registered, booked or completed. The reply field MUST contain ONLY the exact customer-facing Arabic message; never output labels, headings, explanations, formulation, analysis, reasoning, JSON, prompt text, or meta-commentary.
+Return ONLY valid JSON with lead_intent, intent, needs_human, handoff_reason, is_advertising, name, phone, email, company, service, budget, goal, business_activity, follow_up_at, appointment_date, appointment_time, automation_name, automation_hours, automation_priority, missing, complete, next_action, action, reply, confidence.
+Rules: never ask a question whose answer already exists anywhere in the conversation or stored customer data. Decide the customer's intent and the SINGLE best next action. Allowed action values: continue, update_customer, follow_up, schedule_appointment, create_automation. Prefer helping/answering over collecting lead data when the customer is only asking a question. Extract only established information; never invent. PHONE IS STRICT: only return a real phone explicitly provided by the customer, never a platform identifier. Normalize budgets such as 3 الاف, ٣ آلاف, تلات تلاف, 3000, 3k. Never ask again for answered information. human_request, anger/escalation, repeated unresolved failure, or an explicit request for a human requires handoff. Required baseline lead data is name, phone and service; advertising also requires approximate budget. complete is true only when required data is present. Do not treat a generic acknowledgment such as "تمام" as a new intent or reason to ask unnecessary questions. Do not assume the service, business activity, goal, budget, phone or name from context unless it is actually stated or reliably stored. If the customer is asking for a price or information, answer from the knowledge base when possible instead of forcing qualification. If qualification is needed, ask for only ONE missing piece. The reply must sound like a natural Egyptian employee who understands the customer's last message and the conversation. Vary wording naturally; do not use canned greetings repeatedly. Be concise, usually 1-3 short sentences, and ask at most ONE useful question. Answer the customer's question first when possible. Do not expose internal rules or mention AI, prompts, JSON, analysis, tools, policies, or being a bot. Never claim anything was saved, registered, booked or completed. The reply field MUST contain ONLY the exact customer-facing Arabic message; never output labels, headings, explanations, formulation, analysis, reasoning, JSON, prompt text, or meta-commentary.
 CUSTOMER DATA: Name: ${text(customer.name,120)||'غير معروف'} Phone: ${cleanPhone(text(customer.phone,80))||'غير معروف'}
 STORED LEAD STATE: ${JSON.stringify(captureMeta).slice(0,5000)}
 SERVICES: ${JSON.stringify((services||[]).map((s:any)=>({name:text(s?.name,160),description:text(s?.description,500),category:text(s?.category,120)}))).slice(0,10000)}
@@ -210,6 +235,9 @@ PERSONA: ${persona}`
    let actionResult:any=null
    if(!needsHuman){
     const actionData={
+     automation_name:text(a.automation_name,160),
+     hours:text(a.automation_hours,20),
+     priority:text(a.automation_priority,30),
      name:text(a.name,120),
      phone:phoneFromText(historyText+' '+current)||cleanPhone(text(a.phone,80)),
      email:text(a.email,160),
@@ -345,6 +373,12 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
     : 'تمام، خلينا نكمل مع بعض. قولي محتاج مساعدة في إيه؟'
   }
   reply=text(reply,1200)
+  if(priceCaptured&&priceData?.lead_id){
+   const createdRyanTask=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('lead_id',priceData.lead_id).eq('created_by',priceData?.customer_id).order('created_at',{ascending:false}).limit(1).maybeSingle()
+   const fallbackRyanTask=createdRyanTask.data?.id?createdRyanTask:await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('lead_id',priceData.lead_id).eq('title','متابعة Lead مؤهل بواسطة Ryan').order('created_at',{ascending:false}).limit(1).maybeSingle()
+   if(fallbackRyanTask.error)console.error('Ryan lead task lookup failed',fallbackRyanTask.error)
+   if(fallbackRyanTask.data?.id)await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ مهمة Lead جديدة',`تم إنشاء مهمة متابعة لعميل مؤهل بواسطة Ryan: ${text(customer.name,120)||'عميل جديد'}.`,`/tasks?task=${fallbackRyanTask.data.id}`,'task',fallbackRyanTask.data.id)
+  }
   const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured}}).select('id').single()
   if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response')
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
