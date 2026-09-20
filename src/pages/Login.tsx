@@ -82,7 +82,7 @@ export default function Login() {
     }
   }, []);
 
-  // During signup Supabase may briefly emit a SIGNED_IN session before AuthContext signs it out. Never redirect that transient signup session away from the verification step.\n  if (session && mode === 'login' && signupStep !== 'verification') {
+  // During signup Supabase may briefly emit a SIGNED_IN session before AuthContext signs it out.\n  // Keep the user on the signup flow instead of redirecting away.\n  if (session && mode === 'login' && signupStep !== 'verification') {
     return <Navigate to="/" replace />;
   }
 
