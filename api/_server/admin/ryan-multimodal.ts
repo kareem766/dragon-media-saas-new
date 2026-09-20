@@ -57,7 +57,7 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
 }
 
 async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;base64:string}){
- const candidates=['gemini-2.5-flash',model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-2.5-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='audio transcription failed'
  for(const candidate of candidates){
   const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(apiKey),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:'استمع للتسجيل الصوتي جيداً. اكتب فقط النص المنطوق كما قاله العميل، بنفس اللغة قدر الإمكان، بدون شرح أو تلخيص أو علامات مثل النص.'},{inlineData:{mimeType:audio.mime,data:audio.base64}}]}],generationConfig:{maxOutputTokens:1200}})})
