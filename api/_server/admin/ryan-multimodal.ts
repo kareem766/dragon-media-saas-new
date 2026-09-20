@@ -52,7 +52,7 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  const buffer=Buffer.from(await r.arrayBuffer())
  const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
  const declaredMime=mime||''
- const detected=(declaredMime&&/^audio\\//iu.test(declaredMime))?declaredMime:(headerMime&&headerMime!=='application/octet-stream'?headerMime:(declaredMime||headerMime||'application/octet-stream'))
+ const detected=(declaredMime&&/^audio\//i.test(declaredMime))?declaredMime:(headerMime&&headerMime!=='application/octet-stream'?headerMime:(declaredMime||headerMime||'application/octet-stream'))
  return {mime:detected,base64:buffer.toString('base64'),bytes:buffer.byteLength}
 }
 
