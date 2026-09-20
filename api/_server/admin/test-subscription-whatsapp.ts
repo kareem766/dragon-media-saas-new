@@ -40,7 +40,7 @@ export default async function handler(req: any, res: any) {
   const { data: caller } = await admin.from('users').select('is_platform_admin,active').eq('id', authData.user.id).single()
   if (!caller?.is_platform_admin || caller.active === false) return json(res, 403, { error: 'هذه العملية لمدير المنصة فقط' })
 
-  const { organizationId } = req.body || {}
+  const { organizationId, testPhone } = req.body || {}
   if (!organizationId) return json(res, 400, { error: 'organizationId مطلوب' })
 
   const templateName = String(process.env.WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE || 'subscription_expiry_reminder').trim()
@@ -50,8 +50,8 @@ export default async function handler(req: any, res: any) {
   const { data: org } = await admin.from('organizations').select('id,name,phone,suspended').eq('id', organizationId).single()
   if (!org || org.suspended) return json(res, 404, { error: 'المنظمة غير موجودة أو موقوفة' })
 
-  const phone = normalizePhone(org.phone)
-  if (!phone) return json(res, 400, { error: 'رقم WhatsApp للمنظمة غير موجود' })
+  const phone = normalizePhone(testPhone) || normalizePhone(org.phone)
+  if (!phone) return json(res, 400, { error: 'رقم WhatsApp للاختبار غير موجود' })
 
   const { data: integration } = await admin.from('integrations').select('config,metadata').eq('organization_id', organizationId).eq('provider', 'whatsapp').eq('connected', true).maybeSingle()
   const phoneNumberId = String(integration?.metadata?.phone_number_id || '')
