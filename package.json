@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/fix-ryan-import.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
