@@ -215,7 +215,8 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  ])
  const previous=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content)
  const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
- const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n') const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
+ const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n')
+ const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
  const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model)
  const current=text(incoming.content,3000)+(multimodal.currentText||'')
  const currentParts=multimodal.parts||[]
