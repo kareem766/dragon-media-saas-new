@@ -78,8 +78,16 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
   if(fetched.error){summaries.push({type:'unsupported',reason:fetched.error});continue}
   if(!fetched.mime||!SUPPORTED_INLINE.test(fetched.mime)){summaries.push({type:'unsupported',mime:fetched.mime});continue}
   if(fetched.bytes>MAX_INLINE_BYTES){summaries.push({type:'too_large',mime:fetched.mime,bytes:fetched.bytes});continue}
-  if(/^audio\//iu.test(fetched.mime)){const audioText=await transcribeAudio(apiKey,model,{mime:fetched.mime,base64:fetched.base64});transcript=[transcript,audioText].filter(Boolean).join('\n');summaries.push({type:'audio',mime:fetched.mime,transcribed:true})}
-  else{parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}});summaries.push({type:/^image\//iu.test(fetched.mime)?'image':fetched.mime==='application/pdf'?'pdf':'file',mime:fetched.mime})}
+  if(/^audio\//iu.test(fetched.mime)){
+   parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}})
+   try{
+    const audioText=await transcribeAudio(apiKey,model,{mime:fetched.mime,base64:fetched.base64})
+    transcript=[transcript,audioText].filter(Boolean).join('\n')
+    summaries.push({type:'audio',mime:fetched.mime,transcribed:true})
+   }catch(error:any){
+    summaries.push({type:'audio',mime:fetched.mime,transcribed:false,error:text(error?.message,300)||'transcription_failed'})
+   }
+  }else{parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}});summaries.push({type:/^image\//iu.test(fetched.mime)?'image':fetched.mime==='application/pdf'?'pdf':'file',mime:fetched.mime})}
  }
  const attachmentText=summaries.length?'\n[مرفقات العميل: '+summaries.map(x=>x.type+(x.mime?' ('+x.mime+')':'')).join('، ')+']':''
  return {currentText:transcript?transcript+attachmentText:attachmentText,parts,attachmentSummary:summaries,transcript}
