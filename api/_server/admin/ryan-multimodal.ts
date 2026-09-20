@@ -1,9 +1,16 @@
+import { createDecipheriv, createHash } from 'node:crypto'
 const env=(...names:string[])=>names.map(n=>process.env[n]).find(v=>v?.trim())?.trim()||''
 const text=(v:unknown,max=4000)=>typeof v==='string'?v.trim().slice(0,max):''
 const obj=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{}
 type GeminiPart={text?:string;inlineData?:{mimeType:string;data:string}}
 const MAX_INLINE_BYTES=15*1024*1024
 const SUPPORTED_INLINE=/^(?:image\/(?:png|jpe?g|webp|heic|heif|gif|avif)|audio\/(?:mpeg|mp3|wav|ogg|aac|flac|webm|mp4)|application\/pdf|text\/(?:plain|csv|markdown)|application\/json)$/iu
+function decryptMetaToken(value:any){
+ const seed=env('META_TOKEN_ENCRYPTION_KEY','META_APP_SECRET')
+ if(!seed)return ''
+ if(value&&typeof value==='object'&&value.iv&&value.tag&&value.data){try{const decipher=createDecipheriv('aes-256-gcm',createHash('sha256').update(seed).digest(),Buffer.from(String(value.iv),'base64'));decipher.setAuthTag(Buffer.from(String(value.tag),'base64'));return Buffer.concat([decipher.update(Buffer.from(String(value.data),'base64')),decipher.final()]).toString('utf8')}catch{return ''}}
+ return typeof value==='string'?value:''
+}
 
 function attachmentList(metadata:any){
  const candidates=[metadata?.attachments,metadata?.files,metadata?.media,metadata?.file,metadata?.attachment,metadata?.media_url||metadata?.url?metadata:null]
@@ -16,7 +23,7 @@ function attachmentList(metadata:any){
 
 async function whatsappMediaUrl(supabase:any,organizationId:string,mediaId:string){
  const {data:integration}=await supabase.from('integrations').select('config').eq('organization_id',organizationId).eq('provider','whatsapp').eq('connected',true).maybeSingle()
- const token=text(obj(integration?.config).access_token,5000)
+ const token=decryptMetaToken(obj(integration?.config).access_token)
  if(!token)return ''
  const graphVersion=text(process.env.META_GRAPH_API_VERSION,30)||'v23.0'
  const r=await fetch('https://graph.facebook.com/'+graphVersion+'/'+encodeURIComponent(mediaId),{headers:{Authorization:'Bearer '+token}})
