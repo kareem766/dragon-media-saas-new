@@ -191,7 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const pageToken = String(page.access_token)
       const subscription = await graph(
-        `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals`,
+        `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,messaging_deliveries`,
         pageToken,
         { method: 'POST' },
       ).then(() => true).catch(() => false)
