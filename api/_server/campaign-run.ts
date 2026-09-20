@@ -566,8 +566,25 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
             error_message: null,
           })
           if (externalId) {
-            const { data: pendingDelivery } = await admin.from('meta_delivery_events').select('occurred_at').eq('organization_id', organizationId).eq('channel', 'messenger').eq('external_id', externalId).eq('state', 'delivered').maybeSingle()
-            if (pendingDelivery) await markMessage(row.id, 'تم التسليم', { delivered_at: pendingDelivery.occurred_at, updated_at: pendingDelivery.occurred_at })
+            const { data: pendingDelivery } = await admin.from('meta_delivery_events')
+              .select('occurred_at,state,payload')
+              .eq('organization_id', organizationId)
+              .eq('channel', channel)
+              .eq('external_id', externalId)
+              .in('state', ['delivered', 'read', 'failed'])
+              .order('occurred_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+            if (pendingDelivery?.state === 'delivered' || pendingDelivery?.state === 'read') {
+              await markMessage(row.id, 'تم التسليم', { delivered_at: pendingDelivery.occurred_at, updated_at: pendingDelivery.occurred_at })
+            } else if (pendingDelivery?.state === 'failed') {
+              const metaError = (pendingDelivery as any)?.payload?.errors?.[0]
+              await markMessage(row.id, 'فشلت', {
+                failed_at: pendingDelivery.occurred_at,
+                updated_at: pendingDelivery.occurred_at,
+                error_message: metaError?.title || metaError?.message || 'WhatsApp delivery failed.',
+              })
+            }
           }
           sent++
         } catch (error) {
