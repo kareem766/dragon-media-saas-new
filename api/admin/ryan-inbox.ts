@@ -76,7 +76,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    try{
      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current}]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
     const d=await r.json().catch(()=>({}))
-    if(r.ok){const reply=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000);if(reply)return reply;lastError=`Gemini ${candidate} returned an empty response`}
+    if(r.ok){const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),12000);if(raw){try{const parsed=obj(JSON.parse(raw));const structuredReply=text(parsed.reply||parsed.response||parsed.message||parsed.text,5000);if(structuredReply)return structuredReply}catch{};return raw.slice(0,5000)}lastError=`Gemini ${candidate} returned an empty response`}
     else{lastError=d?.error?.message||`Gemini ${r.status}`;if(![408,429,500,502,503,504].includes(r.status))break}
    }catch(error:any){lastError=text(error?.message,500)||'Gemini network error'}
    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,350))
