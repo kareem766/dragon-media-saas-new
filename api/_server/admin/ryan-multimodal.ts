@@ -50,7 +50,9 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  const r=await fetch(url,{headers})
  if(!r.ok)return {error:'media_fetch_'+r.status}
  const buffer=Buffer.from(await r.arrayBuffer())
- const detected=(r.headers.get('content-type')||mime||'application/octet-stream').split(';')[0].toLowerCase()
+ const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
+ const declaredMime=mime||''
+ const detected=(declaredMime&&/^audio\\//iu.test(declaredMime))?declaredMime:(headerMime&&headerMime!=='application/octet-stream'?headerMime:(declaredMime||headerMime||'application/octet-stream'))
  return {mime:detected,base64:buffer.toString('base64'),bytes:buffer.byteLength}
 }
 
