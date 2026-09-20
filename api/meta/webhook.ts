@@ -110,7 +110,11 @@ async function handleFacebookWebhook(db: any, payload: any) {
     const organizationId = String(integration.organization_id)
     for (const event of Array.isArray(entry?.messaging) ? entry.messaging : []) {
       const deliveryMids = Array.isArray(event?.delivery?.mids) ? event.delivery.mids : []
-      for (const mid of deliveryMids) await updateFacebookCampaignStatus(db, organizationId, String(mid), 'delivered')
+      for (const mid of deliveryMids) {
+        const externalId = String(mid)
+        await db.from('meta_delivery_events').upsert({ organization_id: organizationId, channel: 'messenger', external_id: externalId, state: 'delivered', occurred_at: new Date().toISOString(), payload: event?.delivery || null }, { onConflict: 'channel,external_id,state' })
+        await updateFacebookCampaignStatus(db, organizationId, externalId, 'delivered')
+      }
       const readMid = String(event?.read?.mid || '')
       if (readMid) await updateFacebookCampaignStatus(db, organizationId, readMid, 'delivered')
       if (deliveryMids.length || readMid) continue
