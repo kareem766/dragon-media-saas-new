@@ -241,3 +241,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 // Trigger deployment after WhatsApp status diagnostics fix.
+// Production retrigger: ensure webhook delivery-status diagnostics are included.
