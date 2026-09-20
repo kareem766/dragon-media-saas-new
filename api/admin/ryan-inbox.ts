@@ -220,6 +220,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model)
  const current=text(incoming.content,3000)+(multimodal.currentText||'')
  const currentParts=multimodal.parts||[]
+ // deployment verification trigger
  if(multimodal.transcript||multimodal.attachmentSummary?.length){
   const storedContent=multimodal.transcript?((text(incoming.content,3000)?text(incoming.content,3000)+'\n':'')+multimodal.transcript):text(incoming.content,3000)
   await supabase.from('messages').update({content:storedContent,metadata:{...incomingMetadata,ryan_multimodal:multimodal.attachmentSummary||[],ryan_transcript:multimodal.transcript||null}}).eq('id',messageId).eq('conversation_id',conversationId)
