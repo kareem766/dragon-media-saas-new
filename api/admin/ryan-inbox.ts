@@ -8,6 +8,7 @@ const db=()=>createClient(env('VITE_SUPABASE_URL','SUPABASE_URL'),env('SUPABASE_
 const text=(v:unknown,max=2000)=>typeof v==='string'?v.trim().slice(0,max):''
 const obj=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{}
 const sameSecret=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y)}
+const fetchWithTimeout=async(input:RequestInfo|URL,init:RequestInit={},timeoutMs=8000)=>{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs);try{return await fetch(input,{...init,signal:controller.signal})}finally{clearTimeout(timer)}}
 
 async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,body:string,link:string,entityType:string,entityId:string){
  const {data:admins,error}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).or('role.eq.admin,is_platform_admin.eq.true')
@@ -61,7 +62,7 @@ type Turn={role:'user'|'model';parts:{text:string}[]}
 
 async function callGrok(key:string,model:string,system:string,history:Turn[],current:string,structured=false){
  const messages=[{role:'system',content:system},...history.map((t:any)=>({role:t.role==='model'?'assistant':'user',content:text(t.parts?.map((p:any)=>p?.text||'').join(''),4000)})),{role:'user',content:current}]
- const r=await fetch('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},body:JSON.stringify({model:model||'grok-4.6',messages,max_tokens:700,...(structured?{response_format:{type:'json_object'}}:{})})})
+ const r=await fetchWithTimeout('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},body:JSON.stringify({model:model||'grok-4.6',messages,max_tokens:700,...(structured?{response_format:{type:'json_object'}}:{})})})
  const d=await r.json().catch(()=>({}))
  if(!r.ok)throw new Error(d?.error?.message||`Grok ${r.status}`)
  const reply=text(d?.choices?.[0]?.message?.content,12000)
@@ -73,9 +74,9 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  const requestedModel=model.toLowerCase(); const primaryModel=/(gemini-2\.5|gemini-3\.[0-59]\b|gemini-3\.7|gemini-3\.8)/.test(requestedModel)?'gemini-3.6-flash':model; const candidates=[primaryModel,'gemini-3.6-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let lastError='Gemini request failed'
  for(const candidate of candidates){
-  for(let attempt=0;attempt<2;attempt++){
+  for(let attempt=0;attempt<1;attempt++){
    try{
-     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
+     const r=await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
     const d=await r.json().catch(()=>({}))
     if(r.ok){const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),12000);if(raw){try{const parsed=obj(JSON.parse(raw));const structuredReply=text(parsed.reply||parsed.response||parsed.message||parsed.text,5000);if(structuredReply)return structuredReply}catch{};return raw.slice(0,5000)}lastError=`Gemini ${candidate} returned an empty response`}
     else{lastError=d?.error?.message||`Gemini ${r.status}`;if(![408,429,500,502,503,504].includes(r.status))break}
@@ -91,7 +92,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
   const requestedModel=model.toLowerCase(); const primaryModel=/(gemini-2\.5|gemini-3\.[0-59]\b|gemini-3\.7|gemini-3\.8)/.test(requestedModel)?'gemini-3.6-flash':model; const candidates=[primaryModel,'gemini-3.6-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
   for(const candidate of candidates){
    try{
-     const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(geminiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
+     const r=await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(geminiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),12000).replace(/^\\s*\\`\\`\\`(?:json)?\\s*/i,'').replace(/\\s*\\`\\`\\`\\s*$/,'')
@@ -118,6 +119,20 @@ async function capturePriceInquiry(supabase:any,organizationId:string,customerId
  const {data,error}=await supabase.rpc('ryan_capture_price_inquiry',{p_organization_id:organizationId,p_customer_id:customerId||null,p_name:name||null,p_phone:phone||null,p_email:email||null,p_company:null,p_service:service||null,p_notes:notes||null,p_source:'ryan'})
  if(error)throw new Error(error.message)
  return data?.[0]||null
+}
+
+async function ensureRyanFallbackReply(supabase:any,organizationId:string,conversationId:string,messageId:string,incomingMetadata:any,agentId?:string){
+ const fallback='أهلاً بحضرتك، وصلت رسالتك. أنا معاك، قولي محتاج مساعدة في إيه؟'
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   const {data:lastMessage}=await supabase.from('messages').select('id,sender_type').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(1).maybeSingle()
+   if(lastMessage?.sender_type==='ai')return {id:lastMessage.id,reply:null,existing:true}
+   const {data:saved,error}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:fallback,metadata:{source:'ryan',provider:'fallback',fallback:true,ai_agent_id:agentId||null}}).select('id').single()
+   if(!error&&saved)return {id:saved.id,reply:fallback,existing:false}
+  }catch(error){console.error('Ryan fallback attempt failed',error)}
+  await new Promise(resolve=>setTimeout(resolve,150))
+ }
+ return null
 }
 
 async function executeRyanAction(supabase:any,organizationId:string,conversationId:string,customer:any,action:string,data:any,services:any[]){
@@ -426,8 +441,13 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
   return res.status(200).json({ok:true,reply,message_id:saved.id,price_inquiry:priceCaptured,price_data:priceCaptured?priceData:null,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,outbound:'database_trigger'})
  }catch(error:any){
-  await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processing_at:null}}).eq('id',messageId).eq('conversation_id',conversationId)
   console.error('Ryan error',error)
+  try{
+   const fallback=await ensureRyanFallbackReply(supabase,organizationId,conversationId,messageId,incomingMetadata,agent?.id)
+   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_processing_at:null,ryan_fallback:!!fallback}}).eq('id',messageId).eq('conversation_id',conversationId)
+   if(fallback)return res.status(200).json({ok:true,reply:fallback.reply||'تمت معالجة الرسالة.',message_id:fallback.id,fallback:true,outbound:'database_trigger'})
+  }catch(fallbackError){console.error('Ryan fallback handling failed',fallbackError)}
+  await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processing_at:null,ryan_fallback_failed:true}}).eq('id',messageId).eq('conversation_id',conversationId)
   return res.status(502).json({error:'Ryan request failed',details:text(error?.message,500)})
  }
 }
