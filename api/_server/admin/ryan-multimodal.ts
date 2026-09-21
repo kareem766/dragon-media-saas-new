@@ -60,7 +60,7 @@ const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
 const retryDelay=(attempt:number)=>Math.min(4000,500*Math.pow(2,attempt)+Math.floor(Math.random()*400))
 async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;base64:string}){
- const candidates=[model,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='audio transcription failed'
  for(const candidate of candidates){
   for(let attempt=0;attempt<3;attempt++){
