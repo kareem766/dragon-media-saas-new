@@ -190,7 +190,7 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
  if((hasTrustedName||nameWasProvidedNow)&&!phoneWasProvidedNow&&!aiUnavailable&&['handoff_human','create_lead'].includes(text(plan.action,60))){
   plan.reply='تمام يا فندم، ممكن أعرف رقم حضرتك للتواصل؟';plan.action='continue';plan.action_data={};
  }
- let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[],messageId)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
+ const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue'; plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[],messageId)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
   actionResult={success:false,message:'Action execution failed'}
  }}
  let reply=text(plan.reply,5000);if(!actionResult.success){console.error('Ryan action failed',text(plan.action,60),actionResult.message||'unknown');reply='حصلت مشكلة بسيطة وأنا بنفذ الطلب، ومش هقول لحضرتك إنه تم قبل ما يتنفذ فعلاً.'}
