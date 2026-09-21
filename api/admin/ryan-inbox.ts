@@ -39,12 +39,12 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    try{
     const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\
 \
-إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:1400,responseMimeType:'application/json',...( /^gemini-3\\./i.test(candidate) ? {thinkingConfig:{thinkingLevel:'minimal'}} : {}),...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
+إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:4096,responseMimeType:'application/json',...( /^gemini-3\\./i.test(candidate) ? {thinkingConfig:{thinkingLevel:'minimal'}} : {}),...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000)
      if(raw){try{return {plan:parseGeminiJson(raw),model:candidate}}catch{last=candidate+' returned invalid JSON';errors.push(candidate+': '+last)}}
-     else {last=candidate+' returned empty';errors.push(candidate+': '+last)}
+     else {last=candidate+' returned empty';errors.push(candidate+': '+last+' finish_reason='+(text(d?.candidates?.[0]?.finishReason,80)||'unknown')+' prompt_feedback='+text(JSON.stringify(d?.promptFeedback),1000))}
      if(attempt<2){await sleep(retryDelay(attempt));continue}
      break
     }
@@ -172,12 +172,12 @@ COMPANY RULES: ${text(settings.custom_rules,5000)||'لا توجد قواعد إ�
 KNOWLEDGE BASE:
 ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
  let plan:Record<string,any>={},usedModel=model,lastError=''
- try{const result=await callGemini(apiKey,model,system,history,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',lastError)}
+ try{const result=await callGemini(apiKey,model,system,history,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
  if(!plan.service&&plan.intent&&/بيع|شراء|إعلان|تسويق|إدارة صفحة|تصميم|محتوى|عقارات|وحدة|سيارة|منتج/iu.test(String(plan.intent)))plan.service=text(plan.intent,160);
  const aiUnavailable=!plan.reply
  if(aiUnavailable){
   if(runId)await supabase.from('ai_agent_runs').update({status:'failed',model:usedModel,metadata:{source:'ryan',error:lastError}}).eq('id',runId)
-  console.error('Ryan Gemini unavailable after all retries',lastError)
+  console.error('Ryan Gemini unavailable after all retries',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))
   plan={reply:'معلش، حصل تأخير بسيط في الرد. ابعتلي رسالتك تاني وهكمل مع حضرتك فوراً.',action:'continue',action_data:{},confidence:0}
  }
  const explicitName=extractName(current);const learnedName=text(plan.learned_name,120)||explicitName;const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName)&&!invalidCustomerName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
