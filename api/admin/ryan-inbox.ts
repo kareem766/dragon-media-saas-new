@@ -214,7 +214,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  }
  if(claimError)return res.status(500).json({error:'Failed to claim incoming message',details:text(claimError.message,500)})
  if(!claimed)return res.status(200).json({ok:true,skipped:true,reason:'already_processing_or_processed'})
- const {data:incomingAfterClaim}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
+ const {data:incomingAfterClaim}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata,created_at').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
  if(!incomingAfterClaim||incomingAfterClaim.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const incoming=obj(incomingAfterClaim),incomingMetadata=obj(incomingAfterClaim.metadata)
  const {data:newerPending}=await supabase.from('messages').select('id').eq('conversation_id',conversationId).eq('sender_type','customer').gt('created_at',String(incomingAfterClaim.created_at||'' )).is('metadata->>ai_agent_processed_at',null).order('created_at',{ascending:false}).limit(1)
