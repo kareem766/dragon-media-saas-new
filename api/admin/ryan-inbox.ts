@@ -275,7 +275,34 @@ SERVICES: ${JSON.stringify((services||[]).map((s:any)=>({name:text(s?.name,160),
 STORED MEMORY: ${JSON.stringify(memory).slice(0,5000)}
 KNOWLEDGE BASE: ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}
 PERSONA: ${persona}`
-   const a=obj(await analyzeConversation(apiKey,model,analysisSystem,history,current,currentParts))
+   let a:Record<string,any>={};
+   try{
+    a=obj(await analyzeConversation(apiKey,model,analysisSystem,history,current,currentParts))
+   }catch(analysisError:any){
+    console.error('Ryan analysis unavailable; using deterministic context fallback',analysisError)
+    const knownText=historyText+' '+current
+    const detectedName=extractNameFromMessage(knownText)||text(captureMeta.name,120)||(looksLikeName(text(customer.name,120))?text(customer.name,120):'')
+    const detectedPhone=phoneFromText(knownText)|| (validPhone(text(captureMeta.phone,80))?cleanPhone(text(captureMeta.phone,80)):'') || (validPhone(text(customer.phone,80))?cleanPhone(text(customer.phone,80)):'')
+    const detectedService=serviceFromText(knownText,services||[])||text(captureMeta.service,160)
+    const detectedBudget=budgetFromText(knownText)||text(captureMeta.budget,120)
+    const detectedGoal=text(captureMeta.goal,240)
+    const detectedActivity=text(captureMeta.business_activity,240)
+    const ready=!!detectedName&&!!detectedPhone&&!!detectedService&&(!text(captureMeta.is_ad?'true':'false')||!!detectedBudget)
+    a={
+      lead_intent: !!(detectedName||detectedPhone||detectedService||detectedBudget||captureMeta.captured_at),
+      intent: priceIntent(current)?'pricing':(salesIntent(current)?'sales_inquiry':'continue'),
+      needs_human: humanHandoffIntent(knownText),
+      handoff_reason: humanHandoffIntent(knownText)?'طلب العميل التواصل مع موظف':null,
+      is_advertising: captureMeta.is_ad===true || /(?:إعلان|اعلان|إعلانات|اعلانات|ads|advertising)/iu.test(knownText),
+      name:detectedName||null, phone:detectedPhone||null, service:detectedService||null,
+      budget:detectedBudget||null, goal:detectedGoal||null, business_activity:detectedActivity||null,
+      missing:[!detectedName?'name':'',!detectedPhone?'phone':'',!detectedService?'service':'',(!detectedBudget&&captureMeta.is_ad===true)?'budget':''].filter(Boolean),
+      complete:ready,
+      next_action:ready?'continue':(!detectedName?'ask_name':(!detectedPhone?'ask_phone':(!detectedService?'ask_service':(!detectedBudget&&captureMeta.is_ad===true?'ask_budget':'continue')))),
+      action:'continue',
+      reply: ready ? 'تمام يا فندم، نكمل من آخر نقطة وقفنا عندها. قولي حابب نكمل في إيه؟' : ''
+    }
+   }
    const leadIntent=a.lead_intent===true
    const intent=text(a.intent,40)||'other'
    const explicitHumanRequest=humanHandoffIntent(historyText+' '+current)
