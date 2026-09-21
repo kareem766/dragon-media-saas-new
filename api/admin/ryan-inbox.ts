@@ -39,7 +39,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    try{
     const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\
 \
-إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:900,temperature:Math.min(1,Math.max(0,Number(temperature)||0.45)),responseMimeType:'application/json'}})})
+إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:900,responseMimeType:'application/json',...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000)
