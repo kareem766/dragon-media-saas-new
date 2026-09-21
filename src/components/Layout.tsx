@@ -5,6 +5,7 @@ import Topbar from './Topbar'
 import SiteFooter from './SiteFooter'
 import BackButton from './BackButton'
 import { useSubscription } from '../lib/useSubscription'
+import { supabase } from '../lib/supabaseClient'
 
 const titles: Record<string, string> = {
   '/': 'نظرة عامة', '/crm': 'إدارة العملاء (CRM)', '/pipeline': 'مسار المبيعات', '/services': 'الخدمات', '/campaigns': 'الحملات التسويقية', '/inbox': 'صندوق المحادثات الموحد', '/ryan': 'RYAN AI', '/automations': 'الأتمتة', '/tasks': 'المهام والمتابعات', '/appointments': 'المواعيد', '/billing': 'الفواتير والاشتراكات', '/plans': 'الباقات', '/billing/pay': 'إرسال بيانات الدفع', '/reports': 'التقارير', '/users': 'المستخدمون والصلاحيات', '/account': 'حسابي', '/settings': 'الإعدادات', '/tickets': 'الدعم الفني', '/search': 'البحث', '/admin': 'لوحة الإدارة', '/admin/organizations': 'إدارة الشركات', '/admin/payments': 'المدفوعات', '/admin/audit-logs': 'سجل النشاط', '/admin/settings': 'إعدادات المنصة', '/admin/branding': 'هوية المنصة', '/admin/plans': 'إدارة الباقات', '/admin/ryan-credits': 'باقات Ryan', '/admin/roles': 'الأدوار والصلاحيات', '/admin/tickets': 'تذاكر الدعم',
@@ -47,12 +48,17 @@ export default function Layout() {
   const title = titles[pathname] ?? 'Dragon Media'
   const pageTheme = getPageTheme(pathname)
   const { loading, isActive, isExpired, isPendingPayment, daysRemaining, formattedRenewalDate } = useSubscription()
+  const [preSubscriptionAccess, setPreSubscriptionAccess] = useState({ integrations: false })
+  useEffect(() => {
+    if (!supabase) return
+    void supabase.from('platform_settings').select('integrations_enabled_before_subscription').eq('id', 1).single().then(({ data }) => setPreSubscriptionAccess({ integrations: Boolean(data?.integrations_enabled_before_subscription) }))
+  }, [])
   const [accessResolved, setAccessResolved] = useState(false)
 
   useEffect(() => { if (!loading) setAccessResolved(true) }, [loading])
   useEffect(() => { setOpen(false) }, [pathname])
 
-  const exempt = isPathAllowedWithoutSubscription(pathname)
+  const exempt = isPathAllowedWithoutSubscription(pathname) || (pathname.startsWith('/integrations') && preSubscriptionAccess.integrations)
   const adminRoute = isAdminPath(pathname)
   const shouldLockPage = accessResolved && !loading && !isActive && !exempt && !adminRoute
   const showPendingBanner = accessResolved && !loading && isPendingPayment && !exempt && !adminRoute
