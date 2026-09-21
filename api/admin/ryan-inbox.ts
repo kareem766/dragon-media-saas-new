@@ -162,6 +162,8 @@ const trustedCustomerName=storedCustomerName&&!invalidCustomerName(storedCustome
  const safeMemory=rememberCustomer?{name:looksLikeName(String(memory.name||''))?text(memory.name,120):'',phone:validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):'' ,company:text(memory.company,160),email:text(memory.email,160)}:{}
  let multimodal:any={parts:[],currentText:'',transcript:'',attachmentSummary:[]};try{multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),obj(incoming.metadata),apiKey,model)}catch(e){console.error('Ryan multimodal unavailable',e)}
  const current=text(incoming.content,4000)+(multimodal.currentText||'');const currentParts=multimodal.parts||[]
+ const greetingOnly=/^(?:السلام عليكم(?: ورحمة الله وبركاته)?|سلام عليكم|اهلاً|أهلاً|أهلا|اهلا|هاي|hello|hi|مساء الخير|صباح الخير|مساء النور|صباح النور)[.!؟!،,\s]*$/iu.test(current.trim());
+ const effectiveHistory=greetingOnly?[]:history
  const language=text(agent.language,40)||'ar-EG';const emojiMode=['none','light','limited'].includes(text(settings.emoji_mode,20))?text(settings.emoji_mode,20):'light';const emojiInstruction=emojiMode==='none'?'لا تستخدم أي إيموجي.':emojiMode==='limited'?'استخدم إيموجي واحداً فقط عند الحاجة وبشكل طبيعي.':'يمكن استخدام إيموجي خفيف وطبيعي عند ملاءمته، بدون مبالغة.';const languageInstruction=/^(ar-EG|egyptian_arabic)$/iu.test(language)?'استخدم العربية المصرية الطبيعية.':/^ar$/iu.test(language)?'استخدم العربية الواضحة.':'استخدم اللغة المحددة في إعداد Ryan بشكل طبيعي.';
  const system=`أنت ${text(agent.name,80)||'Ryan'}، موظف Dragon Media الذكي. أنت ليس chatbot بأسئلة ثابتة؛ أنت موظف يفهم العميل وسياق كلامه وينفذ طلباته داخل المنصة. ${languageInstruction} ${emojiInstruction} لا تبدأ كل محادثة بنفس الجملة. لا تسأل سؤالاً سبق أن أجابه العميل. سؤال واحد فقط عند الحاجة. لو العميل قال اسمه احفظه واستخدمه طبيعياً لاحقاً. لا تخترع أي معلومة تخص Dragon Media؛ استخدم Knowledge Base كمصدر الحقيقة.
 PERSONA: ${persona}
@@ -172,7 +174,7 @@ COMPANY RULES: ${text(settings.custom_rules,5000)||'لا توجد قواعد إ�
 KNOWLEDGE BASE:
 ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
  let plan:Record<string,any>={},usedModel=model,lastError=''
- try{const result=await callGemini(apiKey,model,system,history,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
+ try{const result=await callGemini(apiKey,model,system,effectiveHistory,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
  if(!plan.service&&plan.intent&&/بيع|شراء|إعلان|تسويق|إدارة صفحة|تصميم|محتوى|عقارات|وحدة|سيارة|منتج/iu.test(String(plan.intent)))plan.service=text(plan.intent,160);
  const aiUnavailable=!plan.reply
  if(aiUnavailable){
@@ -190,6 +192,7 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
  if((hasTrustedName||nameWasProvidedNow)&&!phoneWasProvidedNow&&!aiUnavailable&&['handoff_human','create_lead'].includes(text(plan.action,60))){
   plan.reply='تمام يا فندم، ممكن أعرف رقم حضرتك للتواصل؟';plan.action='continue';plan.action_data={};
  }
+ if(greetingOnly&&!aiUnavailable){plan.action='continue';plan.action_data={};if(hasTrustedName){plan.reply=`أهلاً يا ${effectiveName}، تحب تعرف عن أنهي خدمة؟`}else{plan.reply='أهلاً بحضرتك، ممكن أتشرف باسم حضرتك؟'}}
  const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue'; plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[],messageId)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
   actionResult={success:false,message:'Action execution failed'}
  }}
