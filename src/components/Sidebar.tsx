@@ -370,7 +370,7 @@ export default function Sidebar({
           'top-0 right-0 bottom-0',
           'w-[min(84vw,18rem)] lg:w-72',
           'shrink-0',
-          'bg-ink-950 text-sand-100',
+          'dm-sidebar text-sand-100',
           'flex flex-col',
           'border-l border-white/5',
           'shadow-2xl lg:shadow-none',
@@ -470,8 +470,8 @@ export default function Sidebar({
                       'select-none',
                       active
                         ? [
-                            'bg-gold-500/15',
-                            'text-gold-300',
+                            'bg-cyan-400/12',
+                            'text-cyan-200',
                             'font-semibold',
                             'shadow-[inset_0_0_0_1px_rgba(245,158,11,0.08)]',
                           ].join(' ')
@@ -494,7 +494,7 @@ export default function Sidebar({
                     <>
                       {active && (
                         <span
-                          className="absolute right-0 top-2 bottom-2 w-0.5 rounded-full bg-gold-400"
+                          className="absolute right-0 top-2 bottom-2 w-0.5 rounded-full bg-cyan-300"
                           aria-hidden="true"
                         />
                       )}
@@ -506,7 +506,7 @@ export default function Sidebar({
                           'shrink-0',
                           'transition-colors duration-200',
                           active
-                            ? 'bg-gold-500/10'
+                            ? 'bg-cyan-400/10'
                             : 'bg-transparent group-hover:bg-white/[0.04]',
                         ].join(' ')}
                       >
@@ -553,8 +553,8 @@ export default function Sidebar({
                   'focus-visible:ring-2',
                   'focus-visible:ring-gold-400/40',
                   adminOpen || isAdminRoute
-                    ? 'bg-gold-500/15 text-gold-300 font-semibold'
-                    : 'text-gold-400/75 hover:bg-white/[0.055] hover:text-gold-300',
+                    ? 'bg-gold-500/15 text-cyan-200 font-semibold'
+                    : 'text-cyan-200/75 hover:bg-white/[0.055] hover:text-cyan-200',
                 ].join(' ')}
               >
                 <span className="flex items-center gap-3 min-w-0">
@@ -649,7 +649,7 @@ export default function Sidebar({
             ].join(' ')}
           >
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gold-500/10 text-gold-400 flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-gold-500/10 text-cyan-200 flex items-center justify-center shrink-0">
                 <IconCard
                   className="w-[18px] h-[18px]"
                 />
