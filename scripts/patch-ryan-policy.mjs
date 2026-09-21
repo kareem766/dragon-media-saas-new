@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 const path = 'api/admin/ryan-inbox.ts'
 const source = readFileSync(path, 'utf8')
 
+if (source.includes(`// Hard safety guard: a new customer must be asked for their name before Ryan moves into qualification.`)) process.exit(0)
+
 const old = `const effectiveName=text(customer.name,120);const hasTrustedName=effectiveName&&looksLikeName(effectiveName)&&!invalidCustomerName(effectiveName);const nameWasProvidedNow=Boolean(explicitName&&looksLikeName(explicitName)&&!invalidCustomerName(explicitName));
  if(!hasTrustedName&&!nameWasProvidedNow&&!aiUnavailable){
   plan.reply='ممكن أعرف اسم حضرتك الأول؟';plan.action='continue';plan.action_data={};
