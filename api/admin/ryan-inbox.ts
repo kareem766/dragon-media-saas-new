@@ -27,7 +27,7 @@ const parseGeminiJson=(raw:string)=>{
  return obj(JSON.parse(start>=0&&end>start?clean.slice(start,end+1):clean))
 }
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
- const candidates=[model,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-2.5-flash','gemini-2.5-flash-lite'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='Gemini unavailable'
  for(const candidate of candidates){
   for(let attempt=0;attempt<3;attempt++){
@@ -112,10 +112,10 @@ SERVICES: ${JSON.stringify(services||[]).slice(0,12000)}
 KNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
  let plan:Record<string,any>={},usedModel=model,lastError=''
  try{const result=await callGemini(apiKey,model,system,history,current,currentParts);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',lastError)}
- if(!plan.reply)return res.status(502).json({error:'Ryan AI unavailable',details:lastError})
+ if(!plan.reply){console.error('Ryan Gemini unavailable after all retries',lastError);return res.status(502).json({error:'Ryan AI unavailable',details:lastError})}
  const learnedName=text(plan.learned_name,120)||extractName(current);const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
  let actionResult:any={success:true};if(text(plan.action,60)!=='continue')actionResult=await executeAction(supabase,organizationId,customer,text(plan.action,60),obj(plan.action_data),services||[])
- let reply=text(plan.reply,5000);if(!actionResult.success)reply='تمام، فهمت طلب حضرتك. خليني أتأكد من التفاصيل المطلوبة وأكمل معاك.'
+ let reply=text(plan.reply,5000);if(!actionResult.success){console.error('Ryan action failed',text(plan.action,60),actionResult.message||'unknown');reply='حاضر، خليني أراجع الطلب وأكمل مع حضرتك.'}
  if(actionResult.success&&text(plan.action,60)!=='continue')reply=text(plan.reply,5000)||'تم تنفيذ طلب حضرتك بنجاح 👍'
  const durableMemory={name:text(customer.name,120)||null,phone:cleanPhone(text(customer.phone,80))||null,service:text(plan.service,160)||text(memory.service,160)||null,budget:text(plan.budget,120)||text(memory.budget,120)||budgetFromText(current)||null,intent:text(plan.intent,100)||null,last_message:current,updated_at:new Date().toISOString()};await supabase.from('ai_agent_memory').upsert({agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:`${durableMemory.name||'العميل'} — ${durableMemory.service||'الخدمة غير محددة'}${durableMemory.budget?' — '+durableMemory.budget:''}`},{onConflict:'agent_id,customer_id'})
  const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success}}).select('id').single();if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response');await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
