@@ -29,9 +29,9 @@ const parseGeminiJson=(raw:string)=>{
 }
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[],temperature=0.45,allowFallback=true){
  const deadline=Date.now()+45000
- const fallbackModels=allowFallback?['gemini-2.5-flash-lite']:[]
+ const fallbackModels=allowFallback?['gemini-3.5-flash-lite']:[]
  const candidates=[model,...fallbackModels].filter((v,i,a)=>v&&a.indexOf(v)===i)
- let last='Gemini unavailable'
+ let last='Gemini unavailable',errors:string[]=[]
  for(const candidate of candidates){
   for(let attempt=0;attempt<3;attempt++){
    if(Date.now()>=deadline)break
@@ -48,17 +48,17 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
      if(attempt<2){await sleep(retryDelay(attempt));continue}
      break
     }
-    last=text(d?.error?.message,500)||('Gemini '+r.status)
+    last=text(d?.error?.message,500)||('Gemini '+r.status);errors.push(candidate+': '+last)
     if(transientStatus(r.status)&&attempt<2){await sleep(retryDelay(attempt));continue}
     break
    }catch(e:any){
-    last=e?.name==='AbortError'?candidate+' request timed out':text(e?.message,500)||last
+    last=e?.name==='AbortError'?candidate+' request timed out':text(e?.message,500)||last;errors.push(candidate+': '+last)
     if(attempt<2){await sleep(retryDelay(attempt));continue}
     break
    }finally{clearTimeout(timeout)}
   }
  }
- throw new Error(last)
+ throw new Error(errors.length?errors.join(' | '):last)
 }
 
 async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,body:string,link:string,entityType:string,entityId:string){
