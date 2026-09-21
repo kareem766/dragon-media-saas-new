@@ -18,7 +18,7 @@ if (source.includes(malformedMemory)) {
   changed = true
 }
 
-// Explicit name extraction: direct statements and a bare answer such as "كريم".
+// Explicit name extraction: direct statements and a bare answer such as "كريم". Keep Ryan conversational-state aware.
 const oldExtract = "const extractName=(v:string)=>{const m=v.match(/(?:أنا\\s+اسمي|انا\\s+اسمي|اسمي|my\\s+name\\s+is)\\s+([^,،.!؟?\\n]+?)(?:\\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\\b|$)/iu);return m&&looksLikeName(m[1])?text(m[1],120):''}"
 const newExtract = "const extractName=(v:string)=>{const normalized=text(v,120).replace(/\\s+/g,' ').trim();const m=normalized.match(/(?:أنا\\s+اسمي|انا\\s+اسمي|اسمي|my\\s+name\\s+is)\\s+([^,،.!؟?\\n]+?)(?:\\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\\b|$)/iu);if(m&&looksLikeName(m[1]))return text(m[1],120);return looksLikeName(normalized)?normalized:''}"
 if (source.includes(oldExtract)) {
