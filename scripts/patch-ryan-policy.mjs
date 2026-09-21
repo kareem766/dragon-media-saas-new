@@ -11,6 +11,14 @@ if (source.includes(oldFallback)) {
   changed = true
 }
 
+// Repair the malformed nested ternary introduced by the WhatsApp-name isolation patch.
+const malformedMemory = "name_source:(isWhatsApp?(rememberedExplicitName||explicitName)?'customer_explicit':null):(explicitName?'customer_explicit':'crm')"
+const safeMemory = "name_source:(isWhatsApp ? ((rememberedExplicitName||explicitName) ? 'customer_explicit' : null) : (explicitName ? 'customer_explicit' : 'crm'))"
+if (source.includes(malformedMemory)) {
+  source = source.replace(malformedMemory, safeMemory)
+  changed = true
+}
+
 const marker = `// Hard safety guard: a new customer must be asked for their name before Ryan moves into qualification.`
 if (source.includes(marker)) {
   if (changed) writeFileSync(path, source, 'utf8')
