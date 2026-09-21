@@ -151,7 +151,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (conversationError || !conversation || conversation.channel !== 'whatsapp') return json(res, 404, { error: 'محادثة WhatsApp غير موجودة.' })
 
     const customer = Array.isArray((conversation as any).customers) ? (conversation as any).customers[0] : (conversation as any).customers
-    const to = normalizePhone(customer?.phone)
+    const conversationMetadata = (conversation as any).metadata && typeof (conversation as any).metadata === 'object' ? (conversation as any).metadata : {}
+    // Always reply to the verified WhatsApp participant for this conversation.
+    // customer.phone may be an alternate callback number supplied during qualification.
+    const channelRecipient = normalizePhone(conversationMetadata.whatsapp_from)
+    const to = channelRecipient || normalizePhone(customer?.phone)
     if (!to) return json(res, 400, { error: 'رقم العميل غير موجود.' })
 
     const { data: integration, error: integrationError } = await admin
