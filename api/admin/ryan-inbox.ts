@@ -244,20 +244,6 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  }
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
  if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
- // Ignore accidental webhook retries that deliver the exact same customer text again shortly
- // after Ryan already answered it. Legitimate repeats after the window remain processable.
- const incomingText=text(incomingAfterClaim.content,4000)
- if(incomingText){
-  const since=new Date(Math.max(0,new Date(String(incomingAfterClaim.created_at||Date.now())).getTime()-10*60*1000)).toISOString()
-  const {data:recentSame}=await supabase.from('messages').select('id,created_at').eq('conversation_id',conversationId).eq('sender_type','customer').eq('content',incomingText).gte('created_at',since).lt('created_at',String(incomingAfterClaim.created_at||Date.now())).order('created_at',{ascending:false}).limit(1)
-  if(recentSame?.[0]?.id){
-   const {data:answered}=await supabase.from('messages').select('id,created_at').eq('conversation_id',conversationId).eq('sender_type','ai').gt('created_at',String(recentSame[0].created_at)).order('created_at',{ascending:false}).limit(1)
-   if(answered?.[0]?.id){
-    await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_processing_at:null,ryan_skipped_duplicate:true,duplicate_of:recentSame[0].id}}).eq('id',messageId).eq('conversation_id',conversationId)
-    return res.status(200).json({ok:true,skipped:true,reason:'duplicate_customer_message'})
-   }
-  }
- }
  const [{data:customer},{data:services},{data:agent}]=await Promise.all([
   supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),
   supabase.from('services').select('name,description,category').eq('organization_id',organizationId).order('name').limit(80),
@@ -523,23 +509,6 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   }
   const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured,multimodal:multimodal.attachmentSummary||[]}}).select('id').single()
   if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response')
-  // Persist durable customer memory after every successful turn.
-  const durableMemory={
-   name:text(a?.name,120)||text(captureMeta.name,120)||text(customer.name,120)||null,
-   phone:cleanPhone(text(a?.phone,80)||text(captureMeta.phone,80)||text(customer.phone,80))||null,
-   service:text(a?.service,160)||text(captureMeta.service,160)||null,
-   budget:text(a?.budget,120)||text(captureMeta.budget,120)||null,
-   goal:text(a?.goal,240)||text(captureMeta.goal,240)||null,
-   business_activity:text(a?.business_activity,240)||text(captureMeta.business_activity,240)||null,
-   last_intent:text(a?.intent,40)||null,
-   last_message:current,
-   updated_at:new Date().toISOString()
-  }
-  const memorySummary='العميل '+(durableMemory.name||'غير معروف')+' — '+(durableMemory.service||'الخدمة غير محددة')+(durableMemory.budget?' — ميزانية '+durableMemory.budget:'')
-  const {error:memoryError}=await supabase.from('ai_agent_memory').upsert({
-   agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:memorySummary
-  },{onConflict:'agent_id,customer_id'})
-  if(memoryError)console.error('Ryan durable memory save failed',memoryError)
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
   return res.status(200).json({ok:true,reply,message_id:saved.id,price_inquiry:priceCaptured,price_data:priceCaptured?priceData:null,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,outbound:'database_trigger'})
  }catch(error:any){
