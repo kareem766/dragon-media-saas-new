@@ -127,7 +127,7 @@ async function ensureRyanFallbackReply(supabase:any,organizationId:string,conver
   try{
    const {data:lastMessage}=await supabase.from('messages').select('id,sender_type').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(1).maybeSingle()
    if(lastMessage?.sender_type==='ai')return {id:lastMessage.id,reply:null,existing:true}
-   const {data:saved,error}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:fallback,metadata:{source:'ryan',provider:'fallback',fallback:true,ai_agent_id:agentId||null}}).select('id').single()
+   const {data:saved,error}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:fallback,metadata:{source:'ryan',provider:'fallback',fallback:true,ai_agent_id:agentId||null,ai_agent_processed_at:new Date().toISOString()}}).select('id').single()
    if(!error&&saved)return {id:saved.id,reply:fallback,existing:false}
   }catch(error){console.error('Ryan fallback attempt failed',error)}
   await new Promise(resolve=>setTimeout(resolve,150))
@@ -206,7 +206,12 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  if(!secret||!secretRow?.value||!sameSecret(secret,String(secretRow.value)))return res.status(401).json({error:'Unauthorized'})
  const body=obj(req.body),organizationId=text(body.organization_id,100),conversationId=text(body.conversation_id,100),messageId=text(body.message_id,100)
  if(!organizationId||!conversationId||!messageId)return res.status(400).json({error:'Missing agent identifiers'})
- const {data:claimed,error:claimError}=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId})
+ let {data:claimed,error:claimError}=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId})
+ if(!claimError&&!claimed){
+  await new Promise(resolve=>setTimeout(resolve,1200))
+  const retry=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId})
+  claimed=retry.data; claimError=retry.error
+ }
  if(claimError)return res.status(500).json({error:'Failed to claim incoming message',details:text(claimError.message,500)})
  if(!claimed)return res.status(200).json({ok:true,skipped:true,reason:'already_processing_or_processed'})
  const {data:incomingAfterClaim}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
@@ -232,7 +237,8 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const history:Turn[]=previous.map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}))
  const memory=obj(memoryRow?.memory),knowledgeText=(knowledge||[]).map((x:any)=>`${text(x.title,150)}: ${text(x.content,2000)}`).join('\n')
  const persona=text(agent.persona,3000)||'مساعد ذكي محترف يتحدث باللهجة المصرية.'
- const multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model)
+ let multimodal:any={parts:[],currentText:'',transcript:'',attachmentSummary:[]}
+ try{multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),incomingMetadata,apiKey,model)}catch(multimodalError){console.error('Ryan multimodal preparation failed; continuing with text fallback',multimodalError)}
  const multimodalHint=multimodal.attachmentSummary?.some((item:any)=>item?.type==='audio')
   ? '\n[رسالة صوتية مرفقة: يجب الاستماع للتسجيل وفهم كلام العميل. لا تقل إن الرسائل الصوتية غير مدعومة، ولا تطلب منه الكتابة إذا كان التسجيل متاحاً.]'
   : ''
