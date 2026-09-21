@@ -28,6 +28,7 @@ export default function Login() {
     signIn,
     signUp,
     resendConfirmation,
+    signInWithGoogle,
     loading: authLoading,
   } = useAuth();
 
@@ -569,6 +570,41 @@ export default function Login() {
                   }}
                 />
               )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                setError('');
+                setSuccess('');
+                setSubmitting(true);
+
+                try {
+                  const result = await signInWithGoogle();
+
+                  if (result?.error) {
+                    setError(
+                      result.error ||
+                        'تعذر تسجيل الدخول باستخدام Google.'
+                    );
+                  }
+                } catch (err) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : 'تعذر تسجيل الدخول باستخدام Google.'
+                  );
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              disabled={submitting || authLoading}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-black">
+                G
+              </span>
+              <span>المتابعة باستخدام Google</span>
+            </button>
 
             <div className="my-7 flex items-center gap-4">
               <div className="h-px flex-1 bg-slate-200" />
