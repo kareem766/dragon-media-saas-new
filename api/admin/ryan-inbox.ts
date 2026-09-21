@@ -29,7 +29,7 @@ const parseGeminiJson=(raw:string)=>{
 }
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[],temperature=0.45,allowFallback=true){
  const deadline=Date.now()+45000
- const fallbackModels=allowFallback?['gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash']:[]
+ const fallbackModels=allowFallback?['gemini-2.5-flash-lite']:[]
  const candidates=[model,...fallbackModels].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='Gemini unavailable'
  for(const candidate of candidates){
@@ -140,7 +140,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const {data:incoming}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata,created_at').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle();if(!incoming||incoming.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle();if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:agent},{data:services}]=await Promise.all([supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)]);if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
- const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.6-flash',temperature=Math.min(1,Math.max(0,Number(settings.temperature)||0.45)),allowFallback=settings.fallback_on_llm_failure!==false,rememberCustomer=settings.remember_customer!==false,useKnowledge=settings.use_knowledge_base!==false,crmContext=settings.crm_context!==false,noRepeatQuestions=settings.no_repeat_questions!==false,apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
+ const settings=obj(agent.settings),model=/^gemini-3\./i.test(text(settings.model,100))?'gemini-2.5-flash':(text(settings.model,100)||'gemini-2.5-flash'),temperature=Math.min(1,Math.max(0,Number(settings.temperature)||0.45)),allowFallback=settings.fallback_on_llm_failure!==false,rememberCustomer=settings.remember_customer!==false,useKnowledge=settings.use_knowledge_base!==false,crmContext=settings.crm_context!==false,noRepeatQuestions=settings.no_repeat_questions!==false,apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
  const {data:quota,error:quotaError}=await supabase.rpc('consume_ryan_message',{p_organization_id:organizationId,p_agent_id:agent.id,p_conversation_id:conversationId,p_customer_id:customer.id,p_model:model})
  if(quotaError)return res.status(500).json({error:'Failed to verify Ryan message quota',details:text(quotaError.message,500)})
  const quotaRow=Array.isArray(quota)?quota[0]:quota
