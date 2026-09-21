@@ -31,10 +31,21 @@ async function findIntegration(db: any, phoneNumberId: string, wabaId: string) {
   if (error) throw error
   return (rows || []).find((row: any) => { const metadata = row.metadata || {}; return String(metadata.phone_number_id || '') === phoneNumberId || String(metadata.waba_id || '') === wabaId }) || null
 }
-async function findOrCreateConversation(db: any, organizationId: string, customerId: string, channel: 'whatsapp' | 'facebook', metadata: Record<string, unknown>, now: string) {
+async function findOrCreateConversation(db: any, organizationId: string, customerId: string, channel: 'whatsapp' | 'facebook', metadata: Record<string, unknown>, now: string, incomingText = '') {
   const { data: existing, error: lookupError } = await db.from('conversations').select('id, unread_count, handled_by, status').eq('organization_id', organizationId).eq('channel', channel).eq('customer_id', customerId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
   if (lookupError) throw lookupError
-  if (existing) return { conversation: existing, existed: true }
+  let startFresh = false
+  if (existing) {
+    const normalized = String(incomingText || '').trim().replace(/\\s+/g, ' ')
+    const isGreeting = /^(?:السلام عليكم(?: ورحمة الله وبركاته)?|وعليكم السلام|أهلا|اهلا|أهلًا|اهلاً|هاي|hello|hi)\\s*[!.،؟?]*$/iu.test(normalized)
+    if (channel === 'whatsapp' && isGreeting) {
+      const { data: lastAi } = await db.from('messages').select('metadata').eq('conversation_id', existing.id).eq('sender_type', 'ai').order('created_at', { ascending: false }).limit(1).maybeSingle()
+      const lastAction = String(lastAi?.metadata?.action || '')
+      startFresh = ['handoff_human', 'create_lead'].includes(lastAction)
+    }
+    if (existing.status === 'closed' || existing.status === 'resolved') startFresh = true
+    if (!startFresh) return { conversation: existing, existed: true }
+  }
   const { data: created, error: createError } = await db.from('conversations').insert({ organization_id: organizationId, customer_id: customerId, channel, handled_by: 'ai', status: 'open', unread_count: 1, last_message_at: now, updated_at: now, metadata }).select('id, unread_count, handled_by, status').single()
   if (createError) {
     const { data: raced } = await db.from('conversations').select('id, unread_count, handled_by, status').eq('organization_id', organizationId).eq('channel', channel).eq('customer_id', customerId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
@@ -58,13 +69,13 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
     customer = createdCustomer
   }
   const now = new Date().toISOString()
-  const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'whatsapp', { whatsapp_phone_number_id: phoneNumberId, whatsapp_from: from }, now)
   const messageType = String(message?.type || 'text')
   let content = ''
   if (messageType === 'text') content = String(message?.text?.body || '')
   else if (messageType === 'button') content = String(message?.button?.text || '')
   else if (messageType === 'interactive') content = String(message?.interactive?.button_reply?.title || message?.interactive?.list_reply?.title || '')
   else content = `[${messageType}]`
+  const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'whatsapp', { whatsapp_phone_number_id: phoneNumberId, whatsapp_from: from }, now, content)
   const mediaPayload = messageType === 'audio' ? { media_id: String(message?.audio?.id || ''), mime_type: String(message?.audio?.mime_type || 'audio/ogg') } : messageType === 'image' ? { media_id: String(message?.image?.id || ''), mime_type: String(message?.image?.mime_type || 'image/jpeg'), caption: String(message?.image?.caption || '') } : messageType === 'document' ? { media_id: String(message?.document?.id || ''), mime_type: String(message?.document?.mime_type || 'application/octet-stream'), filename: String(message?.document?.filename || ''), caption: String(message?.document?.caption || '') } : null
   const messageMetadata = { source: 'whatsapp_webhook', whatsapp_message_id: externalId, whatsapp_message_type: messageType, whatsapp_from: from, whatsapp_phone_number_id: phoneNumberId, timestamp: message?.timestamp || null, ...(mediaPayload?.media_id ? { attachments: [mediaPayload] } : {}) }
   const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content: content || `[${messageType}]`, external_id: externalId, metadata: messageMetadata, created_at: message?.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : now })
@@ -204,7 +215,7 @@ async function handleFacebookWebhook(db: any, payload: any) {
       const customer = customerExisting || (await db.from('customers').insert({ organization_id: organizationId, name: `Facebook ${senderId}`, phone: senderId, source: 'facebook' }).select('id,name,phone').single()).data
       if (!customer) continue
       const now = new Date().toISOString()
-      const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'facebook', { facebook_page_id: pageId, facebook_psid: senderId }, now)
+      const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'facebook', { facebook_page_id: pageId, facebook_psid: senderId }, now, content)
       const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'facebook_webhook', facebook_page_id: pageId, facebook_psid: senderId, facebook_message_id: externalId, attachments: attachmentPayload }, created_at: now })
       if (insertError) throw insertError
       await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: Number(conversation.unread_count || 0) + (existed ? 1 : 0), status: 'open' }).eq('id', conversation.id)
