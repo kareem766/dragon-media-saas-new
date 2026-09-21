@@ -161,7 +161,7 @@ const isWhatsApp=String(conversation.channel||'').toLowerCase()==='whatsapp'
 const rememberedExplicitName=rememberCustomer&&memory.name_source==='customer_explicit'&&looksLikeName(String(memory.name||''))?text(memory.name,120):''
 const trustedCustomerName=!isWhatsApp&&storedCustomerName&&!invalidCustomerName(storedCustomerName)?storedCustomerName:(isWhatsApp?rememberedExplicitName:'')
  // Only stable, verified profile facts may cross conversation boundaries. Do not treat prior intent/budget/service as active context.
- const safeMemory=rememberCustomer?{name:looksLikeName(String(memory.name||''))?text(memory.name,120):'',phone:validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):'' ,company:text(memory.company,160),email:text(memory.email,160)}:{}
+ const safeMemory=rememberCustomer?{name:isWhatsApp?rememberedExplicitName:(looksLikeName(String(memory.name||''))?text(memory.name,120):''),phone:validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):'' ,company:text(memory.company,160),email:text(memory.email,160)}:{}
  let multimodal:any={parts:[],currentText:'',transcript:'',attachmentSummary:[]};try{multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),obj(incoming.metadata),apiKey,model)}catch(e){console.error('Ryan multimodal unavailable',e)}
  const current=text(incoming.content,4000)+(multimodal.currentText||'');const currentParts=multimodal.parts||[]
  const greetingOnly=/^(?:السلام عليكم(?: ورحمة الله وبركاته)?|سلام عليكم|اهلاً|أهلاً|أهلا|اهلا|هاي|hello|hi|مساء الخير|صباح الخير|مساء النور|صباح النور)[.!؟!،,\s]*$/iu.test(current.trim());
