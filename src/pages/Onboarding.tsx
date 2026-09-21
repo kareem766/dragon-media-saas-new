@@ -55,6 +55,24 @@ export default function Onboarding({
     setError(null)
 
     try {
+      // Persist the explicit workspace consent on the authenticated user before
+      // the server-side workspace RPC validates it. This also covers OAuth
+      // accounts (such as Google) that did not have consent metadata at signup.
+      const consentTimestamp = new Date().toISOString()
+      const { error: consentError } = await supabase.auth.updateUser({
+        data: {
+          terms_accepted_at: consentTimestamp,
+          terms_version: '1.0',
+          privacy_policy_accepted_at: consentTimestamp,
+          privacy_policy_version: '1.0',
+        },
+      })
+
+      if (consentError) {
+        setError('تعذر حفظ الموافقة على الشروط والسياسة. حاول مرة أخرى.')
+        return
+      }
+
       const { data: organizationId, error: createError } =
         await supabase.rpc('create_organization_for_user', {
           p_name: name.trim(),
