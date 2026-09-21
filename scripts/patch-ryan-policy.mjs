@@ -19,6 +19,23 @@ if (source.includes(malformedMemory)) {
   changed = true
 }
 
+// A bare customer message such as "كريم" is an explicit name when it passes the name validator.
+// This prevents Ryan from asking for the name again after the customer already supplied it.
+const oldExtract = "const extractName=(v:string)=>{const m=v.match(/(?:أنا\\s+اسمي|انا\\s+اسمي|اسمي|my\\s+name\\s+is)\\s+([^,،.!؟?\\n]+?)(?:\\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\\b|$)/iu);return m&&looksLikeName(m[1])?text(m[1],120):''}"
+const newExtract = "const extractName=(v:string)=>{const normalized=text(v,120).replace(/\\s+/g,' ').trim();const m=normalized.match(/(?:أنا\\s+اسمي|انا\\s+اسمي|اسمي|my\\s+name\\s+is)\\s+([^,،.!؟?\\n]+?)(?:\\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\\b|$)/iu);if(m&&looksLikeName(m[1]))return text(m[1],120);return looksLikeName(normalized)?normalized:''}"
+if (source.includes(oldExtract)) {
+  source = source.replace(oldExtract, newExtract)
+  changed = true
+}
+
+// Keep WhatsApp conversations on the explicitly supplied customer name, never the WhatsApp profile name.
+const oldEffective = "const effectiveName=isWhatsApp?(rememberedExplicitName||text(explicitName,120)):text(customer.name,120)"
+const newEffective = "const effectiveName=isWhatsApp?(rememberedExplicitName||text(explicitName,120)):text(customer.name,120)"
+if (source.includes(oldEffective) && oldEffective !== newEffective) {
+  source = source.replace(oldEffective, newEffective)
+  changed = true
+}
+
 const marker = `// Hard safety guard: a new customer must be asked for their name before Ryan moves into qualification.`
 if (source.includes(marker)) {
   if (changed) writeFileSync(path, source, 'utf8')
