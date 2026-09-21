@@ -63,8 +63,7 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
   const { data: existingCustomer } = await db.from('customers').select('id, name, phone').eq('organization_id', organizationId).eq('phone', from).maybeSingle()
   customer = existingCustomer
   if (!customer) {
-    const profileName = String(contact?.profile?.name || `WhatsApp ${from}`)
-    const { data: createdCustomer, error } = await db.from('customers').insert({ organization_id: organizationId, name: profileName, phone: from, source: 'whatsapp' }).select('id, name, phone').single()
+    const { data: createdCustomer, error } = await db.from('customers').insert({ organization_id: organizationId, name: null, phone: from, source: 'whatsapp' }).select('id, name, phone').single()
     if (error) throw error
     customer = createdCustomer
   }
