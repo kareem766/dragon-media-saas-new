@@ -244,14 +244,28 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  }
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
  if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
+ // Ignore accidental webhook retries that deliver the exact same customer text again shortly
+ // after Ryan already answered it. Legitimate repeats after the window remain processable.
+ const incomingText=text(incomingAfterClaim.content,4000)
+ if(incomingText){
+  const since=new Date(Math.max(0,new Date(String(incomingAfterClaim.created_at||Date.now())).getTime()-10*60*1000)).toISOString()
+  const {data:recentSame}=await supabase.from('messages').select('id,created_at').eq('conversation_id',conversationId).eq('sender_type','customer').eq('content',incomingText).gte('created_at',since).lt('created_at',String(incomingAfterClaim.created_at||Date.now())).order('created_at',{ascending:false}).limit(1)
+  if(recentSame?.[0]?.id){
+   const {data:answered}=await supabase.from('messages').select('id,created_at').eq('conversation_id',conversationId).eq('sender_type','ai').gt('created_at',String(recentSame[0].created_at)).order('created_at',{ascending:false}).limit(1)
+   if(answered?.[0]?.id){
+    await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_processing_at:null,ryan_skipped_duplicate:true,duplicate_of:recentSame[0].id}}).eq('id',messageId).eq('conversation_id',conversationId)
+    return res.status(200).json({ok:true,skipped:true,reason:'duplicate_customer_message'})
+   }
+  }
+ }
  const [{data:customer},{data:services},{data:agent}]=await Promise.all([
   supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),
   supabase.from('services').select('name,description,category').eq('organization_id',organizationId).order('name').limit(80),
   supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle()
  ])
  if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
- const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.6-flash',apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY'),grokKey=env('XAI_API_KEY','GROK_API_KEY')
- if(!apiKey&&!grokKey)return res.status(500).json({error:'No AI provider is configured'})
+ const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.6-flash',apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY'),grokKey=env('XAI_API_KEY','GROK_API_KEY'),gatewayKey=env('AI_GATEWAY_API_KEY','VERCEL_OIDC_TOKEN')
+ if(!apiKey&&!grokKey&&!gatewayKey)return res.status(500).json({error:'No AI provider is configured'})
  const historyLimit=Math.min(Math.max(Number(settings.max_history_messages)||80,1),80),knowledgeLimit=Math.min(Math.max(Number(settings.max_knowledge_items)||50,1),50)
  const [{data:messages},{data:knowledge},{data:memoryRow}]=await Promise.all([
   supabase.from('messages').select('id,sender_type,content,created_at').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(historyLimit),
@@ -323,7 +337,19 @@ PERSONA: ${persona}`
       reply: ready ? 'تمام يا فندم، نكمل من آخر نقطة وقفنا عندها. قولي حابب نكمل في إيه؟' : ''
     }
    }
-   const leadIntent=a.lead_intent===true
+   // Persisted conversation facts are authoritative. The model may classify intent,
+   // but it must not forget facts the customer already supplied.
+   const knownText=historyText+' '+current
+   const deterministicName=extractNameFromMessage(knownText)||text(captureMeta.name,120)||(looksLikeName(text(customer.name,120))?text(customer.name,120):'')
+   const deterministicPhone=phoneFromText(knownText)||(validPhone(text(captureMeta.phone,80))?cleanPhone(text(captureMeta.phone,80)):'')||(validPhone(text(customer.phone,80))?cleanPhone(text(customer.phone,80)):'')
+   const deterministicService=serviceFromText(knownText,services||[])||text(captureMeta.service,160)
+   const deterministicBudget=budgetFromText(knownText)||text(captureMeta.budget,120)
+   if(deterministicName)a.name=deterministicName
+   if(deterministicPhone)a.phone=deterministicPhone
+   if(deterministicService)a.service=deterministicService
+   if(deterministicBudget)a.budget=deterministicBudget
+   if(deterministicService&&/(?:إعلان|اعلان|إعلانات|اعلانات|ads|advertising)/iu.test(knownText))a.is_advertising=true
+   const leadIntent=a.lead_intent===true||!!(deterministicName||deterministicPhone||deterministicService||deterministicBudget||captureMeta.captured_at)
    const intent=text(a.intent,40)||'other'
    const explicitHumanRequest=humanHandoffIntent(historyText+' '+current)
    const needsHuman=explicitHumanRequest||a.needs_human===true||intent==='human_request'
@@ -497,6 +523,23 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   }
   const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,price_inquiry:priceCaptured,multimodal:multimodal.attachmentSummary||[]}}).select('id').single()
   if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response')
+  // Persist durable customer memory after every successful turn.
+  const durableMemory={
+   name:text(a?.name,120)||text(captureMeta.name,120)||text(customer.name,120)||null,
+   phone:cleanPhone(text(a?.phone,80)||text(captureMeta.phone,80)||text(customer.phone,80))||null,
+   service:text(a?.service,160)||text(captureMeta.service,160)||null,
+   budget:text(a?.budget,120)||text(captureMeta.budget,120)||null,
+   goal:text(a?.goal,240)||text(captureMeta.goal,240)||null,
+   business_activity:text(a?.business_activity,240)||text(captureMeta.business_activity,240)||null,
+   last_intent:text(a?.intent,40)||null,
+   last_message:current,
+   updated_at:new Date().toISOString()
+  }
+  const memorySummary='العميل '+(durableMemory.name||'غير معروف')+' — '+(durableMemory.service||'الخدمة غير محددة')+(durableMemory.budget?' — ميزانية '+durableMemory.budget:'')
+  const {error:memoryError}=await supabase.from('ai_agent_memory').upsert({
+   agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:memorySummary
+  },{onConflict:'agent_id,customer_id'})
+  if(memoryError)console.error('Ryan durable memory save failed',memoryError)
   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
   return res.status(200).json({ok:true,reply,message_id:saved.id,price_inquiry:priceCaptured,price_data:priceCaptured?priceData:null,provider:priceCaptured?'workflow':'gemini',model:priceCaptured?'price-inquiry':model,outbound:'database_trigger'})
  }catch(error:any){
