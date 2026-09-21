@@ -26,7 +26,10 @@ function decryptToken(value: any) {
 }
 
 function normalizePhone(value: unknown) {
-  return String(value || '').replace(/[^0-9]/g, '')
+  let phone = String(value || '').replace(/[^0-9]/g, '')
+  if (phone.startsWith('00')) phone = phone.slice(2)
+  if (/^01[0125]\d{8}$/.test(phone)) phone = `20${phone.slice(1)}`
+  return phone
 }
 
 async function graph(path: string, token: string, body: unknown) {
