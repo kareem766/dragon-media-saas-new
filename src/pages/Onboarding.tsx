@@ -14,6 +14,8 @@ export default function Onboarding({
   const [businessType, setBusinessType] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [privacyAccepted, setPrivacyAccepted] = useState(false)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +43,11 @@ export default function Onboarding({
 
     if (!address.trim()) {
       setError('اكتب عنوان مقر الشركة.')
+      return
+    }
+
+    if (!termsAccepted || !privacyAccepted) {
+      setError('يجب الموافقة على شروط الاستخدام وسياسة الخصوصية لاستكمال إنشاء مساحة العمل.')
       return
     }
 
@@ -214,6 +221,56 @@ export default function Onboarding({
                   className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm leading-6 text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                   placeholder="مثال: 15 شارع التحرير، سموحة، الإسكندرية"
                 />
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="mb-3 text-sm font-bold text-slate-700">
+                  الموافقة على شروط الاستخدام
+                </p>
+
+                <div className="space-y-3">
+                  <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>
+                      أوافق على{' '}
+                      <a
+                        href="/#/terms"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold text-blue-600 hover:underline"
+                      >
+                        شروط الاستخدام
+                      </a>
+                      .
+                    </span>
+                  </label>
+
+                  <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={privacyAccepted}
+                      onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>
+                      أوافق على{' '}
+                      <a
+                        href="/#/privacy"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold text-blue-600 hover:underline"
+                      >
+                        سياسة الخصوصية
+                      </a>
+                      .
+                    </span>
+                  </label>
+                </div>
               </div>
 
               {error && (
