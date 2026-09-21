@@ -38,23 +38,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) {
+      updateSession(null)
       setLoading(false)
       return
     }
 
-    // INITIAL_SESSION can arrive after signInWithPassword in some browsers.
-    // Never let that initial event overwrite a fresh authenticated session.
-    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (event === 'INITIAL_SESSION' && sessionRef.current) {
-        setLoading(false)
-        return
-      }
+    let mounted = true
 
-      updateSession(newSession)
-      if (event === 'INITIAL_SESSION') setLoading(false)
+    // Resolve persisted auth state explicitly. This avoids a race where a slow
+    // desktop browser renders the login screen before INITIAL_SESSION arrives.
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return
+      updateSession(error ? null : data.session)
+      setLoading(false)
     })
 
-    return () => listener.subscription.unsubscribe()
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!mounted) return
+      updateSession(newSession)
+      if (
+        event === 'INITIAL_SESSION' ||
+        event === 'SIGNED_IN' ||
+        event === 'SIGNED_OUT' ||
+        event === 'TOKEN_REFRESHED' ||
+        event === 'USER_UPDATED'
+      ) {
+        setLoading(false)
+      }
+    })
+
+    return () => {
+      mounted = false
+      listener.subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
@@ -90,9 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-      },
+      options: { redirectTo: window.location.origin },
     })
 
     return { error: error ? error.message : null }
@@ -100,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent): Promise<SignUpResult> => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد', needsEmailConfirmation: false }
+
     const metadata: Record<string, string> = { full_name: fullName }
     if (consent) {
       metadata.terms_accepted_at = consent.termsAcceptedAt
@@ -107,18 +122,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       metadata.privacy_policy_accepted_at = consent.privacyAcceptedAt
       metadata.privacy_policy_version = consent.privacyVersion
     }
+
     const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: metadata, emailRedirectTo: `${window.location.origin}/#/login?verified=1` },
+      email,
+      password,
+      options: {
+        data: metadata,
+        // HashRouter fragments are not reliable Supabase auth callback URLs.
+        // Returning to the real origin lets Supabase restore the session normally.
+        emailRedirectTo: window.location.origin,
+      },
     })
+
     if (error) return { error: error.message, needsEmailConfirmation: false }
+
     const needsEmailConfirmation = Boolean(data.user && !isEmailConfirmed(data.user))
 
-    // Signup must never leave an authenticated session behind. The only
-    // supported path into the workspace is: signup -> email confirmation -> login.
-    if (data.session) {
-      await supabase.auth.signOut()
-    }
+    // Never leave an unconfirmed signup session active.
+    if (data.session) await supabase.auth.signOut()
     updateSession(null)
     setLoading(false)
 
@@ -126,21 +147,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: 'تعذر إنشاء حساب المستخدم. حاول مرة أخرى.', needsEmailConfirmation: false }
     }
 
-    return { error: null, needsEmailConfirmation: true }
+    return { error: null, needsEmailConfirmation }
   }
 
   const resendConfirmation = async (email: string) => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد' }
+
     const { error } = await supabase.auth.resend({
-      type: 'signup', email,
-      options: { emailRedirectTo: `${window.location.origin}/#/login?verified=1` },
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: window.location.origin },
     })
+
     return { error: error ? error.message : null }
   }
 
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut()
     updateSession(null)
+    setLoading(false)
   }
 
   return <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signIn, signInWithGoogle, signUp, resendConfirmation, signOut }}>{children}</AuthContext.Provider>
