@@ -18,30 +18,41 @@ const budgetFromText=(v:string)=>{const m=v.replace(/[,،]/g,' ').match(/(?:مي
 
 type Turn={role:'user'|'model';parts:{text:string}[]}
 
+const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
+const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
+const retryDelay=(attempt:number)=>Math.min(5000,600*Math.pow(2,attempt)+Math.floor(Math.random()*500))
+const parseGeminiJson=(raw:string)=>{
+ const clean=text(raw,14000).replace(/^\`\`\`(?:json)?/i,'').replace(/\`\`\`$/,'').trim()
+ const start=clean.indexOf('{'),end=clean.lastIndexOf('}')
+ return obj(JSON.parse(start>=0&&end>start?clean.slice(start,end+1):clean))
+}
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
  const candidates=[model,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='Gemini unavailable'
  for(const candidate of candidates){
-  try{
-   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:900,responseMimeType:'application/json'}})})
-   const d=await r.json().catch(()=>({}))
-   if(r.ok){const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000);if(raw){const start=raw.indexOf('{'),end=raw.lastIndexOf('}');try{return obj(JSON.parse(start>=0&&end>start?raw.slice(start,end+1):raw))}catch{last=`${candidate} returned invalid JSON`}}else last=`${candidate} returned empty`}
-   else last=d?.error?.message||`Gemini ${r.status}`
-  }catch(e:any){last=text(e?.message,500)||last}
+  for(let attempt=0;attempt<3;attempt++){
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
+   try{
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\\n\\nإخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:900,responseMimeType:'application/json'}})})
+    const d=await r.json().catch(()=>({}))
+    if(r.ok){
+     const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000)
+     if(raw){try{return {plan:parseGeminiJson(raw),model:candidate}}catch{last=candidate+' returned invalid JSON'}}
+     else last=candidate+' returned empty'
+     if(attempt<2){await sleep(retryDelay(attempt));continue}
+     break
+    }
+    last=text(d?.error?.message,500)||('Gemini '+r.status)
+    if(transientStatus(r.status)&&attempt<2){await sleep(retryDelay(attempt));continue}
+    break
+   }catch(e:any){
+    last=e?.name==='AbortError'?candidate+' request timed out':text(e?.message,500)||last
+    if(attempt<2){await sleep(retryDelay(attempt));continue}
+    break
+   }finally{clearTimeout(timeout)}
+  }
  }
  throw new Error(last)
-}
-
-async function callOpenAI(key:string,system:string,history:Turn[],current:string){
- const messages=[{role:'system',content:system},...history.map(t=>({role:t.role==='model'?'assistant':'user',content:t.parts.map(p=>p.text).join('')})),{role:'user',content:current}]
- const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},body:JSON.stringify({model:'gpt-5',messages,max_tokens:900,response_format:{type:'json_object'}})})
- const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error?.message||`OpenAI ${r.status}`);return obj(JSON.parse(text(d?.choices?.[0]?.message?.content,14000)))
-}
-
-async function callClaude(key:string,system:string,history:Turn[],current:string){
- const messages=[...history.map(t=>({role:t.role==='model'?'assistant':'user',content:t.parts.map(p=>p.text).join('')})),{role:'user',content:current}]
- const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-6',system,max_tokens:900,messages})})
- const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d?.error?.message||`Claude ${r.status}`);const raw=text(d?.content?.map((p:any)=>p?.text||'').join(''),14000);const s=raw.indexOf('{'),e=raw.lastIndexOf('}');return obj(JSON.parse(s>=0&&e>s?raw.slice(s,e+1):raw))
 }
 
 async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,body:string,link:string,entityType:string,entityId:string){
@@ -83,9 +94,9 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle();if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:agent},{data:services}]=await Promise.all([supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)]);if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
  const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-2.5-flash',apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY');if(!apiKey)return res.status(500).json({error:'Gemini is not configured'})
- const historyLimit=Math.min(Math.max(Number(settings.max_history_messages)||80,1),80),knowledgeLimit=Math.min(Math.max(Number(settings.max_knowledge_items)||50,1),50)
+ const historyLimit=Math.min(Math.max(Number(settings.max_history_messages)||30,1),40),knowledgeLimit=Math.min(Math.max(Number(settings.max_knowledge_items)||20,1),25)
  const [{data:messages},{data:knowledge},{data:memoryRow}]=await Promise.all([supabase.from('messages').select('id,sender_type,content,created_at').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(historyLimit),settings.use_knowledge_base===false?Promise.resolve({data:[] as any[]}):supabase.from('knowledge_base').select('title,content').eq('organization_id',organizationId).limit(knowledgeLimit),supabase.from('ai_agent_memory').select('memory,summary').eq('agent_id',agent.id).eq('customer_id',customer.id).maybeSingle()])
- const history:Turn[]=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content).map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}));const memory=obj(memoryRow?.memory);const knowledgeText=(knowledge||[]).map((k:any)=>`${text(k.title,150)}: ${text(k.content,2500)}`).join('\n');const persona=text(agent.persona,4000)||'موظف مصري ودود ومحترف من Dragon Media.'
+ const history:Turn[]=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content).map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}));const memory=obj(memoryRow?.memory);const knowledgeText=(knowledge||[]).map((k:any)=>`${text(k.title,150)}: ${text(k.content,1800)}`).join('\n');const persona=text(agent.persona,4000)||'موظف مصري ودود ومحترف من Dragon Media.'
  let multimodal:any={parts:[],currentText:'',transcript:'',attachmentSummary:[]};try{multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),obj(incoming.metadata),apiKey,model)}catch(e){console.error('Ryan multimodal unavailable',e)}
  const current=text(incoming.content,4000)+(multimodal.currentText||'');const currentParts=multimodal.parts||[]
  const system=`أنت Ryan، موظف Dragon Media الذكي. أنت ليس chatbot بأسئلة ثابتة؛ أنت موظف مصري ودود ومحبوب يفهم العميل وسياق كلامه وينفذ طلباته داخل المنصة. استخدم اللهجة المصرية الطبيعية، وإيموجي مناسب باعتدال 👋😊👍. لا تبدأ كل محادثة بنفس الجملة. لا تسأل سؤالاً سبق أن أجابه العميل. سؤال واحد فقط عند الحاجة. لو العميل قال اسمه احفظه واستخدمه طبيعياً لاحقاً. لا تخترع أي معلومة تخص Dragon Media؛ استخدم Knowledge Base كمصدر الحقيقة.
@@ -99,14 +110,14 @@ CUSTOMER: name=${text(customer.name,120)||'غير معروف'}, phone=${cleanPho
 MEMORY: ${JSON.stringify(memory).slice(0,6000)}
 SERVICES: ${JSON.stringify(services||[]).slice(0,12000)}
 KNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
- let plan:Record<string,any>={};const providers=[async()=>callGemini(apiKey,model,system,history,current,currentParts),async()=>{const k=env('ANTHROPIC_API_KEY');if(!k)throw new Error('Claude key unavailable');return callClaude(k,system,history,current)},async()=>{const k=env('OPENAI_API_KEY');if(!k)throw new Error('OpenAI key unavailable');return callOpenAI(k,system,history,current)}]
- let lastError='';for(const provider of providers){try{plan=obj(await provider());if(plan.reply)break}catch(e:any){lastError=text(e?.message,500);console.error('Ryan provider failed',lastError)}}
+ let plan:Record<string,any>={},usedModel=model,lastError=''
+ try{const result=await callGemini(apiKey,model,system,history,current,currentParts);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',lastError)}
  if(!plan.reply)return res.status(502).json({error:'Ryan AI unavailable',details:lastError})
  const learnedName=text(plan.learned_name,120)||extractName(current);const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
  let actionResult:any={success:true};if(text(plan.action,60)!=='continue')actionResult=await executeAction(supabase,organizationId,customer,text(plan.action,60),obj(plan.action_data),services||[])
  let reply=text(plan.reply,5000);if(!actionResult.success)reply='تمام، فهمت طلب حضرتك. خليني أتأكد من التفاصيل المطلوبة وأكمل معاك.'
  if(actionResult.success&&text(plan.action,60)!=='continue')reply=text(plan.reply,5000)||'تم تنفيذ طلب حضرتك بنجاح 👍'
  const durableMemory={name:text(customer.name,120)||null,phone:cleanPhone(text(customer.phone,80))||null,service:text(plan.service,160)||text(memory.service,160)||null,budget:text(plan.budget,120)||text(memory.budget,120)||budgetFromText(current)||null,intent:text(plan.intent,100)||null,last_message:current,updated_at:new Date().toISOString()};await supabase.from('ai_agent_memory').upsert({agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:`${durableMemory.name||'العميل'} — ${durableMemory.service||'الخدمة غير محددة'}${durableMemory.budget?' — '+durableMemory.budget:''}`},{onConflict:'agent_id,customer_id'})
- const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:'gemini',model,action:text(plan.action,60)||'continue',action_success:actionResult.success}}).select('id').single();if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response');await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
- return res.status(200).json({ok:true,reply,message_id:saved.id,provider:'gemini',model,action:text(plan.action,60)||'continue',action_success:actionResult.success})
+ const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success}}).select('id').single();if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response');await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
+ return res.status(200).json({ok:true,reply,message_id:saved.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success})
 }
