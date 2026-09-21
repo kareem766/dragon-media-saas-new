@@ -70,7 +70,7 @@ async function callGrok(key:string,model:string,system:string,history:Turn[],cur
 }
 
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){
- const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const requestedModel=model.toLowerCase(); const primaryModel=/(gemini-2\.5|gemini-3\.[0-59]\b|gemini-3\.7|gemini-3\.8)/.test(requestedModel)?'gemini-3.6-flash':model; const candidates=[primaryModel,'gemini-3.6-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let lastError='Gemini request failed'
  for(const candidate of candidates){
   for(let attempt=0;attempt<2;attempt++){
@@ -88,7 +88,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
   try{return await callGrok(grokKey,'grok-4.6',system,history,current)}catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback failed: ${text(error?.message,500)||'request failed'}`)}
  } throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)}async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){ const errors:string[]=[]
  try{
-  const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.5-flash-lite','gemini-3.7-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+  const requestedModel=model.toLowerCase(); const primaryModel=/(gemini-2\.5|gemini-3\.[0-59]\b|gemini-3\.7|gemini-3\.8)/.test(requestedModel)?'gemini-3.6-flash':model; const candidates=[primaryModel,'gemini-3.6-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
   for(const candidate of candidates){
    try{
      const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(geminiKey)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:700,responseMimeType:'application/json'}})});
@@ -291,10 +291,10 @@ PERSONA: ${persona}`
     const handoffAt=new Date().toISOString()
     const handoffReply=text(a.reply,5000)
     const safeHandoffReply=!containsInternalLeak(handoffReply)&&handoffReply?handoffReply:'تمام، هحوّل حضرتك لفريق Dragon Media علشان نكمل معاك بشكل مباشر.'
-    const {data:existingHandoff}=await supabase.from('human_handoff_requests').select('id').eq('organization_id',organizationId).eq('conversation_id',conversationId).in('status',['pending','open','assigned']).order('created_at',{ascending:false}).limit(1).maybeSingle()
+    const {data:existingHandoff}=await supabase.from('human_handoff_requests').select('id').eq('organization_id',organizationId).eq('conversation_id',conversationId).eq('status','open').order('created_at',{ascending:false}).limit(1).maybeSingle()
     let handoffRequest=existingHandoff
     if(!handoffRequest){
-      const created=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:effectiveHandoffReason||'طلب تدخل بشري من العميل',status:'pending',conversation_id:conversationId}).select('id').single()
+      const created=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,160)||'عميل Ryan',reason:effectiveHandoffReason||'طلب تدخل بشري من العميل',status:'open',conversation_id:conversationId}).select('id').single()
       if(created.error||!created.data)throw new Error(created.error?.message||'Failed to create human handoff request')
       handoffRequest=created.data
     }
