@@ -77,20 +77,26 @@ export default function Login() {
 
   useEffect(() => {
     const heroText = 'إدارة العملاء والمبيعات والتسويق من مكان واحد.';
+    let typingTimer: number | undefined;
+
     const startTimer = window.setTimeout(() => {
       setHeroTypingStarted(true);
       let index = 0;
-      const typingTimer = window.setInterval(() => {
+      typingTimer = window.setInterval(() => {
         index += 1;
         setHeroTypedText(heroText.slice(0, index));
-        if (index >= heroText.length) {
+        if (index >= heroText.length && typingTimer) {
           window.clearInterval(typingTimer);
         }
       }, 58);
-      return () => window.clearInterval(typingTimer);
     }, 1050);
 
-    return () => window.clearTimeout(startTimer);
+    return () => {
+      window.clearTimeout(startTimer);
+      if (typingTimer) {
+        window.clearInterval(typingTimer);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -381,7 +387,7 @@ export default function Login() {
                 aria-label="إدارة العملاء والمبيعات والتسويق من مكان واحد."
               >
                 {heroTypedText}
-                {heroTypingStarted && heroTypedText.length < 48 && (
+                {heroTypingStarted && heroTypedText.length < 'إدارة العملاء والمبيعات والتسويق من مكان واحد.'.length && (
                   <span className="mr-1 inline-block animate-pulse text-blue-300" aria-hidden="true">
                     |
                   </span>
