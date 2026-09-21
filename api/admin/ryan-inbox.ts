@@ -108,7 +108,10 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
   }
  }
  try{return await callRyanGatewayFallback(system,history,current,false)}
- catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Claude/OpenAI fallback failed: ${text(error?.message,500)||'request failed'}`)}async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){ const errors:string[]=[]
+ catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Claude/OpenAI fallback failed: ${text(error?.message,500)||'request failed'}`)}
+}
+
+async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){ const errors:string[]=[]
  try{
   const requestedModel=model.toLowerCase(); const primaryModel=/(gemini-2\.5|gemini-3\.[0-59]\b|gemini-3\.7|gemini-3\.8)/.test(requestedModel)?'gemini-3.6-flash':model; const candidates=[primaryModel,'gemini-3.6-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
   for(const candidate of candidates){
