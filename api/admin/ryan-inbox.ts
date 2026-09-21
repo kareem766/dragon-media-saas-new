@@ -11,9 +11,11 @@ const sameSecret=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);r
 const cleanPhone=(v:string)=>v.replace(/[^0-9+]/g,'').trim()
 const phoneFromText=(v:string)=>{const m=v.match(/(?:\+?20\s*)?(01[0125]\s*\d{8})\b/);return m?cleanPhone(m[0]):''}
 const validPhone=(v:string)=>/^(?:01[0125]\d{8}|20(10|11|12|15)\d{8})$/.test(cleanPhone(v).replace(/^\+/,''))
-const nameStop=/^(?:تمام|حاضر|ماشي|اه|أه|ايوه|أيوه|السلام عليكم|السلام عليكم ورحمة الله وبركاته|وعليكم السلام|اهلا|أهلا|أهلًا|منور|ممكن|عايز|عاوز|محتاج|الخدمة|خدمة|السعر|سعر|بكام|بكم|كام|شكرا|شكراً|العفو)$/iu\nconst invalidCustomerName=(v:string)=>nameStop.test(v.trim().replace(/\\s+/g,' '))
+const nameStop=/^(?:تمام|حاضر|ماشي|اه|أه|ايوه|أيوه|السلام عليكم|السلام عليكم ورحمة الله وبركاته|وعليكم السلام|اهلا|أهلا|أهلًا|منور|ممكن|عايز|عاوز|محتاج|الخدمة|خدمة|السعر|سعر|بكام|بكم|كام|شكرا|شكراً|العفو)$/iu
+const invalidCustomerName=(v:string)=>nameStop.test(v.trim().replace(/\\s+/g,' '))
 const looksLikeName=(v:string)=>{const x=v.trim().replace(/\s+/g,' ');if(!x||x.length<2||x.length>80||nameStop.test(x)||phoneFromText(x)||/[?؟!]/.test(x))return false;return /^[\p{L}][\p{L}\u064B-\u065F\s.'’-]{1,79}$/u.test(x)}
-const extractName=(v:string)=>{const m=v.match(/(?:أنا\s+اسمي|انا\s+اسمي|اسمي|my\s+name\s+is)\s+([^,،.!؟?\n]+?)(?:\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\b|$)/iu);return m&&looksLikeName(m[1])?text(m[1],120):''}
+const extractName=(v:string)=>{const m=v.match(/(?:أنا\s+اسمي|انا\s+اسمي|اسمي|my\s+name\s+is)\s+([^,،.!؟?
+]+?)(?:\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\b|$)/iu);return m&&looksLikeName(m[1])?text(m[1],120):''}
 const budgetFromText=(v:string)=>{const m=v.replace(/[,،]/g,' ').match(/(?:ميزاني(?:ة|ه)|budget)\s*(?:هي|هو|:)?\s*([0-9٠-٩][0-9٠-٩\s.,]*)/iu)||v.match(/([0-9٠-٩]+)\s*(?:جنيه|ج|EGP|الف|ألف)/iu);return m?text(m[1],60):''}
 
 type Turn={role:'user'|'model';parts:{text:string}[]}
@@ -34,7 +36,9 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
   for(let attempt=0;attempt<3;attempt++){
    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
    try{
-    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\\n\\nإخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:900,temperature:Math.min(1,Math.max(0,Number(temperature)||0.45)),responseMimeType:'application/json'}})})
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\
+\
+إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:900,temperature:Math.min(1,Math.max(0,Number(temperature)||0.45)),responseMimeType:'application/json'}})})
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000)
@@ -125,7 +129,10 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const settings=obj(agent.settings),model=text(settings.model,100)||'gemini-3.6-flash',temperature=Math.min(1,Math.max(0,Number(settings.temperature)||0.45)),allowFallback=settings.fallback_on_llm_failure!==false,rememberCustomer=settings.remember_customer!==false,useKnowledge=settings.use_knowledge_base!==false,crmContext=settings.crm_context!==false,noRepeatQuestions=settings.no_repeat_questions!==false,apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY');if(!apiKey)return res.status(500).json({error:'Gemini is not configured'})
  const historyLimit=Math.min(Math.max(Number(settings.max_history_messages)||40,1),80),knowledgeLimit=Math.min(Math.max(Number(settings.max_knowledge_items)||50,1),50)
  const [{data:messages},{data:knowledge},{data:memoryRow}]=await Promise.all([supabase.from('messages').select('id,sender_type,content,created_at').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(historyLimit),useKnowledge?supabase.from('knowledge_base').select('title,content').eq('organization_id',organizationId).limit(knowledgeLimit):Promise.resolve({data:[] as any[]}),rememberCustomer?supabase.from('ai_agent_memory').select('memory,summary').eq('agent_id',agent.id).eq('customer_id',customer.id).maybeSingle():Promise.resolve({data:null as any})])
- const history:Turn[]=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content).map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}));const memory=rememberCustomer?obj(memoryRow?.memory):{};const knowledgeText=(knowledge||[]).map((k:any)=>`${text(k.title,150)}: ${text(k.content,1800)}`).join('\n');const persona=text(agent.persona,4000)||'موظف مصري ودود ومحترف من Dragon Media.'\nconst storedCustomerName=text(customer.name,120)\nconst trustedCustomerName=storedCustomerName&&!invalidCustomerName(storedCustomerName)?storedCustomerName:''
+ const history:Turn[]=(messages||[]).reverse().filter((m:any)=>m.id!==messageId&&m.content).map((m:any)=>({role:m.sender_type==='customer'?'user':'model',parts:[{text:text(m.content,1500)}]}));const memory=rememberCustomer?obj(memoryRow?.memory):{};const knowledgeText=(knowledge||[]).map((k:any)=>`${text(k.title,150)}: ${text(k.content,1800)}`).join('
+');const persona=text(agent.persona,4000)||'موظف مصري ودود ومحترف من Dragon Media.'
+const storedCustomerName=text(customer.name,120)
+const trustedCustomerName=storedCustomerName&&!invalidCustomerName(storedCustomerName)?storedCustomerName:''
  let multimodal:any={parts:[],currentText:'',transcript:'',attachmentSummary:[]};try{multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),obj(incoming.metadata),apiKey,model)}catch(e){console.error('Ryan multimodal unavailable',e)}
  const current=text(incoming.content,4000)+(multimodal.currentText||'');const currentParts=multimodal.parts||[]
  const system=`أنت Ryan، موظف Dragon Media الذكي. أنت ليس chatbot بأسئلة ثابتة؛ أنت موظف مصري ودود ومحبوب يفهم العميل وسياق كلامه وينفذ طلباته داخل المنصة. استخدم اللهجة المصرية الطبيعية، وإيموجي مناسب باعتدال 👋😊👍. لا تبدأ كل محادثة بنفس الجملة. لا تسأل سؤالاً سبق أن أجابه العميل. سؤال واحد فقط عند الحاجة. اعتبر وصف العميل لاحتياجه مثل «عايز أبيع وحدة» أو «عايز أعمل إعلان» نية/احتياجاً صالحاً، وليس مطلوباً أن يطابق اسم خدمة في قائمة الخدمات حرفياً. لو العميل قال اسمه صراحةً مثل «أنا اسمي أحمد» أو «اسمي أحمد» احفظه واستخدمه طبيعياً لاحقاً. لا تعتبر التحية أو كلمة «تمام» أو «شكراً» اسماً، ولا تستنتج اسم العميل من رقم الهاتف أو أي نص آخر. لا تخترع أي معلومة تخص Dragon Media؛ استخدم Knowledge Base كمصدر الحقيقة.
@@ -141,10 +148,12 @@ ${crmContext?`CUSTOMER: name=${trustedCustomerName||'غير معروف'}, phone=
 MEMORY: ${JSON.stringify(memory).slice(0,6000)}
 SERVICES: ${JSON.stringify(services||[]).slice(0,12000)}`:'CRM CONTEXT: disabled by Ryan settings'}
 COMPANY RULES: ${text(settings.custom_rules,5000)||'لا توجد قواعد إضافية.'}
-KNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
+KNOWLEDGE BASE:
+${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
  let plan:Record<string,any>={},usedModel=model,lastError=''
  try{const result=await callGemini(apiKey,model,system,history,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',lastError)}
- if(!plan.service&&plan.intent&&/بيع|شراء|إعلان|تسويق|إدارة صفحة|تصميم|محتوى|عقارات|وحدة|سيارة|منتج/iu.test(String(plan.intent)))plan.service=text(plan.intent,160);\n if(!plan.reply){console.error('Ryan Gemini unavailable after all retries',lastError);return res.status(502).json({error:'Ryan AI unavailable',details:lastError})}
+ if(!plan.service&&plan.intent&&/بيع|شراء|إعلان|تسويق|إدارة صفحة|تصميم|محتوى|عقارات|وحدة|سيارة|منتج/iu.test(String(plan.intent)))plan.service=text(plan.intent,160);
+ if(!plan.reply){console.error('Ryan Gemini unavailable after all retries',lastError);return res.status(502).json({error:'Ryan AI unavailable',details:lastError})}
  const learnedName=text(plan.learned_name,120)||extractName(current);const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName)&&!invalidCustomerName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
  let actionResult:any={success:true};if(text(plan.action,60)!=='continue')actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[])
  let reply=text(plan.reply,5000);if(!actionResult.success){console.error('Ryan action failed',text(plan.action,60),actionResult.message||'unknown');reply='حصلت مشكلة بسيطة وأنا بنفذ الطلب، ومش هقول لحضرتك إنه تم قبل ما يتنفذ فعلاً.'}
