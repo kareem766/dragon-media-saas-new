@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useSubscription } from '../lib/useSubscription'
 
 const tabs = [
   'بيانات الشركة',
@@ -212,7 +213,11 @@ export default function Settings() {
     error: orgError,
   } = useOrganization()
 
-  const [active, setActive] = useState('إعدادات واتساب')
+  const [active, setActive] = useState('بيانات الشركة')
+  const { isActive: hasActiveSubscription } = useSubscription()
+  const [accessControls, setAccessControls] = useState({ integrations: false, whatsapp: false })
+  const canOpenIntegrations = hasActiveSubscription || accessControls.integrations
+  const canOpenWhatsApp = hasActiveSubscription || accessControls.whatsapp
   const [org, setOrg] = useState<OrgData>(initialOrg)
 
   const [loading, setLoading] = useState(true)
@@ -270,6 +275,13 @@ export default function Settings() {
     setSaved(false)
     setError('')
   }
+
+  useEffect(() => {
+    if (!supabase) return
+    void supabase.from('platform_settings').select('integrations_enabled_before_subscription, whatsapp_settings_enabled_before_subscription').eq('id', 1).single().then(({ data }) => {
+      setAccessControls({ integrations: Boolean(data?.integrations_enabled_before_subscription), whatsapp: Boolean(data?.whatsapp_settings_enabled_before_subscription) })
+    })
+  }, [])
 
   useEffect(() => {
     const loadOrganization = async () => {
@@ -1252,6 +1264,11 @@ export default function Settings() {
       }
     }
 
+  useEffect(() => {
+    if (!canOpenIntegrations && active === 'التكاملات') setActive('بيانات الشركة')
+    if (!canOpenWhatsApp && active === 'إعدادات واتساب') setActive('بيانات الشركة')
+  }, [canOpenIntegrations, canOpenWhatsApp, active])
+
   if (orgLoading || loading) {
     return (
       <div
@@ -1332,14 +1349,17 @@ export default function Settings() {
               <button
                 key={tab}
                 type="button"
+                disabled={(tab === 'التكاملات' && !canOpenIntegrations) || (tab === 'إعدادات واتساب' && !canOpenWhatsApp)}
                 onClick={() => setActive(tab)}
                 className={`min-h-11 shrink-0 rounded-xl px-4 py-3 text-right text-sm font-bold transition-all duration-200 lg:w-full ${
                   active === tab
                     ? 'bg-ink-950 text-white shadow-sm'
-                    : 'border border-sand-200 bg-white text-ink-900/65 hover:border-sand-300 hover:bg-sand-50 hover:text-ink-950'
+                    : ((tab === 'التكاملات' && !canOpenIntegrations) || (tab === 'إعدادات واتساب' && !canOpenWhatsApp))
+                      ? 'border border-sand-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                      : 'border border-sand-200 bg-white text-ink-900/65 hover:border-blue-200 hover:bg-blue-50/40 hover:text-blue-950'
                 }`}
               >
-                {tab}
+                <span className="inline-flex items-center gap-2">{tab}{((tab === 'التكاملات' && !canOpenIntegrations) || (tab === 'إعدادات واتساب' && !canOpenWhatsApp)) && <span aria-hidden="true">🔒</span>}</span>
               </button>
             ))}
           </nav>
@@ -1375,7 +1395,7 @@ export default function Settings() {
             />
           )}
 
-          {active === 'التكاملات' && (
+          {active === 'التكاملات' && canOpenIntegrations && (
             <IntegrationsSection
               integrations={integrations}
               loading={integrationsLoading}
@@ -1414,7 +1434,7 @@ export default function Settings() {
             />
           )}
 
-          {active === 'إعدادات واتساب' && (
+          {active === 'إعدادات واتساب' && canOpenWhatsApp && (
             <WhatsAppSection
               integration={getIntegration(
                 'whatsapp',
