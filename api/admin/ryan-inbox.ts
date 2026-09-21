@@ -29,7 +29,7 @@ const parseGeminiJson=(raw:string)=>{
 }
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[],temperature=0.45,allowFallback=true){
  const deadline=Date.now()+45000
- const fallbackModels=allowFallback?['gemini-3.5-flash-lite']:[]
+ const fallbackModels=allowFallback?['gemini-3.5-flash-lite','gemini-3.1-flash-lite']:[]
  const candidates=[model,...fallbackModels].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='Gemini unavailable',errors:string[]=[]
  for(const candidate of candidates){
