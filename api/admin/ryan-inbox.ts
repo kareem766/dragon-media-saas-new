@@ -39,11 +39,11 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    try{
     const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\
 \
-إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:4096,responseMimeType:'application/json',...( /^gemini-3\\./i.test(candidate) ? {thinkingConfig:{thinkingLevel:'minimal'}} : {}),...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
+إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:4096,responseMimeType:'application/json',responseSchema:{type:'object',properties:{reply:{type:'string'},action:{type:'string',enum:['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation']},action_data:{type:'object'},learned_name:{type:'string'},learned_phone:{type:'string'},service:{type:'string'},budget:{type:'string'},intent:{type:'string'},confidence:{type:'number'}},required:['reply','action']},...( /^gemini-3\\./i.test(candidate) ? {thinkingConfig:{thinkingLevel:'minimal'}} : {}),...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000)
-     if(raw){try{return {plan:parseGeminiJson(raw),model:candidate}}catch{last=candidate+' returned invalid JSON';errors.push(candidate+': '+last)}}
+     if(raw){try{const parsed=parseGeminiJson(raw);if(!text(parsed.reply,5000)){last=candidate+' returned JSON without reply';errors.push(candidate+': '+last+' raw='+text(raw,3000));if(attempt<2){await sleep(retryDelay(attempt));continue}break}return {plan:parsed,model:candidate}}catch{last=candidate+' returned invalid JSON';errors.push(candidate+': '+last+' raw='+text(raw,3000))}}
      else {last=candidate+' returned empty';errors.push(candidate+': '+last+' finish_reason='+(text(d?.candidates?.[0]?.finishReason,80)||'unknown')+' prompt_feedback='+text(JSON.stringify(d?.promptFeedback),1000))}
      if(attempt<2){await sleep(retryDelay(attempt));continue}
      break
