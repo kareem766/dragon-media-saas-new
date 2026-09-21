@@ -60,6 +60,29 @@ const extractNameFromMessage=(value:string)=>{
 }
 type Turn={role:'user'|'model';parts:{text:string}[]}
 
+async function callGatewayModel(model:string,system:string,history:Turn[],current:string,structured=false){
+ const gatewayKey=env('AI_GATEWAY_API_KEY','VERCEL_OIDC_TOKEN')
+ if(!gatewayKey)throw new Error('AI Gateway credentials are not configured')
+ const messages=[{role:'system',content:system},...history.map((t:any)=>({role:t.role==='model'?'assistant':'user',content:text(t.parts?.map((p:any)=>p?.text||'').join(''),4000)})),{role:'user',content:current}]
+ const r=await fetchWithTimeout('https://ai-gateway.vercel.sh/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${gatewayKey}`},body:JSON.stringify({model,messages,max_tokens:700,temperature:0.2,...(structured?{response_format:{type:'json_object'}}:{})})},6500)
+ const d=await r.json().catch(()=>({}))
+ if(!r.ok)throw new Error(d?.error?.message||`AI Gateway ${model} ${r.status}`)
+ const reply=text(d?.choices?.[0]?.message?.content,12000)
+ if(!reply)throw new Error(`AI Gateway ${model} returned an empty response`)
+ return reply
+}
+async function callRyanGatewayFallback(system:string,history:Turn[],current:string,structured=false){
+ const errors:string[]=[]
+ for(const model of ['anthropic/claude-sonnet-4.6','openai/gpt-5']){
+  try{
+   const raw=await callGatewayModel(model,system,history,current,structured)
+   if(structured){const data=obj(JSON.parse(raw));if(Object.keys(data).length)return data;errors.push(`${model}: invalid JSON`)}
+   else return raw
+  }catch(error:any){errors.push(`${model}: ${text(error?.message,500)||'request failed'}`)}
+ }
+ throw new Error(`Ryan provider chain exhausted: ${errors.join(' | ')}`)
+}
+
 async function callGrok(key:string,model:string,system:string,history:Turn[],current:string,structured=false){
  const messages=[{role:'system',content:system},...history.map((t:any)=>({role:t.role==='model'?'assistant':'user',content:text(t.parts?.map((p:any)=>p?.text||'').join(''),4000)})),{role:'user',content:current}]
  const r=await fetchWithTimeout('https://api.x.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},body:JSON.stringify({model:model||'grok-4.6',messages,max_tokens:700,...(structured?{response_format:{type:'json_object'}}:{})})})
@@ -84,10 +107,8 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    if(attempt===0)await new Promise(resolve=>setTimeout(resolve,350))
   }
  }
- const grokKey=env('XAI_API_KEY','GROK_API_KEY')
- if(grokKey){
-  try{return await callGrok(grokKey,'grok-4.6',system,history,current)}catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback failed: ${text(error?.message,500)||'request failed'}`)}
- } throw new Error(`Ryan Gemini failed: ${lastError}; Grok fallback unavailable: XAI_API_KEY is not configured`)}async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){ const errors:string[]=[]
+ try{return await callRyanGatewayFallback(system,history,current,false)}
+ catch(error:any){throw new Error(`Ryan Gemini failed: ${lastError}; Claude/OpenAI fallback failed: ${text(error?.message,500)||'request failed'}`)}async function analyzeConversation(geminiKey:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[]){ const errors:string[]=[]
  try{
   const requestedModel=model.toLowerCase(); const primaryModel=/(gemini-2\.5|gemini-3\.[0-59]\b|gemini-3\.7|gemini-3\.8)/.test(requestedModel)?'gemini-3.6-flash':model; const candidates=[primaryModel,'gemini-3.6-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
   for(const candidate of candidates){
@@ -104,14 +125,10 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    }catch(error:any){errors.push(`Gemini ${candidate}: ${text(error?.message,500)||'request failed'}`)}
   }
  }catch(error:any){errors.push(`Gemini: ${text(error?.message,500)||'request failed'}`)}
- const grokKey=env('XAI_API_KEY','GROK_API_KEY')
- if(grokKey){
-  try{
-   const raw=await callGrok(grokKey,'grok-4.6',system,history,current,true)
-   const data=obj(JSON.parse(raw));if(Object.keys(data).length)return data
-   errors.push('Grok: invalid JSON')
-  }catch(error:any){errors.push(`Grok: ${text(error?.message,500)||'request failed'}`)}
- }else errors.push('Grok: XAI_API_KEY is not configured')
+ try{
+  const data=await callRyanGatewayFallback(system,history,current,true)
+  if(Object.keys(data).length)return data
+ }catch(error:any){errors.push(`Claude/OpenAI: ${text(error?.message,500)||'request failed'}`)}
  throw new Error(`Ryan AI analysis exhausted: ${errors.join(' | ')}`)
 }
 
@@ -374,7 +391,7 @@ STORED MEMORY:
 ${JSON.stringify(memory).slice(0,5000)}
 KNOWLEDGE BASE:
 ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
-    reply=await callGemini(apiKey,model,system,history,current,currentParts)
+    try{reply=await callGemini(apiKey,model,system,history,current,currentParts)}catch{reply=await callRyanGatewayFallback(system,history,current,false)}
    }else{
     const isAd=a.is_advertising===true
     const name=text(a.name,120)||text(captureMeta.name,120)||(looksLikeName(text(customer.name,120))?text(customer.name,120):'')
@@ -405,7 +422,7 @@ BUDGET: ${budget||text(captureMeta.budget,120)||'غير محدد'}
 CONVERSATION:\n${history.map((item:any)=>text(item?.parts?.[0]?.text,1200)).join(' | ')}
 LAST MESSAGE:\n${current}`;
       try{ reply=await callGemini(apiKey,model,continuationSystem,history,current,currentParts) }
-      catch{ reply='تمام، نكمل من آخر نقطة وقفنا عندها. قولي حابب نكمل في إيه؟' }
+      catch{ try{ reply=await callRyanGatewayFallback(continuationSystem,history,current,false) }catch{ reply='تمام، نكمل من آخر نقطة وقفنا عندها. قولي حابب نكمل في إيه؟' } }
       await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_lead_capture:{...captureMeta,active:false,last_continued_at:new Date().toISOString()}}}).eq('id',conversationId).eq('organization_id',organizationId)
      }else{
      const notes=['بيانات تم جمعها بواسطة Ryan','الخدمة: '+service,activity?'النشاط: '+activity:'',goal?'الهدف: '+goal:'',isAd?'ميزانية الإعلان: '+budget:'','القناة: '+(conversation.channel||'غير محدد')].filter(Boolean).join(' | ')
@@ -431,7 +448,8 @@ ${current}`;
      try{
       reply=await callGemini(apiKey,model,readyReplySystem,history,current,currentParts)
      }catch{
-      reply=`تمام، سجلت بيانات حضرتك بخصوص ${service}، وفريق Dragon Media هيكمل معاك من هنا.`
+      try{ reply=await callRyanGatewayFallback(readyReplySystem,history,current,false) }
+      catch{ reply=`تمام، سجلت بيانات حضرتك بخصوص ${service}، وفريق Dragon Media هيكمل معاك من هنا.` }
      }
      }
     }else{
@@ -459,7 +477,7 @@ STORED MEMORY:
 ${JSON.stringify(memory).slice(0,5000)}
 KNOWLEDGE BASE:
 ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
-   reply=await callGemini(apiKey,model,system,history,current,currentParts)
+   try{reply=await callGemini(apiKey,model,system,history,current,currentParts)}catch{reply=await callRyanGatewayFallback(system,history,current,false)}
   }
   // Final safety gate: never persist or send internal/model output to the customer.
   if(containsInternalLeak(reply)){
