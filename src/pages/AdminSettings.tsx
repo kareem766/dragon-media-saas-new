@@ -78,6 +78,8 @@ export default function AdminSettings() {
   const [phone, setPhone] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [email, setEmail] = useState('')
+  const [integrationsEnabledBeforeSubscription, setIntegrationsEnabledBeforeSubscription] = useState(false)
+  const [whatsappSettingsEnabledBeforeSubscription, setWhatsappSettingsEnabledBeforeSubscription] = useState(false)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -96,7 +98,7 @@ export default function AdminSettings() {
 
       const { data, error: loadError } = await supabase
         .from('platform_settings')
-        .select('support_phone, support_email, support_whatsapp')
+        .select('support_phone, support_email, support_whatsapp, integrations_enabled_before_subscription, whatsapp_settings_enabled_before_subscription')
         .eq('id', 1)
         .single()
 
@@ -107,6 +109,8 @@ export default function AdminSettings() {
       setPhone(data?.support_phone ?? '')
       setWhatsapp(data?.support_whatsapp ?? '')
       setEmail(data?.support_email ?? '')
+      setIntegrationsEnabledBeforeSubscription(Boolean(data?.integrations_enabled_before_subscription))
+      setWhatsappSettingsEnabledBeforeSubscription(Boolean(data?.whatsapp_settings_enabled_before_subscription))
     } catch (err) {
       const message =
         err instanceof Error
@@ -137,6 +141,8 @@ export default function AdminSettings() {
           support_phone: phone.trim(),
           support_whatsapp: whatsapp.trim(),
           support_email: email.trim(),
+          integrations_enabled_before_subscription: integrationsEnabledBeforeSubscription,
+          whatsapp_settings_enabled_before_subscription: whatsappSettingsEnabledBeforeSubscription,
         })
         .eq('id', 1)
 
@@ -315,6 +321,27 @@ export default function AdminSettings() {
           </div>
         </div>
       </Card>
+
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-ink-900/6 bg-white px-5 py-4 sm:px-6">
+          <h2 className="text-sm font-bold text-ink-950">صلاحيات ما قبل الاشتراك</h2>
+          <p className="mt-1 text-xs leading-5 text-ink-900/50">تحكم في فتح التكاملات وإعدادات WhatsApp للحسابات التي لم تُفعّل اشتراكًا بعد. الوضع الافتراضي مغلق.</p>
+        </div>
+        <div className="space-y-3 p-5 sm:p-6">
+          <AdminAccessToggle label="فتح صفحة التكاملات قبل الاشتراك" description="يسمح للمستخدم الجديد بفتح التكاملات واستخدام مسار الربط قبل تفعيل الاشتراك." checked={integrationsEnabledBeforeSubscription} onChange={setIntegrationsEnabledBeforeSubscription} />
+          <AdminAccessToggle label="فتح إعدادات WhatsApp قبل الاشتراك" description="يسمح للمستخدم الجديد بفتح تبويب إعدادات WhatsApp داخل الإعدادات قبل تفعيل الاشتراك." checked={whatsappSettingsEnabledBeforeSubscription} onChange={setWhatsappSettingsEnabledBeforeSubscription} />
+          <div className="border-t border-ink-900/6 pt-5"><Button onClick={handleSave} disabled={saving} className="min-h-11 w-full sm:w-auto">{saving ? 'جاري الحفظ...' : 'حفظ إعدادات الوصول'}</Button></div>
+        </div>
+      </Card>
     </div>
+  )
+}
+
+function AdminAccessToggle({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-sand-200 bg-white p-4 transition hover:border-blue-200 hover:bg-blue-50/30">
+      <div className="min-w-0"><div className="text-sm font-bold text-ink-950">{label}</div><div className="mt-1 text-xs leading-5 text-ink-900/50">{description}</div></div>
+      <span className="relative shrink-0"><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" /><span className={`block h-7 w-12 rounded-full p-1 transition-colors ${checked ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-0' : 'translate-x-5'}`} /></span></span>
+    </label>
   )
 }
