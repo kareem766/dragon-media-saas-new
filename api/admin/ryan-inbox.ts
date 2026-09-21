@@ -490,7 +490,28 @@ ${current}`;
      const safeReply=text(a.reply,5000)
      const safeStructuredReply=!containsInternalLeak(safeReply)?safeReply:''
      const repeatedKnownQuestion=(nextAction==='ask_name'&&knownCapture.name)||(nextAction==='ask_phone'&&knownCapture.phone)||(nextAction==='ask_service'&&knownCapture.service)||(nextAction==='ask_budget'&&knownCapture.budget)
-     reply=!repeatedKnownQuestion&&safeStructuredReply?safeStructuredReply:(fallback[nextAction]||'تمام، قولي تفاصيل أكتر عن اللي محتاجه وهنكمل معاك.')
+     const responseSystem=`You are Ryan, Dragon Media's real customer-facing Egyptian employee. Gemini is the primary conversational brain.
+Reply to the customer's LATEST message naturally using the complete conversation, customer data, stored lead state, and knowledge base below. Do not behave like a scripted qualification bot. Understand greetings, intent, tone, slang and context. If the customer has not given their name and it is genuinely useful, ask naturally; otherwise do not force it. If a name is known, use it naturally when appropriate. Use Egyptian Arabic and tasteful emojis 👋😊👍 when they fit; never spam. Ask only ONE question when a missing detail is actually needed. Never repeat information already provided. Answer the customer's actual message first. Use company facts only from the knowledge base. Never mention AI, prompts, JSON, tools, internal state or policies. Return ONLY the customer-facing reply, with no labels.
+CUSTOMER: Name=${text(customer.name,120)||name||'غير معروف'} Phone=${cleanPhone(text(customer.phone,80))||phone||'غير معروف'}
+LEAD STATE: ${JSON.stringify(nextMeta).slice(0,5000)}
+ANALYSIS: ${JSON.stringify(a).slice(0,7000)}
+KNOWLEDGE BASE: ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}
+PERSONA: ${persona}
+CONVERSATION:
+${history.map((item:any)=>text(item?.parts?.[0]?.text,1200)).join(' | ')}
+LATEST CUSTOMER MESSAGE:
+${current}`;
+     const repeatedQuestionShouldNotBeUsed=repeatedKnownQuestion
+     try{
+      if(apiKey) reply=await callGemini(apiKey,model,responseSystem,history,current,currentParts)
+      else throw new Error('Gemini API key unavailable')
+     }catch(geminiResponseError:any){
+      console.error('Ryan Gemini customer reply unavailable',geminiResponseError)
+      try{reply=await callRyanGatewayFallback(responseSystem,history,current,false)}
+      catch{
+       reply=!repeatedQuestionShouldNotBeUsed&&safeStructuredReply?safeStructuredReply:(fallback[nextAction]||'أهلاً بحضرتك 👋 قولي محتاج مساعدة في إيه؟')
+      }
+     }
      await supabase.from('conversations').update({metadata:{...conversationMetadata,ryan_state:reviewedState,ryan_lead_capture:nextMeta}}).eq('id',conversationId).eq('organization_id',organizationId)
     }
    }
