@@ -129,3 +129,18 @@ button:not(:disabled):active { transform: translateY(1px); }
 .text-gold-700, .text-gold-600, .text-gold-500 { color: #0077ff !important; }
 button.bg-ink-950, a.bg-ink-950, button.bg-gold-500, a.bg-gold-500 { box-shadow: 0 0 0 1px rgba(0,207,255,.16), 0 0 22px rgba(0,207,255,.18), 0 8px 24px rgba(21,94,239,.18); }
 button.bg-ink-950:hover, a.bg-ink-950:hover, button.bg-gold-500:hover, a.bg-gold-500:hover { box-shadow: 0 0 0 1px rgba(0,207,255,.24), 0 0 30px rgba(0,207,255,.30), 0 12px 28px rgba(21,94,239,.22); }
+
+
+/* Professional dark-blue sidebar */
+.dm-sidebar {
+  background: linear-gradient(180deg, #071f45 0%, #0a2d63 52%, #082653 100%) !important;
+  color: #eef6ff !important;
+  border-left-color: rgba(96, 165, 250, .16) !important;
+  box-shadow: 0 0 34px rgba(7, 31, 69, .18), inset -1px 0 0 rgba(255,255,255,.035);
+}
+.dm-sidebar .bg-cyan-400\/12 { background: rgba(34, 211, 238, .13) !important; }
+.dm-sidebar .text-cyan-200 { color: #b9f4ff !important; }
+.dm-sidebar .bg-cyan-300 { background-color: #67e8f9 !important; }
+.dm-sidebar a:hover { background-color: rgba(96, 165, 250, .09); }
+.dm-sidebar .border-white\/10 { border-color: rgba(148, 197, 255, .12) !important; }
+.dm-sidebar .border-white\/5 { border-color: rgba(148, 197, 255, .10) !important; }
