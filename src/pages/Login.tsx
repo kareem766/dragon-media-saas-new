@@ -59,6 +59,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
+  const [heroTypingStarted, setHeroTypingStarted] = useState(false);
+  const [heroTypedText, setHeroTypedText] = useState('');
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -72,6 +74,24 @@ export default function Login() {
       setSignupStep('account');
     }
   }, [initialMode]);
+
+  useEffect(() => {
+    const heroText = 'إدارة العملاء والمبيعات والتسويق من مكان واحد.';
+    const startTimer = window.setTimeout(() => {
+      setHeroTypingStarted(true);
+      let index = 0;
+      const typingTimer = window.setInterval(() => {
+        index += 1;
+        setHeroTypedText(heroText.slice(0, index));
+        if (index >= heroText.length) {
+          window.clearInterval(typingTimer);
+        }
+      }, 58);
+      return () => window.clearInterval(typingTimer);
+    }, 1050);
+
+    return () => window.clearTimeout(startTimer);
+  }, []);
 
   useEffect(() => {
     const storedInviteCode = localStorage.getItem(
@@ -290,6 +310,37 @@ export default function Login() {
       dir="rtl"
       className="min-h-screen bg-slate-50 text-slate-900"
     >
+      <style>{`
+        @keyframes dragonHeroLogoFade {
+          0% { opacity: 0; transform: translateY(10px) scale(.97); filter: blur(4px); }
+          60% { opacity: 1; transform: translateY(-2px) scale(1.01); filter: blur(0); }
+          100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        }
+
+        @keyframes dragonHeroTextReveal {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hero-logo-fade {
+          opacity: 0;
+          animation: dragonHeroLogoFade 900ms cubic-bezier(.22,1,.36,1) forwards;
+        }
+
+        .hero-type-text {
+          animation: dragonHeroTextReveal 420ms ease-out both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .hero-logo-fade,
+          .hero-type-text {
+            animation: none !important;
+            opacity: 1 !important;
+            transform: none !important;
+            filter: none !important;
+          }
+        }
+      `}</style>
       <div className="min-h-screen lg:grid lg:grid-cols-[0.9fr_1.1fr]">
         <section className="relative hidden overflow-hidden bg-slate-950 p-10 text-white lg:flex">
           <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl" />
@@ -299,7 +350,7 @@ export default function Login() {
           <div className="relative z-10 flex w-full flex-col">
             <Link
               to="/home"
-              className="mb-16 inline-flex w-fit items-center gap-3"
+              className="hero-logo-fade mb-16 inline-flex w-fit items-center gap-3"
             >
               <img
                 src={logoDarkUrl || logoUrl}
@@ -313,12 +364,28 @@ export default function Login() {
             </Link>
 
             <div className="max-w-xl">
-              <span className="mb-5 inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300">
+              <span
+                className={[
+                  'mb-5 inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition-opacity duration-500',
+                  heroTypingStarted ? 'opacity-100' : 'opacity-0',
+                ].join(' ')}
+              >
                 منصة متكاملة لإدارة نشاطك
               </span>
 
-              <h1 className="text-4xl font-black leading-tight xl:text-5xl">
-                إدارة العملاء والمبيعات والتسويق من مكان واحد.
+              <h1
+                className={[
+                  'min-h-[2.4em] text-4xl font-black leading-tight xl:text-5xl',
+                  heroTypingStarted ? 'hero-type-text' : 'opacity-0',
+                ].join(' ')}
+                aria-label="إدارة العملاء والمبيعات والتسويق من مكان واحد."
+              >
+                {heroTypedText}
+                {heroTypingStarted && heroTypedText.length < 48 && (
+                  <span className="mr-1 inline-block animate-pulse text-blue-300" aria-hidden="true">
+                    |
+                  </span>
+                )}
               </h1>
 
               <p className="mt-6 text-lg leading-8 text-slate-300">
