@@ -39,12 +39,12 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    try{
     const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\
 \
-إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:900,responseMimeType:'application/json',...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
+إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:1400,responseMimeType:'application/json',...( /^gemini-3\\./i.test(candidate) ? {thinkingConfig:{thinkingLevel:'minimal'}} : {}),...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000)
-     if(raw){try{return {plan:parseGeminiJson(raw),model:candidate}}catch{last=candidate+' returned invalid JSON'}}
-     else last=candidate+' returned empty'
+     if(raw){try{return {plan:parseGeminiJson(raw),model:candidate}}catch{last=candidate+' returned invalid JSON';errors.push(candidate+': '+last)}}
+     else {last=candidate+' returned empty';errors.push(candidate+': '+last)}
      if(attempt<2){await sleep(retryDelay(attempt));continue}
      break
     }
@@ -58,7 +58,7 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
    }finally{clearTimeout(timeout)}
   }
  }
- throw new Error(errors.length?errors.join(' | '):last)
+ throw new Error(errors.length?errors.join(' | '):('Gemini failure: '+last))
 }
 
 async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,body:string,link:string,entityType:string,entityId:string){
