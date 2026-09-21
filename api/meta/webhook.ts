@@ -69,13 +69,13 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
     customer = createdCustomer
   }
   const now = new Date().toISOString()
-  const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'whatsapp', { whatsapp_phone_number_id: phoneNumberId, whatsapp_from: from }, now, content)
   const messageType = String(message?.type || 'text')
   let content = ''
   if (messageType === 'text') content = String(message?.text?.body || '')
   else if (messageType === 'button') content = String(message?.button?.text || '')
   else if (messageType === 'interactive') content = String(message?.interactive?.button_reply?.title || message?.interactive?.list_reply?.title || '')
   else content = `[${messageType}]`
+  const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'whatsapp', { whatsapp_phone_number_id: phoneNumberId, whatsapp_from: from }, now, content)
   const mediaPayload = messageType === 'audio' ? { media_id: String(message?.audio?.id || ''), mime_type: String(message?.audio?.mime_type || 'audio/ogg') } : messageType === 'image' ? { media_id: String(message?.image?.id || ''), mime_type: String(message?.image?.mime_type || 'image/jpeg'), caption: String(message?.image?.caption || '') } : messageType === 'document' ? { media_id: String(message?.document?.id || ''), mime_type: String(message?.document?.mime_type || 'application/octet-stream'), filename: String(message?.document?.filename || ''), caption: String(message?.document?.caption || '') } : null
   const messageMetadata = { source: 'whatsapp_webhook', whatsapp_message_id: externalId, whatsapp_message_type: messageType, whatsapp_from: from, whatsapp_phone_number_id: phoneNumberId, timestamp: message?.timestamp || null, ...(mediaPayload?.media_id ? { attachments: [mediaPayload] } : {}) }
   const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content: content || `[${messageType}]`, external_id: externalId, metadata: messageMetadata, created_at: message?.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : now })
