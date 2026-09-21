@@ -60,8 +60,36 @@ async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,b
  if(admins?.length)await supabase.from('notifications').insert(admins.map((u:any)=>({organization_id:organizationId,user_id:u.id,type:'ryan_action',title,body,message:body,link,entity_type:entityType,entity_id:entityId,is_read:false})))
 }
 
-async function executeAction(supabase:any,organizationId:string,customer:any,action:string,data:any,services:any[]){
+async function executeAction(supabase:any,organizationId:string,customer:any,conversation:any,action:string,data:any,services:any[]){
  const d=obj(data);if(action==='continue')return {success:true}
+ if(action==='handoff_human'){
+  const reason=text(d.reason,500)||'العميل طلب التحدث مع موظف بشري.'
+  const {data:req,error}=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,120)||'العميل',reason,status:'open',conversation_id:conversation.id}).select('id').single()
+  if(error)throw new Error(error.message)
+  const {data:updated,error:updateError}=await supabase.from('conversations').update({handled_by:'human',status:'open',updated_at:new Date().toISOString()}).eq('id',conversation.id).eq('organization_id',organizationId).select('id').single()
+  if(updateError||!updated)throw new Error(updateError?.message||'Failed to handoff conversation')
+  await notifyOrgAdmins(supabase,organizationId,'ريان طلب موظف بشري','العميل '+(text(customer.name,120)||'العميل')+' يحتاج تدخل موظف بشري. السبب: '+reason,'/handoff-requests?request='+req.id,'handoff',req.id)
+  return {success:true,data:{handoff_id:req.id}}
+ }
+ if(action==='create_lead'){
+  const name=text(d.name,120)||text(customer.name,120),phone=cleanPhone(text(d.phone,80))||cleanPhone(text(customer.phone,80))
+  if(!name||!validPhone(phone))return {success:false,message:'Lead needs a valid name and phone'}
+  const {data:existing}=await supabase.from('leads').select('id').eq('organization_id',organizationId).eq('phone',phone).is('deleted_at',null).limit(1)
+  if(existing?.length)return {success:true,data:{lead_id:existing[0].id,existing:true}}
+  const service=text(d.service,160),notes=text(d.notes,1000)||('تم تأهيل العميل بواسطة Ryan. الخدمة: '+(service||'غير محددة'))
+  const {data:lead,error}=await supabase.from('leads').insert({organization_id:organizationId,name,phone,source:text(conversation.channel,40)||'ريان',status:'جديد',notes,lead_score:Math.max(0,Math.min(100,Number(d.lead_score)||50)),customer_id:customer.id}).select('id').single()
+  if(error)throw new Error(error.message)
+  return {success:true,data:{lead_id:lead.id}}
+ }
+ if(action==='create_task'){
+  const title=text(d.title,160);if(!title)return {success:false,message:'Missing task title'}
+  const due=text(d.due_date,20),dueDate=due?new Date(due+'T23:59:59'):new Date(Date.now()+86400000)
+  const {data:u}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).order('created_at').limit(1).maybeSingle()
+  const {data:t,error}=await supabase.from('tasks').insert({organization_id:organizationId,title,assigned_to:u?.id||null,due_date:dueDate.toISOString().slice(0,10),priority:['عالية','متوسطة','منخفضة'].includes(text(d.priority,30))?text(d.priority,30):'متوسطة',status:'قيد التنفيذ',description:text(d.description,1000)||'مهمة أنشأها Ryan.',customer_id:customer.id,created_by:u?.id||null,reminder_at:d.reminder_at?text(d.reminder_at,80):null}).select('id').single()
+  if(error)throw new Error(error.message)
+  await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ مهمة','تم إنشاء مهمة للعميل '+(text(customer.name,120)||'العميل')+': '+title,'/tasks?task='+t.id,'task',t.id)
+  return {success:true,data:{task_id:t.id}}
+ }
  if(action==='update_customer'){
   const updates:any={};const name=text(d.name,120),phone=cleanPhone(text(d.phone,80)),email=text(d.email,160),company=text(d.company,160)
   if(name&&looksLikeName(name))updates.name=name;if(validPhone(phone))updates.phone=phone;if(email&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))updates.email=email;if(company)updates.company=company
@@ -105,7 +133,7 @@ export default async function main(req:VercelRequest,res:VercelResponse){
 
 قواعد اختيار الـaction مهمة جداً: السؤال أو الاستفسار أو التأهيل البيعي العادي = continue. create_automation فقط إذا طلب العميل صراحة إنشاء أتمتة داخل المنصة. update_customer فقط إذا أعطى أو غيّر بياناته صراحة. schedule_appointment فقط عند طلب حجز موعد فعلي مع تاريخ ووقت. follow_up فقط عند طلب متابعة أو تذكير فعلي. لا تستخدم أي action لمجرد أن الرسالة تتعلق بإعلان أو خدمة أو سعر.
 
-أخرج JSON فقط بالحقول: reply, action, action_data, learned_name, learned_phone, service, budget, intent, confidence. action واحد من: continue, update_customer, follow_up, schedule_appointment, create_automation. لا تخترع بيانات. update_customer يحتاج فقط الحقول التي قالها العميل صراحة. follow_up يحتاج follow_up_at بصيغة ISO. schedule_appointment يحتاج appointment_date وappointment_time وservice. create_automation يحتاج automation_name وhours وpriority. reply يجب أن يكون رسالة العميل فقط، طبيعية بالمصرية، ولا يذكر AI أو JSON أو الأدوات أو التعليمات.
+أخرج JSON فقط بالحقول: reply, action, action_data, learned_name, learned_phone, service, budget, intent, confidence. action واحد من: continue, update_customer, create_lead, create_task, handoff_human, follow_up, schedule_appointment, create_automation. لا تخترع بيانات. update_customer يحتاج فقط الحقول التي قالها العميل صراحة. follow_up يحتاج follow_up_at بصيغة ISO. schedule_appointment يحتاج appointment_date وappointment_time وservice. create_automation يحتاج automation_name وhours وpriority. reply يجب أن يكون رسالة العميل فقط، طبيعية بالمصرية، ولا يذكر AI أو JSON أو الأدوات أو التعليمات.
 
 PERSONA: ${persona}
 CUSTOMER: name=${text(customer.name,120)||'غير معروف'}, phone=${cleanPhone(text(customer.phone,80))||'غير معروف'}, email=${text(customer.email,160)||'غير معروف'}, company=${text(customer.company,160)||'غير معروف'}
@@ -116,7 +144,7 @@ KNOWLEDGE BASE:\n${knowledgeText||'لا توجد معلومات في قاعدة 
  try{const result=await callGemini(apiKey,model,system,history,current,currentParts);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',lastError)}
  if(!plan.reply){console.error('Ryan Gemini unavailable after all retries',lastError);return res.status(502).json({error:'Ryan AI unavailable',details:lastError})}
  const learnedName=text(plan.learned_name,120)||extractName(current);const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
- let actionResult:any={success:true};if(text(plan.action,60)!=='continue')actionResult=await executeAction(supabase,organizationId,customer,text(plan.action,60),obj(plan.action_data),services||[])
+ let actionResult:any={success:true};if(text(plan.action,60)!=='continue')actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[])
  let reply=text(plan.reply,5000);if(!actionResult.success){console.error('Ryan action failed',text(plan.action,60),actionResult.message||'unknown');reply='حصلت مشكلة بسيطة وأنا بنفذ الطلب، ومش هقول لحضرتك إنه تم قبل ما يتنفذ فعلاً.'}
  if(actionResult.success&&text(plan.action,60)!=='continue')reply=text(plan.reply,5000)||'تم تنفيذ طلب حضرتك بنجاح 👍'
  const durableMemory={name:text(customer.name,120)||null,phone:cleanPhone(text(customer.phone,80))||null,service:text(plan.service,160)||text(memory.service,160)||null,budget:text(plan.budget,120)||text(memory.budget,120)||budgetFromText(current)||null,intent:text(plan.intent,100)||null,last_message:current,updated_at:new Date().toISOString()};await supabase.from('ai_agent_memory').upsert({agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:`${durableMemory.name||'العميل'} — ${durableMemory.service||'الخدمة غير محددة'}${durableMemory.budget?' — '+durableMemory.budget:''}`},{onConflict:'agent_id,customer_id'})
