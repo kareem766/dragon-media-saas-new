@@ -66,7 +66,7 @@ async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,b
  if(admins?.length)await supabase.from('notifications').insert(admins.map((u:any)=>({organization_id:organizationId,user_id:u.id,type:'ryan_action',title,body,message:body,link,entity_type:entityType,entity_id:entityId,is_read:false})))
 }
 
-async function executeAction(supabase:any,organizationId:string,customer:any,conversation:any,action:string,data:any,services:any[],messageId:string){
+async function executeAction(supabase:any,organizationId:string,customer:any,conversation:any,action:string,data:any,services:any[],messageId:string,memory:any={}){
  const d=obj(data);if(action==='continue')return {success:true}
  if(action==='handoff_human'){
   const reason=text(d.reason,500)||'العميل طلب التحدث مع موظف بشري.'
@@ -84,7 +84,7 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
   if(!name||!validPhone(phone))return {success:false,message:'Lead needs a valid name and phone'}
   const {data:existing}=await supabase.from('leads').select('id').eq('organization_id',organizationId).eq('phone',phone).is('deleted_at',null).limit(1)
   if(existing?.length)return {success:true,data:{lead_id:existing[0].id,existing:true}}
-  const service=text(d.service,160),notes=text(d.notes,1000)||('تم تأهيل العميل بواسطة Ryan. الخدمة: '+(service||'غير محددة'))
+  const service=text(d.service,160)||text(memory.service,160),notes=text(d.notes,1000)||('تم تأهيل العميل بواسطة Ryan. الخدمة: '+(service||'غير محددة'))
   const {data:lead,error}=await supabase.from('leads').insert({organization_id:organizationId,name,phone,source:text(conversation.channel,40)||'ريان',status:'جديد',notes,lead_score:Math.max(0,Math.min(100,Number(d.lead_score)||50)),customer_id:customer.id}).select('id').single()
   if(error)throw new Error(error.message)
   return {success:true,data:{lead_id:lead.id}}
@@ -195,7 +195,7 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   plan.reply='تمام يا فندم، ممكن أعرف رقم حضرتك للتواصل؟';plan.action='continue';plan.action_data={};
  }
  if(greetingOnly&&!aiUnavailable){plan.action='continue';plan.action_data={};if(hasTrustedName){plan.reply=plan.reply||`أهلاً بحضرتك يا أستاذ ${effectiveName}، أقدر أساعدك إزاي النهارده؟ أنا في خدمتك، اتفضل 😊`}else{plan.reply=plan.reply||'أهلاً بحضرتك، أقدر أساعدك إزاي النهارده؟ أنا في خدمتك، اتفضل 😊'}}
- const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue'; plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[],messageId)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
+ const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue'; plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; const actionData=obj(plan.action_data);if(!text(actionData.service,160)&&text(plan.service,160))actionData.service=text(plan.service,160);if(!text(actionData.service,160)&&text(memory.service,160))actionData.service=text(memory.service,160);if(!text(actionData.phone,80)&&validPhone(String(customer.phone||'')))actionData.phone=cleanPhone(String(customer.phone));plan.action_data=actionData;let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),actionData,services||[],messageId,memory)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
   actionResult={success:false,message:'Action execution failed'}
  }}
  let reply=text(plan.reply,5000);
