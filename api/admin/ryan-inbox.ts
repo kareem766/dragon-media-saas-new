@@ -287,7 +287,7 @@ PERSONA: ${persona}`
     const detectedBudget=budgetFromText(knownText)||text(captureMeta.budget,120)
     const detectedGoal=text(captureMeta.goal,240)
     const detectedActivity=text(captureMeta.business_activity,240)
-    const ready=!!detectedName&&!!detectedPhone&&!!detectedService&&(!text(captureMeta.is_ad?'true':'false')||!!detectedBudget)
+    const requiresBudget=captureMeta.is_ad===true || /(?:إعلان|اعلان|إعلانات|اعلانات|ads|advertising)/iu.test(knownText); const ready=!!detectedName&&!!detectedPhone&&!!detectedService&&(!requiresBudget||!!detectedBudget)
     a={
       lead_intent: !!(detectedName||detectedPhone||detectedService||detectedBudget||captureMeta.captured_at),
       intent: priceIntent(current)?'pricing':(salesIntent(current)?'sales_inquiry':'continue'),
