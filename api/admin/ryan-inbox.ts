@@ -217,6 +217,11 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const {data:incomingAfterClaim}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle()
  if(!incomingAfterClaim||incomingAfterClaim.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const incoming=obj(incomingAfterClaim),incomingMetadata=obj(incomingAfterClaim.metadata)
+ const {data:newerPending}=await supabase.from('messages').select('id').eq('conversation_id',conversationId).eq('sender_type','customer').gt('created_at',String(incomingAfterClaim.created_at||'' )).is('metadata->>ai_agent_processed_at',null).order('created_at',{ascending:false}).limit(1)
+ if(newerPending?.length){
+  await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),ai_agent_processing_at:null,ryan_skipped_superseded:true}}).eq('id',messageId).eq('conversation_id',conversationId)
+  return res.status(200).json({ok:true,skipped:true,reason:'superseded_by_newer_customer_message'})
+ }
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle()
  if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:services},{data:agent}]=await Promise.all([
