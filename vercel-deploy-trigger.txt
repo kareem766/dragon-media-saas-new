@@ -1,1 +1,2 @@
 Vercel deployment trigger
+CRM sync fix 2026-09-22
