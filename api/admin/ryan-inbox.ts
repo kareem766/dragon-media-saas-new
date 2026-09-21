@@ -28,12 +28,14 @@ const parseGeminiJson=(raw:string)=>{
  return obj(JSON.parse(start>=0&&end>start?clean.slice(start,end+1):clean))
 }
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[],temperature=0.45,allowFallback=true){
+ const deadline=Date.now()+45000
  const fallbackModels=allowFallback?['gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash']:[]
  const candidates=[model,...fallbackModels].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='Gemini unavailable'
  for(const candidate of candidates){
   for(let attempt=0;attempt<3;attempt++){
-   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
+   if(Date.now()>=deadline)break
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),Math.min(12000,Math.max(1000,deadline-Date.now())))
    try{
     const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\
 \
@@ -64,10 +66,12 @@ async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,b
  if(admins?.length)await supabase.from('notifications').insert(admins.map((u:any)=>({organization_id:organizationId,user_id:u.id,type:'ryan_action',title,body,message:body,link,entity_type:entityType,entity_id:entityId,is_read:false})))
 }
 
-async function executeAction(supabase:any,organizationId:string,customer:any,conversation:any,action:string,data:any,services:any[]){
+async function executeAction(supabase:any,organizationId:string,customer:any,conversation:any,action:string,data:any,services:any[],messageId:string){
  const d=obj(data);if(action==='continue')return {success:true}
  if(action==='handoff_human'){
   const reason=text(d.reason,500)||'العميل طلب التحدث مع موظف بشري.'
+  const {data:existingReq}=await supabase.from('human_handoff_requests').select('id').eq('organization_id',organizationId).eq('conversation_id',conversation.id).eq('status','open').limit(1).maybeSingle()
+  if(existingReq?.id)return {success:true,data:{handoff_id:existingReq.id,existing:true}}
   const {data:req,error}=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:text(customer.name,120)||'العميل',reason,status:'open',conversation_id:conversation.id}).select('id').single()
   if(error)throw new Error(error.message)
   const {data:updated,error:updateError}=await supabase.from('conversations').update({handled_by:'human',status:'open',updated_at:new Date().toISOString()}).eq('id',conversation.id).eq('organization_id',organizationId).select('id').single()
@@ -87,9 +91,12 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
  }
  if(action==='create_task'){
   const title=text(d.title,160);if(!title)return {success:false,message:'Missing task title'}
+  const actionMarker='Ryan message:'+messageId
+  const {data:existingTask}=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('description','%'+actionMarker+'%').limit(1).maybeSingle()
+  if(existingTask?.id)return {success:true,data:{task_id:existingTask.id,existing:true}}
   const due=text(d.due_date,20),dueDate=due?new Date(due+'T23:59:59'):new Date(Date.now()+86400000)
   const {data:u}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).order('created_at').limit(1).maybeSingle()
-  const {data:t,error}=await supabase.from('tasks').insert({organization_id:organizationId,title,assigned_to:u?.id||null,due_date:dueDate.toISOString().slice(0,10),priority:['عالية','متوسطة','منخفضة'].includes(text(d.priority,30))?text(d.priority,30):'متوسطة',status:'قيد التنفيذ',description:text(d.description,1000)||'مهمة أنشأها Ryan.',customer_id:customer.id,created_by:u?.id||null,reminder_at:d.reminder_at?text(d.reminder_at,80):null}).select('id').single()
+  const {data:t,error}=await supabase.from('tasks').insert({organization_id:organizationId,title,assigned_to:u?.id||null,due_date:dueDate.toISOString().slice(0,10),priority:['عالية','متوسطة','منخفضة'].includes(text(d.priority,30))?text(d.priority,30):'متوسطة',status:'قيد التنفيذ',description:(text(d.description,1000)||'مهمة أنشأها Ryan.')+' ['+actionMarker+']',customer_id:customer.id,created_by:u?.id||null,reminder_at:d.reminder_at?text(d.reminder_at,80):null}).select('id').single()
   if(error)throw new Error(error.message)
   await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ مهمة','تم إنشاء مهمة للعميل '+(text(customer.name,120)||'العميل')+': '+title,'/tasks?task='+t.id,'task',t.id)
   return {success:true,data:{task_id:t.id}}
@@ -102,17 +109,25 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
  }
  if(action==='follow_up'){
   const at=text(d.follow_up_at,80),date=new Date(at);if(!at||Number.isNaN(date.getTime())||date.getTime()<=Date.now())return {success:false,message:'Invalid follow-up time'}
+  const actionMarker='Ryan message:'+messageId
+  const {data:existingFollowUp}=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('description','%'+actionMarker+'%').limit(1).maybeSingle()
+  if(existingFollowUp?.id)return {success:true,data:{task_id:existingFollowUp.id,existing:true,follow_up_at:date.toISOString()}}
   const {data:u}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).order('created_at').limit(1).maybeSingle()
-  const {data:t,error}=await supabase.from('tasks').insert({organization_id:organizationId,title:'متابعة عميل بواسطة Ryan',assigned_to:u?.id||null,due_date:date.toISOString().slice(0,10),priority:'متوسطة',status:'قيد التنفيذ',description:'متابعة أنشأها Ryan من محادثة العميل.',customer_id:customer.id,created_by:u?.id||null,reminder_at:date.toISOString()}).select('id').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ متابعة',`تم إنشاء متابعة للعميل ${text(customer.name,120)||'العميل'}.`,`/tasks?task=${t.id}`,'task',t.id);return {success:true,data:{task_id:t.id,follow_up_at:date.toISOString()}}
+  const {data:t,error}=await supabase.from('tasks').insert({organization_id:organizationId,title:'متابعة عميل بواسطة Ryan',assigned_to:u?.id||null,due_date:date.toISOString().slice(0,10),priority:'متوسطة',status:'قيد التنفيذ',description:'متابعة أنشأها Ryan من محادثة العميل. ['+actionMarker+']',customer_id:customer.id,created_by:u?.id||null,reminder_at:date.toISOString()}).select('id').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ متابعة',`تم إنشاء متابعة للعميل ${text(customer.name,120)||'العميل'}.`,`/tasks?task=${t.id}`,'task',t.id);return {success:true,data:{task_id:t.id,follow_up_at:date.toISOString()}}
  }
  if(action==='schedule_appointment'){
   const date=text(d.appointment_date,20),time=text(d.appointment_time,20);if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(time))return {success:false,message:'Missing appointment date/time'}
+  const actionMarker='Ryan message:'+messageId
+  const {data:existingAppointment}=await supabase.from('appointments').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('notes','%'+actionMarker+'%').limit(1).maybeSingle()
+  if(existingAppointment?.id)return {success:true,data:{appointment_id:existingAppointment.id,existing:true,appointment_date:date,appointment_time:time}}
   const serviceName=text(d.service,160),service=services.find((s:any)=>text(s.name,160).toLowerCase()===serviceName.toLowerCase());const {data:existing}=await supabase.from('appointments').select('id').eq('organization_id',organizationId).eq('appointment_date',date).eq('appointment_time',time).eq('status','قيد الانتظار').limit(1);if(existing?.length)return {success:false,message:'Slot occupied'}
-  const {data:a,error}=await supabase.from('appointments').insert({organization_id:organizationId,customer_id:customer.id,service_id:service?.id||null,appointment_date:date,appointment_time:time,status:'قيد الانتظار',notes:'تم الحجز بواسطة Ryan.'}).select('id').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان حجز موعد',`تم حجز موعد للعميل ${text(customer.name,120)||'العميل'} يوم ${date} الساعة ${time}.`,`/appointments?appointment=${a.id}`,'appointment',a.id);return {success:true,data:{appointment_id:a.id,appointment_date:date,appointment_time:time}}
+  const {data:a,error}=await supabase.from('appointments').insert({organization_id:organizationId,customer_id:customer.id,service_id:service?.id||null,appointment_date:date,appointment_time:time,status:'قيد الانتظار',notes:'تم الحجز بواسطة Ryan. ['+actionMarker+']'}).select('id').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان حجز موعد',`تم حجز موعد للعميل ${text(customer.name,120)||'العميل'} يوم ${date} الساعة ${time}.`,`/appointments?appointment=${a.id}`,'appointment',a.id);return {success:true,data:{appointment_id:a.id,appointment_date:date,appointment_time:time}}
  }
  if(action==='create_automation'){
   const name=text(d.automation_name,160),hours=Math.max(1,Math.min(720,Number(d.hours)||24)),priority=['عالية','متوسطة','منخفضة'].includes(text(d.priority,30))?text(d.priority,30):'متوسطة';if(!name)return {success:false,message:'Missing automation name'}
-  const {data:a,error}=await supabase.from('automations').insert({organization_id:organizationId,name,trigger_event:'lead_stale',config:{hours},action_type:'create_task',action_config:{title_template:'متابعة مع {name} - تم إنشاؤها بواسطة Ryan',priority},active:true}).select('id,name').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ أتمتة',`تم إنشاء الأتمتة «${name}» بواسطة Ryan.`,`/automations?automation=${a.id}`,'automation',a.id);return {success:true,data:a}
+  const {data:existingAutomation}=await supabase.from('automations').select('id,name').eq('organization_id',organizationId).eq('config->>ryan_message_id',messageId).limit(1).maybeSingle()
+  if(existingAutomation?.id)return {success:true,data:{...existingAutomation,existing:true}}
+  const {data:a,error}=await supabase.from('automations').insert({organization_id:organizationId,name,trigger_event:'lead_stale',config:{hours,ryan_message_id:messageId},action_type:'create_task',action_config:{title_template:'متابعة مع {name} - تم إنشاؤها بواسطة Ryan',priority},active:true}).select('id,name').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ أتمتة',`تم إنشاء الأتمتة «${name}» بواسطة Ryan.`,`/automations?automation=${a.id}`,'automation',a.id);return {success:true,data:a}
  }
  return {success:false,message:'Unsupported action'}
 }
@@ -153,12 +168,18 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
  let plan:Record<string,any>={},usedModel=model,lastError=''
  try{const result=await callGemini(apiKey,model,system,history,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',lastError)}
  if(!plan.service&&plan.intent&&/بيع|شراء|إعلان|تسويق|إدارة صفحة|تصميم|محتوى|عقارات|وحدة|سيارة|منتج/iu.test(String(plan.intent)))plan.service=text(plan.intent,160);
- if(!plan.reply){console.error('Ryan Gemini unavailable after all retries',lastError);return res.status(502).json({error:'Ryan AI unavailable',details:lastError})}
+ const aiUnavailable=!plan.reply
+ if(aiUnavailable){
+  console.error('Ryan Gemini unavailable after all retries',lastError)
+  plan={reply:'معلش، حصل تأخير بسيط في الرد. ابعتلي رسالتك تاني وهكمل مع حضرتك فوراً.',action:'continue',action_data:{},confidence:0}
+ }
  const learnedName=text(plan.learned_name,120)||extractName(current);const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName)&&!invalidCustomerName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
- let actionResult:any={success:true};if(text(plan.action,60)!=='continue')actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[])
+ let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[],messageId)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
+  actionResult={success:false,message:'Action execution failed'}
+ }}
  let reply=text(plan.reply,5000);if(!actionResult.success){console.error('Ryan action failed',text(plan.action,60),actionResult.message||'unknown');reply='حصلت مشكلة بسيطة وأنا بنفذ الطلب، ومش هقول لحضرتك إنه تم قبل ما يتنفذ فعلاً.'}
  if(actionResult.success&&text(plan.action,60)!=='continue')reply=text(plan.reply,5000)||'تم تنفيذ طلب حضرتك بنجاح.'
  const durableMemory={name:text(customer.name,120)||null,phone:cleanPhone(text(customer.phone,80))||null,service:text(plan.service,160)||null,budget:text(plan.budget,120)||budgetFromText(current)||null,intent:text(plan.intent,100)||null,last_message:current,updated_at:new Date().toISOString()};if(rememberCustomer)await supabase.from('ai_agent_memory').upsert({agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:`${durableMemory.name||'العميل'} — ${durableMemory.service||'الخدمة غير محددة'}${durableMemory.budget?' — '+durableMemory.budget:''}`},{onConflict:'agent_id,customer_id'})
- const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success}}).select('id').single();if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response');await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
- return res.status(200).json({ok:true,reply,message_id:saved.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success})
+ const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success,safety_fallback:aiUnavailable}}).select('id').single();if(saveError||!saved)throw new Error(saveError?.message||'Failed to save Ryan response');await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
+ return res.status(200).json({ok:true,reply,message_id:saved.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success,safety_fallback:aiUnavailable})
 }
