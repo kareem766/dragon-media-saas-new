@@ -8,7 +8,7 @@ const db=()=>createClient(env('VITE_SUPABASE_URL','SUPABASE_URL'),env('SUPABASE_
 const text=(v:unknown,max=2000)=>typeof v==='string'?v.trim().slice(0,max):''
 const obj=(v:unknown):Record<string,any>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{ }
 const sameSecret=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y)}
-const cleanPhone=(v:string)=>v.replace(/[^0-9+]/g,'').trim()
+const cleanPhone=(v:string)=>{let x=v.replace(/[^0-9]/g,'');if(x.startsWith('00'))x=x.slice(2);if(/^01[0125]\d{8}$/.test(x))x='20'+x.slice(1);return x}
 const phoneFromText=(v:string)=>{const m=v.match(/(?:\+?20\s*)?(01[0125]\s*\d{8})\b/);return m?cleanPhone(m[0]):''}
 const validPhone=(v:string)=>/^(?:01[0125]\d{8}|20(10|11|12|15)\d{8})$/.test(cleanPhone(v).replace(/^\+/,''))
 const nameStop=/^(?:تمام|حاضر|ماشي|اه|أه|ايوه|أيوه|السلام عليكم|السلام عليكم ورحمة الله وبركاته|وعليكم السلام|اهلا|أهلا|أهلًا|منور|ممكن|عايز|عاوز|محتاج|الخدمة|خدمة|السعر|سعر|بكام|بكم|كام|شكرا|شكراً|العفو)$/iu
