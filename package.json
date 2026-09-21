@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/fix-ryan-import.mjs && tsc && vite build",
+    "build": "node scripts/fix-ryan-import.mjs && node scripts/patch-ryan-policy.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
