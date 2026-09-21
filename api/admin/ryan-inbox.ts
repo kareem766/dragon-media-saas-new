@@ -71,7 +71,7 @@ async function callGatewayModel(model:string,system:string,history:Turn[],curren
  if(!reply)throw new Error(`AI Gateway ${model} returned an empty response`)
  return reply
 }
-async function callRyanGatewayFallback(system:string,history:Turn[],current:string,structured=false){
+async function callRyanGatewayFallback(system:string,history:Turn[],current:string,structured=false):Promise<any>{
  const errors:string[]=[]
  for(const model of ['anthropic/claude-sonnet-4.6','openai/gpt-5']){
   try{
