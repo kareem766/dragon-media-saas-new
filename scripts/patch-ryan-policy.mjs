@@ -10,7 +10,7 @@ const old = `const effectiveName=text(customer.name,120);const hasTrustedName=ef
  let actionResult:any={success:true};`
 
 const replacement = `const effectiveName=text(customer.name,120);const hasTrustedName=effectiveName&&looksLikeName(effectiveName)&&!invalidCustomerName(effectiveName);const nameWasProvidedNow=Boolean(explicitName&&looksLikeName(explicitName)&&!invalidCustomerName(explicitName));
- const phoneWasProvidedNow=Boolean((phoneFromText(current)||validPhone(cleanPhone(text(plan.learned_phone,80)))));
+ const phoneWasProvidedNow=Boolean(phoneFromText(current));
  if(!hasTrustedName&&!nameWasProvidedNow&&!aiUnavailable){
   plan.reply='اهلاً وسهلا بحضرتك يافندم ، ممكن أتشرف بأسم حضرتك';plan.action='continue';plan.action_data={};
  }
