@@ -173,7 +173,13 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   console.error('Ryan Gemini unavailable after all retries',lastError)
   plan={reply:'معلش، حصل تأخير بسيط في الرد. ابعتلي رسالتك تاني وهكمل مع حضرتك فوراً.',action:'continue',action_data:{},confidence:0}
  }
- const learnedName=text(plan.learned_name,120)||extractName(current);const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName)&&!invalidCustomerName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
+ const explicitName=extractName(current);const learnedName=text(plan.learned_name,120)||explicitName;const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);const customerUpdates:any={};if(learnedName&&looksLikeName(learnedName)&&!invalidCustomerName(learnedName))customerUpdates.name=learnedName;if(validPhone(learnedPhone))customerUpdates.phone=learnedPhone;if(Object.keys(customerUpdates).length){customerUpdates.updated_at=new Date().toISOString();await supabase.from('customers').update(customerUpdates).eq('id',customer.id).eq('organization_id',organizationId);Object.assign(customer,customerUpdates)}
+ // Hard safety guard: a new customer must be asked for their name before Ryan moves into qualification.
+ // Gemini remains responsible for the wording; this only prevents it from skipping a required identity field.
+ const effectiveName=text(customer.name,120);const hasTrustedName=effectiveName&&looksLikeName(effectiveName)&&!invalidCustomerName(effectiveName);const nameWasProvidedNow=Boolean(explicitName&&looksLikeName(explicitName)&&!invalidCustomerName(explicitName));
+ if(!hasTrustedName&&!nameWasProvidedNow&&!aiUnavailable){
+  plan.reply='ممكن أعرف اسم حضرتك الأول؟';plan.action='continue';plan.action_data={};
+ }
  let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),obj(plan.action_data),services||[],messageId)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
   actionResult={success:false,message:'Action execution failed'}
  }}
