@@ -337,8 +337,11 @@ PERSONA: ${persona}`
    if(deterministicService&&/(?:إعلان|اعلان|إعلانات|اعلانات|ads|advertising)/iu.test(knownText))a.is_advertising=true
    const leadIntent=a.lead_intent===true||!!(deterministicName||deterministicPhone||deterministicService||deterministicBudget||captureMeta.captured_at)
    const intent=text(a.intent,40)||'other'
-   const explicitHumanRequest=humanHandoffIntent(historyText+' '+current)
-   const needsHuman=explicitHumanRequest||a.needs_human===true||intent==='human_request'
+   // Human handoff must be triggered by the customer's current message, not stale history/model state.
+   // This prevents a previous handoff request from trapping the conversation in human mode forever.
+   const explicitHumanRequest=humanHandoffIntent(current)
+   const modelHumanRequest=(a.needs_human===true||intent==='human_request')&&humanHandoffIntent(current)
+   const needsHuman=explicitHumanRequest||modelHumanRequest
    const handoffReason=text(a.handoff_reason,300)
    const action=text(a.action,40)||text(a.next_action,40)||'continue'
    let actionResult:any=null
