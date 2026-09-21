@@ -74,6 +74,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
     }
 
+    const { data: platformSettings } = await db.from('platform_settings').select('integrations_enabled_before_subscription').eq('id', 1).maybeSingle()
+    const allowBeforeSubscription = Boolean(platformSettings?.integrations_enabled_before_subscription)
+    const { data: subscription } = await db.from('subscriptions').select('status,expires_at,renewal_date').eq('organization_id', organizationId).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
+    const expiry = String(subscription?.expires_at || subscription?.renewal_date || '')
+    const today = new Date().toISOString().slice(0, 10)
+    const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
+    if (!subscriptionActive && !allowBeforeSubscription) return json(res, 403, { error: 'ربط التكاملات متاح بعد تفعيل الاشتراك.' })
+
     const { data: permission } = await db
       .from('role_permissions')
       .select('can_edit')
