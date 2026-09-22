@@ -40,6 +40,7 @@ const createEmptyPlan = () => ({
   yearlyPrice: '',
   currency: 'EGP',
   trial_days: '7',
+  sort_order: '0',
   isPopular: false,
   features: Object.fromEntries(
     featureKeys.map((feature) => [feature.key, false])
@@ -163,6 +164,7 @@ export default function AdminPlans() {
           : '',
       currency: plan.currency,
       trial_days: String(plan.trial_days),
+      sort_order: String(plan.sort_order),
       isPopular: plan.is_popular,
       features: {
         ...Object.fromEntries(
@@ -203,6 +205,7 @@ export default function AdminPlans() {
     currency: form.currency.trim() || 'EGP',
     billing_cycle: 'monthly',
     trial_days: Number(form.trial_days),
+    sort_order: Number(form.sort_order),
     is_popular: form.isPopular,
     features: form.features,
     limits: Object.fromEntries(
@@ -235,6 +238,10 @@ export default function AdminPlans() {
       Number(form.trial_days) < 0
     ) {
       return 'أيام التجربة يجب أن تكون رقمًا صحيحًا أو صفرًا.'
+    }
+
+    if (!Number.isInteger(Number(form.sort_order)) || Number(form.sort_order) < 0) {
+      return 'ترتيب الباقة يجب أن يكون رقمًا صحيحًا يساوي صفرًا أو أكبر.'
     }
 
     for (const limit of limitKeys) {
@@ -288,7 +295,7 @@ export default function AdminPlans() {
           .insert({
             ...payload,
             status: 'active',
-            sort_order: maxOrder + 1,
+            sort_order: Number(form.sort_order) > 0 ? Number(form.sort_order) : maxOrder + 1,
           })
 
         if (insertError) {
@@ -489,6 +496,20 @@ export default function AdminPlans() {
                   }))
                 }
                 placeholder="مثال: 9600"
+              />
+
+              <Field
+                label="ترتيب ظهور الباقة"
+                value={form.sort_order}
+                type="number"
+                min="0"
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    sort_order: value,
+                  }))
+                }
+                placeholder="0 = أول باقة"
               />
 
               <Field
