@@ -536,7 +536,6 @@ export default function Landing() {
         <section
           id="how-it-works"
           className="relative py-20 lg:py-28 bg-sand-50 overflow-hidden"
-          className="relative py-20 lg:py-28 bg-sand-50 overflow-hidden"
         >
           <div className="absolute top-10 inset-inline-end-10 dm-gold-ornament" aria-hidden="true" />
           <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
