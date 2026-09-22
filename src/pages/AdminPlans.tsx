@@ -285,17 +285,12 @@ export default function AdminPlans() {
 
         setSuccess('تم تحديث الباقة بنجاح.')
       } else {
-        const maxOrder = plans.reduce(
-          (max, plan) => Math.max(max, plan.sort_order),
-          0
-        )
-
         const { error: insertError } = await supabase
           .from('plans')
           .insert({
             ...payload,
             status: 'active',
-            sort_order: Number(form.sort_order) > 0 ? Number(form.sort_order) : maxOrder + 1,
+            sort_order: Number(form.sort_order),
           })
 
         if (insertError) {
@@ -509,7 +504,7 @@ export default function AdminPlans() {
                     sort_order: value,
                   }))
                 }
-                placeholder="0 = أول باقة"
+                placeholder="رقم أصغر = ظهور أعلى"
               />
 
               <Field
