@@ -210,8 +210,20 @@ async function handleFacebookWebhook(db: any, payload: any) {
       const attachments = Array.isArray(event?.message?.attachments) ? event.message.attachments : []
       const attachmentPayload = attachments.slice(0, 4).map((a: any) => ({ type: String(a?.type || ''), url: String(a?.payload?.url || ''), mime_type: String(a?.payload?.mime_type || (String(a?.type || '').toLowerCase() === 'audio' ? 'audio/mpeg' : 'application/octet-stream')), source: 'facebook' })).filter((a: any) => a.url)
       if (!content && !attachmentPayload.length) continue
-      const { data: customerExisting } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('phone', senderId).maybeSingle()
-      const customer = customerExisting || (await db.from('customers').insert({ organization_id: organizationId, name: null, phone: senderId, source: 'messenger' }).select('id,name,phone').single()).data
+      const { data: customerByPhone } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('phone', senderId).maybeSingle()
+      let customer = customerByPhone
+      if (!customer) {
+        const { data: conversationByPsid } = await db.from('conversations').select('customer_id').eq('organization_id', organizationId).in('channel', ['messenger', 'facebook']).filter('metadata->>facebook_psid', 'eq', senderId).filter('metadata->>facebook_page_id', 'eq', pageId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+        if (conversationByPsid?.customer_id) {
+          const { data: customerByConversation } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('id', conversationByPsid.customer_id).maybeSingle()
+          customer = customerByConversation
+        }
+      }
+      if (!customer) {
+        const { data: createdCustomer, error: customerError } = await db.from('customers').insert({ organization_id: organizationId, name: null, phone: null, source: 'messenger' }).select('id,name,phone').single()
+        if (customerError) throw customerError
+        customer = createdCustomer
+      }
       if (!customer) continue
       const now = new Date().toISOString()
       const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'messenger', { provider: 'facebook', facebook_page_id: pageId, facebook_psid: senderId }, now, content)
