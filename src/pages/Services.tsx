@@ -667,6 +667,12 @@ export default function Services() {
         </div>
       )}
 
+      {error && !showForm && (
+        <Card className="border-red-100 bg-red-50/70 p-4 text-sm text-red-700" role="alert">
+          {error}
+        </Card>
+      )}
+
       {services.length === 0 ? (
         <Card className="border-sand-200/80 p-8 text-center shadow-sm sm:p-14">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-sand-100 text-ink-900/45">
