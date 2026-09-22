@@ -26,6 +26,18 @@ function isEmailConfirmed(user: User | null) {
   return Boolean(user?.email_confirmed_at || user?.confirmed_at)
 }
 
+function normalizeAuthError(message: string) {
+  const normalized = message.toLowerCase().trim()
+  if (
+    normalized.includes('invalid login credentials') ||
+    normalized.includes('invalid_credentials') ||
+    normalized.includes('invalid credentials')
+  ) {
+    return 'خطأ في اسم المستخدم أو كلمة المرور.'
+  }
+  return message
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const sessionRef = useRef<Session | null>(null)
@@ -45,8 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let mounted = true
 
-    // Resolve persisted auth state explicitly. This avoids a race where a slow
-    // desktop browser renders the login screen before INITIAL_SESSION arrives.
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return
       updateSession(error ? null : data.session)
@@ -82,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (message.includes('email not confirmed') || message.includes('email_not_confirmed')) {
         return { error: 'البريد الإلكتروني غير مؤكد. افتح رسالة التأكيد ثم حاول تسجيل الدخول مرة أخرى.' }
       }
-      return { error: error.message }
+      return { error: normalizeAuthError(error.message) }
     }
 
     if (!data.session || !data.user) {
@@ -109,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { redirectTo: window.location.origin },
     })
 
-    return { error: error ? error.message : null }
+    return { error: error ? normalizeAuthError(error.message) : null }
   }
 
   const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent): Promise<SignUpResult> => {
@@ -128,17 +138,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: metadata,
-        // HashRouter fragments are not reliable Supabase auth callback URLs.
-        // Returning to the real origin lets Supabase restore the session normally.
         emailRedirectTo: window.location.origin,
       },
     })
 
-    if (error) return { error: error.message, needsEmailConfirmation: false }
+    if (error) return { error: normalizeAuthError(error.message), needsEmailConfirmation: false }
 
     const needsEmailConfirmation = Boolean(data.user && !isEmailConfirmed(data.user))
 
-    // Never leave an unconfirmed signup session active.
     if (data.session) await supabase.auth.signOut()
     updateSession(null)
     setLoading(false)
@@ -159,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: { emailRedirectTo: window.location.origin },
     })
 
-    return { error: error ? error.message : null }
+    return { error: error ? normalizeAuthError(error.message) : null }
   }
 
   const signOut = async () => {
