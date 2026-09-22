@@ -19,7 +19,7 @@ export default function Landing() {
     <div className="min-h-screen bg-white text-ink-950">
       <header className="sticky top-0 z-40 border-b border-blue-100 bg-white/90 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-6">
-          <Link to="/" className="flex items-center gap-3 shrink-0">
+          <Link to="/home" className="flex items-center gap-3 shrink-0">
             <img src={logoUrl} alt={name} className="h-10 w-auto object-contain" />
             <span className="font-black text-lg hidden sm:block">{name}</span>
           </Link>
@@ -30,7 +30,7 @@ export default function Landing() {
           </nav>
           <div className="flex items-center gap-2">
             <Link to="/login" className="hidden sm:inline-flex rounded-xl px-4 py-2.5 text-sm font-bold text-blue-800 hover:bg-blue-50">تسجيل الدخول</Link>
-            <Link to="/signup" className="inline-flex rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-lg hover:bg-blue-800">ابدأ الآن</Link>
+            <Link to="/login?mode=signup" className="inline-flex rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-lg hover:bg-blue-800">ابدأ الآن</Link>
           </div>
         </div>
       </header>
@@ -42,7 +42,7 @@ export default function Landing() {
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-4 py-2 text-xs font-bold text-blue-800"><span className="w-2 h-2 rounded-full bg-cyan-400"/> منصة واحدة لإدارة رحلة العميل</div>
             <h1 className="mt-7 text-4xl sm:text-5xl lg:text-6xl font-black leading-tight">إدارة العملاء والمبيعات<br/><span className="text-blue-700">والتسويق من مكان واحد</span></h1>
             <p className="max-w-2xl mx-auto mt-6 text-lg leading-8 text-ink-900/60">إدارة العملاء والمبيعات والتسويق وخدمة العملاء من مكان واحد.</p>
-            <div className="flex flex-col sm:flex-row justify-center gap-3 mt-8"><Link to="/signup" className="rounded-xl bg-blue-700 px-7 py-3.5 text-white font-black shadow-xl hover:bg-blue-800">ابدأ تجربة المنصة</Link><a href="#features" className="rounded-xl border border-blue-100 bg-white px-7 py-3.5 text-blue-800 font-bold">استكشف المميزات</a></div>
+            <div className="flex flex-col sm:flex-row justify-center gap-3 mt-8"><Link to="/login?mode=signup" className="rounded-xl bg-blue-700 px-7 py-3.5 text-white font-black shadow-xl hover:bg-blue-800">ابدأ تجربة المنصة</Link><a href="#features" className="rounded-xl border border-blue-100 bg-white px-7 py-3.5 text-blue-800 font-bold">استكشف المميزات</a></div>
             <div className="dm-gold-line mx-auto mt-10"/>
           </div>
         </section>
@@ -57,7 +57,7 @@ export default function Landing() {
         <section id="ryan" className="relative py-20 lg:py-28 bg-[#f7faff] overflow-hidden"><div className="max-w-7xl mx-auto px-5 grid lg:grid-cols-2 gap-12 items-center"><div><span className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-800">الذكاء الاصطناعي داخل المنصة</span><h2 className="mt-5 text-3xl lg:text-4xl font-black">Ryan AI — موظفك الذكي لخدمة العملاء</h2><p className="text-ink-900/60 leading-8 mt-6">مساعد ذكي مصمم لفهم سياق المحادثة والتعامل مع العميل بصورة طبيعية.</p><div className="mt-7 space-y-3">{['يفهم سياق المحادثة','يساعد في جمع بيانات العميل ومتابعته','تجربة محادثة عربية طبيعية'].map(x=><div key={x} className="flex items-center gap-3 rounded-xl border border-blue-100 bg-white p-4"><span className="w-6 h-6 rounded-full bg-blue-700 text-white flex items-center justify-center">✓</span><span className="text-sm font-semibold">{x}</span></div>)}</div></div><div className="relative rounded-3xl border border-blue-900/30 bg-[#071f45] p-5 shadow-2xl overflow-hidden"><div className="flex items-center gap-3 border-b border-white/10 pb-4"><div className="w-11 h-11 rounded-full bg-cyan-300 text-[#071f45] flex items-center justify-center font-black">R</div><div><div className="font-black text-white">Ryan AI</div><div className="text-xs text-cyan-200 mt-1">مساعد {name}</div></div></div><div className="space-y-4 py-6"><div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/90">أهلاً بحضرتك، أنا ريان. أقدر أساعدك إزاي النهاردة؟</div><div className="max-w-[75%] mr-auto rounded-2xl rounded-tl-md bg-cyan-300 text-[#071f45] p-4 text-sm leading-7 font-semibold">محتاج أعرف خدماتكم وأسعارها.</div><div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/90">أكيد، خليني أعرف احتياج حضرتك الأول وأرشح لك الأنسب.</div></div></div></div></section>
 
         <section id="how-it-works" className="relative py-20 lg:py-28 bg-sand-50 overflow-hidden"><div className="max-w-7xl mx-auto px-5"><span className="text-sm font-bold text-gold-600">طريقة العمل</span><h2 className="mt-3 text-3xl lg:text-4xl font-black">ابدأ ببساطة وتوسع مع نشاطك</h2><div className="grid md:grid-cols-3 gap-5 mt-10">{[['01','أنشئ مساحة عملك'],['02','نظّم عملاءك ومبيعاتك'],['03','طوّر التشغيل مع الأتمتة']].map(([n,t])=><div key={n} className="rounded-2xl bg-white border border-sand-200 p-6"><span className="text-sm font-black text-blue-700">{n}</span><h3 className="mt-4 font-black text-lg">{t}</h3></div>)}</div></div></section>
-        <section className="py-20 bg-blue-700 text-white text-center"><h2 className="text-3xl lg:text-4xl font-black">جاهز تدير نشاطك باحترافية أكبر؟</h2><Link to="/signup" className="inline-flex mt-8 rounded-xl bg-white px-7 py-3.5 text-blue-800 font-black">ابدأ الآن</Link></section>
+        <section className="py-20 bg-blue-700 text-white text-center"><h2 className="text-3xl lg:text-4xl font-black">جاهز تدير نشاطك باحترافية أكبر؟</h2><Link to="/login?mode=signup" className="inline-flex mt-8 rounded-xl bg-white px-7 py-3.5 text-blue-800 font-black">ابدأ الآن</Link></section>
       </main>
       <footer className="border-t border-blue-100 bg-white py-8"><div className="max-w-7xl mx-auto px-5 flex justify-between text-sm text-ink-900/45"><span>© {new Date().getFullYear()} {name}</span><div className="flex gap-5"><Link to="/privacy">الخصوصية</Link><Link to="/terms">الشروط</Link></div></div></footer>
     </div>
