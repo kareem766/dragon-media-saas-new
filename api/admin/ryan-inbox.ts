@@ -94,6 +94,22 @@ function isRyanUrgentRequest(message:string){
  return /(?:مستعجل|مستعجلة|عاجل|عاجلة|ضروري|ضرورية|بسرعة|بأسرع وقت|في أسرع وقت|حالاً|حالا|النهارده|اليوم|اتصلوا بيا|يتصلوا بيا|حد يكلمني|حد يتواصل معايا|الفريق يتواصل معايا|الفريق يكلمني|عايز الفريق يكلمني|عاوز الفريق يكلمني|محتاج الفريق يكلمني|محتاج حد يكلمني|عايز حد يكلمني|عاوز حد يكلمني|ضروري حد يكلمني)/iu.test(x);
 }
 
+async function formatRyanNote(timestamp:string,channel:string,content:string,urgent:boolean){
+ const channelNames:Record<string,string>={whatsapp:'واتساب',messenger:'ماسنجر',instagram:'إنستجرام',facebook:'فيسبوك',web:'الموقع'};
+ const label=channelNames[channel.toLowerCase()]||channel||'Ryan';
+ const date=new Intl.DateTimeFormat('ar-EG',{dateStyle:'medium',timeStyle:'short',timeZone:'Africa/Cairo'}).format(new Date(timestamp));
+ return '• '+date+' — '+label+(urgent?' — استعجال':'')+': '+content;
+}
+const normalizeRyanNotes=(notes:string)=>{
+ const normalized=notes.replace(/\\\\n/g,'\\n').replace(/\\r?\\n/g,'\\n');
+ return normalized.split('\\n').map(line=>{
+  const m=line.match(/^\\[([^\\]]+)\\]\\s+\\[([^\\]]+)\\]\\s+(.*)$/);
+  if(!m)return line;
+  const urgent=/^\\[استعجال\\]\\s*/.test(m[3]);
+  return formatRyanNote(m[1],m[2],m[3].replace(/^\\[استعجال\\]\\s*/,''),urgent);
+ }).join('\\n').trim();
+}
+
 async function recordRyanCustomerMessage(supabase:any,organizationId:string,customer:any,conversation:any,messageId:string,message:string){
  const content=text(message,4000);
  if(!customer?.id||!content)return {recorded:false,urgent:false};
@@ -109,10 +125,10 @@ async function recordRyanCustomerMessage(supabase:any,organizationId:string,cust
  });
  if(activityError)throw new Error(activityError.message);
  const {data:latest}=await supabase.from('customers').select('notes').eq('id',customer.id).eq('organization_id',organizationId).maybeSingle();
- const previousNotes=text(latest?.notes,10000);
- const note='['+timestamp+'] ['+channel+'] '+(urgent?'[استعجال] ':'')+content;
- const notes=previousNotes?(previousNotes+'\\n'+note).slice(-12000):note;
- const {error:noteError}=await supabase.from('customers').update({notes,updated_at:timestamp}).eq('id',customer.id).eq('organization_id',organizationId);
+ const previousNotes=normalizeRyanNotes(text(latest?.notes,10000));
+ const note=await formatRyanNote(timestamp,channel,content,urgent);
+ const notes=(previousNotes?previousNotes+'\\n':'')+(previousNotes?'': 'سجل تواصل Ryan\\n')+note;
+ const {error:noteError}=await supabase.from('customers').update({notes:notes.slice(-12000),updated_at:timestamp}).eq('id',customer.id).eq('organization_id',organizationId);
  if(noteError)throw new Error(noteError.message);
  await notifyOrgAdmins(
   supabase,organizationId,
@@ -126,7 +142,6 @@ async function recordRyanCustomerMessage(supabase:any,organizationId:string,cust
  );
  return {recorded:true,urgent};
 }
-
 async function executeAction(supabase:any,organizationId:string,customer:any,conversation:any,action:string,data:any,services:any[],messageId:string,memory:any={}){
  const d=obj(data);if(action==='continue')return {success:true}
  if(action==='handoff_human'){
