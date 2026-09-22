@@ -177,7 +177,11 @@ COMPANY RULES: ${text(settings.custom_rules,5000)||'لا توجد قواعد إ�
 KNOWLEDGE BASE:
 ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}`
  let plan:Record<string,any>={},usedModel=model,lastError=''
- try{const result=await callGemini(apiKey,model,system,effectiveHistory,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
+ // Greeting-only messages are deterministic: never send historical context to Gemini and never let the model revive an old request.
+ if(greetingOnly){
+  const greetingName=trustedCustomerName||text(customer.name,120)
+  plan={reply:greetingName?`وعليكم السلام يا أستاذ ${greetingName}، أهلاً بحضرتك. أقدر أساعدك في إيه؟`:'وعليكم السلام، أهلاً بحضرتك. أقدر أساعدك في إيه؟',action:'continue',action_data:{},confidence:1}
+ } else try{const result=await callGemini(apiKey,model,system,effectiveHistory,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
  if(!plan.service&&plan.intent&&/بيع|شراء|إعلان|تسويق|إدارة صفحة|تصميم|محتوى|عقارات|وحدة|سيارة|منتج/iu.test(String(plan.intent)))plan.service=text(plan.intent,160);
  const aiUnavailable=!plan.reply
  if(aiUnavailable){
@@ -195,7 +199,7 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
  if((hasTrustedName||nameWasProvidedNow)&&!phoneWasProvidedNow&&!aiUnavailable&&['handoff_human','create_lead'].includes(text(plan.action,60))){
   plan.reply='تمام يا فندم، ممكن أعرف رقم حضرتك للتواصل؟';plan.action='continue';plan.action_data={};
  }
- if(greetingOnly&&!aiUnavailable){plan.action='continue';plan.action_data={};plan.reply=hasTrustedName?`وعليكم السلام يا أستاذ ${effectiveName}، أهلاً بحضرتك. أقدر أساعدك في إيه؟`:'وعليكم السلام، أهلاً بحضرتك. أقدر أساعدك في إيه؟'}
+ if(greetingOnly&&!aiUnavailable){plan.action='continue';plan.action_data={};}
  const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue'; plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; const actionData=obj(plan.action_data);if(!text(actionData.service,160)&&text(plan.service,160))actionData.service=text(plan.service,160);if(!text(actionData.phone,80)&&validPhone(String(customer.phone||'')))actionData.phone=cleanPhone(String(customer.phone));plan.action_data=actionData;let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),actionData,services||[],messageId,memory)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
   actionResult={success:false,message:'Action execution failed'}
  }}
