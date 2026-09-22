@@ -12,7 +12,7 @@ const cleanPhone=(v:string)=>{let x=v.replace(/[^0-9]/g,'');if(x.startsWith('00'
 const phoneFromText=(v:string)=>{const m=v.match(/(?:\+?20\s*)?(01[0125]\s*\d{8})\b/);return m?cleanPhone(m[0]):''}
 const validPhone=(v:string)=>/^(?:01[0125]\d{8}|20(10|11|12|15)\d{8})$/.test(cleanPhone(v).replace(/^\+/,''))
 const nameStop=/^(?:تمام|حاضر|ماشي|اه|أه|ايوه|أيوه|السلام عليكم|السلام عليكم ورحمة الله وبركاته|وعليكم السلام|اهلا|أهلا|أهلًا|منور|ممكن|عايز|عاوز|محتاج|الخدمة|خدمة|السعر|سعر|بكام|بكم|كام|شكرا|شكراً|شكرا جدا|شكراً جداً|شكراً ليك|شكرا ليك|متشكر|العفو|تسلم|ربنا يخليك|ربنا يكرمك|تمام شكرا|تمام شكراً)$/iu
-const invalidCustomerName=(v:string)=>nameStop.test(v.trim().replace(/\\s+/g,' '))
+const invalidCustomerName=(v:string)=>{const x=v.trim().replace(/\\s+/g,' ');return nameStop.test(x)||/(?:ان شاء الله|إن شاء الله|شكرا|شكراً|السلام عليكم|وعليكم السلام|اهلا|أهلا|أهلًا|تحت أمرك|العفو|تمام|معلش|ممكن|عايز|عاوز|محتاج|بكام|بكم|كام|الخدمة|السعر|خصم|اشتراك|الباقات|الفريق|المكالمة|المتابعة)/iu.test(x)}
 const looksLikeName=(v:string)=>{const x=v.trim().replace(/\s+/g,' ');if(!x||x.length<2||x.length>80||nameStop.test(x)||phoneFromText(x)||/[?؟!]/.test(x))return false;return /^[\p{L}][\p{L}\u064B-\u065F\s.'’-]{1,79}$/u.test(x)}
 const extractName=(v:string)=>{const normalized=text(v,120).replace(/\s+/g,' ').trim();const m=normalized.match(/(?:أنا\s+اسمي|انا\s+اسمي|اسمي|my\s+name\s+is)\s+([^,،.!؟?\n]+?)(?:\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\b|$)/iu);if(m&&looksLikeName(m[1]))return text(m[1],120);return looksLikeName(normalized)?normalized:''}
 const budgetFromText=(v:string)=>{const m=v.replace(/[,،]/g,' ').match(/(?:ميزاني(?:ة|ه)|budget)\s*(?:هي|هو|:)?\s*([0-9٠-٩][0-9٠-٩\s.,]*)/iu)||v.match(/([0-9٠-٩]+)\s*(?:جنيه|ج|EGP|الف|ألف)/iu);return m?text(m[1],60):''}
@@ -180,7 +180,7 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
  let plan:Record<string,any>={},usedModel=model,lastError=''
  // Greeting-only messages are deterministic: never send historical context to Gemini and never let the model revive an old request.
  if(greetingOnly){
-  const greetingName=trustedCustomerName||text(customer.name,120)
+  const greetingName=trustedCustomerName
   plan={reply:greetingName?`وعليكم السلام يا أستاذ ${greetingName}، أهلاً بحضرتك. أقدر أساعدك في إيه؟`:'وعليكم السلام، أهلاً بحضرتك. أقدر أساعدك في إيه؟',action:'continue',action_data:{},confidence:1}
  } else try{const result=await callGemini(apiKey,model,system,effectiveHistory,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
  if(!plan.service&&plan.intent&&/بيع|شراء|إعلان|تسويق|إدارة صفحة|تصميم|محتوى|عقارات|وحدة|سيارة|منتج/iu.test(String(plan.intent)))plan.service=text(plan.intent,160);
