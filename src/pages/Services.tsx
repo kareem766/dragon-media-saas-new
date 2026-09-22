@@ -172,6 +172,8 @@ export default function Services() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -226,6 +228,38 @@ export default function Services() {
       .some((value) => String(value).toLowerCase().includes(query))
   })
 
+  const startEdit = (service: DBService) => {
+    setEditingId(service.id)
+    setShowForm(true)
+    setError(null)
+    setForm({
+      name: service.name,
+      description: service.description ?? '',
+      category: service.category ?? '',
+      price: service.price ?? '',
+    })
+  }
+
+  const handleDelete = async (service: DBService) => {
+    if (!supabase || !organizationId || deletingId) return
+    if (!window.confirm('هل تريد حذف الخدمة «' + service.name + '»؟')) return
+    setDeletingId(service.id)
+    setError(null)
+    const { error: deleteError } = await supabase
+      .from('services')
+      .delete()
+      .eq('id', service.id)
+      .eq('organization_id', organizationId)
+    setDeletingId(null)
+    if (deleteError) {
+      console.error('Service delete error:', deleteError)
+      setError('تعذر حذف الخدمة. حاول مرة أخرى.')
+      return
+    }
+    if (editingId === service.id) closeForm()
+    await loadData()
+  }
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -241,25 +275,27 @@ export default function Services() {
     setSaving(true)
     setError(null)
 
-    const { error: insertError } = await supabase
-      .from('services')
-      .insert({
-        organization_id: organizationId,
-        name,
-        description: form.description.trim() || null,
-        category: form.category.trim() || null,
-        price: form.price.trim() || null,
-      })
+    const payload = {
+      name,
+      description: form.description.trim() || null,
+      category: form.category.trim() || null,
+      price: form.price.trim() || null,
+    }
+
+    const result = editingId
+      ? await supabase.from('services').update(payload).eq('id', editingId).eq('organization_id', organizationId)
+      : await supabase.from('services').insert({ organization_id: organizationId, ...payload })
 
     setSaving(false)
 
-    if (insertError) {
-      console.error('Service insert error:', insertError)
-      setError(insertError.message)
+    if (result.error) {
+      console.error('Service save error:', result.error)
+      setError('تعذر حفظ الخدمة. حاول مرة أخرى.')
       return
     }
 
     setForm(emptyForm)
+    setEditingId(null)
     setShowForm(false)
     await loadData()
   }
@@ -268,6 +304,7 @@ export default function Services() {
     if (saving) return
 
     setShowForm(false)
+    setEditingId(null)
     setError(null)
     setForm(emptyForm)
   }
@@ -427,7 +464,9 @@ export default function Services() {
               type="button"
               onClick={() => {
                 setShowForm((value) => !value)
+                setEditingId(null)
                 setError(null)
+                if (showForm) setForm(emptyForm)
               }}
               aria-expanded={showForm}
               className="min-h-11"
@@ -450,11 +489,11 @@ export default function Services() {
         <Card className="overflow-hidden border-sand-200/80 p-0 shadow-sm">
           <div className="border-b border-sand-100 bg-sand-50/60 px-5 py-4 sm:px-6">
             <div className="text-xs font-bold text-gold-600">
-              خدمة جديدة
+              {editingId ? 'تعديل الخدمة' : 'خدمة جديدة'}
             </div>
 
             <h2 className="mt-1 text-base font-extrabold text-ink-950">
-              إضافة خدمة أو منتج
+              {editingId ? 'تعديل بيانات الخدمة أو المنتج' : 'إضافة خدمة أو منتج'}
             </h2>
 
             <p className="mt-1 text-xs text-ink-900/45">
@@ -588,7 +627,7 @@ export default function Services() {
                 aria-busy={saving}
                 className="min-h-11"
               >
-                {saving ? 'جاري الحفظ...' : 'حفظ الخدمة'}
+                {saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديلات' : 'حفظ الخدمة'}
               </Button>
             </div>
           </form>
@@ -690,23 +729,14 @@ export default function Services() {
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-ink-950 text-white transition group-hover:bg-ink-800">
                     <IconBriefcase className="h-5 w-5" />
                   </div>
-
                   <div className="min-w-0">
-                    <h3 className="break-words text-base font-extrabold leading-6 text-ink-950">
-                      {service.name}
-                    </h3>
-
-                    {service.category && (
-                      <div className="mt-2">
-                        <Badge>
-                          <span className="inline-flex items-center gap-1.5">
-                            <IconTag className="h-3 w-3" />
-                            {service.category}
-                          </span>
-                        </Badge>
-                      </div>
-                    )}
+                    <h3 className="break-words text-base font-extrabold leading-6 text-ink-950">{service.name}</h3>
+                    {service.category && <div className="mt-2"><Badge><span className="inline-flex items-center gap-1.5"><IconTag className="h-3 w-3" />{service.category}</span></Badge></div>}
                   </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button type="button" onClick={() => startEdit(service)} className="rounded-lg px-2.5 py-2 text-xs font-bold text-ink-600 transition hover:bg-sand-100 hover:text-ink-950" aria-label={'تعديل ' + service.name}>تعديل</button>
+                  <button type="button" onClick={() => void handleDelete(service)} disabled={deletingId === service.id} className="rounded-lg px-2.5 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50" aria-label={'حذف ' + service.name}>{deletingId === service.id ? '...' : 'حذف'}</button>
                 </div>
               </div>
 
