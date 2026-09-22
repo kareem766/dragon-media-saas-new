@@ -103,10 +103,10 @@ function formatRyanNote(timestamp:string,channel:string,content:string,urgent:bo
 const normalizeRyanNotes=(notes:string)=>{
  const normalized=notes.replace(/\\\\n/g,'\\n').replace(/\\r?\\n/g,'\\n');
  return normalized.split('\\n').map(line=>{
-  const m=line.match(/^\\[([^\\]]+)\\]\\s+\\[([^\\]]+)\\]\\s+(.*)$/);
+  const m=line.match(/^\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.*)$/);
   if(!m)return line;
-  const urgent=/^\\[استعجال\\]\\s*/.test(m[3]);
-  return formatRyanNote(m[1],m[2],m[3].replace(/^\\[استعجال\\]\\s*/,''),urgent);
+  const urgent=/^\[استعجال\]\s*/.test(m[3]);
+  return formatRyanNote(m[1],m[2],m[3].replace(/^\[استعجال\]\s*/,''),urgent);
  }).join('\\n').trim();
 }
 
