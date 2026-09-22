@@ -89,7 +89,7 @@ async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,b
 
 function isRyanUrgentRequest(message:string){
  const x=text(message,1200).replace(/\s+/g,' ').trim();
- return /(?:مستعجل|مستعجلة|عاجل|عاجلة|ضروري|ضرورية|بسرعة|بأسرع وقت|في أسرع وقت|حالاً|حالا|دلوقتي|النهارده|اليوم|اتصلوا بيا|يتصلوا بيا|حد يكلمني|حد يتواصل معايا|الفريق يتواصل معايا|الفريق يكلمني|عايز الفريق يكلمني|عاوز الفريق يكلمني|محتاج الفريق يكلمني|محتاج حد يكلمني|عايز حد يكلمني|عاوز حد يكلمني|ضروري حد يكلمني)/iu.test(x);
+ return /(?:مستعجل|مستعجلة|عاجل|عاجلة|ضروري|ضرورية|بسرعة|بأسرع وقت|في أسرع وقت|حالاً|حالا|النهارده|اليوم|اتصلوا بيا|يتصلوا بيا|حد يكلمني|حد يتواصل معايا|الفريق يتواصل معايا|الفريق يكلمني|عايز الفريق يكلمني|عاوز الفريق يكلمني|محتاج الفريق يكلمني|محتاج حد يكلمني|عايز حد يكلمني|عاوز حد يكلمني|ضروري حد يكلمني)/iu.test(x);
 }
 
 async function recordRyanCustomerMessage(supabase:any,organizationId:string,customer:any,conversation:any,messageId:string,message:string){
