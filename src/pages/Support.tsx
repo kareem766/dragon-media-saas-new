@@ -1,15 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../lib/supabaseClient'
 import { useBranding } from '../hooks/useBranding'
 
-interface SettingsData {
-  support_phone: string | null
-  support_email: string | null
-  support_whatsapp: string | null
-}
-
-const COMPANY_ADDRESS = 'الإسكندرية - مصر'
 
 function WhatsAppIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
@@ -46,31 +38,13 @@ function LocationIcon({ className = 'w-5 h-5' }: { className?: string }) {
 }
 
 export default function Support() {
-  const [settings, setSettings] = useState<SettingsData | null>(null)
-  const [loading, setLoading] = useState(true)
   const { branding, logoUrl } = useBranding()
-
-  useEffect(() => {
-    if (!supabase) {
-      setLoading(false)
-      return
-    }
-
-    supabase
-      .from('platform_settings')
-      .select('support_phone, support_email, support_whatsapp')
-      .eq('id', 1)
-      .single()
-      .then(({ data }) => {
-        setSettings(data as SettingsData)
-        setLoading(false)
-      })
-  }, [])
-
   const platformName = branding?.platform_name || 'Dragon Media'
-  const whatsappHref = settings?.support_whatsapp
-    ? `https://wa.me/20${settings.support_whatsapp.replace(/^0/, '')}`
-    : null
+  const phone = branding?.contact_phone || null
+  const email = branding?.contact_email || null
+  const whatsapp = branding?.whatsapp_number || null
+  const address = branding?.support_address || 'الإسكندرية - مصر'
+  const whatsappHref = whatsapp ? `https://wa.me/20${whatsapp.replace(/^0/, '')}` : null
 
   return (
     <div
@@ -131,7 +105,7 @@ export default function Support() {
               </p>
             </div>
 
-            {loading ? (
+            {!branding ? (
               <div className="space-y-3" aria-live="polite">
                 {[1, 2, 3].map((item) => (
                   <div key={item} className="h-20 animate-pulse rounded-2xl bg-sand-100" />
@@ -139,7 +113,7 @@ export default function Support() {
               </div>
             ) : (
               <div className="space-y-3">
-                {whatsappHref && settings?.support_whatsapp && (
+                {whatsappHref && whatsapp && (
                   <a
                     href={whatsappHref}
                     target="_blank"
@@ -155,13 +129,13 @@ export default function Support() {
                         <p className="mt-0.5 text-xs text-emerald-900/60">تواصل معنا مباشرة</p>
                       </div>
                     </div>
-                    <span dir="ltr" className="shrink-0 rounded-xl bg-white px-3 py-2 text-sm font-bold text-emerald-900 shadow-sm">{settings.support_whatsapp}</span>
+                    <span dir="ltr" className="shrink-0 rounded-xl bg-white px-3 py-2 text-sm font-bold text-emerald-900 shadow-sm">{whatsapp}</span>
                   </a>
                 )}
 
-                {settings?.support_phone && (
+                {phone && (
                   <a
-                    href={`tel:${settings.support_phone}`}
+                    href={`tel:${phone}`}
                     className="group flex items-center justify-between gap-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4 transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-100/80 hover:shadow-lg hover:shadow-blue-900/5"
                   >
                     <div className="flex min-w-0 items-center gap-3">
@@ -173,13 +147,13 @@ export default function Support() {
                         <p className="mt-0.5 text-xs text-blue-900/60">اتصل بفريق الدعم</p>
                       </div>
                     </div>
-                    <span dir="ltr" className="shrink-0 rounded-xl bg-white px-3 py-2 text-sm font-bold text-blue-900 shadow-sm">{settings.support_phone}</span>
+                    <span dir="ltr" className="shrink-0 rounded-xl bg-white px-3 py-2 text-sm font-bold text-blue-900 shadow-sm">{phone}</span>
                   </a>
                 )}
 
-                {settings?.support_email && (
+                {email && (
                   <a
-                    href={`mailto:${settings.support_email}`}
+                    href={`mailto:${email}`}
                     className="group flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 transition-all hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100/80 hover:shadow-lg hover:shadow-amber-900/5"
                   >
                     <div className="flex min-w-0 items-center gap-3">
@@ -191,7 +165,7 @@ export default function Support() {
                         <p className="mt-0.5 text-xs text-amber-900/60">راسلنا في أي وقت</p>
                       </div>
                     </div>
-                    <span dir="ltr" className="max-w-[58%] truncate rounded-xl bg-white px-3 py-2 text-sm font-bold text-amber-900 shadow-sm">{settings.support_email}</span>
+                    <span dir="ltr" className="max-w-[58%] truncate rounded-xl bg-white px-3 py-2 text-sm font-bold text-amber-900 shadow-sm">{email}</span>
                   </a>
                 )}
 
@@ -201,11 +175,11 @@ export default function Support() {
                   </div>
                   <div>
                     <p className="text-sm font-bold text-ink-950">مقر الشركة</p>
-                    <p className="mt-0.5 text-xs text-ink-900/55">{COMPANY_ADDRESS}</p>
+                    <p className="mt-0.5 text-xs text-ink-900/55">{address}</p>
                   </div>
                 </div>
 
-                {!settings?.support_phone && !settings?.support_whatsapp && !settings?.support_email && (
+                {!phone && !whatsapp && !email && (
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
                     بيانات التواصل مع الدعم غير متاحة حاليًا. يمكنك مراجعة إدارة المنصة لتحديث وسائل التواصل.
                   </div>
