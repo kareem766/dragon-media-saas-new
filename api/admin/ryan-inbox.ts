@@ -86,6 +86,45 @@ async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,b
  if(admins?.length)await supabase.from('notifications').insert(admins.map((u:any)=>({organization_id:organizationId,user_id:u.id,type:'ryan_action',title,body,message:body,link,entity_type:entityType,entity_id:entityId,is_read:false})))
 }
 
+
+function isRyanUrgentRequest(message:string){
+ const x=text(message,1200).replace(/\s+/g,' ').trim();
+ return /(?:مستعجل|مستعجلة|عاجل|عاجلة|ضروري|ضرورية|بسرعة|بأسرع وقت|في أسرع وقت|حالاً|حالا|دلوقتي|النهارده|اليوم|اتصلوا بيا|يتصلوا بيا|حد يكلمني|حد يتواصل معايا|الفريق يتواصل معايا|الفريق يكلمني|عايز الفريق يكلمني|عاوز الفريق يكلمني|محتاج الفريق يكلمني|محتاج حد يكلمني|عايز حد يكلمني|عاوز حد يكلمني|ضروري حد يكلمني)/iu.test(x);
+}
+
+async function recordRyanCustomerMessage(supabase:any,organizationId:string,customer:any,conversation:any,messageId:string,message:string){
+ const content=text(message,4000);
+ if(!customer?.id||!content)return {recorded:false,urgent:false};
+ const {data:existing}=await supabase.from('crm_activities').select('id,metadata').eq('organization_id',organizationId).eq('entity_type','customer').eq('entity_id',customer.id).eq('activity_type','ryan_message').contains('metadata',{ryan_message_id:messageId}).limit(1).maybeSingle();
+ if(existing?.id)return {recorded:false,urgent:Boolean(existing.metadata?.urgent)};
+ const urgent=isRyanUrgentRequest(content);
+ const channel=text(conversation.channel,40)||'ريان';
+ const timestamp=new Date().toISOString();
+ const description='رسالة عميل عبر Ryan ('+channel+'): '+content;
+ const {error:activityError}=await supabase.from('crm_activities').insert({
+  organization_id:organizationId,entity_type:'customer',entity_id:customer.id,activity_type:'ryan_message',
+  title:urgent?'رسالة عميل — استعجال':'رسالة عميل عبر Ryan',description,metadata:{ryan_message_id:messageId,channel,urgent},created_at:timestamp
+ });
+ if(activityError)throw new Error(activityError.message);
+ const {data:latest}=await supabase.from('customers').select('notes').eq('id',customer.id).eq('organization_id',organizationId).maybeSingle();
+ const previousNotes=text(latest?.notes,10000);
+ const note='['+timestamp+'] ['+channel+'] '+(urgent?'[استعجال] ':'')+content;
+ const notes=previousNotes?(previousNotes+'\\n'+note).slice(-12000):note;
+ const {error:noteError}=await supabase.from('customers').update({notes,updated_at:timestamp}).eq('id',customer.id).eq('organization_id',organizationId);
+ if(noteError)throw new Error(noteError.message);
+ await notifyOrgAdmins(
+  supabase,organizationId,
+  urgent?'استعجال من عميل عبر Ryan':'Ryan سجّل ملاحظة جديدة',
+  urgent
+   ? 'العميل '+(text(customer.name,120)||'العميل')+' طلب أن يتواصل معه الفريق بشكل عاجل. الرسالة: '+content
+   : 'تمت إضافة ملاحظة جديدة من محادثة '+(channel)+' للعميل '+(text(customer.name,120)||'العميل')+'.',
+  '/customers?customer='+customer.id,
+  urgent?'ryan_urgent':'ryan_note',
+  customer.id
+ );
+ return {recorded:true,urgent};
+}
+
 async function executeAction(supabase:any,organizationId:string,customer:any,conversation:any,action:string,data:any,services:any[],messageId:string,memory:any={}){
  const d=obj(data);if(action==='continue')return {success:true}
  if(action==='handoff_human'){
@@ -185,6 +224,13 @@ const trustedCustomerName=(storedCustomerName&&!invalidCustomerName(storedCustom
  const safeMemory=rememberCustomer?{name:isWhatsApp?rememberedExplicitName:(looksLikeName(String(memory.name||''))?text(memory.name,120):''),phone:validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):'' ,company:text(memory.company,160),email:text(memory.email,160)}:{}
  let multimodal:any={parts:[],currentText:'',transcript:'',attachmentSummary:[]};try{multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),obj(incoming.metadata),apiKey,model)}catch(e){console.error('Ryan multimodal unavailable',e)}
  const current=text(incoming.content,4000)+(multimodal.currentText||'');const currentParts=multimodal.parts||[]
+ let messageRecord:any={recorded:false,urgent:false};
+ try{
+  messageRecord=await recordRyanCustomerMessage(supabase,organizationId,customer,conversation,messageId,current);
+ }catch(e:any){
+  console.error('Ryan customer note/notification failed',text(e?.message,500));
+ }
+
  const greetingOnly=/^(?:السلام عليكم(?: ورحمة الله وبركاته)?|سلام عليكم|اهلاً|أهلاً|أهلا|اهلا|هاي|hello|hi|مساء الخير|صباح الخير|مساء النور|صباح النور)[.!؟!،,\s]*$/iu.test(current.trim());
  const explicitOldContextReference=/(?:كنت\s+(?:كلمت|بتكلم|بتواصل|طلبت|سألت)|كلمتكم\s+قبل|المرة\s+اللي\s+فاتت|الطلب\s+القديم|الخدمة\s+القديمة|نكمل\s+(?:الطلب|الموضوع)|بخصوص\s+(?:الطلب|الخدمة|الحملة)\s+اللي)/iu.test(current.trim());
  const effectiveHistory=greetingOnly?[]:history
@@ -221,7 +267,12 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   plan.reply='تمام يا فندم، ممكن أعرف رقم حضرتك للتواصل؟';plan.action='continue';plan.action_data={};
  }
  if(greetingOnly&&!aiUnavailable){plan.action='continue';plan.action_data={};}
- const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue'; plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; const actionData=obj(plan.action_data);if(!text(actionData.service,160)&&text(plan.service,160))actionData.service=text(plan.service,160);if(!text(actionData.phone,80)&&validPhone(String(customer.phone||'')))actionData.phone=cleanPhone(String(customer.phone));plan.action_data=actionData;let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),actionData,services||[],messageId,memory)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
+ const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue';
+ if(messageRecord.urgent&&text(plan.action,60)==='continue'&&!aiUnavailable){
+  plan.action='handoff_human';
+  plan.action_data={...obj(plan.action_data),reason:'العميل طلب استعجال وتواصل سريع من الفريق.'};
+ }
+ plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; const actionData=obj(plan.action_data);if(!text(actionData.service,160)&&text(plan.service,160))actionData.service=text(plan.service,160);if(!text(actionData.phone,80)&&validPhone(String(customer.phone||'')))actionData.phone=cleanPhone(String(customer.phone));plan.action_data=actionData;let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),actionData,services||[],messageId,memory)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
   actionResult={success:false,message:'Action execution failed'}
  }}
  let reply=text(plan.reply,5000);
