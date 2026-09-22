@@ -84,7 +84,7 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
   if(!name||!validPhone(phone))return {success:false,message:'Lead needs a valid name and phone'}
   const {data:existing}=await supabase.from('leads').select('id').eq('organization_id',organizationId).eq('phone',phone).is('deleted_at',null).limit(1)
   if(existing?.length)return {success:true,data:{lead_id:existing[0].id,existing:true}}
-  const service=text(d.service,160)||text(memory.service,160),notes=text(d.notes,1000)||('تم تأهيل العميل بواسطة Ryan. الخدمة: '+(service||'غير محددة'))
+  const service=text(d.service,160),notes=text(d.notes,1000)||('تم تأهيل العميل بواسطة Ryan. الخدمة: '+(service||'غير محددة'))
   const {data:lead,error}=await supabase.from('leads').insert({organization_id:organizationId,name,phone,source:text(conversation.channel,40)||'ريان',status:'جديد',notes,lead_score:Math.max(0,Math.min(100,Number(d.lead_score)||50)),customer_id:customer.id}).select('id').single()
   if(error)throw new Error(error.message)
   return {success:true,data:{lead_id:lead.id}}
