@@ -511,6 +511,20 @@ export default function AdminPayments() {
 
   const activeMethods = methods.filter((method) => method.enabled)
 
+  const approvedByMethod = Object.entries(
+    requests
+      .filter((request) => request.status === 'approved')
+      .reduce<Record<string, { count: number; amount: number }>>((totals, request) => {
+        const key = request.method || 'غير محدد'
+        const current = totals[key] ?? { count: 0, amount: 0 }
+        totals[key] = {
+          count: current.count + 1,
+          amount: current.amount + Number(request.amount || 0),
+        }
+        return totals
+      }, {})
+  ).sort(([, a], [, b]) => b.amount - a.amount)
+
   if (loading && methodsLoading) {
     return (
       <div className="space-y-6">
@@ -570,6 +584,35 @@ export default function AdminPayments() {
           </div>
         </Card>
       </section>
+
+      {approvedByMethod.length > 0 && (
+        <section className="space-y-4">
+          <SectionHeader
+            title="ملخص المدفوعات حسب الطريقة"
+            description="إجمالي الطلبات التي تمت الموافقة عليها، مجمعة حسب طريقة الدفع."
+          />
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {approvedByMethod.map(([methodKey, summary]) => {
+              const methodName =
+                methods.find((method) => method.method_key === methodKey)?.name ??
+                methodKey
+
+              return (
+                <Card key={methodKey} className="border-sand-200 bg-white p-4">
+                  <div className="text-sm font-bold text-ink-950">{methodName}</div>
+                  <div className="mt-2 text-xl font-bold text-ink-950">
+                    {formatCurrency(summary.amount)}
+                  </div>
+                  <div className="mt-1 text-xs text-ink-900/45">
+                    {summary.count.toLocaleString('ar-EG')} طلب معتمد
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Payment Methods */}
       <section className="space-y-4">
