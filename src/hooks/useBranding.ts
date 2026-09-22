@@ -15,6 +15,7 @@ export interface BrandingSettings {
   contact_email: string | null;
   contact_phone: string | null;
   whatsapp_number: string | null;
+  support_address: string | null;
   website_url: string | null;
   social_links: Record<string, string>;
   is_default: boolean;
