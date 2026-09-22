@@ -24,9 +24,9 @@ export default function Landing() {
             <span className="font-black text-lg hidden sm:block">{name}</span>
           </Link>
           <nav className="dm-landing-nav hidden md:flex items-center gap-2 text-sm text-ink-900/65">
-            <a href="#features" className="rounded-xl px-4 py-2.5 hover:text-blue-800">المميزات</a>
-            <a href="#how-it-works" className="rounded-xl px-4 py-2.5 hover:text-blue-800">طريقة العمل</a>
-            <a href="#ryan" className="rounded-xl px-4 py-2.5 hover:text-blue-800">Ryan AI</a>
+            <a to="/home#features" className="rounded-xl px-4 py-2.5 hover:text-blue-800">المميزات</a>
+            <a to="/home#how-it-works" className="rounded-xl px-4 py-2.5 hover:text-blue-800">طريقة العمل</a>
+            <a to="/home#ryan" className="rounded-xl px-4 py-2.5 hover:text-blue-800">Ryan AI</a>
           </nav>
           <div className="flex items-center gap-2">
             <Link to="/login" className="hidden sm:inline-flex rounded-xl px-4 py-2.5 text-sm font-bold text-blue-800 hover:bg-blue-50">تسجيل الدخول</Link>
