@@ -534,6 +534,26 @@ export default function Topbar({
     }
   }
 
+  const resolveNotificationLink = (
+    notification: NotificationItem
+  ) => {
+    const link = notification.link?.trim() || ''
+
+    // Support legacy Ryan notifications that were saved before
+    // customer notifications were moved to the real CRM detail route.
+    const legacyCustomerMatch = link.match(
+      /^\/customers\?customer=([^&]+)$/
+    )
+
+    if (legacyCustomerMatch?.[1]) {
+      return `/crm/customer/${encodeURIComponent(
+        legacyCustomerMatch[1]
+      )}`
+    }
+
+    return link
+  }
+
   const handleNotificationClick = async (
     notification: NotificationItem
   ) => {
@@ -541,8 +561,10 @@ export default function Topbar({
 
     setNotificationsOpen(false)
 
-    if (notification.link) {
-      navigate(notification.link)
+    const target = resolveNotificationLink(notification)
+
+    if (target) {
+      navigate(target)
     }
   }
 
