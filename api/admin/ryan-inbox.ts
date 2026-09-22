@@ -94,7 +94,7 @@ function isRyanUrgentRequest(message:string){
  return /(?:مستعجل|مستعجلة|عاجل|عاجلة|ضروري|ضرورية|بسرعة|بأسرع وقت|في أسرع وقت|حالاً|حالا|النهارده|اليوم|اتصلوا بيا|يتصلوا بيا|حد يكلمني|حد يتواصل معايا|الفريق يتواصل معايا|الفريق يكلمني|عايز الفريق يكلمني|عاوز الفريق يكلمني|محتاج الفريق يكلمني|محتاج حد يكلمني|عايز حد يكلمني|عاوز حد يكلمني|ضروري حد يكلمني)/iu.test(x);
 }
 
-async function formatRyanNote(timestamp:string,channel:string,content:string,urgent:boolean){
+function formatRyanNote(timestamp:string,channel:string,content:string,urgent:boolean){
  const channelNames:Record<string,string>={whatsapp:'واتساب',messenger:'ماسنجر',instagram:'إنستجرام',facebook:'فيسبوك',web:'الموقع'};
  const label=channelNames[channel.toLowerCase()]||channel||'Ryan';
  const date=new Intl.DateTimeFormat('ar-EG',{dateStyle:'medium',timeStyle:'short',timeZone:'Africa/Cairo'}).format(new Date(timestamp));
