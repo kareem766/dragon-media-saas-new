@@ -47,9 +47,10 @@ function normalizeCustomer(customer: Conversation['customer'] | Conversation['cu
   return Array.isArray(customer) ? customer[0] ?? null : customer
 }
 function normalizeConversation(row: any): Conversation {
+  const normalizedChannel: Channel = row.channel === 'facebook' ? 'messenger' : row.channel
   return {
     id: row.id, organization_id: row.organization_id, customer_id: row.customer_id ?? null,
-    channel: row.channel, handled_by: row.handled_by === 'human' ? 'human' : 'ai',
+    channel: normalizedChannel, handled_by: row.handled_by === 'human' ? 'human' : 'ai',
     assigned_user_id: row.assigned_user_id ?? null, last_message_at: row.last_message_at ?? null,
     created_at: row.created_at, status: row.status ?? 'open', subject: row.subject ?? null,
     unread_count: Number(row.unread_count ?? 0), metadata: row.metadata ?? {},
@@ -66,7 +67,7 @@ function formatDateTime(value: string | null | undefined) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
-function getName(c: Conversation) { return c.customer?.name || c.customer?.phone || 'عميل بدون اسم' }
+function getName(c: Conversation) { return c.customer?.name || c.customer?.phone || (c.channel === 'messenger' ? 'عميل ماسنجر' : 'عميل بدون اسم') }
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (!parts.length) return '؟'
