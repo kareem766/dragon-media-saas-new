@@ -228,6 +228,7 @@ export default function AdminBranding() {
           contact_email: form.contact_email,
           contact_phone: form.contact_phone,
           whatsapp_number: form.whatsapp_number,
+          support_address: form.support_address,
           website_url: form.website_url,
           social_links: form.social_links,
           is_default: !form.logo_url,
@@ -594,6 +595,17 @@ export default function AdminBranding() {
                 )
               }
               placeholder="+20 10 0000 0000"
+            />
+
+            <Field
+              label="العنوان"
+              value={form.support_address || ''}
+              onChange={(value) =>
+                setForm((current) =>
+                  current ? { ...current, support_address: value } : current
+                )
+              }
+              placeholder="الإسكندرية - مصر"
             />
 
             <Field
