@@ -668,7 +668,7 @@ export default function Services() {
       )}
 
       {error && !showForm && (
-        <Card className="border-red-100 bg-red-50/70 p-4 text-sm text-red-700" role="alert">
+        <Card className="border-red-100 bg-red-50/70 p-4 text-sm text-red-700">
           {error}
         </Card>
       )}
