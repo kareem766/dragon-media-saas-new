@@ -178,10 +178,10 @@ export default function Landing() {
               </div>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-7 text-sm text-ink-900/65">
+            <nav className="dm-landing-nav hidden md:flex items-center gap-2 text-sm text-ink-900/65">
               <a
                 href="#features"
-                className="hover:text-ink-950 transition-colors"
+                className="rounded-xl px-4 py-2.5 hover:bg-white hover:text-ink-950 transition-colors"
               >
                 المميزات
               </a>
