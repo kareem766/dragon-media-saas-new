@@ -118,7 +118,7 @@ async function recordRyanCustomerMessage(supabase:any,organizationId:string,cust
   urgent
    ? 'العميل '+(text(customer.name,120)||'العميل')+' طلب أن يتواصل معه الفريق بشكل عاجل. الرسالة: '+content
    : 'تمت إضافة ملاحظة جديدة من محادثة '+(channel)+' للعميل '+(text(customer.name,120)||'العميل')+'.',
-  '/customers?customer='+customer.id,
+  '/crm/customer/'+customer.id,
   urgent?'ryan_urgent':'ryan_note',
   customer.id
  );
