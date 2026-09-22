@@ -21,7 +21,7 @@ export default function Ryan() {
           agent?.id ? client.from('ai_agent_memory').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id) : Promise.resolve({ count: 0 }),
           agent?.id ? client.from('ai_agent_runs').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id) : Promise.resolve({ count: 0 }),
         ])
-        if (mounted) setState({ loading: false, active: Boolean(agent?.active), memory: memory || 0, runs: runs || 0, model: String((agent as any)?.settings?.model || 'gemini-2.5-flash'), error: '' })
+        if (mounted) setState({ loading: false, active: Boolean(agent?.active), memory: memory || 0, runs: runs || 0, model: String((agent as any)?.settings?.model || 'gemini-3.1-flash-lite'), error: '' })
       } catch (error: any) {
         if (mounted) setState((s) => ({ ...s, loading: false, error: error?.message || 'تعذر تحميل حالة Ryan' }))
       }
