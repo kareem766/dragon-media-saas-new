@@ -61,6 +61,26 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
  throw new Error(errors.length?errors.join(' | '):('Gemini failure: '+last))
 }
 
+async function ensureRyanLead(supabase:any,organizationId:string,customer:any,conversation:any,service:string,budget:string){
+ const name=text(customer.name,120)||'عميل',phone=cleanPhone(text(customer.phone,80)),source=text(conversation.channel,40)||'ريان';
+ if(!customer?.id)return null;
+ const {data:existing,error:lookupError}=await supabase.from('leads').select('id,name,phone,notes').eq('organization_id',organizationId).eq('customer_id',customer.id).is('deleted_at',null).order('created_at',{ascending:false}).limit(1).maybeSingle();
+ if(lookupError)throw new Error(lookupError.message);
+ const budgetText=budget?' الميزانية الحالية: '+budget+'.':'';
+ const serviceText=service?' الخدمة: '+service+'.':'';
+ const notes=('تم تسجيل العميل بواسطة Ryan من '+source+'.'+serviceText+budgetText).trim();
+ if(existing?.id){
+  const updates:any={name,phone:phone||null};
+  if(service||budget)updates.notes=notes;
+  await supabase.from('leads').update(updates).eq('id',existing.id).eq('organization_id',organizationId);
+  return existing.id;
+ }
+ const {data:lead,error}=await supabase.from('leads').insert({organization_id:organizationId,name,phone:phone||null,source,status:'جديد',notes,lead_score:50,customer_id:customer.id}).select('id').single();
+ if(error)throw new Error(error.message);
+ await notifyOrgAdmins(supabase,organizationId,'ريان سجّل عميل محتمل','تم تسجيل '+name+' كعميل محتمل جديد من '+source+'.','/leads?lead='+lead.id,'lead',lead.id);
+ return lead.id;
+}
+
 async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,body:string,link:string,entityType:string,entityId:string){
  const {data:admins}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).or('role.eq.admin,is_platform_admin.eq.true')
  if(admins?.length)await supabase.from('notifications').insert(admins.map((u:any)=>({organization_id:organizationId,user_id:u.id,type:'ryan_action',title,body,message:body,link,entity_type:entityType,entity_id:entityId,is_read:false})))
@@ -206,7 +226,9 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
  }}
  let reply=text(plan.reply,5000);
  if(actionResult.success&&text(plan.action,60)!=='continue')reply=text(plan.reply,5000)||'تم تنفيذ طلب حضرتك بنجاح.'
- const previousService=text(memory.service,160),previousBudget=text(memory.budget,120),previousIntent=text(memory.intent,100);const durableMemory={name:(isWhatsApp?(rememberedExplicitName||explicitName):text(customer.name,120))||null,name_source:(isWhatsApp ? ((rememberedExplicitName||explicitName) ? 'customer_explicit' : null) : (explicitName ? 'customer_explicit' : 'crm')),phone:validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):null,company:text(memory.company,160)||null,email:text(memory.email,160)||null,service:text(plan.service,160)||previousService||null,budget:text(plan.budget,120)||budgetFromText(current)||previousBudget||null,intent:text(plan.intent,100)||previousIntent||null,stage:(text(plan.service,160)||previousService)?'qualification':'discovery',last_question:text(plan.reply,5000).split(/[؟?]/).slice(-2).join('؟').trim()||null,last_message:current,updated_at:new Date().toISOString()};if(rememberCustomer)await supabase.from('ai_agent_memory').upsert({agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:`${durableMemory.name||'العميل'} — ${durableMemory.service||'الخدمة غير محددة'}${durableMemory.budget?' — '+durableMemory.budget:''}`},{onConflict:'agent_id,customer_id'})
+ const previousService=text(memory.service,160),previousBudget=text(memory.budget,120),previousIntent=text(memory.intent,100);const currentBudget=budgetFromText(current);if(currentBudget&&currentBudget!==previousBudget){ const budgetReply='تمام يا أستاذ '+(text(customer.name,120)||'حضرتك')+'، سجلت الميزانية الجديدة '+currentBudget+' وهبني عليها المتابعة.'; if(!reply||!/ميزاني(?:ة|ه)|ميزانية/iu.test(reply))reply=budgetReply; }
+const leadService=text(plan.service,160)||previousService;const leadBudget=currentBudget||text(plan.budget,120)||previousBudget;try{await ensureRyanLead(supabase,organizationId,customer,conversation,leadService,leadBudget)}catch(e:any){console.error('Ryan lead sync failed',text(e?.message,500))}
+const durableMemory={name:(isWhatsApp?(rememberedExplicitName||explicitName):text(customer.name,120))||null,name_source:(isWhatsApp ? ((rememberedExplicitName||explicitName) ? 'customer_explicit' : null) : (explicitName ? 'customer_explicit' : 'crm')),phone:validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):null,company:text(memory.company,160)||null,email:text(memory.email,160)||null,service:text(plan.service,160)||previousService||null,budget:text(plan.budget,120)||budgetFromText(current)||previousBudget||null,intent:text(plan.intent,100)||previousIntent||null,stage:(text(plan.service,160)||previousService)?'qualification':'discovery',last_question:text(plan.reply,5000).split(/[؟?]/).slice(-2).join('؟').trim()||null,last_message:current,updated_at:new Date().toISOString()};if(rememberCustomer)await supabase.from('ai_agent_memory').upsert({agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:`${durableMemory.name||'العميل'} — ${durableMemory.service||'الخدمة غير محددة'}${durableMemory.budget?' — '+durableMemory.budget:''}`},{onConflict:'agent_id,customer_id'})
  const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success,safety_fallback:aiUnavailable,billing_run_id:runId||null}}).select('id').single();if(saveError||!saved){if(runId)await supabase.from('ai_agent_runs').update({status:'failed',metadata:{source:'ryan',error:saveError?.message||'Failed to save Ryan response'}}).eq('id',runId);throw new Error(saveError?.message||'Failed to save Ryan response')}if(runId&&!aiUnavailable)await supabase.from('ai_agent_runs').update({status:'success',model:usedModel,metadata:{source:'ryan',action:text(plan.action,60)||'continue',action_success:actionResult.success}}).eq('id',runId);await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
  return res.status(200).json({ok:true,reply,message_id:saved.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success,safety_fallback:aiUnavailable})
 }
