@@ -42,7 +42,7 @@ export default function Landing() {
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-4 py-2 text-xs font-bold text-blue-800"><span className="w-2 h-2 rounded-full bg-cyan-400"/> منصة واحدة لإدارة رحلة العميل</div>
             <h1 className="mt-7 text-4xl sm:text-5xl lg:text-6xl font-black leading-tight">إدارة العملاء والمبيعات<br/><span className="text-blue-700">والتسويق من مكان واحد</span></h1>
             <p className="max-w-2xl mx-auto mt-6 text-lg leading-8 text-ink-900/60">إدارة العملاء والمبيعات والتسويق وخدمة العملاء من مكان واحد.</p>
-            <div className="flex flex-col sm:flex-row justify-center gap-3 mt-8"><Link to="/login?mode=signup" className="rounded-xl bg-blue-700 px-7 py-3.5 text-white font-black shadow-xl hover:bg-blue-800">ابدأ تجربة المنصة</Link><a href="#features" className="rounded-xl border border-blue-100 bg-white px-7 py-3.5 text-blue-800 font-bold">استكشف المميزات</a></div>
+            <div className="flex flex-col sm:flex-row justify-center gap-3 mt-8"><Link to="/login?mode=signup" className="rounded-xl bg-blue-700 px-7 py-3.5 text-white font-black shadow-xl hover:bg-blue-800">ابدأ تجربة المنصة</Link><button type="button" onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth", block: "start" })} className="rounded-xl border border-blue-100 bg-white px-7 py-3.5 text-blue-800 font-bold">استكشف المميزات</button></div>
             <div className="dm-gold-line mx-auto mt-10"/>
           </div>
         </section>
