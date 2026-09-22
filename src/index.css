@@ -157,3 +157,22 @@ button.bg-ink-950:hover, a.bg-ink-950:hover, button.bg-gold-500:hover, a.bg-gold
 .dm-sidebar .bg-white\\/\\[0.085\\] { background: rgba(255,255,255,.085) !important; }
 .dm-sidebar .hover\\:bg-white\\/\\[0.085\\]:hover { background: rgba(255,255,255,.10) !important; }
 .dm-sidebar .text-sand-100\\/45 { color: rgba(238,246,255,.48) !important; }
+
+
+/* Premium landing-page ornaments and clearer photographic backgrounds. */
+.dm-gold-line { height: 1px; width: 120px; background: linear-gradient(90deg, transparent, rgba(184,134,11,.78), transparent); position: relative; }
+.dm-gold-line::after { content: ''; position: absolute; width: 5px; height: 5px; border-radius: 999px; background: #b8860b; top: -2px; left: 50%; transform: translateX(-50%); box-shadow: 0 0 12px rgba(184,134,11,.35); }
+.dm-gold-ornament { width: 150px; height: 90px; border-top: 1px solid rgba(184,134,11,.28); border-inline-start: 1px solid rgba(184,134,11,.18); border-top-left-radius: 80px; transform: rotate(-8deg); opacity: .7; pointer-events: none; }
+.dm-gold-ornament::after { content: ''; display: block; width: 70px; height: 45px; margin: 18px; border-top: 1px solid rgba(184,134,11,.20); border-inline-start: 1px solid rgba(184,134,11,.14); border-top-left-radius: 60px; }
+.dm-landing-nav a { position: relative; }
+.dm-landing-nav a::after { content: ''; position: absolute; inset-inline: 12px; bottom: -9px; height: 2px; border-radius: 999px; background: #b8860b; transform: scaleX(0); transform-origin: center; transition: transform .2s ease; }
+.dm-landing-nav a:hover::after { transform: scaleX(1); }
+.dm-landing-hero { background: radial-gradient(circle at 70% 15%, rgba(37,99,235,.08), transparent 30%), radial-gradient(circle at 20% 65%, rgba(184,134,11,.07), transparent 28%); }
+
+/* Make the existing page photography visibly present without sacrificing readability. */
+.dm-page-backdrop::before { background: linear-gradient(180deg, rgba(255,255,255,.56) 0%, rgba(255,255,255,.68) 42%, rgba(255,255,255,.82) 100%), radial-gradient(circle at 72% 18%, rgba(0,190,255,.08), transparent 34%); }
+[data-page-theme] .dm-main-stage { background: linear-gradient(180deg, rgba(255,255,255,.70) 0%, rgba(255,255,255,.80) 28%, rgba(255,255,255,.90) 100%); }
+@media (max-width: 768px) {
+  .dm-page-backdrop::before { background: linear-gradient(180deg, rgba(255,255,255,.70), rgba(255,255,255,.82) 55%, rgba(255,255,255,.91)); }
+  [data-page-theme] .dm-main-stage { background: linear-gradient(180deg, rgba(255,255,255,.76), rgba(255,255,255,.92)); }
+}
