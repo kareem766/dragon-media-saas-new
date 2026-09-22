@@ -31,8 +31,8 @@ async function findIntegration(db: any, phoneNumberId: string, wabaId: string) {
   if (error) throw error
   return (rows || []).find((row: any) => { const metadata = row.metadata || {}; return String(metadata.phone_number_id || '') === phoneNumberId || String(metadata.waba_id || '') === wabaId }) || null
 }
-async function findOrCreateConversation(db: any, organizationId: string, customerId: string, channel: 'whatsapp' | 'facebook', metadata: Record<string, unknown>, now: string, incomingText = '') {
-  const { data: existing, error: lookupError } = await db.from('conversations').select('id, unread_count, handled_by, status').eq('organization_id', organizationId).eq('channel', channel).eq('customer_id', customerId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+async function findOrCreateConversation(db: any, organizationId: string, customerId: string, channel: 'whatsapp' | 'messenger', metadata: Record<string, unknown>, now: string, incomingText = '') {
+  const { data: existing, error: lookupError } = channel === 'messenger' ? await db.from('conversations').select('id, unread_count, handled_by, status, channel').eq('organization_id', organizationId).eq('customer_id', customerId).in('channel', ['messenger', 'facebook']).order('updated_at', { ascending: false }).limit(1).maybeSingle() : await db.from('conversations').select('id, unread_count, handled_by, status, channel').eq('organization_id', organizationId).eq('channel', channel).eq('customer_id', customerId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
   if (lookupError) throw lookupError
   let startFresh = false
   if (existing) {
@@ -44,11 +44,11 @@ async function findOrCreateConversation(db: any, organizationId: string, custome
       startFresh = ['handoff_human', 'create_lead'].includes(lastAction)
     }
     if (existing.status === 'closed' || existing.status === 'resolved') startFresh = true
-    if (!startFresh) return { conversation: existing, existed: true }
+    if (!startFresh) { if (channel === 'messenger' && String(existing.channel || '') === 'facebook') { const { data: normalized } = await db.from('conversations').update({ channel: 'messenger', updated_at: now }).eq('id', existing.id).select('id, unread_count, handled_by, status, channel').single(); if (normalized) return { conversation: normalized, existed: true } } return { conversation: existing, existed: true } }
   }
   const { data: created, error: createError } = await db.from('conversations').insert({ organization_id: organizationId, customer_id: customerId, channel, handled_by: 'ai', status: 'open', unread_count: 1, last_message_at: now, updated_at: now, metadata }).select('id, unread_count, handled_by, status').single()
   if (createError) {
-    const { data: raced } = await db.from('conversations').select('id, unread_count, handled_by, status').eq('organization_id', organizationId).eq('channel', channel).eq('customer_id', customerId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+    const { data: raced } = channel === 'messenger' ? await db.from('conversations').select('id, unread_count, handled_by, status, channel').eq('organization_id', organizationId).eq('customer_id', customerId).in('channel', ['messenger', 'facebook']).order('updated_at', { ascending: false }).limit(1).maybeSingle() : await db.from('conversations').select('id, unread_count, handled_by, status, channel').eq('organization_id', organizationId).eq('channel', channel).eq('customer_id', customerId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
     if (raced) return { conversation: raced, existed: true }
     throw createError
   }
@@ -211,10 +211,10 @@ async function handleFacebookWebhook(db: any, payload: any) {
       const attachmentPayload = attachments.slice(0, 4).map((a: any) => ({ type: String(a?.type || ''), url: String(a?.payload?.url || ''), mime_type: String(a?.payload?.mime_type || (String(a?.type || '').toLowerCase() === 'audio' ? 'audio/mpeg' : 'application/octet-stream')), source: 'facebook' })).filter((a: any) => a.url)
       if (!content && !attachmentPayload.length) continue
       const { data: customerExisting } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('phone', senderId).maybeSingle()
-      const customer = customerExisting || (await db.from('customers').insert({ organization_id: organizationId, name: `Facebook ${senderId}`, phone: senderId, source: 'facebook' }).select('id,name,phone').single()).data
+      const customer = customerExisting || (await db.from('customers').insert({ organization_id: organizationId, name: null, phone: senderId, source: 'messenger' }).select('id,name,phone').single()).data
       if (!customer) continue
       const now = new Date().toISOString()
-      const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'facebook', { facebook_page_id: pageId, facebook_psid: senderId }, now, content)
+      const { conversation, existed } = await findOrCreateConversation(db, organizationId, customer.id, 'messenger', { provider: 'facebook', facebook_page_id: pageId, facebook_psid: senderId }, now, content)
       const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'facebook_webhook', facebook_page_id: pageId, facebook_psid: senderId, facebook_message_id: externalId, attachments: attachmentPayload }, created_at: now })
       if (insertError) throw insertError
       await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: Number(conversation.unread_count || 0) + (existed ? 1 : 0), status: 'open' }).eq('id', conversation.id)
