@@ -243,16 +243,8 @@ export default function Landing() {
                 </span>
               </h1>
 
-              <div className="max-w-3xl mx-auto mt-6 rounded-2xl border border-sand-200 bg-white/70 px-5 py-4 text-sm sm:text-base leading-7 text-ink-900/65">
-                <strong className="text-ink-950">Dragon Media</strong> هي منصة SaaS عربية لإدارة الأعمال والمبيعات وخدمة العملاء،
-                موجهة للشركات والأنشطة التجارية في مصر والأسواق العربية. تجمع CRM، إدارة العملاء والصفقات،
-                صندوق المحادثات الموحد، الحملات، الأتمتة، والتعامل مع العملاء بالذكاء الاصطناعي من خلال <strong className="text-ink-950">RYAN AI</strong>.
-              </div>
-
-              <p className="max-w-2xl mx-auto mt-7 text-base sm:text-lg lg:text-xl leading-8 text-ink-900/60">
-                {description} اجمع عملائك، نظّم مبيعاتك،
-                تابع حملاتك، وأتمت عملياتك من منصة واحدة
-                مصممة لنمو نشاطك.
+              <p className="max-w-2xl mx-auto mt-6 text-base sm:text-lg lg:text-xl leading-8 text-ink-900/60">
+                {description} كل ما تحتاجه لإدارة العملاء والمبيعات والتسويق وخدمة العملاء في مساحة عمل واحدة.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-9">
@@ -273,7 +265,8 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="mt-16 lg:mt-20 max-w-6xl mx-auto">
+            <div className="mt-14 lg:mt-20 max-w-6xl mx-auto">
+              <div className="dm-gold-line mx-auto mb-5" aria-hidden="true" />
               <div className="relative rounded-3xl border border-sand-200 bg-white p-2 sm:p-3 shadow-2xl shadow-ink-950/10">
                 <div className="rounded-2xl bg-ink-950 overflow-hidden">
                   <div className="h-10 border-b border-white/10 flex items-center gap-2 px-4">
@@ -393,17 +386,20 @@ export default function Landing() {
                 </div>
               </div>
 
-              <p className="text-center text-xs text-ink-900/35 mt-4">
-                واجهة مصممة لتكون واضحة وسريعة وسهلة الاستخدام
-              </p>
+              <div className="flex items-center justify-center gap-3 mt-5 text-xs text-ink-900/40">
+                <span className="h-px w-12 bg-gold-500/40" />
+                <span>واجهة واحدة لإدارة رحلة العميل بالكامل</span>
+                <span className="h-px w-12 bg-gold-500/40" />
+              </div>
             </div>
           </div>
         </section>
 
         <section
           id="features"
-          className="py-20 lg:py-28 bg-white border-y border-sand-200"
+          className="relative py-20 lg:py-28 bg-white border-y border-sand-200 overflow-hidden"
         >
+          <div className="absolute top-16 inset-inline-start-10 dm-gold-ornament" aria-hidden="true" />
           <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
             <div className="max-w-2xl mx-auto text-center">
               <span className="text-sm font-bold text-gold-600">
@@ -424,12 +420,13 @@ export default function Landing() {
               {features.map((feature) => (
                 <div
                   key={feature.title}
-                  className="group rounded-2xl border border-sand-200 bg-sand-50 p-6 hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-ink-950/5 transition-all"
+                  className="group relative rounded-2xl border border-blue-100 bg-white p-6 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl hover:shadow-blue-950/8 transition-all"
                 >
                   <div className="w-12 h-12 rounded-xl bg-ink-950 text-gold-400 flex items-center justify-center group-hover:bg-gold-500 group-hover:text-ink-950 transition-colors">
                     {feature.icon}
                   </div>
 
+                  <div className="absolute top-5 inset-inline-end-5 h-px w-10 bg-gradient-to-l from-gold-500/70 to-transparent" />
                   <h3 className="font-black text-lg mt-6">
                     {feature.title}
                   </h3>
@@ -445,25 +442,25 @@ export default function Landing() {
 
         <section
           id="ryan"
-          className="py-20 lg:py-28 bg-ink-950 text-white overflow-hidden"
+          className="py-20 lg:py-28 bg-white text-ink-950 overflow-hidden border-y border-blue-100"
         >
           <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-white/60">
-                  <span className="w-2 h-2 rounded-full bg-gold-400" />
+                <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs text-blue-800">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
                   RYAN AI
                 </div>
 
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight mt-6">
                   مساعد ذكي يساعدك
                   <br />
-                  <span className="text-gold-400">
+                  <span className="text-blue-700">
                     على تحويل المحادثات إلى مبيعات
                   </span>
                 </h2>
 
-                <p className="text-white/55 leading-8 mt-6 max-w-xl">
+                <p className="text-ink-900/60 leading-8 mt-6 max-w-xl">
                   RYAN مصمم للتعامل مع العملاء بشكل طبيعي، جمع البيانات
                   المهمة، اكتشاف فرص البيع، ومساعدة فريقك في متابعة العملاء.
                 </p>
@@ -477,13 +474,13 @@ export default function Landing() {
                   ].map((item) => (
                     <div
                       key={item}
-                      className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] p-4"
+                      className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4"
                     >
-                      <div className="w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                      <div className="w-6 h-6 rounded-full bg-blue-700 text-white flex items-center justify-center shrink-0">
                         ✓
                       </div>
 
-                      <span className="text-sm text-white/75">
+                      <span className="text-sm font-semibold text-ink-950">
                         {item}
                       </span>
                     </div>
@@ -492,11 +489,12 @@ export default function Landing() {
               </div>
 
               <div className="relative">
-                <div className="absolute -inset-10 bg-gold-500/10 blur-3xl rounded-full" />
+                <div className="absolute -inset-10 bg-blue-500/10 blur-3xl rounded-full" />
 
-                <div className="relative rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-2xl">
+                <div className="relative rounded-3xl border border-blue-900/30 bg-[#071f45] p-5 shadow-2xl shadow-blue-950/20 overflow-hidden">
+                  <div className="absolute top-0 inset-inline-end-0 h-px w-40 bg-gradient-to-l from-cyan-300/80 to-transparent" aria-hidden="true" />
                   <div className="flex items-center gap-3 pb-5 border-b border-white/10">
-                    <div className="w-11 h-11 rounded-full bg-gold-500 text-ink-950 flex items-center justify-center font-black">
+                    <div className="w-11 h-11 rounded-full bg-cyan-300 text-[#071f45] flex items-center justify-center font-black">
                       R
                     </div>
 
@@ -505,28 +503,28 @@ export default function Landing() {
                         RYAN AI
                       </div>
 
-                      <div className="text-xs text-emerald-400 mt-1">
+                      <div className="text-xs text-cyan-200 mt-1">
                         متصل الآن
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-4 py-6">
-                    <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/80">
+                    <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/90">
                       أهلًا بحضرتك، أقدر أساعدك تعرف الخدمات المناسبة
                       لنشاطك.
                     </div>
 
-                    <div className="max-w-[75%] mr-auto rounded-2xl rounded-tl-md bg-gold-500 text-ink-950 p-4 text-sm leading-7">
+                    <div className="max-w-[75%] mr-auto rounded-2xl rounded-tl-md bg-cyan-300 text-[#071f45] p-4 text-sm leading-7 font-semibold">
                       عندي شركة وعايز أزود عدد العملاء.
                     </div>
 
-                    <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/80">
+                    <div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/90">
                       تمام، إيه نوع النشاط بتاع حضرتك؟
                     </div>
                   </div>
 
-                  <div className="rounded-xl bg-black/20 border border-white/10 px-4 py-3 text-xs text-white/35">
+                  <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-xs text-white/55">
                     RYAN يجهز الرد...
                   </div>
                 </div>
@@ -537,8 +535,10 @@ export default function Landing() {
 
         <section
           id="how-it-works"
-          className="py-20 lg:py-28 bg-sand-50"
+          className="relative py-20 lg:py-28 bg-sand-50 overflow-hidden"
+          className="relative py-20 lg:py-28 bg-sand-50 overflow-hidden"
         >
+          <div className="absolute top-10 inset-inline-end-10 dm-gold-ornament" aria-hidden="true" />
           <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
             <div className="max-w-2xl">
               <span className="text-sm font-bold text-gold-600">
