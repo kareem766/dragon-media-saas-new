@@ -18,9 +18,17 @@ if (source.includes(malformedMemory)) {
   changed = true
 }
 
+// Reject conversational replies that can look like names, including phrases such as "اه ياريت".
+const oldInvalid = "const invalidCustomerName=(v:string)=>{const x=v.trim().replace(/\\\\s+/g,' ');return nameStop.test(x)||/(?:^عميل$|^العميل$|ان شاء الله|إن شاء الله|شكرا|شكراً|السلام عليكم|وعليكم السلام|اهلا|أهلا|أهلًا|تحت أمرك|العفو|تمام|معلش|ممكن|عايز|عاوز|محتاج|بكام|بكم|كام|الخدمة|السعر|خصم|اشتراك|الباقات|الفريق|المكالمة|المتابعة)/iu.test(x)}"
+const newInvalid = "const invalidCustomerName=(v:string)=>{const x=v.trim().replace(/\\\\s+/g,' ');return nameStop.test(x)||/(?:^عميل$|^العميل$|(?:^|\\\\s)(?:اه|أه|ايوه|أيوه|ياريت|لو سمحت|من فضلك)(?:\\\\s|$)|ان شاء الله|إن شاء الله|شكرا|شكراً|السلام عليكم|وعليكم السلام|اهلا|أهلا|أهلًا|تحت أمرك|العفو|تمام|معلش|ممكن|عايز|عاوز|محتاج|بكام|بكم|كام|الخدمة|السعر|خصم|اشتراك|الباقات|الفريق|المكالمة|المتابعة)/iu.test(x)}"
+if (source.includes(oldInvalid)) {
+  source = source.replace(oldInvalid, newInvalid)
+  changed = true
+}
+
 // Explicit name extraction: direct statements and a bare answer such as "كريم". Keep Ryan conversational-state aware.
 const oldExtract = "const extractName=(v:string)=>{const m=v.match(/(?:أنا\\s+اسمي|انا\\s+اسمي|اسمي|my\\s+name\\s+is)\\s+([^,،.!؟?\\n]+?)(?:\\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\\b|$)/iu);return m&&looksLikeName(m[1])?text(m[1],120):''}"
-const newExtract = "const extractName=(v:string)=>{const normalized=text(v,120).replace(/\\s+/g,' ').trim();const m=normalized.match(/(?:أنا\\s+اسمي|انا\\s+اسمي|اسمي|my\\s+name\\s+is)\\s+([^,،.!؟?\\n]+?)(?:\\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\\b|$)/iu);if(m&&looksLikeName(m[1]))return text(m[1],120);return looksLikeName(normalized)?normalized:''}"
+const newExtract = "const extractName=(v:string)=>{const normalized=text(v,120).replace(/\\s+/g,' ').trim();const m=normalized.match(/(?:أنا\\s+اسمي|انا\\s+اسمي|اسمي|my\\s+name\\s+is)\\s+([^,،.!؟?\\n]+?)(?:\\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\\b|$)/iu);if(m&&looksLikeName(m[1])&&!invalidCustomerName(m[1]))return text(m[1],120);return looksLikeName(normalized)&&!invalidCustomerName(normalized)?normalized:''}"
 if (source.includes(oldExtract)) {
   source = source.replace(oldExtract, newExtract)
   changed = true
@@ -28,9 +36,17 @@ if (source.includes(oldExtract)) {
 
 // If Ryan's previous message asked for the customer's name, a short valid Arabic name by itself is an explicit answer.
 const oldExplicit = "const explicitName=extractName(current);const learnedName=explicitName;const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);"
-const newExplicit = "const lastModelMessage=(history.slice().reverse().find((t:any)=>t.role==='model')?.parts?.[0]?.text||'').toString();const nameQuestionPending=/(?:اسم حضرتك|اسمك|اسمِك|الاسم|أسم حضرتك|أسمك)/iu.test(lastModelMessage);const explicitName=extractName(current)||((nameQuestionPending&&looksLikeName(text(current,120)))?text(current,120):'');const learnedName=explicitName;const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);"
+const newExplicit = "const lastModelMessage=(history.slice().reverse().find((t:any)=>t.role==='model')?.parts?.[0]?.text||'').toString();const nameQuestionPending=/(?:اسم حضرتك|اسمك|اسمِك|الاسم|أسم حضرتك|أسمك)/iu.test(lastModelMessage);const explicitName=extractName(current)||((!hasKnownNameBeforeTurn&&nameQuestionPending&&looksLikeName(text(current,120))&&!invalidCustomerName(text(current,120)))?text(current,120):'');const learnedName=explicitName;const learnedPhone=cleanPhone(text(plan.learned_phone,80))||phoneFromText(current);"
 if (source.includes(oldExplicit)) {
   source = source.replace(oldExplicit, newExplicit)
+  changed = true
+}
+
+// Current builds already contain the conversational-aware explicit-name block; harden it in-place as well.
+const oldExplicitCurrent = "const lastModelMessage=(history.slice().reverse().find((t:any)=>t.role==='model')?.parts?.[0]?.text||'').toString();const nameQuestionPending=/(?:اسم حضرتك|اسمك|اسمِك|الاسم|أسم حضرتك|أسمك)/iu.test(lastModelMessage);const hasKnownNameBeforeTurn=Boolean(trustedCustomerName);const explicitName=extractName(current)||((!hasKnownNameBeforeTurn&&nameQuestionPending&&looksLikeName(text(current,120)))?text(current,120):'');"
+const newExplicitCurrent = "const lastModelMessage=(history.slice().reverse().find((t:any)=>t.role==='model')?.parts?.[0]?.text||'').toString();const nameQuestionPending=/(?:اسم حضرتك|اسمك|اسمِك|الاسم|أسم حضرتك|أسمك)/iu.test(lastModelMessage);const hasKnownNameBeforeTurn=Boolean(trustedCustomerName);const explicitName=extractName(current)||((!hasKnownNameBeforeTurn&&nameQuestionPending&&looksLikeName(text(current,120))&&!invalidCustomerName(text(current,120)))?text(current,120):'');"
+if (source.includes(oldExplicitCurrent)) {
+  source = source.replace(oldExplicitCurrent, newExplicitCurrent)
   changed = true
 }
 
