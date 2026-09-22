@@ -87,6 +87,7 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
   const service=text(d.service,160),notes=text(d.notes,1000)||('تم تأهيل العميل بواسطة Ryan. الخدمة: '+(service||'غير محددة'))
   const {data:lead,error}=await supabase.from('leads').insert({organization_id:organizationId,name,phone,source:text(conversation.channel,40)||'ريان',status:'جديد',notes,lead_score:Math.max(0,Math.min(100,Number(d.lead_score)||50)),customer_id:customer.id}).select('id').single()
   if(error)throw new Error(error.message)
+  await notifyOrgAdmins(supabase,organizationId,'ريان سجّل عميل محتمل',`تم تسجيل ${name} كعميل محتمل جديد من ${String(conversation.channel||'ريان') === 'messenger' ? 'ماسنجر' : String(conversation.channel||'ريان')}.`,`/leads?lead=${lead.id}`,'lead',lead.id)
   return {success:true,data:{lead_id:lead.id}}
  }
  if(action==='create_task'){
