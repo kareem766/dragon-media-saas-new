@@ -73,6 +73,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (authenticatedUserId) {
       const { data: membership } = await db.from('users').select('id,organization_id,active').eq('id', authenticatedUserId).eq('organization_id', organizationId).maybeSingle()
       if (!membership || membership.active === false) return json(res, 403, { error: 'You are not a member of this organization.' })
+
+      const { data: permission, error: permissionError } = await db
+        .from('role_permissions')
+        .select('can_edit')
+        .eq('role', membership.role || '')
+        .eq('resource', 'inbox')
+        .maybeSingle()
+      if (permissionError) throw permissionError
+      if (!permission?.can_edit) return json(res, 403, { error: 'ليس لديك صلاحية إرسال رسائل من صندوق المحادثات.' })
     }
 
     const customer = Array.isArray((conversation as any).customers) ? (conversation as any).customers[0] : (conversation as any).customers
