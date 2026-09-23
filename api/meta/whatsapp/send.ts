@@ -140,6 +140,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('active', true)
         .maybeSingle()
       if (membershipError || !membership) return json(res, 403, { error: 'غير مصرح لهذا الحساب.' })
+
+      const { data: permission, error: permissionError } = await admin
+        .from('role_permissions')
+        .select('can_edit')
+        .eq('role', membership.role || '')
+        .eq('resource', 'inbox')
+        .maybeSingle()
+      if (permissionError) throw permissionError
+      if (!permission?.can_edit) return json(res, 403, { error: 'ليس لديك صلاحية إرسال رسائل من صندوق المحادثات.' })
     }
 
     const { data: conversation, error: conversationError } = await admin
