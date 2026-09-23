@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Card, Badge, Button, Table, statusTone } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { usePermissions } from '../lib/usePermissions'
 import { IconPlus } from '../components/Icon'
 
 type TaskStatus =
@@ -187,6 +188,9 @@ function normalizeTask(task: DBTask): DBTask {
 }
 
 export default function Tasks() {
+  const { can } = usePermissions()
+  const canEditTasks = can('tasks', 'edit')
+  const canDeleteTasks = can('tasks', 'delete')
   const {
     organizationId,
     loading: organizationLoading,
@@ -405,6 +409,7 @@ export default function Tasks() {
     description: string,
     metadata: Record<string, unknown> = {}
   ) => {
+    if (!canDeleteTasks) { setError('ليس لديك صلاحية حذف المهام.'); return }
     if (!supabase || !organizationId) return
 
     const {
@@ -446,6 +451,7 @@ export default function Tasks() {
   }
 
   const saveTask = async () => {
+    if (!canEditTasks) { setError('ليس لديك صلاحية إنشاء أو تعديل المهام.'); return }
     if (
       !supabase ||
       !organizationId
