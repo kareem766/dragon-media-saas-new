@@ -80,10 +80,10 @@ export default function RyanAssistant() {
 
   return (
     <div dir="rtl" className="space-y-5 pb-8">
-      <section className="rounded-3xl bg-ink-950 text-white shadow-xl overflow-hidden">
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#071f45] via-[#0b315f] to-[#155eef] text-white shadow-[0_20px_55px_rgba(7,31,69,.18)]">
         <div className="p-6 md:p-8">
           <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gold-500 text-ink-950">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-cyan-300 text-[#071f45] shadow-lg shadow-cyan-950/20">
               <IconSpark className="h-7 w-7" />
             </div>
             <div>
@@ -96,7 +96,7 @@ export default function RyanAssistant() {
         </div>
       </section>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden rounded-3xl border border-blue-100/80 shadow-[0_14px_40px_rgba(15,47,107,.06)]">
         <div className="border-b border-ink-900/10 p-4">
           <div className="flex flex-wrap gap-2">
             {quickQuestions.map((question) => (
@@ -113,7 +113,7 @@ export default function RyanAssistant() {
           </div>
         </div>
 
-        <div className="min-h-[430px] max-h-[58vh] overflow-y-auto space-y-4 p-4 md:p-6 bg-ink-50/40" aria-live="polite">
+        <div className="min-h-[430px] max-h-[58vh] overflow-y-auto space-y-4 bg-gradient-to-b from-[#f7faff] to-white p-4 md:p-6" aria-live="polite">
           {messages.map((message, index) => (
             <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-start' : 'justify-end'}`}>
               <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-7 ${message.role === 'user' ? 'bg-white border border-ink-900/10 text-ink-900' : 'bg-ink-950 text-white'}`}>
