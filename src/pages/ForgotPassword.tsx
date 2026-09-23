@@ -81,7 +81,7 @@ export default function ForgotPassword() {
                 <img
                   src={logoUrl}
                   alt={platformName}
-                  className="h-9 w-9 object-contain"
+                  className="h-9 w-9 rounded-full object-contain"
                 />
               </div>
 
