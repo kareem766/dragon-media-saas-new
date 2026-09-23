@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { usePermissions } from '../lib/usePermissions'
 import { Card, Badge, Button } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
@@ -41,6 +42,10 @@ const priorityLabels: Record<string, string> = {
 }
 
 export default function Tickets() {
+  const { can } = usePermissions()
+  const canEditResource = can('support_tickets', 'edit')
+  const canDeleteResource = can('support_tickets', 'delete')
+
   const { organizationId, loading: orgLoading } = useOrganization()
   const { user } = useAuth()
 
@@ -128,6 +133,7 @@ export default function Tickets() {
   }
 
   const handleCreate = async (e: React.FormEvent) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     e.preventDefault()
 
     if (
@@ -195,6 +201,7 @@ export default function Tickets() {
   }
 
   const handleReply = async (e: React.FormEvent) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     e.preventDefault()
 
     if (!supabase || !activeId || !reply.trim()) return
