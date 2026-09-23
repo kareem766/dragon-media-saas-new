@@ -273,7 +273,7 @@ export default function Tickets() {
     const ticket = tickets.find(item => item.id === activeId)
 
     return (
-      <div className="space-y-5 max-w-3xl">
+      <div className="mx-auto w-full max-w-5xl space-y-5 pb-8">
         <button
           type="button"
           onClick={closeTicket}
@@ -283,7 +283,7 @@ export default function Tickets() {
           العودة إلى التذاكر
         </button>
 
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border-blue-100/80 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm">
           <div className="border-b border-sand-200 bg-sand-50/60 p-5 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="min-w-0">
