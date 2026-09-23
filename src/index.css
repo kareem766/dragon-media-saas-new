@@ -176,3 +176,87 @@ button.bg-ink-950:hover, a.bg-ink-950:hover, button.bg-gold-500:hover, a.bg-gold
   .dm-page-backdrop::before { background: linear-gradient(180deg, rgba(255,255,255,.70), rgba(255,255,255,.82) 55%, rgba(255,255,255,.91)); }
   [data-page-theme] .dm-main-stage { background: linear-gradient(180deg, rgba(255,255,255,.76), rgba(255,255,255,.92)); }
 }
+
+/* === Dragon Media visual polish v2 === */
+.dm-app-shell > div > header {
+  background: rgba(248, 251, 255, .78) !important;
+  border-bottom: 1px solid rgba(21, 94, 239, .10) !important;
+  box-shadow: 0 8px 30px rgba(15, 47, 107, .06);
+}
+.dm-app-shell > div > header > div {
+  position: relative;
+}
+.dm-app-shell > div > header > div::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,207,255,.28), rgba(21,94,239,.16), transparent);
+  pointer-events: none;
+}
+[data-page-theme] .dm-page-content .bg-white {
+  background: rgba(255,255,255,.84) !important;
+  border-color: rgba(21,94,239,.10) !important;
+  box-shadow: 0 12px 34px rgba(15,47,107,.055), inset 0 1px 0 rgba(255,255,255,.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+[data-page-theme] .dm-page-content .bg-white:hover {
+  border-color: rgba(21,94,239,.15) !important;
+}
+[data-page-theme] .dm-page-content .border-sand-200 {
+  border-color: rgba(21,94,239,.10) !important;
+}
+[data-page-theme] .dm-page-content .bg-sand-50,
+[data-page-theme] .dm-page-content .bg-sand-100 {
+  background-color: rgba(241,247,255,.76) !important;
+}
+[data-page-theme] .dm-page-content input,
+[data-page-theme] .dm-page-content textarea,
+[data-page-theme] .dm-page-content select {
+  border-color: rgba(21,94,239,.14) !important;
+  background-color: rgba(255,255,255,.90) !important;
+  box-shadow: inset 0 1px 2px rgba(15,47,107,.025);
+}
+[data-page-theme] .dm-page-content input:focus,
+[data-page-theme] .dm-page-content textarea:focus,
+[data-page-theme] .dm-page-content select:focus {
+  border-color: rgba(21,94,239,.38) !important;
+  box-shadow: 0 0 0 4px rgba(0,207,255,.09), 0 8px 24px rgba(21,94,239,.05) !important;
+}
+[data-page-theme] .dm-page-content table thead {
+  background: linear-gradient(90deg, rgba(238,245,255,.90), rgba(247,251,255,.72)) !important;
+}
+[data-page-theme] .dm-page-content table tbody tr {
+  transition: background-color .18s ease, transform .18s ease;
+}
+[data-page-theme] .dm-page-content table tbody tr:hover {
+  background: rgba(0,207,255,.035);
+}
+[data-page-theme] .dm-page-content .rounded-3xl {
+  box-shadow: 0 16px 42px rgba(15,47,107,.065), inset 0 1px 0 rgba(255,255,255,.94);
+}
+[data-page-theme] .dm-page-content h1 {
+  letter-spacing: -.025em;
+}
+[data-page-theme] .dm-page-content h1::after {
+  content: '';
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #155eef, #00cfff);
+  box-shadow: 0 0 12px rgba(0,207,255,.18);
+}
+@media (max-width: 768px) {
+  .dm-app-shell > div > header {
+    background: rgba(248,251,255,.88) !important;
+  }
+  [data-page-theme] .dm-page-content .bg-white {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
