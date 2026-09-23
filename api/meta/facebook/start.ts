@@ -44,11 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!organizationId) {
       const { data, error } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).maybeSingle()
       if (error) return json(res, 500, { error: 'تعذر التحقق من الشركة المرتبطة بالحساب.' })
-      membership = data as typeof membership
+      membership = data as { id: string; organization_id: string; active: boolean; role: string } | null
       organizationId = String(membership?.organization_id || '')
     } else {
       const { data } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).eq('organization_id', organizationId).maybeSingle()
-      membership = data as typeof membership
+      membership = data as { id: string; organization_id: string; active: boolean; role: string } | null
     }
     if (!membership || membership.active === false || !membership.organization_id) return json(res, 403, { error: 'لا تملك صلاحية ربط Facebook لهذه الشركة.' })
 
