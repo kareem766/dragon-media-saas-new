@@ -465,18 +465,19 @@ export default function Billing() {
 
   return (
     <div
-      className="space-y-6 max-w-5xl mx-auto pb-10"
+      className="mx-auto w-full max-w-5xl space-y-6 pb-10"
       dir="rtl"
     >
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-ink-950">
+      <div className="rounded-3xl border border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm sm:p-6">
+        <h1 className="text-2xl font-bold tracking-tight text-ink-950">
           الفوترة والاشتراك
         </h1>
 
-        <p className="text-sm text-ink-900/55 mt-1">
+        <p className="mt-1 text-sm text-ink-900/55">
           إدارة باقتك، مدفوعاتك وفواتير Dragon Media
         </p>
+        <div className="mt-4 h-px w-14 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" />
       </div>
 
       {error && (
@@ -497,7 +498,7 @@ export default function Billing() {
       )}
 
       {/* Current subscription */}
-      <Card className="p-6">
+      <Card className="border border-blue-100/80 bg-white/90 p-6 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5">
           <div>
             <div className="text-xs text-ink-900/45">
