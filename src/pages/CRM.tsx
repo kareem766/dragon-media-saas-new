@@ -1231,12 +1231,13 @@ export default function CRM() {
                         </button>
                       )}
 
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() =>
-                          handleDeleteLead(lead)
-                        }
+                      {canDeleteLeads && (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            handleDeleteLead(lead)
+                          }
                         className="min-h-9 rounded-lg border border-red-100 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         حذف
