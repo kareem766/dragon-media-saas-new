@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { usePermissions } from '../lib/usePermissions'
 import { Link, useParams } from 'react-router-dom'
 import { Card, Badge, Button, Skeleton } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
@@ -173,6 +174,10 @@ const formatDate = (
 }
 
 export default function DealDetail() {
+  const { can } = usePermissions()
+  const canEditResource = can('deals', 'edit')
+  const canDeleteResource = can('deals', 'delete')
+
   const { id } = useParams<{ id: string }>()
 
   const {
@@ -291,6 +296,7 @@ export default function DealDetail() {
       : 0
 
   const handleStageChange = async () => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (
       !supabase ||
       !organizationId ||
