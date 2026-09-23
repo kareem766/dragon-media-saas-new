@@ -64,8 +64,12 @@ async function callGemini(key:string,model:string,system:string,history:Turn[],c
 }
 
 async function ensureRyanLead(supabase:any,organizationId:string,customer:any,conversation:any,service:string,budget:string){
- const name=text(customer.name,120)||'عميل',phone=cleanPhone(text(customer.phone,80)),source=text(conversation.channel,40)||'ريان';
+ const name=text(customer.name,120),phone=cleanPhone(text(customer.phone,80)),normalizedService=text(service,160),normalizedBudget=text(budget,120),source=text(conversation.channel,40)||'ريان';
  if(!customer?.id)return null;
+ // لا ننشئ Lead لمجرد بدء المحادثة؛ يجب اكتمال بيانات التأهيل الأساسية أولاً.
+ if(!name||!looksLikeName(name)||invalidCustomerName(name)||!validPhone(phone)||!normalizedService)return null;
+ // خدمة الإعلانات لا تكتمل بدون الميزانية.
+ if(/(?:إعلان|إعلانات|اعلان|اعلانات|ads|advertis)/iu.test(normalizedService)&&!normalizedBudget)return null;
  const {data:existing,error:lookupError}=await supabase.from('leads').select('id,name,phone,notes').eq('organization_id',organizationId).eq('customer_id',customer.id).is('deleted_at',null).order('created_at',{ascending:false}).limit(1).maybeSingle();
  if(lookupError)throw new Error(lookupError.message);
  const budgetText=budget?' الميزانية الحالية: '+budget+'.':'';
