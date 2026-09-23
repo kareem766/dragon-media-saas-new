@@ -141,7 +141,7 @@ export default function Search() {
   const hasQuery = q.trim().length >= 2
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="mx-auto w-full max-w-5xl space-y-6 pb-8">
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-ink-950">
           البحث
@@ -151,7 +151,7 @@ export default function Search() {
         </p>
       </div>
 
-      <Card className="p-4 sm:p-5">
+      <Card className="border-blue-100/80 bg-white/90 p-4 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm sm:p-5">
         <div className="flex items-center gap-3 bg-sand-50 border border-sand-200 rounded-2xl px-4 py-3.5 focus-within:border-ink-900/30 focus-within:ring-2 focus-within:ring-ink-900/5 transition-all">
           <IconSearch className="w-5 h-5 text-ink-900/40 shrink-0" />
 
