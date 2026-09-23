@@ -358,7 +358,7 @@ export default function AdminPlans() {
     return (
       <div
         dir="rtl"
-        className="space-y-6 p-1 sm:p-2"
+        className="mx-auto w-full max-w-7xl space-y-6 p-1 sm:p-2"
         aria-busy="true"
       >
         <div className="animate-pulse space-y-2">
@@ -376,7 +376,7 @@ export default function AdminPlans() {
   }
 
   return (
-    <div dir="rtl" className="space-y-6 p-1 sm:p-2">
+    <div dir="rtl" className="mx-auto w-full max-w-7xl space-y-6 p-1 sm:p-2">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-ink-950 sm:text-2xl">
@@ -427,7 +427,7 @@ export default function AdminPlans() {
       )}
 
       {isEditing && (
-        <Card className="overflow-hidden border border-ink-900/8 p-0 shadow-sm">
+        <Card className="overflow-hidden border border-blue-100/80 bg-white/90 p-0 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur">
           <div className="border-b border-ink-900/8 bg-white px-5 py-5 sm:px-6">
             <div className="flex flex-col gap-1">
               <h3 className="text-lg font-bold text-ink-950">
