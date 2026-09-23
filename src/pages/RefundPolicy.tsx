@@ -7,9 +7,9 @@ const COMPANY_ADDRESS = 'الإسكندرية - مصر'
 
 export default function RefundPolicy() {
   return (
-    <div dir="rtl" className="min-h-screen bg-sand-50 text-ink-900 px-5 py-10 sm:px-6 lg:px-8">
+    <div dir="rtl" className="min-h-screen bg-gradient-to-br from-[#f7faff] via-white to-[#fffaf1] text-ink-900 px-5 py-10 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
-        <div className="rounded-3xl border border-sand-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-3xl border border-blue-100/80 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm overflow-hidden">
           <div className="border-b border-sand-200 px-6 py-7 sm:px-8">
             <p className="text-sm font-bold text-gold-600">Dragon Media</p>
             <h1 className="text-2xl sm:text-3xl font-black mt-2">سياسة الاسترجاع واسترداد الأموال</h1>
