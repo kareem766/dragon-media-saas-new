@@ -1085,7 +1085,7 @@ export default function CustomerDetail() {
 
   if (orgLoading || loading) {
     return (
-      <div className="space-y-6">
+      <div className="mx-auto w-full max-w-6xl space-y-6 pb-8">
         <div className="h-48 bg-sand-100 rounded-3xl" />
 
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1517,7 +1517,7 @@ export default function CustomerDetail() {
             </button>
           </div>
 
-          <div className="space-y-5">
+          <div className="mx-auto w-full max-w-6xl space-y-5 pb-8">
             <div>
               <div className="text-xs text-ink-900/40">
                 الاسم
