@@ -15,6 +15,8 @@ interface AuthContextValue {
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signInWithGoogle: () => Promise<{ error: string | null }>
+  signInWithFacebook: () => Promise<{ error: string | null }>
+  signInWithApple: () => Promise<{ error: string | null }>
   signUp: (email: string, password: string, fullName: string, consent?: SignupConsent) => Promise<SignUpResult>
   resendConfirmation: (email: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -111,16 +113,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null }
   }
 
-  const signInWithGoogle = async () => {
+  const signInWithOAuthProvider = async (provider: 'google' | 'facebook' | 'apple') => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد' }
 
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo: window.location.origin },
     })
 
     return { error: error ? normalizeAuthError(error.message) : null }
   }
+
+  const signInWithGoogle = () => signInWithOAuthProvider('google')
+  const signInWithFacebook = () => signInWithOAuthProvider('facebook')
+  const signInWithApple = () => signInWithOAuthProvider('apple')
 
   const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent): Promise<SignUpResult> => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد', needsEmailConfirmation: false }
@@ -175,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false)
   }
 
-  return <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signIn, signInWithGoogle, signUp, resendConfirmation, signOut }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signIn, signInWithGoogle, signInWithFacebook, signInWithApple, signUp, resendConfirmation, signOut }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
