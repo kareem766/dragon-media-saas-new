@@ -273,7 +273,7 @@ export default function Appointments() {
       dir="rtl"
       className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 sm:px-6 sm:py-7 lg:px-8"
     >
-      <section className="overflow-hidden rounded-3xl border border-sand-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+      <section className="overflow-hidden rounded-3xl border border-blue-100/80 bg-white/90 shadow-[0_16px_42px_rgba(15,47,107,0.06)]">
         <div className="relative p-5 sm:p-7">
           <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3.5">
