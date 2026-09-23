@@ -142,7 +142,7 @@ export default function ResetPassword() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6"
+      className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(245,158,11,0.10),_transparent_35%),radial-gradient(circle_at_bottom_left,_rgba(37,99,235,0.09),_transparent_35%)] bg-sand-50 px-4 py-8 sm:px-6"
     >
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center justify-center">
         <div className="w-full">
@@ -151,7 +151,7 @@ export default function ResetPassword() {
               to="/home"
               className="flex items-center gap-3"
             >
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-sand-200 bg-white shadow-sm">
                 <img
                   src={logoUrl}
                   alt={platformName}
@@ -165,7 +165,7 @@ export default function ResetPassword() {
             </Link>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
+          <div className="rounded-[2rem] border border-sand-200/80 bg-white/90 p-6 shadow-[0_25px_70px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:p-8">
             {success ? (
               <div className="text-center">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-2xl font-black text-emerald-600">
@@ -197,7 +197,7 @@ export default function ResetPassword() {
             ) : (
               <>
                 <div className="mb-7">
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-lg font-black text-blue-600">
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 text-lg font-black text-blue-600">
                     🔒
                   </div>
 
@@ -241,7 +241,7 @@ export default function ResetPassword() {
                           }
                           autoComplete="new-password"
                           placeholder="6 أحرف على الأقل"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 pl-20 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                          className="w-full rounded-2xl border border-sand-200 bg-white px-4 py-3.5 pl-20 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                         />
 
                         <button
