@@ -182,7 +182,7 @@ export default async function handler(req: any, res: any) {
         const {
           data,
           error,
-        } = await userClient.rpc(
+        } = await admin.rpc(
           'approve_ryan_credit_purchase',
           {
             p_payment_request_id: requestId,
@@ -213,7 +213,7 @@ export default async function handler(req: any, res: any) {
       const {
         data,
         error,
-      } = await userClient.rpc(
+      } = await admin.rpc(
         'approve_payment_request',
         {
           p_request_id: requestId,
@@ -258,7 +258,7 @@ export default async function handler(req: any, res: any) {
         const {
           data,
           error,
-        } = await userClient.rpc(
+        } = await admin.rpc(
           'reject_ryan_credit_purchase',
           {
             p_payment_request_id: requestId,
@@ -291,7 +291,7 @@ export default async function handler(req: any, res: any) {
       const {
         data,
         error,
-      } = await userClient.rpc(
+      } = await admin.rpc(
         'reject_payment_request',
         {
           p_request_id: requestId,
