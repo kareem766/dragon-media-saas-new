@@ -64,6 +64,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!tokenResponse.ok || !tokenData.access_token) throw new Error(tokenData?.error?.message || 'فشل تبادل authorization code مع Facebook.')
 
     const userToken = String(tokenData.access_token)
+
+    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    const stateUserId = String(stateData.userId || '')
+    const organizationId = String(stateData.organizationId || '')
+    if (!stateUserId || !organizationId) throw new Error('بيانات جلسة Facebook غير مكتملة.')
+
+    const { data: membership } = await db
+      .from('users')
+      .select('id,organization_id,active,role')
+      .eq('id', stateUserId)
+      .eq('organization_id', organizationId)
+      .maybeSingle()
+    if (!membership || membership.active === false) throw new Error('حساب المستخدم لم يعد مخولًا لربط Facebook بهذه الشركة.')
+
+    const { data: platformSettings } = await db.from('platform_settings').select('integrations_enabled_before_subscription').eq('id', 1).maybeSingle()
+    const allowBeforeSubscription = Boolean(platformSettings?.integrations_enabled_before_subscription)
+    const { data: subscription } = await db.from('subscriptions').select('status,expires_at,renewal_date').eq('organization_id', organizationId).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
+    const expiry = String(subscription?.expires_at || subscription?.renewal_date || '')
+    const today = new Date().toISOString().slice(0, 10)
+    const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
+    if (!subscriptionActive && !allowBeforeSubscription) throw new Error('ربط التكاملات متاح بعد تفعيل الاشتراك.')
+
+    const { data: permission } = await db.from('role_permissions').select('can_edit').eq('role', membership.role).eq('resource', 'settings').maybeSingle()
+    if (!permission?.can_edit) throw new Error('ربط Facebook متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.')
+
     const pages = await graph('/me/accounts?fields=id,name,category,access_token,tasks&limit=100', userToken)
     const page = Array.isArray(pages?.data) ? pages.data.find((item: any) => item?.id && item?.access_token) : null
     if (!page) throw new Error('تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.')
@@ -71,7 +96,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pageToken = String(page.access_token)
     const subscription = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`, pageToken, { method: 'POST' }).then(() => true).catch(() => false)
 
-    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const { error } = await db.from('integrations').upsert({
       organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected',
       config: { access_token: encryptToken(pageToken) },
