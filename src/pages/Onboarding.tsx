@@ -134,7 +134,7 @@ export default function Onboarding({
                   <img
                     src={logoUrl}
                     alt={platformName}
-                    className="h-10 w-10 object-contain"
+                    className="h-10 w-10 rounded-full object-contain"
                   />
                 </div>
 
