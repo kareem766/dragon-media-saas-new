@@ -104,7 +104,7 @@ function formatDate(value: string | null) {
 function LoadingSkeleton() {
   return (
     <div
-      className="space-y-5 animate-pulse"
+      className="mx-auto w-full max-w-6xl space-y-5 animate-pulse"
       aria-label="جاري تحميل الحملات"
     >
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -120,7 +120,7 @@ function LoadingSkeleton() {
         {Array.from({ length: 5 }).map((_, index) => (
           <div
             key={index}
-            className="rounded-2xl border border-sand-200 bg-white p-4"
+            className="rounded-2xl border border-blue-100/80 bg-white/90 p-4 shadow-[0_8px_24px_rgba(15,47,107,0.04)]"
           >
             <div className="h-3 w-20 rounded bg-sand-200" />
             <div className="h-8 w-14 rounded bg-sand-200 mt-3" />
@@ -128,7 +128,7 @@ function LoadingSkeleton() {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-sand-200 bg-white p-5">
+      <div className="rounded-3xl border border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm">
         <div className="h-5 w-40 rounded bg-sand-200" />
         <div className="h-4 w-64 rounded bg-sand-200 mt-3" />
 
