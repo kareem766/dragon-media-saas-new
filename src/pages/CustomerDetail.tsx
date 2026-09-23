@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { usePermissions } from '../lib/usePermissions'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, statusTone } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
@@ -176,6 +177,10 @@ const formatTaskDueDate = (value: string | null | undefined) => {
 }
 
 export default function CustomerDetail() {
+  const { can } = usePermissions()
+  const canEditResource = can('customers', 'edit')
+  const canDeleteResource = can('customers', 'delete')
+
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { organizationId, loading: orgLoading } = useOrganization()
@@ -560,6 +565,7 @@ export default function CustomerDetail() {
    * cannot accidentally change marketing consent.
    */
   const updateMarketingConsent = async (
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     nextOptIn: boolean
   ) => {
     if (
@@ -692,6 +698,7 @@ export default function CustomerDetail() {
   }
 
   const createTask = async () => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id || !customer) {
       return
     }
@@ -775,6 +782,7 @@ export default function CustomerDetail() {
   }
 
   const updateTaskStatus = async (
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     task: Task,
     status: string
   ) => {
@@ -855,6 +863,7 @@ export default function CustomerDetail() {
   }
 
   const deleteTask = async (task: Task) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
@@ -925,6 +934,7 @@ export default function CustomerDetail() {
   }
 
   const saveCustomer = async () => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id || !customer) {
       return
     }
@@ -1010,6 +1020,7 @@ export default function CustomerDetail() {
   }
 
   const deleteCustomer = async () => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
