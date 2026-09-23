@@ -311,7 +311,7 @@ export default function Services() {
 
   if (!supabase) {
     return (
-      <div dir="rtl" className="space-y-6 pb-8">
+      <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-6 pb-8">
         <Card className="border-red-100 bg-red-50/70 p-8 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-red-600 shadow-sm">
             <IconAlert className="h-6 w-6" />
@@ -433,7 +433,7 @@ export default function Services() {
 
   return (
     <div dir="rtl" className="space-y-6 pb-8">
-      <section className="relative overflow-hidden rounded-2xl border border-sand-200/80 bg-white p-5 shadow-sm sm:p-7">
+      <section className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm sm:p-7">
         <div className="pointer-events-none absolute -left-16 -top-20 h-48 w-48 rounded-full bg-gold-400/10 blur-3xl" />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
