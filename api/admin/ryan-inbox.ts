@@ -295,11 +295,11 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   plan.reply='تمام يا فندم، ممكن أعرف رقم حضرتك للتواصل؟';plan.action='continue';plan.action_data={};
  }
  if(greetingOnly&&!aiUnavailable){plan.action='continue';plan.action_data={};}
- const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue';
  if(messageRecord.urgent&&text(plan.action,60)==='continue'&&!aiUnavailable){
   plan.action='handoff_human';
   plan.action_data={...obj(plan.action_data),reason:'العميل طلب استعجال وتواصل سريع من الفريق.'};
  }
+ const normalizedAction=['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation'].includes(text(plan.action,60))?text(plan.action,60):'continue';
  plan.action=normalizedAction; if(!text(plan.action,60))plan.action='continue'; const actionData=obj(plan.action_data);if(nameReplacementRequested&&replacementName)actionData.__verified_name_replacement=replacementName;else delete actionData.__verified_name_replacement;if(!text(actionData.service,160)&&text(plan.service,160))actionData.service=text(plan.service,160);if(!text(actionData.phone,80)&&validPhone(String(customer.phone||'')))actionData.phone=cleanPhone(String(customer.phone));plan.action_data=actionData;let actionResult:any={success:true};if(text(plan.action,60)!=='continue'){try{actionResult=await executeAction(supabase,organizationId,customer,conversation,text(plan.action,60),actionData,services||[],messageId,memory)}catch(e:any){console.error('Ryan action execution failed',text(plan.action,60),text(e?.message,500))
   actionResult={success:false,message:'Action execution failed'}
  }}
