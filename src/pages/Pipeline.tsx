@@ -900,7 +900,7 @@ export default function Pipeline() {
   return (
     <div dir="rtl" className="space-y-6 pb-8">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-3xl border border-sand-200 bg-gradient-to-br from-white via-white to-sand-50 p-5 shadow-sm sm:p-7">
+      <div className="relative overflow-hidden rounded-3xl border border-blue-100/80 bg-gradient-to-br from-white via-white to-sand-50 p-5 shadow-sm sm:p-7">
         <div className="pointer-events-none absolute -left-16 -top-20 h-48 w-48 rounded-full bg-gold-400/10 blur-3xl" />
 
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -1019,7 +1019,7 @@ export default function Pipeline() {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="ابحث باسم الصفقة أو العميل أو الشركة..."
               aria-label="البحث في الصفقات"
-              className="w-full rounded-xl border border-sand-200 bg-sand-50/30 py-3 pe-11 ps-10 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/30 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
+              className="w-full rounded-xl border border-blue-100/80 bg-sand-50/30 py-3 pe-11 ps-10 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/30 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
             />
 
             {search && (
@@ -1038,7 +1038,7 @@ export default function Pipeline() {
             value={stageFilter}
             onChange={(event) => setStageFilter(event.target.value)}
             aria-label="تصفية حسب المرحلة"
-            className="rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
+            className="rounded-xl border border-blue-100/80 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
           >
             <option value="الكل">كل المراحل</option>
 
@@ -1053,7 +1053,7 @@ export default function Pipeline() {
             value={ownerFilter}
             onChange={(event) => setOwnerFilter(event.target.value)}
             aria-label="تصفية حسب المسؤول"
-            className="rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
+            className="rounded-xl border border-blue-100/80 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
           >
             <option value="الكل">كل المسؤولين</option>
 
@@ -1233,7 +1233,7 @@ export default function Pipeline() {
                             setDraggedDealId(null)
                             setDragOverStageId(null)
                           }}
-                          className={`group cursor-grab rounded-2xl border border-sand-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ink-900/15 hover:shadow-lg active:cursor-grabbing ${
+                          className={`group cursor-grab rounded-2xl border border-blue-100/80 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-ink-900/15 hover:shadow-lg active:cursor-grabbing ${
                             draggedDealId === deal.id
                               ? 'scale-[0.98] opacity-50'
                               : ''
@@ -1418,7 +1418,7 @@ export default function Pipeline() {
                       })
                     }
                     placeholder="مثال: إدارة صفحات شركة ABC"
-                    className="w-full rounded-xl border border-sand-200 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
+                    className="w-full rounded-xl border border-blue-100/80 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
                   />
                 </label>
 
@@ -1439,7 +1439,7 @@ export default function Pipeline() {
                       })
                     }
                     placeholder="0"
-                    className="w-full rounded-xl border border-sand-200 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
+                    className="w-full rounded-xl border border-blue-100/80 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
                   />
                 </label>
 
@@ -1456,7 +1456,7 @@ export default function Pipeline() {
                         customerId: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
+                    className="w-full rounded-xl border border-blue-100/80 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
                     <option value="">بدون عميل</option>
 
@@ -1487,7 +1487,7 @@ export default function Pipeline() {
                         stageId: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
+                    className="w-full rounded-xl border border-blue-100/80 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
                     {stages.map((stage) => (
                       <option
@@ -1513,7 +1513,7 @@ export default function Pipeline() {
                         ownerId: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
+                    className="w-full rounded-xl border border-blue-100/80 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
                     <option value="">غير معين</option>
 
@@ -1545,7 +1545,7 @@ export default function Pipeline() {
                         source: event.target.value,
                       })
                     }
-                    className="w-full rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
+                    className="w-full rounded-xl border border-blue-100/80 bg-white px-4 py-3 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:ring-4 focus:ring-ink-900/5"
                   >
                     <option value="">اختر المصدر</option>
 
@@ -1577,7 +1577,7 @@ export default function Pipeline() {
                           followUpAt: event.target.value,
                         })
                       }
-                      className="w-full rounded-xl border border-sand-200 bg-sand-50/20 py-3 pe-10 ps-4 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
+                      className="w-full rounded-xl border border-blue-100/80 bg-sand-50/20 py-3 pe-10 ps-4 text-sm text-ink-950 outline-none transition focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
                     />
                   </div>
                 </label>
@@ -1597,7 +1597,7 @@ export default function Pipeline() {
                       })
                     }
                     placeholder="أضف أي ملاحظات خاصة بالصفقة..."
-                    className="w-full resize-none rounded-xl border border-sand-200 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
+                    className="w-full resize-none rounded-xl border border-blue-100/80 bg-sand-50/20 px-4 py-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-900/25 focus:border-ink-700 focus:bg-white focus:ring-4 focus:ring-ink-900/5"
                   />
                 </label>
               </div>
