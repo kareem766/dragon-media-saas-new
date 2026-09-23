@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { usePermissions } from '../lib/usePermissions'
 import { Card, Button } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
@@ -11,6 +12,9 @@ interface DBEntry {
 }
 
 export default function KnowledgeBase() {
+  const { can } = usePermissions()
+  const canEditKnowledge = can('knowledge_base', 'edit')
+  const canDeleteKnowledge = can('knowledge_base', 'delete')
   const { organizationId, loading: orgLoading } = useOrganization()
   const [entries, setEntries] = useState<DBEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,8 +71,8 @@ export default function KnowledgeBase() {
           <p className="text-sm text-ink-900/50 mt-1">أضف معلومات عن شركتك عشان ريان يستخدمها في الرد على العملاء — أسئلة شائعة، سياسات، تفاصيل خدمات.</p>
         </div>
         <Button onClick={() => setShowForm(v => !v)}>
-          <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة معلومة</span>
-        </Button>
+          {canEditKnowledge && <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة معلومة</span>}
+        </Button>}
       </div>
 
       {showForm && (
@@ -77,7 +81,7 @@ export default function KnowledgeBase() {
             <input required placeholder="العنوان (مثال: سياسة الاسترجاع)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
             <textarea required placeholder="المحتوى بالتفصيل..." rows={4} value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} className="w-full border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
             <div className="flex gap-2">
-              <Button type="submit" disabled={saving}>{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
+              {canEditKnowledge && <Button type="submit" disabled={saving}>{saving ? 'جاري الحفظ...' : 'حفظ'}</Button>
               <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>إلغاء</Button>
             </div>
           </form>
@@ -95,7 +99,7 @@ export default function KnowledgeBase() {
                   <h3 className="font-semibold text-sm text-ink-950">{e.title}</h3>
                   <p className="text-sm text-ink-900/60 mt-1.5 leading-relaxed">{e.content}</p>
                 </div>
-                <button onClick={() => handleDelete(e.id)} className="text-xs text-red-500 hover:underline whitespace-nowrap">حذف</button>
+                {canDeleteKnowledge && <button onClick={() => handleDelete(e.id)} className="text-xs text-red-500 hover:underline whitespace-nowrap">حذف</button>}
               </div>
             </Card>
           ))}
