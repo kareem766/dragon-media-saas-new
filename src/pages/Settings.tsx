@@ -1285,7 +1285,7 @@ export default function Settings() {
             ))}
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-sand-200 bg-white sm:rounded-3xl">
+          <div className="overflow-hidden rounded-3xl border border-blue-100/80 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm sm:rounded-3xl">
             <div className="h-20 animate-pulse border-b border-sand-100 bg-sand-50" />
 
             <div className="space-y-5 p-4 sm:p-8">
