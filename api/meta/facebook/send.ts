@@ -71,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!organizationId) return json(res, 400, { error: 'Organization is required.' })
 
     if (authenticatedUserId) {
-      const { data: membership } = await db.from('users').select('id,organization_id,active').eq('id', authenticatedUserId).eq('organization_id', organizationId).maybeSingle()
+      const { data: membership } = await db.from('users').select('id,organization_id,active,role').eq('id', authenticatedUserId).eq('organization_id', organizationId).maybeSingle()
       if (!membership || membership.active === false) return json(res, 403, { error: 'You are not a member of this organization.' })
 
       const { data: permission, error: permissionError } = await db
