@@ -13,7 +13,6 @@ function normalizePhone(value: unknown) {
   return String(value || '').replace(/[\u200e\u200f\u202a-\u202e\s+]/g, '').replace(/[^0-9]/g, '')
 }
 
-
 const variableTokens = (value: unknown) =>
   Array.from(String(value || '').matchAll(/\{\{([^}]+)\}\}/g))
     .map((match: any) => String(match[1] || '').trim())
@@ -64,7 +63,7 @@ async function sendTemplate(phoneNumberId: string, token: string, to: string, te
       parameters: bodyTokens.map((token, index) => ({
         type: 'text',
         text: String(values[index] || fallbackValues[index] || 'اختبار').replace(/[\r\n\t]/g, ' ').trim(),
-        ...( /^\d+$/.test(token) ? {} : { parameter_name: token }),
+        ...(/^\d+$/.test(token) ? {} : { parameter_name: token }),
       })),
     })
   }
@@ -123,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const templateName = String(process.env.WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE || '').trim()
   const templateLanguage = String(process.env.WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE_LANGUAGE || 'ar').trim()
   if (!templateName) {
-    console.error('[subscription-whatsapp] WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE is not configured')
+    console.warn('[subscription-whatsapp] WHATSAPP_SUBSCRIPTION_EXPIRY_TEMPLATE is not configured; reminders are skipped safely')
     return json(res, 200, { success: true, sent: 0, skipped: 0, failed: 0, reason: 'template_not_configured' })
   }
 
