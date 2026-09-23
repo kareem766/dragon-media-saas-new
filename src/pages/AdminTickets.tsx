@@ -224,7 +224,7 @@ export default function AdminTickets() {
 
   if (loading) {
     return (
-      <div className="space-y-5">
+      <div className="mx-auto w-full max-w-7xl space-y-6">
         <div className="space-y-2">
           <div className="h-7 w-52 animate-pulse rounded-lg bg-sand-200" />
           <div className="h-4 w-80 max-w-full animate-pulse rounded bg-sand-100" />
@@ -288,7 +288,7 @@ export default function AdminTickets() {
           رجوع لكل التذاكر
         </button>
 
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden border border-blue-100/80 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur">
           <div className="border-b border-sand-200 bg-white p-4 sm:p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
