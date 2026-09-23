@@ -618,6 +618,7 @@ export default function Tasks() {
   const deleteTask = async (
     task: DBTask
   ) => {
+    if (!canDeleteTasks) { setError('ليس لديك صلاحية حذف المهام.'); return }
     if (
       !supabase ||
       !organizationId
