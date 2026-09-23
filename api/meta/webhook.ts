@@ -60,8 +60,9 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
   const { data: existing } = await db.from('messages').select('id').eq('external_id', externalId).maybeSingle()
   if (existing) return
   let customer = null
-  const { data: existingCustomer } = await db.from('customers').select('id, name, phone').eq('organization_id', organizationId).eq('phone', from).maybeSingle()
-  customer = existingCustomer
+  const { data: existingCustomers, error: existingCustomerError } = await db.from('customers').select('id, name, phone').eq('organization_id', organizationId).eq('phone', from).order('updated_at', { ascending: false }).limit(1)
+  if (existingCustomerError) throw existingCustomerError
+  customer = existingCustomers?.[0] || null
   if (!customer) {
     const { data: createdCustomer, error } = await db.from('customers').insert({ organization_id: organizationId, name: String(contact?.profile?.name || contact?.name || 'عميل جديد').trim() || 'عميل جديد', phone: from, source: 'whatsapp' }).select('id, name, phone').single()
     if (error) throw error
@@ -210,8 +211,9 @@ async function handleFacebookWebhook(db: any, payload: any) {
       const attachments = Array.isArray(event?.message?.attachments) ? event.message.attachments : []
       const attachmentPayload = attachments.slice(0, 4).map((a: any) => ({ type: String(a?.type || ''), url: String(a?.payload?.url || ''), mime_type: String(a?.payload?.mime_type || (String(a?.type || '').toLowerCase() === 'audio' ? 'audio/mpeg' : 'application/octet-stream')), source: 'facebook' })).filter((a: any) => a.url)
       if (!content && !attachmentPayload.length) continue
-      const { data: customerByPhone } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('phone', senderId).maybeSingle()
-      let customer = customerByPhone
+      const { data: customersByPhone, error: customerByPhoneError } = await db.from('customers').select('id,name,phone').eq('organization_id', organizationId).eq('phone', senderId).order('updated_at', { ascending: false }).limit(1)
+      if (customerByPhoneError) throw customerByPhoneError
+      let customer = customersByPhone?.[0] || null
       if (!customer) {
         const { data: conversationByPsid } = await db.from('conversations').select('customer_id').eq('organization_id', organizationId).in('channel', ['messenger', 'facebook']).filter('metadata->>facebook_psid', 'eq', senderId).filter('metadata->>facebook_page_id', 'eq', pageId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
         if (conversationByPsid?.customer_id) {
