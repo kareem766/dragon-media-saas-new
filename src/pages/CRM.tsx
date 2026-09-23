@@ -745,6 +745,7 @@ export default function CRM() {
   }
 
   const handleDeleteLead = async (lead: Lead) => {
+    if (!canDeleteLeads) { alert('ليس لديك صلاحية حذف العملاء المحتملين.'); return }
     if (!supabase || !organizationId) return
 
     const confirmed = window.confirm(
