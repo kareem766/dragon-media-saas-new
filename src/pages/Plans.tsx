@@ -134,8 +134,8 @@ export default function Plans() {
   }
 
   return (
-    <div className="space-y-10 max-w-5xl mx-auto">
-      <div className="text-center space-y-4">
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <div className="rounded-3xl border border-blue-100/80 bg-white/85 px-5 py-7 text-center shadow-[0_16px_45px_rgba(15,47,107,0.06)] sm:px-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-ink-950">
           اختر الباقة المناسبة لعملك
         </h1>
