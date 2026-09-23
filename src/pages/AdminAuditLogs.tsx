@@ -111,7 +111,7 @@ function ErrorState({
   onRetry: () => void
 }) {
   return (
-    <Card className="border-red-500/15 bg-red-50/50 p-5 sm:p-6">
+    <Card className="border-red-100 bg-red-50/60 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.04)] sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-sm font-bold text-red-800">
@@ -210,8 +210,8 @@ export default function AdminAuditLogs() {
   }, [loadLogs])
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto w-full max-w-7xl space-y-6">
+      <div className="rounded-3xl border border-blue-100/80 bg-white/85 p-4 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm sm:p-5 sm:flex sm:items-end sm:justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-ink-950 sm:text-2xl">
             سجل النشاط
@@ -223,7 +223,7 @@ export default function AdminAuditLogs() {
         </div>
 
         {!loading && !error && (
-          <div className="w-fit rounded-xl border border-ink-900/8 bg-white px-3 py-2 text-xs font-semibold text-ink-900/55">
+          <div className="w-fit rounded-xl border border-blue-100/80 bg-white px-3 py-2 text-xs font-semibold text-ink-900/55 shadow-sm">
             {logs.length} عملية
           </div>
         )}
@@ -237,7 +237,7 @@ export default function AdminAuditLogs() {
           onRetry={() => void loadLogs()}
         />
       ) : logs.length === 0 ? (
-        <Card className="border-dashed p-8 sm:p-12">
+        <Card className="border-dashed border-blue-100/80 bg-white/90 p-8 shadow-[0_12px_34px_rgba(15,47,107,0.05)] sm:p-12">
           <div className="mx-auto max-w-md text-center">
             <h2 className="text-sm font-bold text-ink-950">
               لا توجد عمليات مسجلة
@@ -249,7 +249,7 @@ export default function AdminAuditLogs() {
           </div>
         </Card>
       ) : (
-        <Card className="overflow-hidden p-0">
+        <Card className="overflow-hidden border border-blue-100/80 bg-white/90 p-0 shadow-[0_14px_38px_rgba(15,47,107,0.06)] backdrop-blur-sm">
           <div className="overflow-x-auto">
             <table className="min-w-[900px] w-full text-sm">
               <thead>
