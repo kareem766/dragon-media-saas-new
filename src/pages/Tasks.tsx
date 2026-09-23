@@ -683,6 +683,7 @@ export default function Tasks() {
     task: DBTask,
     status: TaskStatus
   ) => {
+    if (!canEditTasks) { setError('ليس لديك صلاحية تعديل المهام.'); return }
     if (
       !supabase ||
       !organizationId
