@@ -1,4 +1,4 @@
-import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, Badge } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../lib/AuthContext'
@@ -126,6 +126,7 @@ export default function Inbox() {
   const [messageError, setMessageError] = useState<string | null>(null)
   const [reply, setReply] = useState('')
   const [showDetails, setShowDetails] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
 
   const active = useMemo(() => conversations.find(c => c.id === activeConversationId) ?? null, [conversations, activeConversationId])
   const filtered = useMemo(() => {
@@ -183,6 +184,11 @@ export default function Inbox() {
     if (!activeConversationId) { setMessages([]); return }
     void loadMessages(activeConversationId); void markRead(activeConversationId); setShowDetails(false)
   }, [activeConversationId, loadMessages, markRead])
+  useEffect(() => {
+    if (!loadingMessages && messages.length > 0) {
+      requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' }))
+    }
+  }, [messages, loadingMessages])
   useEffect(() => {
     if (!supabase || !organizationId) return
     const channelRef = supabase.channel(`inbox-conversations-${organizationId}`).on('postgres_changes', { event: '*', schema: 'public', table: 'conversations', filter: `organization_id=eq.${organizationId}` }, payload => {
@@ -285,6 +291,7 @@ export default function Inbox() {
                   </div></div>
                 })}</div>}
                 {messageError && messages.length > 0 && <div className="mx-auto mt-3 max-w-xl text-center text-[11px] text-red-600" role="alert">{messageError}</div>}
+                <div ref={messagesEndRef} aria-hidden="true" className="h-px w-full" />
               </div>
               <form onSubmit={handleSend} className="border-t border-sand-100 bg-white p-3 md:p-4"><div className="mx-auto max-w-3xl"><div className="rounded-2xl border border-sand-200 bg-sand-50/70 p-1.5 transition focus-within:border-ink-500 focus-within:bg-white focus-within:shadow-sm"><div className="flex items-end gap-1.5"><textarea value={reply} onChange={e => setReply(e.target.value)} onKeyDown={handleKeyDown} disabled={sending} rows={1} placeholder={active.handled_by === 'human' ? 'اكتب ردك للعميل...' : 'اكتب ردًا وسيتم تحويل المحادثة للموظف...'} className="max-h-32 min-h-[46px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm text-ink-950 outline-none placeholder:text-ink-900/35 disabled:opacity-60" aria-label="اكتب ردك هنا"/><button type="submit" disabled={sending || !reply.trim()} className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-ink-950 px-4 text-xs font-extrabold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-35"><Icon name="send" className="h-4 w-4"/>{sending ? 'جاري...' : 'إرسال'}</button></div></div><div className="mt-1.5 flex items-center justify-between px-1 text-[9px] text-ink-900/35"><span>Enter للإرسال · Shift + Enter لسطر جديد</span><span className="hidden sm:inline">الرد اليدوي يوقف Ryan لهذه المحادثة</span></div></div></form>
             </>}
