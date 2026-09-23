@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { HashRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
 import { AuthProvider } from './lib/AuthContext'
 import { ToastProvider } from './lib/ToastContext'
@@ -8,50 +8,50 @@ import PermissionRoute from './components/PermissionRoute'
 import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
 import SiteFooter from './components/SiteFooter'
-import Landing from './pages/Landing'
-import Login from './pages/Login'
-import Privacy from './pages/Privacy'
-import Terms from './pages/Terms'
-import Support from './pages/Support'
-import RefundPolicy from './pages/RefundPolicy'
-import Dashboard from './pages/Dashboard'
-import CRM from './pages/CRM'
-import CustomerDetail from './pages/CustomerDetail'
-import DealDetail from './pages/DealDetail'
-import Pipeline from './pages/Pipeline'
-import Services from './pages/Services'
-import Campaigns from './pages/Campaigns'
-import Inbox from './pages/Inbox'
-import Account from './pages/Account'
-import Ryan from './pages/Ryan'
-import RyanAssistant from './pages/RyanAssistant'
-import RyanSettings from './pages/RyanSettings'
-import KnowledgeBase from './pages/KnowledgeBase'
-import HandoffRequests from './pages/HandoffRequests'
-import Automations from './pages/Automations'
-import AdminDashboard from './pages/AdminDashboard'
-import AdminPayments from './pages/AdminPayments'
-import AdminAuditLogs from './pages/AdminAuditLogs'
-import AdminSettings from './pages/AdminSettings'
-import AdminBranding from './pages/AdminBranding'
-import AdminOrganizations from './pages/AdminOrganizations'
-import AdminPlans from './pages/AdminPlans'
-import AdminRyanPackages from './pages/AdminRyanPackages'
-import AdminRoles from './pages/AdminRoles'
-import AdminTickets from './pages/AdminTickets'
-import Tickets from './pages/Tickets'
-import Search from './pages/Search'
-import Plans from './pages/Plans'
-import PaymentRequest from './pages/PaymentRequest'
-import Tasks from './pages/Tasks'
-import Appointments from './pages/Appointments'
-import Billing from './pages/Billing'
-import Reports from './pages/Reports'
-import Users from './pages/Users'
-import Settings from './pages/Settings'
-import MetaConnections from './pages/MetaConnections'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
+const Landing = lazy(() => import('./pages/Landing'))
+const Login = lazy(() => import('./pages/Login'))
+const Privacy = lazy(() => import('./pages/Privacy'))
+const Terms = lazy(() => import('./pages/Terms'))
+const Support = lazy(() => import('./pages/Support'))
+const RefundPolicy = lazy(() => import('./pages/RefundPolicy'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const CRM = lazy(() => import('./pages/CRM'))
+const CustomerDetail = lazy(() => import('./pages/CustomerDetail'))
+const DealDetail = lazy(() => import('./pages/DealDetail'))
+const Pipeline = lazy(() => import('./pages/Pipeline'))
+const Services = lazy(() => import('./pages/Services'))
+const Campaigns = lazy(() => import('./pages/Campaigns'))
+const Inbox = lazy(() => import('./pages/Inbox'))
+const Account = lazy(() => import('./pages/Account'))
+const Ryan = lazy(() => import('./pages/Ryan'))
+const RyanAssistant = lazy(() => import('./pages/RyanAssistant'))
+const RyanSettings = lazy(() => import('./pages/RyanSettings'))
+const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'))
+const HandoffRequests = lazy(() => import('./pages/HandoffRequests'))
+const Automations = lazy(() => import('./pages/Automations'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const AdminPayments = lazy(() => import('./pages/AdminPayments'))
+const AdminAuditLogs = lazy(() => import('./pages/AdminAuditLogs'))
+const AdminSettings = lazy(() => import('./pages/AdminSettings'))
+const AdminBranding = lazy(() => import('./pages/AdminBranding'))
+const AdminOrganizations = lazy(() => import('./pages/AdminOrganizations'))
+const AdminPlans = lazy(() => import('./pages/AdminPlans'))
+const AdminRyanPackages = lazy(() => import('./pages/AdminRyanPackages'))
+const AdminRoles = lazy(() => import('./pages/AdminRoles'))
+const AdminTickets = lazy(() => import('./pages/AdminTickets'))
+const Tickets = lazy(() => import('./pages/Tickets'))
+const Search = lazy(() => import('./pages/Search'))
+const Plans = lazy(() => import('./pages/Plans'))
+const PaymentRequest = lazy(() => import('./pages/PaymentRequest'))
+const Tasks = lazy(() => import('./pages/Tasks'))
+const Appointments = lazy(() => import('./pages/Appointments'))
+const Billing = lazy(() => import('./pages/Billing'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Users = lazy(() => import('./pages/Users'))
+const Settings = lazy(() => import('./pages/Settings'))
+const MetaConnections = lazy(() => import('./pages/MetaConnections'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 
 function PublicShell() {
   return (
@@ -62,6 +62,10 @@ function PublicShell() {
       <SiteFooter />
     </div>
   )
+}
+
+function PageLoading() {
+  return <div dir="rtl" className="min-h-[40vh] flex items-center justify-center p-6"><div className="rounded-2xl border border-blue-100 bg-white/90 px-5 py-4 text-sm font-semibold text-ink-700 shadow-sm">جاري تحميل الصفحة...</div></div>
 }
 
 function RyanPageShell() {
@@ -84,7 +88,8 @@ export default function App() {
     <ToastProvider>
       <AuthProvider>
         <HashRouter>
-          <Routes>
+          <Suspense fallback={<PageLoading />}>
+            <Routes>
             <Route path="/home" element={<Landing />} />
 
             <Route element={<PublicShell />}>
@@ -135,7 +140,8 @@ export default function App() {
               <Route path="/admin/roles" element={<AdminRoute><AdminRoles /></AdminRoute>} />
               <Route path="/admin/tickets" element={<AdminRoute><AdminTickets /></AdminRoute>} />
             </Route>
-          </Routes>
+            </Routes>
+          </Suspense>
         </HashRouter>
       </AuthProvider>
     </ToastProvider>
