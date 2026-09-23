@@ -443,7 +443,7 @@ export default function Account() {
           <div className="h-4 w-72 max-w-full animate-pulse rounded-lg bg-sand-100" />
         </div>
 
-        <div className="overflow-hidden rounded-3xl border border-sand-200 bg-white">
+        <div className="overflow-hidden rounded-3xl border border-blue-100/80 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm">
           <div className="h-40 animate-pulse bg-sand-100" />
 
           <div className="space-y-6 p-6 sm:p-8">
