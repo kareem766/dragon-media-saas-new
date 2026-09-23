@@ -168,7 +168,7 @@ function KpiCard({
   progress?: number
 }) {
   return (
-    <Card className="relative overflow-hidden border-sand-200/80 p-5 shadow-[0_8px_30px_rgba(15,23,42,0.035)]">
+    <Card className="relative overflow-hidden border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-ink-900/45">
