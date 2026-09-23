@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { usePermissions } from '../lib/usePermissions'
 import { Link } from 'react-router-dom'
 import { Card, Button, Skeleton } from '../components/ui'
 import { IconPlus } from '../components/Icon'
@@ -263,6 +264,10 @@ const IconUser = ({ className = '' }: { className?: string }) => (
 )
 
 export default function Pipeline() {
+  const { can } = usePermissions()
+  const canEditResource = can('deals', 'edit')
+  const canDeleteResource = can('deals', 'delete')
+
   const {
     organizationId,
     loading: orgLoading,
@@ -533,6 +538,7 @@ export default function Pipeline() {
   }
 
   const saveDeal = async (event: React.FormEvent) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     event.preventDefault()
 
     if (!supabase || !organizationId) return
@@ -728,6 +734,7 @@ export default function Pipeline() {
   }
 
   const moveDeal = async (
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     deal: Deal,
     targetStageId: string
   ) => {
