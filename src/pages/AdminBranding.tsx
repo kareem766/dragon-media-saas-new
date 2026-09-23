@@ -15,7 +15,7 @@ function LoadingState() {
   return (
     <div
       dir="rtl"
-      className="mx-auto w-full max-w-4xl space-y-5 p-4 sm:p-6"
+      className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6"
       aria-busy="true"
     >
       <div className="animate-pulse space-y-2">
@@ -23,7 +23,7 @@ function LoadingState() {
         <div className="h-4 w-80 max-w-full rounded-lg bg-ink-900/6" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={index}
