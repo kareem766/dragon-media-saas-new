@@ -16,8 +16,8 @@ export default function Landing() {
   const name = branding?.platform_name || 'Dragon Media'
 
   return (
-    <div className="min-h-screen bg-white text-ink-950">
-      <header className="sticky top-0 z-40 border-b border-blue-100 bg-white/90 backdrop-blur-xl">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.05),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.05),transparent_28%)] bg-white text-ink-950">
+      <header className="sticky top-0 z-40 border-b border-blue-100/80 bg-white/85 shadow-[0_8px_28px_rgba(15,47,107,0.05)] backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-6">
           <Link to="/home" className="flex items-center gap-3 shrink-0">
             <img src={logoUrl} alt={name} className="h-10 w-auto object-contain" />
@@ -45,7 +45,7 @@ export default function Landing() {
         <section id="features" className="relative py-20 lg:py-28 bg-white border-y border-blue-100 overflow-hidden">
           <div className="absolute top-16 inset-inline-start-10 dm-gold-ornament" aria-hidden="true"/>
           <div className="max-w-7xl mx-auto px-5"><div className="max-w-2xl mb-12"><span className="text-sm font-bold text-gold-600">كل أدواتك في مكان واحد</span><h2 className="mt-3 text-3xl lg:text-4xl font-black">منصة مصممة لنمو نشاطك</h2><p className="mt-4 text-ink-900/55 leading-8">اجمع أهم عمليات العمل والعملاء والمبيعات في تجربة واحدة.</p></div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">{features.map(([title,description]) => <article key={title} className="relative rounded-2xl border border-blue-100 bg-white p-6 hover:-translate-y-1 hover:shadow-xl transition-all"><div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-xl font-black">✦</div><div className="absolute top-5 inset-inline-end-5 h-px w-10 bg-amber-500/70"/><h3 className="font-black text-lg mt-6">{title}</h3><p className="mt-3 text-sm leading-7 text-ink-900/55">{description}</p></article>)}</div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">{features.map(([title,description]) => <article key={title} className="relative rounded-2xl border border-blue-100/80 bg-white/90 p-6 shadow-[0_10px_30px_rgba(15,47,107,0.04)] backdrop-blur-sm hover:-translate-y-1 hover:shadow-xl transition-all"><div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-xl font-black">✦</div><div className="absolute top-5 inset-inline-end-5 h-px w-10 bg-amber-500/70"/><h3 className="font-black text-lg mt-6">{title}</h3><p className="mt-3 text-sm leading-7 text-ink-900/55">{description}</p></article>)}</div>
           </div>
         </section>
 
