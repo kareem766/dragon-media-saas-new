@@ -1316,16 +1316,18 @@ export default function Tasks() {
                           </Button>
                         )}
 
-                        <Button
-                          variant="ghost"
-                          onClick={() =>
-                            deleteTask(
-                              task
-                            )
-                          }
-                        >
-                          حذف
-                        </Button>
+                        {canDeleteTasks && (
+                          <Button
+                            variant="ghost"
+                            onClick={() =>
+                              deleteTask(
+                                task
+                              )
+                            }
+                          >
+                            حذف
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
