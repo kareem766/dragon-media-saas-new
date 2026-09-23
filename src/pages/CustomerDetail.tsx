@@ -565,9 +565,9 @@ export default function CustomerDetail() {
    * cannot accidentally change marketing consent.
    */
   const updateMarketingConsent = async (
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     nextOptIn: boolean
   ) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (
       !supabase ||
       !organizationId ||
@@ -782,10 +782,10 @@ export default function CustomerDetail() {
   }
 
   const updateTaskStatus = async (
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     task: Task,
     status: string
   ) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
@@ -863,7 +863,7 @@ export default function CustomerDetail() {
   }
 
   const deleteTask = async (task: Task) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!can('tasks', 'delete')) { alert('ليس لديك صلاحية حذف المهام.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
@@ -1020,7 +1020,7 @@ export default function CustomerDetail() {
   }
 
   const deleteCustomer = async () => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canDeleteResource) { alert('ليس لديك صلاحية أرشفة العميل.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
