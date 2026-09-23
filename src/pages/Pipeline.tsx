@@ -734,7 +734,6 @@ export default function Pipeline() {
   }
 
   const moveDeal = async (
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     deal: Deal,
     targetStageId: string
   ) => {
