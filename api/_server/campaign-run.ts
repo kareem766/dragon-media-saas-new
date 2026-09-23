@@ -97,6 +97,32 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
     if (!organizationId) organizationId = String(campaign.organization_id || '')
     if (!organizationId) return json(res, 403, { message: 'لم يتم العثور على مساحة العمل.' })
 
+    // Enforce campaign permissions on the server. UI guards are not a security boundary.
+    // Background worker requests are already authenticated with the worker secret and must bypass
+    // tenant-user permissions so scheduled campaigns continue to run.
+    if (user) {
+      const { data: userRow, error: userRowError } = await admin
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (userRowError) throw userRowError
+
+      const { data: permission, error: permissionError } = await admin
+        .from('role_permissions')
+        .select('can_view, can_edit, can_delete')
+        .eq('role', userRow?.role || '')
+        .eq('resource', 'campaigns')
+        .maybeSingle()
+
+      if (permissionError) throw permissionError
+
+      const requiredPermission = action === 'refresh' ? 'can_view' : 'can_edit'
+      if (!permission?.[requiredPermission]) {
+        return json(res, 403, { message: 'ليس لديك صلاحية تنفيذ هذا الإجراء على الحملات.' })
+      }
+    }
+
     if (action === 'cancel') {
       const { error } = await admin.from('campaigns').update({ status: 'ملغاة', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', campaignId).eq('organization_id', organizationId)
       if (error) throw error
