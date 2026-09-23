@@ -9,8 +9,8 @@ export default function Privacy() {
   return (
     <div dir="rtl" className="min-h-screen bg-gradient-to-br from-[#f7faff] via-white to-[#fffaf1] text-ink-900 px-5 py-10 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
-        <div className="rounded-3xl border border-blue-100/80 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm overflow-hidden">
-          <div className="border-b border-sand-200 px-6 py-7 sm:px-8">
+        <div className="overflow-hidden rounded-[2rem] border border-blue-100/80 bg-white/90 shadow-[0_25px_70px_rgba(15,47,107,0.08)] backdrop-blur-xl">
+          <div className="border-b border-sand-200 bg-gradient-to-r from-blue-50/70 via-white to-amber-50/50 px-6 py-7 sm:px-8">
             <p className="text-sm font-bold text-gold-600">Dragon Media</p>
             <h1 className="text-2xl sm:text-3xl font-black mt-2">سياسة الخصوصية</h1>
             <p className="text-sm text-ink-900/50 mt-2">آخر تحديث: 17 سبتمبر 2026</p>
