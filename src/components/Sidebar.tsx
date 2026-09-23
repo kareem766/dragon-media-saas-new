@@ -383,15 +383,15 @@ export default function Sidebar({
         {/* Brand Header */}
         <div className="relative shrink-0 px-4 sm:px-5 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="relative w-11 h-11 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="relative w-11 h-11 rounded-full bg-white/[0.07] border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
               <img
                 src={logoUrl}
                 alt={platformName}
-                className="w-9 h-9 object-contain"
+                className="w-9 h-9 rounded-full object-cover"
               />
 
               <span
-                className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/10 to-transparent pointer-events-none"
+                className="absolute inset-0 rounded-full bg-gradient-to-br from-white/10 to-transparent pointer-events-none"
                 aria-hidden="true"
               />
             </div>
