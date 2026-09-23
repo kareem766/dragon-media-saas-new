@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { usePermissions } from '../lib/usePermissions'
 import { Card, Badge, Button } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
@@ -161,6 +162,9 @@ const SkeletonCard = () => (
 )
 
 export default function Services() {
+  const { can } = usePermissions()
+  const canEditServices = can('services', 'edit')
+  const canDeleteServices = can('services', 'delete')
   const {
     organizationId,
     loading: orgLoading,
@@ -741,8 +745,8 @@ export default function Services() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <button type="button" onClick={() => startEdit(service)} className="rounded-lg px-2.5 py-2 text-xs font-bold text-ink-600 transition hover:bg-sand-100 hover:text-ink-950" aria-label={'تعديل ' + service.name}>تعديل</button>
-                  <button type="button" onClick={() => void handleDelete(service)} disabled={deletingId === service.id} className="rounded-lg px-2.5 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50" aria-label={'حذف ' + service.name}>{deletingId === service.id ? '...' : 'حذف'}</button>
+                  {canEditServices && <button type="button" onClick={() => startEdit(service)} className="rounded-lg px-2.5 py-2 text-xs font-bold text-ink-600 transition hover:bg-sand-100 hover:text-ink-950" aria-label={'تعديل ' + service.name}>تعديل</button>}
+                  {canDeleteServices && <button type="button" onClick={() => void handleDelete(service)} disabled={deletingId === service.id} className="rounded-lg px-2.5 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50" aria-label={'حذف ' + service.name}>{deletingId === service.id ? '...' : 'حذف'}</button>}
                 </div>
               </div>
 
