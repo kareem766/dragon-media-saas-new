@@ -150,7 +150,7 @@ function ErrorBox({
   return (
     <div
       role="alert"
-      className="rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-sm text-red-700"
+      className="rounded-2xl border border-red-200/80 bg-red-50/80 px-4 py-4 text-sm text-red-700 shadow-sm"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <span>{message}</span>
