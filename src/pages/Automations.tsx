@@ -43,7 +43,7 @@ function AutomationIcon() {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ink-950 text-white shadow-sm"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#071f45] to-[#155eef] text-white shadow-md shadow-blue-900/15"
     >
       <svg
         viewBox="0 0 24 24"
@@ -210,7 +210,7 @@ export default function Automations() {
       className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5 sm:px-6 sm:py-7 lg:px-8"
     >
       {/* Header */}
-      <section className="overflow-hidden rounded-3xl border border-sand-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.05)]">
+      <section className="overflow-hidden rounded-3xl border border-blue-100/80 bg-white/90 shadow-[0_16px_42px_rgba(15,47,107,0.06)]">
         <div className="relative p-5 sm:p-7">
           <div
             aria-hidden="true"
