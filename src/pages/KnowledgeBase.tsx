@@ -60,7 +60,7 @@ export default function KnowledgeBase() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="mx-auto w-full max-w-6xl space-y-5 pb-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-ink-950">قاعدة معرفة RYAN</h2>
