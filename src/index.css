@@ -148,15 +148,15 @@ button.bg-ink-950:hover, a.bg-ink-950:hover, button.bg-gold-500:hover, a.bg-gold
 .dm-sidebar a:hover { background-color: rgba(96, 165, 250, .10); }
 .dm-sidebar a[aria-current="page"] { background: linear-gradient(90deg, rgba(34,211,238,.08), rgba(34,211,238,.17)) !important; box-shadow: inset 0 0 0 1px rgba(103,232,249,.10), 0 8px 20px rgba(0,0,0,.10); }
 .dm-sidebar a[aria-current="page"]::after { content: ''; position: absolute; inset-inline-end: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 999px 0 0 999px; background: #67e8f9; box-shadow: 0 0 14px rgba(103,232,249,.55); }
-.dm-sidebar .bg-cyan-400\\/12 { background: rgba(34, 211, 238, .13) !important; }
+.dm-sidebar .bg-cyan-400\/12 { background: rgba(34, 211, 238, .13) !important; }
 .dm-sidebar .text-cyan-200 { color: #b9f4ff !important; }
 .dm-sidebar .bg-cyan-300 { background-color: #67e8f9 !important; }
-.dm-sidebar .border-white\\/10 { border-color: rgba(148, 197, 255, .14) !important; }
-.dm-sidebar .border-white\\/5 { border-color: rgba(148, 197, 255, .10) !important; }
-.dm-sidebar .bg-white\\/\\[0.055\\] { background: rgba(255,255,255,.055) !important; }
-.dm-sidebar .bg-white\\/\\[0.085\\] { background: rgba(255,255,255,.085) !important; }
-.dm-sidebar .hover\\:bg-white\\/\\[0.085\\]:hover { background: rgba(255,255,255,.10) !important; }
-.dm-sidebar .text-sand-100\\/45 { color: rgba(238,246,255,.48) !important; }
+.dm-sidebar .border-white\/10 { border-color: rgba(148, 197, 255, .14) !important; }
+.dm-sidebar .border-white\/5 { border-color: rgba(148, 197, 255, .10) !important; }
+.dm-sidebar .bg-white\/\[0.055\] { background: rgba(255,255,255,.055) !important; }
+.dm-sidebar .bg-white\/\[0.085\] { background: rgba(255,255,255,.085) !important; }
+.dm-sidebar .hover\\:bg-white\/\[0.085\]:hover { background: rgba(255,255,255,.10) !important; }
+.dm-sidebar .text-sand-100\/45 { color: rgba(238,246,255,.48) !important; }
 
 
 /* Premium landing-page ornaments and clearer photographic backgrounds. */
