@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { usePermissions } from '../lib/usePermissions'
 
 type Lead = {
   id: string
@@ -342,6 +343,10 @@ function LoadingState() {
 
 export default function CRM() {
   const navigate = useNavigate()
+  const { can } = usePermissions()
+  const canEditLeads = can('leads', 'edit')
+  const canDeleteLeads = can('leads', 'delete')
+  const canEditCustomers = can('customers', 'edit')
 
   const {
     organizationId,
@@ -525,6 +530,7 @@ export default function CRM() {
   }, [leads, customers])
 
   const handleAddLead = async (event: React.FormEvent) => {
+    if (!canEditLeads) { alert('ليس لديك صلاحية إضافة العملاء المحتملين.'); return }
     event.preventDefault()
 
     if (!supabase || !organizationId) {
@@ -609,6 +615,7 @@ export default function CRM() {
     leadId: string,
     status: string
   ) => {
+    if (!canEditLeads) { alert('ليس لديك صلاحية تعديل العملاء المحتملين.'); return }
     if (!supabase || !organizationId) return
 
     const previous = leads
