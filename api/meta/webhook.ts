@@ -63,7 +63,7 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
   const { data: existingCustomer } = await db.from('customers').select('id, name, phone').eq('organization_id', organizationId).eq('phone', from).maybeSingle()
   customer = existingCustomer
   if (!customer) {
-    const { data: createdCustomer, error } = await db.from('customers').insert({ organization_id: organizationId, name: null, phone: from, source: 'whatsapp' }).select('id, name, phone').single()
+    const { data: createdCustomer, error } = await db.from('customers').insert({ organization_id: organizationId, name: String(contact?.profile?.name || contact?.name || 'عميل جديد').trim() || 'عميل جديد', phone: from, source: 'whatsapp' }).select('id, name, phone').single()
     if (error) throw error
     customer = createdCustomer
   }
@@ -220,7 +220,7 @@ async function handleFacebookWebhook(db: any, payload: any) {
         }
       }
       if (!customer) {
-        const { data: createdCustomer, error: customerError } = await db.from('customers').insert({ organization_id: organizationId, name: null, phone: null, source: 'messenger' }).select('id,name,phone').single()
+        const { data: createdCustomer, error: customerError } = await db.from('customers').insert({ organization_id: organizationId, name: 'عميل جديد', phone: null, source: 'messenger' }).select('id,name,phone').single()
         if (customerError) throw customerError
         customer = createdCustomer
       }
