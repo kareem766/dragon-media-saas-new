@@ -263,7 +263,7 @@ export default function MetaConnections() {
   }
 
   return (
-    <div dir="rtl" className="space-y-5">
+    <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-5 pb-8">
       <div>
         <h1 className="text-2xl font-bold text-ink-950">اتصالات Meta</h1>
         <p className="mt-1 text-sm text-ink-600">ربط WhatsApp عبر Meta Embedded Signup الرسمي، وربط صفحات Facebook عبر OAuth الرسمي.</p>
