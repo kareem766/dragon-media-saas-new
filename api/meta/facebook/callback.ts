@@ -94,13 +94,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!page) throw new Error('تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.')
 
     const pageToken = String(page.access_token)
-    const subscription = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`, pageToken, { method: 'POST' }).then(() => true).catch(() => false)
+    const webhookSubscribed = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`, pageToken, { method: 'POST' }).then(() => true).catch(() => false)
 
     const { error } = await db.from('integrations').upsert({
       organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected',
       config: { access_token: encryptToken(pageToken) },
-      metadata: { facebook_page_id: String(page.id), facebook_page_name: String(page.name || ''), facebook_page_category: String(page.category || ''), facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [], facebook_webhook_subscribed: subscription, ready_for_messaging: subscription, connected_via: 'facebook_oauth' },
-      connected_at: new Date().toISOString(), last_verified_at: new Date().toISOString(), error_message: subscription ? null : 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.', updated_at: new Date().toISOString(),
+      metadata: { facebook_page_id: String(page.id), facebook_page_name: String(page.name || ''), facebook_page_category: String(page.category || ''), facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [], facebook_webhook_subscribed: webhookSubscribed, ready_for_messaging: webhookSubscribed, connected_via: 'facebook_oauth' },
+      connected_at: new Date().toISOString(), last_verified_at: new Date().toISOString(), error_message: webhookSubscribed ? null : 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.', updated_at: new Date().toISOString(),
     }, { onConflict: 'organization_id,provider' })
     if (error) throw new Error('تعذر حفظ اتصال Facebook في Dragon Media.')
     return redirect(res, 'connected')
