@@ -189,7 +189,7 @@ export default function AdminSettings() {
   }
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       <div>
         <h1 className="text-xl font-bold tracking-tight text-ink-950 sm:text-2xl">
           إعدادات المنصة العامة
@@ -199,7 +199,7 @@ export default function AdminSettings() {
         </p>
       </div>
 
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden border border-blue-100/80 bg-white/90 p-0 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur">
         <div className="border-b border-ink-900/6 bg-white px-5 py-4 sm:px-6">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold-500/10 text-gold-700">
