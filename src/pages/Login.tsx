@@ -29,8 +29,6 @@ export default function Login() {
     signUp,
     resendConfirmation,
     signInWithGoogle,
-    signInWithFacebook,
-    signInWithApple,
     loading: authLoading,
   } = useAuth();
 
@@ -646,29 +644,40 @@ export default function Login() {
                 />
               )}
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <SocialAuthButton
-                provider="google"
-                label="Google"
-                onClick={signInWithGoogle}
-                submitting={submitting || authLoading}
-                setError={setError}
-              />
-              <SocialAuthButton
-                provider="facebook"
-                label="Facebook"
-                onClick={signInWithFacebook}
-                submitting={submitting || authLoading}
-                setError={setError}
-              />
-              <SocialAuthButton
-                provider="apple"
-                label="Apple"
-                onClick={signInWithApple}
-                submitting={submitting || authLoading}
-                setError={setError}
-              />
-            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setError('');
+                setSuccess('');
+                setSubmitting(true);
+
+                try {
+                  const result = await signInWithGoogle();
+
+                  if (result?.error) {
+                    setError(
+                      result.error ||
+                        'تعذر تسجيل الدخول باستخدام Google.'
+                    );
+                  }
+                } catch (err) {
+                  setError(
+                    err instanceof Error
+                      ? err.message
+                      : 'تعذر تسجيل الدخول باستخدام Google.'
+                  );
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              disabled={submitting || authLoading}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-black">
+                G
+              </span>
+              <span>المتابعة باستخدام Google</span>
+            </button>
 
             <div className="my-7 flex items-center gap-4">
               <div className="h-px flex-1 bg-slate-200" />
@@ -708,64 +717,6 @@ export default function Login() {
         </main>
       </div>
     </div>
-  );
-}
-
-function SocialAuthButton({
-  provider,
-  label,
-  onClick,
-  submitting,
-  setError,
-}: {
-  provider: 'google' | 'facebook' | 'apple';
-  label: string;
-  onClick: () => Promise<{ error: string | null }>;
-  submitting: boolean;
-  setError: (message: string) => void;
-}) {
-  const handleClick = async () => {
-    setError('');
-    try {
-      const result = await onClick();
-      if (result?.error) {
-        setError(result.error || `تعذر تسجيل الدخول باستخدام ${label}.`);
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : `تعذر تسجيل الدخول باستخدام ${label}.`
-      );
-    }
-  };
-
-  const icon =
-    provider === 'google'
-      ? 'G'
-      : provider === 'facebook'
-        ? 'f'
-        : '';
-
-  return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={submitting}
-      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-3.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-      aria-label={`المتابعة باستخدام ${label}`}
-    >
-      <span
-        className={[
-          'flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white font-black',
-          provider === 'apple' ? 'text-base' : 'text-sm',
-        ].join(' ')}
-        aria-hidden="true"
-      >
-        {icon}
-      </span>
-      <span>{label}</span>
-    </button>
   );
 }
 
