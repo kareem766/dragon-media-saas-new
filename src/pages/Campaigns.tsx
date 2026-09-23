@@ -463,9 +463,9 @@ export default function Campaigns() {
   }, [campaigns, messageStats])
 
   const handleAdd = async (
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     e: React.FormEvent<HTMLFormElement>
   ) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     e.preventDefault()
 
     if (!supabase || !organizationId) {
@@ -716,9 +716,9 @@ export default function Campaigns() {
   }
 
   const prepareCampaign = async (
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     campaign: DBCampaign
   ) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     setPreparingId(campaign.id)
     setError(null)
     setSuccess(null)
@@ -752,7 +752,6 @@ export default function Campaigns() {
   }
 
   const runCampaign = async (campaign: DBCampaign) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     const confirmed = window.confirm(
       `سيتم بدء إرسال حملة «${campaign.name}» عبر ${channelLabels[campaign.channel] ?? campaign.channel} على دفعات. هل تريد المتابعة؟`
     )
@@ -809,9 +808,9 @@ export default function Campaigns() {
   }
 
   const retryFailed = async (
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     campaignId: string
   ) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     setActionId(campaignId)
     setActionType('retry')
     setError(null)
@@ -843,9 +842,9 @@ export default function Campaigns() {
   }
 
   const cancelCampaign = async (
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     campaignId: string
   ) => {
+    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     const confirmed =
       window.confirm(
         'هل أنت متأكد من إلغاء هذه الحملة؟ سيتم تخطي الرسائل التي لم يتم إرسالها.'
