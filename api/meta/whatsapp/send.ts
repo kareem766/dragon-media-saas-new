@@ -134,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (authenticatedUserId) {
       const { data: membership, error: membershipError } = await admin
         .from('users')
-        .select('id, organization_id, active')
+        .select('id, organization_id, active, role')
         .eq('id', authenticatedUserId)
         .eq('organization_id', organizationId)
         .eq('active', true)
