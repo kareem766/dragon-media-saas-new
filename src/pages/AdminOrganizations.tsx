@@ -1507,9 +1507,9 @@ export default function AdminOrganizations() {
     return (
       <div
         dir="rtl"
-        className="min-h-screen bg-sand-50 p-4 sm:p-6"
+        className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.06),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.05),transparent_28%)] bg-sand-50 p-4 sm:p-6"
       >
-        <Card className="mx-auto max-w-xl p-6 text-center sm:p-8">
+        <Card className="mx-auto max-w-xl border border-blue-100/80 bg-white/90 p-6 text-center shadow-[0_16px_42px_rgba(15,47,107,0.07)] backdrop-blur-sm sm:p-8">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
             <svg
               viewBox="0 0 24 24"
@@ -1561,7 +1561,7 @@ export default function AdminOrganizations() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen space-y-5 bg-sand-50 p-3.5 sm:space-y-6 sm:p-6"
+      className="mx-auto min-h-screen w-full max-w-7xl space-y-6 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.06),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.05),transparent_28%)] p-3.5 sm:p-6"
     >
       {toast && (
         <div
@@ -1575,7 +1575,7 @@ export default function AdminOrganizations() {
 
       {/* Header */}
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="rounded-3xl border border-blue-100/80 bg-white/85 p-4 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm sm:p-5 lg:flex lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-ink-950 text-gold-400 shadow-sm">
             <BuildingIcon className="h-5 w-5" />
@@ -1610,7 +1610,7 @@ export default function AdminOrganizations() {
       </div>
 
       {/* Subscription WhatsApp Test — only organizations with an active WhatsApp connection are selectable. */}
-      <Card className="overflow-hidden border border-emerald-200 bg-gradient-to-l from-emerald-50 to-white p-4 sm:p-5">
+      <Card className="overflow-hidden border border-emerald-200/80 bg-gradient-to-l from-emerald-50 to-white p-4 shadow-[0_12px_34px_rgba(15,47,107,0.05)] sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
