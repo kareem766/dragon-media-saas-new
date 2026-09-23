@@ -361,7 +361,7 @@ export default function Login() {
               <img
                 src={logoDarkUrl || logoUrl}
                 alt={platformName}
-                className="h-12 w-auto object-contain"
+                className="h-12 w-auto rounded-full object-contain"
               />
 
               <span className="text-xl font-bold">
@@ -436,7 +436,7 @@ export default function Login() {
                 <img
                   src={logoUrl}
                   alt={platformName}
-                  className="h-10 w-auto object-contain"
+                  className="h-10 w-auto rounded-full object-contain"
                 />
 
                 <span className="font-bold">
