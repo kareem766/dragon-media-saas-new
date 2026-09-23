@@ -1072,7 +1072,7 @@ export default function CRM() {
 
       {/* Leads */}
       {activeTab === 'leads' && (
-        <div className="overflow-hidden rounded-2xl border border-sand-100 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-sand-100 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)]">
           <div className="flex flex-col gap-1 border-b border-sand-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-bold text-ink-950">
@@ -1244,7 +1244,7 @@ export default function CRM() {
 
       {/* Customers */}
       {activeTab === 'customers' && (
-        <div className="overflow-hidden rounded-2xl border border-sand-100 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-sand-100 bg-white/90 shadow-[0_12px_34px_rgba(15,47,107,0.05)]">
           <div className="flex flex-col gap-1 border-b border-sand-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="font-bold text-ink-950">
