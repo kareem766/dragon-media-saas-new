@@ -314,7 +314,7 @@ export default function Login() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-slate-50 text-slate-900"
+      className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.06),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.05),transparent_25%)] bg-slate-50 text-slate-900"
     >
       <style>{`
         @keyframes dragonHeroLogoFade {
