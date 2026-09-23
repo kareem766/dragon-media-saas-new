@@ -20,7 +20,7 @@ export default function Landing() {
       <header className="sticky top-0 z-40 border-b border-blue-100/80 bg-white/85 shadow-[0_8px_28px_rgba(15,47,107,0.05)] backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-6">
           <Link to="/home" className="flex items-center gap-3 shrink-0">
-            <img src={logoUrl} alt={name} className="h-10 w-auto object-contain" />
+            <img src={logoUrl} alt={name} className="h-10 w-auto rounded-full object-contain" />
             <span className="font-black text-lg hidden sm:block">{name}</span>
           </Link>
           <div className="flex items-center gap-2">
