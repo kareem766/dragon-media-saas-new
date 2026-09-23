@@ -464,7 +464,7 @@ export default function Services() {
               <span>خدمة</span>
             </div>
 
-            <Button
+            {canEditServices && <Button
               type="button"
               onClick={() => {
                 setShowForm((value) => !value)
