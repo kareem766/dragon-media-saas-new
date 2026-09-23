@@ -40,15 +40,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
       organizationId = String(body.organizationId || '')
     }
+    let membership: { id: string; organization_id: string; active: boolean; role: string } | null = null
     if (!organizationId) {
-      const { data: membership, error } = await db.from('users').select('organization_id,active').eq('id', userData.user.id).maybeSingle()
+      const { data, error } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).maybeSingle()
       if (error) return json(res, 500, { error: 'تعذر التحقق من الشركة المرتبطة بالحساب.' })
+      membership = data as typeof membership
       organizationId = String(membership?.organization_id || '')
-      if (!organizationId || membership?.active === false) return json(res, 403, { error: 'لا تملك صلاحية ربط Facebook لهذه الشركة.' })
     } else {
-      const { data: membership } = await db.from('users').select('id,organization_id,active').eq('id', userData.user.id).eq('organization_id', organizationId).maybeSingle()
-      if (!membership || membership.active === false) return json(res, 403, { error: 'لا تملك صلاحية ربط Facebook لهذه الشركة.' })
+      const { data } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).eq('organization_id', organizationId).maybeSingle()
+      membership = data as typeof membership
     }
+    if (!membership || membership.active === false || !membership.organization_id) return json(res, 403, { error: 'لا تملك صلاحية ربط Facebook لهذه الشركة.' })
+
+    const { data: platformSettings } = await db.from('platform_settings').select('integrations_enabled_before_subscription').eq('id', 1).maybeSingle()
+    const allowBeforeSubscription = Boolean(platformSettings?.integrations_enabled_before_subscription)
+    const { data: subscription } = await db.from('subscriptions').select('status,expires_at,renewal_date').eq('organization_id', organizationId).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
+    const expiry = String(subscription?.expires_at || subscription?.renewal_date || '')
+    const today = new Date().toISOString().slice(0, 10)
+    const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
+    if (!subscriptionActive && !allowBeforeSubscription) return json(res, 403, { error: 'ربط التكاملات متاح بعد تفعيل الاشتراك.' })
+
+    const { data: permission } = await db.from('role_permissions').select('can_edit').eq('role', membership.role).eq('resource', 'settings').maybeSingle()
+    if (!permission?.can_edit) return json(res, 403, { error: 'ربط Facebook متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.' })
 
     const state = signState({
       provider: 'facebook',
