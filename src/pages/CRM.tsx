@@ -907,7 +907,7 @@ export default function CRM() {
           </p>
         </div>
 
-        {activeTab === 'leads' && (
+        {activeTab === 'leads' && canEditLeads && (
           <button
             type="button"
             onClick={() => setShowAddLead(true)}
