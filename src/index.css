@@ -153,9 +153,9 @@ button.bg-ink-950:hover, a.bg-ink-950:hover, button.bg-gold-500:hover, a.bg-gold
 .dm-sidebar .bg-cyan-300 { background-color: #67e8f9 !important; }
 .dm-sidebar .border-white\/10 { border-color: rgba(148, 197, 255, .14) !important; }
 .dm-sidebar .border-white\/5 { border-color: rgba(148, 197, 255, .10) !important; }
-.dm-sidebar .bg-white\/\[0.055\] { background: rgba(255,255,255,.055) !important; }
-.dm-sidebar .bg-white\/\[0.085\] { background: rgba(255,255,255,.085) !important; }
-.dm-sidebar .hover\\:bg-white\/\[0.085\]:hover { background: rgba(255,255,255,.10) !important; }
+.dm-sidebar [class*="bg-white/[0.055]"] { background: rgba(255,255,255,.055) !important; }
+.dm-sidebar [class*="bg-white/[0.085]"] { background: rgba(255,255,255,.085) !important; }
+.dm-sidebar [class*="hover:bg-white/[0.085]"]:hover { background: rgba(255,255,255,.10) !important; }
 .dm-sidebar .text-sand-100\/45 { color: rgba(238,246,255,.48) !important; }
 
 
