@@ -47,7 +47,7 @@ export default function HandoffRequests() {
   const resolved = requests.filter(r => r.status === 'resolved')
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 pb-8">
       <div>
         <h2 className="text-xl font-bold text-ink-950">طلبات التحويل للدعم البشري</h2>
         <p className="text-sm text-ink-900/50 mt-1">عملاء طلبوا من ريان التحدث مع موظف حقيقي.</p>
