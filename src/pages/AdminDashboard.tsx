@@ -299,7 +299,7 @@ function DashboardSkeleton() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-sand-50 p-4 sm:p-6"
+      className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(37,99,235,0.07),_transparent_30%),radial-gradient(circle_at_bottom_left,_rgba(245,158,11,0.06),_transparent_30%)] bg-sand-50 p-4 sm:p-6"
     >
       <div className="mx-auto max-w-[1600px] space-y-6">
         <div className="space-y-3">
@@ -312,7 +312,7 @@ function DashboardSkeleton() {
             (_, index) => (
               <div
                 key={index}
-                className="rounded-2xl border border-sand-200 bg-white p-5"
+                className="rounded-3xl border border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm"
               >
                 <div className="animate-pulse space-y-3">
                   <div className="h-3 w-24 rounded bg-sand-100" />
@@ -323,7 +323,7 @@ function DashboardSkeleton() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-sand-200 bg-white p-5">
+        <div className="rounded-3xl border border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm">
           <div className="animate-pulse space-y-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-2">
@@ -382,7 +382,7 @@ function ErrorState({
   return (
     <div
       dir="rtl"
-      className="mx-auto max-w-xl rounded-2xl border border-red-200 bg-red-50 p-6 text-center"
+      className="mx-auto max-w-xl rounded-3xl border border-red-200 bg-red-50/95 p-6 text-center shadow-[0_12px_34px_rgba(127,29,29,0.06)]"
       role="alert"
     >
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-lg font-bold text-red-700">
