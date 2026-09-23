@@ -381,7 +381,7 @@ export default function Dashboard() {
   ) {
     return (
       <div className="flex min-h-[420px] items-center justify-center">
-        <div className="w-full max-w-md rounded-2xl border border-red-100 bg-red-50 p-6 text-center">
+        <div className="w-full max-w-md rounded-3xl border border-red-100 bg-red-50/70 p-6 text-center shadow-[0_12px_34px_rgba(15,47,107,0.05)]">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-600">
             <svg
               width="22"
@@ -421,9 +421,9 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6 sm:space-y-7">
+    <div className="mx-auto w-full max-w-7xl space-y-6 sm:space-y-7">
       {/* Page intro */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="rounded-3xl border border-blue-100/80 bg-white/85 p-4 shadow-[0_12px_34px_rgba(15,47,107,0.05)] backdrop-blur-sm sm:p-5 sm:flex sm:items-end sm:justify-between">
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-gold-600">
             لوحة التحكم
