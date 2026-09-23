@@ -60,7 +60,7 @@ export default function Support() {
             <div className="relative">
               <div className="mb-8 flex items-center gap-4">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/10 p-2.5 shadow-lg">
-                  <img src={logoUrl} alt={platformName} className="h-full w-full object-contain" />
+                  <img src={logoUrl} alt={platformName} className="h-full w-full rounded-full object-contain" />
                 </div>
                 <div>
                   <p className="text-lg font-bold">{platformName}</p>
@@ -89,7 +89,7 @@ export default function Support() {
           <section className="p-5 sm:p-8 lg:p-10">
             <div className="mb-8 flex items-center gap-3 lg:hidden">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-sand-200 bg-white p-2 shadow-sm">
-                <img src={logoUrl} alt={platformName} className="h-full w-full object-contain" />
+                <img src={logoUrl} alt={platformName} className="h-full w-full rounded-full object-contain" />
               </div>
               <div>
                 <h1 className="font-bold text-lg text-ink-950">تواصل مع فريق الدعم</h1>
