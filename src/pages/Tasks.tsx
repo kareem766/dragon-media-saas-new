@@ -1303,16 +1303,18 @@ export default function Tasks() {
                           </Button>
                         )}
 
-                        <Button
-                          variant="ghost"
-                          onClick={() =>
-                            openEditModal(
-                              task
-                            )
-                          }
-                        >
-                          تعديل
-                        </Button>
+                        {canEditTasks && (
+                          <Button
+                            variant="ghost"
+                            onClick={() =>
+                              openEditModal(
+                                task
+                              )
+                            }
+                          >
+                            تعديل
+                          </Button>
+                        )}
 
                         <Button
                           variant="ghost"
