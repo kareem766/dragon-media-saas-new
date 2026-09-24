@@ -43,7 +43,9 @@ async function getContext(db: any, userId: string): Promise<any> {
     const { data } = await db.from('plans').select('id,name,features').eq('name',subscription.plan).maybeSingle()
     plan = data || null
   }
-  const canGenerateImages = String(plan?.name || '') === 'أعمال' && plan?.features?.ai_image_generation === true
+  // Image generation is an explicit entitlement. Do not couple it to the Arabic display name of the plan.
+  // This keeps the feature working when the plan is renamed or localized.
+  const canGenerateImages = plan?.features?.ai_image_generation === true
 
   return { user, organization, services: services || [], canEdit: Boolean(permission?.can_edit), organizationId: user.organization_id, plan, canGenerateImages }
 }
@@ -207,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('AI content image generation failed', error)
       }
 
-      if (!ctx.canGenerateImages) imageError = 'لتوليد الصورة يجب عليك الاشتراك في باقة أعمال'
+      if (!ctx.canGenerateImages) imageError = 'توليد الصور متاح فقط للخطط التي تتضمن ميزة توليد الصور.'
 
       const { data: post, error } = await db.from('ai_content_posts').insert({
         organization_id:ctx.organizationId,
@@ -232,7 +234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST' && action === 'regenerate_image') {
       const id = text(body.id,100)
-      if (!ctx.canGenerateImages) return json(res,403,{error:'لتوليد الصورة يجب عليك الاشتراك في باقة أعمال',code:'IMAGE_GENERATION_PLAN_REQUIRED'})
+      if (!ctx.canGenerateImages) return json(res,403,{error:'توليد الصور متاح فقط للخطط التي تتضمن ميزة توليد الصور.',code:'IMAGE_GENERATION_PLAN_REQUIRED'})
       const { data: existing, error: existingError } = await db.from('ai_content_posts').select('*').eq('id',id).eq('organization_id',ctx.organizationId).maybeSingle()
       if (existingError || !existing) return json(res,404,{error:'المحتوى غير موجود.'})
       ctx.contentType = text(existing.content_type || 'custom',80)
@@ -243,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         image = await generateImage(existing.prompt,ctx,existing.hook)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'فشل توليد الصورة.'
-        return json(res,402,{error:message,code:'IMAGE_GENERATION_BILLING_REQUIRED'})
+        const quotaError = /limit:\s*0|free.?tier|quota|rate limit|resource exhausted|حد الاستخدام/i.test(message)\n        return json(res, quotaError ? 429 : 400, {error:message,code:quotaError ? 'IMAGE_GENERATION_RATE_LIMITED' : 'IMAGE_GENERATION_FAILED'})
       }
       const imagePath = `${ctx.organizationId}/${crypto.randomUUID()}.jpg`
       const { error: uploadError } = await db.storage.from('ai-content').upload(imagePath,image,{contentType:'image/jpeg',upsert:false})
@@ -279,7 +281,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error('AI content handler failed',error)
     const message = error instanceof Error ? error.message : 'حدث خطأ غير متوقع.'
-    const status = message === 'Authentication required.' || message.includes('جلسة الدخول') ? 401 : message.includes('صلاحية') || message.includes('اشتراك') ? 403 : 400
+    const status = message === 'Authentication required.' || message.includes('جلسة الدخول') ? 401 : message.includes('صلاحية') || message.includes('اشتراك') || message.includes('خطط') ? 403 : 400
     return json(res,status,{error:message})
   }
 }
