@@ -1,0 +1,39 @@
+name: Fix AI image toggle
+
+on:
+  push:
+    branches:
+      - feature/ai-content-studio
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ai-content-studio
+          fetch-depth: 0
+      - name: Fix malformed toggle line
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/server/ai-content.ts')
+          s = p.read_text()
+          bad = "// Image generation is temporarily disabled. Keep the text-generation studio available without calling Gemini Image API.\\\\n  const canGenerateImages = false"
+          good = "// Image generation is temporarily disabled. Keep the text-generation studio available without calling Gemini Image API.\n  const canGenerateImages = false"
+          if bad not in s:
+              print('No malformed toggle found; nothing to do.')
+              raise SystemExit(0)
+          p.write_text(s.replace(bad, good))
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/server/ai-content.ts
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix AI image toggle syntax'
+          git push origin feature/ai-content-studio
