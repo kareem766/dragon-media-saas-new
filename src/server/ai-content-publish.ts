@@ -9,11 +9,19 @@ const json=(res:VercelResponse,status:number,body:unknown)=>res.status(status).j
 
 function decryptToken(value:any){
   if(!value?.iv||!value?.tag||!value?.data) throw new Error('Meta access token غير متاح.')
-  const seed=env('META_TOKEN_ENCRYPTION_KEY','META_APP_SECRET')
-  const key=createHash('sha256').update(seed).digest()
-  const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(String(value.iv),'base64'))
-  decipher.setAuthTag(Buffer.from(String(value.tag),'base64'))
-  return Buffer.concat([decipher.update(Buffer.from(String(value.data),'base64')),decipher.final()]).toString('utf8')
+  const seeds=[env('META_TOKEN_ENCRYPTION_KEY'),env('META_APP_SECRET')].filter(Boolean)
+  let lastError: unknown = null
+  for(const seed of seeds){
+    try{
+      const key=createHash('sha256').update(seed).digest()
+      const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(String(value.iv),'base64'))
+      decipher.setAuthTag(Buffer.from(String(value.tag),'base64'))
+      return Buffer.concat([decipher.update(Buffer.from(String(value.data),'base64')),decipher.final()]).toString('utf8')
+    }catch(error){
+      lastError=error
+    }
+  }
+  throw new Error('تعذر فك تشفير اتصال Facebook. مفتاح تشفير Meta الحالي لا يطابق المفتاح المستخدم عند حفظ الاتصال. أعد ربط Facebook من إعدادات Meta.')
 }
 async function graph(path:string,token:string,body:Record<string,unknown>){
   const response=await fetch(`https://graph.facebook.com/${GRAPH_VERSION}${path}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)})
