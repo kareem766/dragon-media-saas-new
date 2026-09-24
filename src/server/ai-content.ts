@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const env = (...names: string[]) => names.map((n) => process.env[n]).find((v) => v?.trim())?.trim() || ''
 const GEMINI_TEXT_MODEL = env('AI_CONTENT_GEMINI_MODEL') || 'gemini-3.5-flash'
-const GEMINI_IMAGE_MODEL = env('AI_CONTENT_GEMINI_IMAGE_MODEL') || 'gemini-3.1-flash-image'
+const GEMINI_IMAGE_MODEL = env('AI_CONTENT_GEMINI_IMAGE_MODEL') || 'gemini-3.1-flash-lite-image'
 
 function json(res: VercelResponse, status: number, body: unknown) {
   return res.status(status).json(body)
@@ -127,7 +127,13 @@ Requirements: professional commercial composition, strong visual hierarchy, clea
     }),
   })
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(text(data?.error?.message,500) || 'فشل توليد الصورة.')
+  if (!response.ok) {
+    const message = text(data?.error?.message,1000) || 'فشل توليد الصورة.'
+    if (response.status === 429 || /limit:\s*0|free.?tier|quota|rate limit|resource exhausted/i.test(message)) {
+      throw new Error('توليد الصور في Gemini يحتاج تفعيل الفوترة للمشروع. توليد النص يعمل بشكل مستقل.')
+    }
+    throw new Error(message)
+  }
   const imageData = text(data?.output_image?.data, 20000000)
   if (!imageData) throw new Error('Gemini لم يرجع صورة.')
   return Buffer.from(imageData, 'base64')
@@ -180,14 +186,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const generated = await generateText(prompt,ctx)
       let imageUrl = ''
       let imagePath = ''
+      let imageError = ''
       try {
         const image = await generateImage(prompt,ctx,generated.hook)
         imagePath = `${ctx.organizationId}/${crypto.randomUUID()}.jpg`
         const { error: uploadError } = await db.storage.from('ai-content').upload(imagePath,image,{contentType:'image/jpeg',upsert:false})
         if (uploadError) throw uploadError
         imageUrl = `${url}/storage/v1/object/public/ai-content/${imagePath}`
-      } catch (imageError) {
-        console.error('AI content image generation failed',imageError)
+      } catch (error) {
+        imageError = error instanceof Error ? error.message : 'فشل توليد الصورة.'
+        console.error('AI content image generation failed', error)
       }
 
       const { data: post, error } = await db.from('ai_content_posts').insert({
@@ -205,10 +213,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status:'ready',
         generation_model:GEMINI_TEXT_MODEL,
         image_model:imageUrl ? GEMINI_IMAGE_MODEL : null,
-        metadata:{image_generation_failed:!imageUrl},
+        metadata:{image_generation_failed:!imageUrl,image_generation_error:imageError || null,image_generation_provider:'gemini'},
       }).select('*').single()
       if (error) throw error
-      return json(res,200,{post,imageGenerated:Boolean(imageUrl)})
+      return json(res,200,{post,imageGenerated:Boolean(imageUrl),imageError:imageError || null})
     }
 
     if (req.method === 'POST' && action === 'regenerate_image') {
@@ -218,7 +226,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ctx.contentType = text(existing.content_type || 'custom',80)
       ctx.tone = text(existing.tone || 'professional',80)
       ctx.imageStyle = text(existing.image_style || 'modern',80)
-      const image = await generateImage(existing.prompt,ctx,existing.hook)
+      let image
+      try {
+        image = await generateImage(existing.prompt,ctx,existing.hook)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'فشل توليد الصورة.'
+        return json(res,402,{error:message,code:'IMAGE_GENERATION_BILLING_REQUIRED'})
+      }
       const imagePath = `${ctx.organizationId}/${crypto.randomUUID()}.jpg`
       const { error: uploadError } = await db.storage.from('ai-content').upload(imagePath,image,{contentType:'image/jpeg',upsert:false})
       if (uploadError) throw uploadError
