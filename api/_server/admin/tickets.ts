@@ -26,7 +26,7 @@ export default async function handler(req: any, res: any) {
     },
   })
 
-  const { data: authData } = await userClient.auth.getUser()
+  const { data: authData, error: authError } = await userClient.auth.getUser(accessToken)
 
   if (!authData?.user) {
     res.status(401).json({ error: 'غير مصرح' })
