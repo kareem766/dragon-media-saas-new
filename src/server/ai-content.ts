@@ -45,7 +45,7 @@ async function getContext(db: any, userId: string): Promise<any> {
   }
   // Image generation is an explicit entitlement. Do not couple it to the Arabic display name of the plan.
   // This keeps the feature working when the plan is renamed or localized.
-  const canGenerateImages = plan?.features?.ai_image_generation === true
+  // Image generation is temporarily disabled. Keep the text-generation studio available without calling Gemini Image API.\n  const canGenerateImages = false
 
   return { user, organization, services: services || [], canEdit: Boolean(permission?.can_edit), organizationId: user.organization_id, plan, canGenerateImages }
 }
@@ -209,7 +209,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('AI content image generation failed', error)
       }
 
-      if (!ctx.canGenerateImages) imageError = 'توليد الصور متاح فقط للخطط التي تتضمن ميزة توليد الصور.'
+      if (!ctx.canGenerateImages) imageError = 'توليد الصور متوقف مؤقتًا في استوديو المحتوى.'
 
       const { data: post, error } = await db.from('ai_content_posts').insert({
         organization_id:ctx.organizationId,
@@ -234,7 +234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST' && action === 'regenerate_image') {
       const id = text(body.id,100)
-      if (!ctx.canGenerateImages) return json(res,403,{error:'توليد الصور متاح فقط للخطط التي تتضمن ميزة توليد الصور.',code:'IMAGE_GENERATION_PLAN_REQUIRED'})
+      if (!ctx.canGenerateImages) return json(res,403,{error:'توليد الصور متوقف مؤقتًا في استوديو المحتوى.',code:'IMAGE_GENERATION_DISABLED'})
       const { data: existing, error: existingError } = await db.from('ai_content_posts').select('*').eq('id',id).eq('organization_id',ctx.organizationId).maybeSingle()
       if (existingError || !existing) return json(res,404,{error:'المحتوى غير موجود.'})
       ctx.contentType = text(existing.content_type || 'custom',80)
