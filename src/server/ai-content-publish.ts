@@ -44,7 +44,6 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     if(!permission?.can_edit) return json(res,403,{error:'ليس لديك صلاحية نشر المحتوى.'})
     const {data:post,error:postError}=await db.from('ai_content_posts').select('*').eq('id',id).eq('organization_id',user.organization_id).maybeSingle()
     if(postError||!post) return json(res,404,{error:'المحتوى غير موجود.'})
-    if(!post.image_url) return json(res,422,{error:'يجب إنشاء صورة للبوست قبل النشر.'})
     const caption=[post.hook,post.content,post.cta].filter(Boolean).join('\n\n')
     const results:any={...(post.publish_results||{})}
     for(const platform of platforms){
@@ -55,7 +54,9 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
           const pageId=text(integration.metadata?.facebook_page_id,100)
           if(!pageId) throw new Error('لم يتم تحديد صفحة Facebook.')
           const token=decryptToken(integration.config?.access_token)
-          const response=await graph(`/${encodeURIComponent(pageId)}/photos`,token,{url:post.image_url,caption,published:true})
+          const response=post.image_url
+            ? await graph(`/${encodeURIComponent(pageId)}/photos`,token,{url:post.image_url,caption,published:true})
+            : await graph(`/${encodeURIComponent(pageId)}/feed`,token,{message:caption,published:true})
           results.facebook={status:'published',id:text(response?.post_id||response?.id,200),published_at:new Date().toISOString()}
         }else if(platform==='instagram'){
           const {data:integration}=await db.from('integrations').select('config,metadata,connected,status').eq('organization_id',user.organization_id).eq('provider','instagram').maybeSingle()
@@ -63,6 +64,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
           const igUserId=text(integration.metadata?.instagram_user_id||integration.metadata?.ig_user_id,100)
           if(!igUserId) throw new Error('حساب Instagram غير مؤهل للنشر أو لم يتم حفظ Instagram User ID.')
           const token=decryptToken(integration.config?.access_token)
+          if(!post.image_url) throw new Error('Instagram يحتاج صورة للبوست، وستتوفر خدمة توليد الصور قريبًا على منصة دراجون ميديا.')
           const container=await graph(`/${encodeURIComponent(igUserId)}/media`,token,{image_url:post.image_url,caption,media_type:'IMAGE'})
           const creationId=text(container?.id,200)
           if(!creationId) throw new Error('تعذر إنشاء حاوية Instagram.')
