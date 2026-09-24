@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
+// Admin tickets API — server-side token validation
 export default async function handler(req: any, res: any) {
   const authHeader = req.headers.authorization
   const accessToken = authHeader?.replace('Bearer ', '')
