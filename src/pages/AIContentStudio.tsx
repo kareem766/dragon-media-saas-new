@@ -41,11 +41,12 @@ export default function AIContentStudio() {
   const [platforms,setPlatforms] = useState<string[]>(['facebook'])
   const [publishing,setPublishing] = useState(false)
   const [regeneratingImage,setRegeneratingImage] = useState(false)
+  const [canGenerateImages,setCanGenerateImages] = useState(false)
 
   const load = async () => {
     if (!session) return
     setLoading(true); setError('')
-    try { const data=await api('/api/admin/ai-content',session); setPosts(data.posts||[]); setActive((data.posts||[])[0]||null) }
+    try { const data=await api('/api/admin/ai-content',session); setPosts(data.posts||[]); setActive((data.posts||[])[0]||null); setCanGenerateImages(Boolean(data.canGenerateImages)) }
     catch(e){setError(e instanceof Error?e.message:'تعذر تحميل المحتوى.')}
     finally{setLoading(false)}
   }
@@ -58,6 +59,7 @@ export default function AIContentStudio() {
       const data=await api('/api/admin/ai-content',session,{method:'POST',body:JSON.stringify({action:'generate',prompt,contentType,tone,imageStyle})})
       setPosts((prev)=>[data.post,...prev.filter((p:Post)=>p.id!==data.post.id)])
       setActive(data.post); setPrompt('')
+      if (data.imageError && !canGenerateImages) setError('لتوليد الصورة يجب عليك الاشتراك في باقة أعمال')
     } catch(e){setError(e instanceof Error?e.message:'تعذر إنشاء البوست.')}
     finally{setGenerating(false)}
   }
@@ -168,7 +170,7 @@ export default function AIContentStudio() {
           <div className="order-1 border-b border-sand-100 bg-sand-50/40 p-5 lg:order-2 lg:border-b-0 lg:border-r sm:p-6">
             {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-square w-full rounded-3xl object-cover shadow-sm" /> : <div className="flex aspect-square w-full items-center justify-center rounded-3xl border border-dashed border-gold-200 bg-white px-6 text-center"><div><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-50 text-xl">◌</div><div className="mt-4 text-sm font-extrabold text-ink-950">البوست النصي جاهز</div><p className="mt-2 text-xs leading-6 text-ink-900/50">لتوليد الصورة يجب عليك الاشتراك في باقة أعمال</p></div></div>}
             {!active.image_url && <div className="mb-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3 text-xs font-bold leading-6 text-gold-800">تم إنشاء البوست النصي بنجاح. الصورة متاحة بعد الاشتراك في باقة أعمال.</div>}
-            <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4"><div className="text-xs font-extrabold text-ink-900/50">اختيار منصات النشر</div><div className="mt-3 grid grid-cols-2 gap-2"><PlatformButton label="Facebook" selected={platforms.includes('facebook')} onClick={()=>setPlatforms((p)=>p.includes('facebook')?p.filter(x=>x!=='facebook'):[...p,'facebook'])}/><PlatformButton label="Instagram" selected={platforms.includes('instagram')} onClick={()=>setPlatforms((p)=>p.includes('instagram')?p.filter(x=>x!=='instagram'):[...p,'instagram'])}/></div><button type="button" onClick={()=>void regenerateImage()} disabled={regeneratingImage||publishing} className="mt-3 w-full rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900 disabled:opacity-50">{regeneratingImage?'جاري إنشاء Creative جديد…':'إعادة إنشاء الصورة'}</button><p className="mt-3 text-[11px] leading-5 text-ink-900/40">النشر يتم من الخادم مباشرة ولا يتم إرسال Access Tokens إلى المتصفح.</p></div>
+            <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4"><div className="text-xs font-extrabold text-ink-900/50">اختيار منصات النشر</div><div className="mt-3 grid grid-cols-2 gap-2"><PlatformButton label="Facebook" selected={platforms.includes('facebook')} onClick={()=>setPlatforms((p)=>p.includes('facebook')?p.filter(x=>x!=='facebook'):[...p,'facebook'])}/><PlatformButton label="Instagram" selected={platforms.includes('instagram')} onClick={()=>setPlatforms((p)=>p.includes('instagram')?p.filter(x=>x!=='instagram'):[...p,'instagram'])}/></div><button type="button" onClick={()=>void regenerateImage()} disabled={!canGenerateImages||regeneratingImage||publishing} className="mt-3 w-full rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900 disabled:opacity-50">{regeneratingImage?'جاري إنشاء Creative جديد…':canGenerateImages?'إعادة إنشاء الصورة':'توليد الصورة متاح في باقة أعمال'}</button><p className="mt-3 text-[11px] leading-5 text-ink-900/40">{canGenerateImages?'توليد الصور مفعّل حسب باقة أعمال.':'لتوليد الصورة يجب عليك الاشتراك في باقة أعمال'}</p><p className="mt-2 text-[11px] leading-5 text-ink-900/40">النشر يتم من الخادم مباشرة ولا يتم إرسال Access Tokens إلى المتصفح.</p></div>
           </div>
         </div>
       </section>}
