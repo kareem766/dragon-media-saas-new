@@ -11,31 +11,19 @@ export default async function handler(req: any, res: any) {
     res.status(401).json({ error: 'غير مصرح' })
     return
   }
+const { data: authData } = await admin.auth.getUser(accessToken)
 
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const { data: authData } = await admin.auth.getUser(accessToken)
+  const { data: authData, error: authError } = await admin.auth.getUser(accessToken)
 
   if (!authData?.user) {
     res.status(401).json({ error: 'غير مصرح' })
     return
   }
-
-  const admin = createClient(supabaseUrl, serviceKey)
-
-  const { data: callerRow } = await admin
-    .from('users')
-    .select('is_platform_admin, active')
-    .eq('id', authData.user.id)
-    .single()
-
-  if (!callerRow?.is_platform_admin || callerRow.active === false) {
-    res.status(403).json({
-      error: 'هذه الصفحة مخصصة لمدير المنصة فقط',
-    })
-    return
+return
   }
 
   const { data } = await admin
