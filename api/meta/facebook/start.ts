@@ -24,8 +24,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const appId = env('META_APP_ID', 'FACEBOOK_APP_ID')
     const stateSecret = env('META_STATE_SECRET', 'META_APP_SECRET')
     const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
-    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
-    if (!appId || !stateSecret || !supabaseUrl || !serviceKey) return json(res, 500, { error: 'إعدادات Facebook أو Supabase غير مكتملة على الخادم.' })
+    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY')
+    const missing = [
+      !appId ? 'META_APP_ID' : '',
+      !stateSecret ? 'META_STATE_SECRET أو META_APP_SECRET' : '',
+      !supabaseUrl ? 'SUPABASE_URL أو VITE_SUPABASE_URL' : '',
+      !serviceKey ? 'SUPABASE_SERVICE_ROLE_KEY أو SUPABASE_SECRET_KEY' : '',
+    ].filter(Boolean)
+    if (missing.length) return json(res, 500, { error: 'إعدادات Facebook أو Supabase غير مكتملة على الخادم.', missing })
 
     const authorization = String(req.headers.authorization || '')
     const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
