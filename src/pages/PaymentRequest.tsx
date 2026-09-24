@@ -519,240 +519,229 @@ export default function PaymentRequest() {
     selectedPlan.currency || 'EGP'
 
   return (
-    <div className="max-w-lg space-y-6">
-      <Card className="p-5 bg-ink-950 text-sand-100 border-0">
-        <div className="text-sm text-sand-100/60">
-          الباقة المختارة
+    <div className="mx-auto w-full max-w-3xl space-y-5 pb-8">
+      <div className="text-center">
+        <div className="text-xs font-semibold text-ink-900/45">
+          إتمام الاشتراك
+        </div>
+        <h1 className="mt-1 text-2xl font-black text-ink-950">
+          إتمام الدفع بأمان
+        </h1>
+        <p className="mt-1 text-sm text-ink-900/55">
+          راجع الفاتورة، حوّل المبلغ، ثم أرسل بيانات العملية للمراجعة.
+        </p>
+      </div>
+
+      <Card className="overflow-hidden border border-ink-900/10 bg-white p-0 shadow-[0_18px_50px_rgba(15,47,107,0.08)]">
+        <div className="bg-ink-950 px-6 py-5 text-sand-100">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="text-xs text-sand-100/55">فاتورة مبدئية</div>
+              <div className="mt-1 text-lg font-bold">
+                {selectedPlan.name}
+              </div>
+              <div className="mt-1 text-xs text-sand-100/55">
+                {billingCycle === 'yearly' ? 'اشتراك سنوي' : 'اشتراك شهري'}
+              </div>
+            </div>
+            <div className="text-left">
+              <div className="text-xs text-sand-100/55">الإجمالي</div>
+              <div className="mt-1 text-2xl font-black">
+                {amount?.toLocaleString('ar-EG')} {currency}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="text-xl font-bold mt-1">
-          {selectedPlan.name}
-        </div>
-
-        {subscription?.plan?.id ===
-          selectedPlan.id &&
-          (subscription.status === 'active' ||
-            subscription.status ===
-              'trialing') && (
-            <div className="mt-2 text-xs text-sand-100/50">
-              هذه هي باقتك الحالية
+        <div className="p-6">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="rounded-xl bg-sand-50 p-3.5">
+              <div className="text-xs text-ink-900/45">الباقة</div>
+              <div className="mt-1 font-bold text-ink-950">{selectedPlan.name}</div>
             </div>
-          )}
-
-        <div className="mt-2 text-sm text-sand-100/70">
-          دورة الفوترة:{' '}
-          {billingCycle === 'yearly'
-            ? 'سنوية'
-            : 'شهرية'}
-        </div>
-
-        <div className="mt-3">
-          <span className="text-3xl font-bold">
-            {amount?.toLocaleString(
-              'ar-EG'
-            )}
-          </span>
-
-          <span className="text-sm text-sand-100/60 mr-1">
-            {currency}
-          </span>
-
-          {billingCycle === 'yearly' ? (
-            <div className="text-xs text-sand-100/50 mt-1">
-              {monthlyPrice.toLocaleString(
-                'ar-EG'
-              )}{' '}
-              {currency} شهريًا عند الحساب الشهري
+            <div className="rounded-xl bg-sand-50 p-3.5">
+              <div className="text-xs text-ink-900/45">دورة الفوترة</div>
+              <div className="mt-1 font-bold text-ink-950">
+                {billingCycle === 'yearly' ? 'سنوية' : 'شهرية'}
+              </div>
             </div>
-          ) : (
-            <div className="text-xs text-sand-100/50 mt-1">
-              يتم التجديد كل 30 يومًا بعد التفعيل
-            </div>
-          )}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between border-t border-ink-900/10 pt-4">
+            <span className="font-bold text-ink-950">المبلغ المطلوب دفعه</span>
+            <span className="text-xl font-black text-ink-950">
+              {amount?.toLocaleString('ar-EG')} {currency}
+            </span>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-xs leading-6 text-blue-900/75">
+            الفاتورة الحالية مبدئية. سيتم تفعيل الباقة وإصدار الفاتورة النهائية بعد مراجعة واعتماد طلب الدفع.
+          </div>
         </div>
       </Card>
 
-      <Card className="p-5">
-        <h3 className="font-bold text-ink-950 mb-1">
-          بيانات التحويل
-        </h3>
-
-        <p className="text-xs text-ink-900/45 mb-4">
-          اختر طريقة الدفع المناسبة لك وستظهر لك بيانات الدفع الحالية.
-        </p>
+      <Card className="p-6">
+        <div className="mb-4">
+          <div className="text-xs font-semibold text-ink-900/45">الخطوة 1</div>
+          <h2 className="mt-1 text-lg font-black text-ink-950">اختر طريقة الدفع</h2>
+          <p className="mt-1 text-xs text-ink-900/45">
+            اختر الطريقة التي استخدمتها في التحويل لتظهر بياناتها.
+          </p>
+        </div>
 
         {methodsLoading ? (
-          <div className="flex items-center gap-2 text-sm text-ink-900/50 py-4">
-            <div className="w-4 h-4 border-2 border-ink-900/20 border-t-ink-900 rounded-full animate-spin" />
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-ink-900/50">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-ink-900/15 border-t-ink-900" />
             جاري تحميل طرق الدفع...
           </div>
         ) : methodsError ? (
-          <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
             {methodsError}
           </div>
         ) : methods.length === 0 ? (
-          <div className="text-sm text-ink-900/50 bg-sand-50 border border-sand-200 rounded-lg px-3.5 py-3">
+          <div className="rounded-xl border border-sand-200 bg-sand-50 px-4 py-4 text-sm text-ink-900/55">
             لم يتم إعداد أي طريقة دفع متاحة حاليًا.
-
-            <div className="mt-1 text-xs text-ink-900/40">
-              برجاء التواصل مع إدارة المنصة لإتمام عملية الاشتراك.
-            </div>
           </div>
-        ) : selectedMethod ? (
-          <div className="text-sm text-ink-900/70 space-y-3 bg-sand-50 rounded-lg p-4 border border-sand-200">
-            <div className="font-bold text-ink-950">
-              {selectedMethod.name}
-            </div>
-
-            {renderPaymentDetails(
-              selectedMethod
-            )}
-          </div>
-        ) : null}
-      </Card>
-
-      <Card className="p-5">
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4"
-        >
-          <div>
-            <label className="text-xs text-ink-900/50">
-              طريقة الدفع
-            </label>
-
-            <select
-              value={method}
-              onChange={(e) =>
-                setMethod(e.target.value)
-              }
-              disabled={
-                methodsLoading ||
-                methods.length === 0
-              }
-              className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700 bg-white disabled:bg-sand-50 disabled:text-ink-900/40"
-            >
-              {methods.length === 0 ? (
-                <option value="">
-                  لا توجد طرق دفع متاحة
-                </option>
-              ) : (
-                methods.map((item) => (
-                  <option
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {methods.map((item) => {
+                const active = item.method_key === method
+                return (
+                  <button
                     key={item.id}
-                    value={item.method_key}
+                    type="button"
+                    onClick={() => setMethod(item.method_key)}
+                    className={`rounded-xl border px-4 py-4 text-right transition-all ${
+                      active
+                        ? 'border-ink-900 bg-ink-950 text-sand-100 shadow-md'
+                        : 'border-sand-200 bg-white text-ink-950 hover:border-ink-900/30 hover:bg-sand-50'
+                    }`}
                   >
-                    {item.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-bold">{item.name}</span>
+                      <span className={`h-4 w-4 rounded-full border-2 ${
+                        active ? 'border-sand-100 bg-sand-100' : 'border-ink-900/20'
+                      }`} />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
 
-          <div>
-            <label className="text-xs text-ink-900/50">
-              رقم العملية / المرجع
-            </label>
-
-            <input
-              required
-              value={reference}
-              onChange={(e) =>
-                setReference(e.target.value)
-              }
-              placeholder="أدخل رقم العملية أو المرجع"
-              className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-ink-900/50">
-              تاريخ التحويل
-            </label>
-
-            <input
-              required
-              type="date"
-              value={date}
-              onChange={(e) =>
-                setDate(e.target.value)
-              }
-              className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-ink-900/50">
-              إيصال الدفع
-            </label>
-
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
-              onChange={handleReceiptChange}
-              className="w-full mt-1 text-sm text-ink-900/70 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-sand-100 file:text-ink-900 file:font-semibold"
-            />
-
-            <p className="text-xs text-ink-900/40 mt-1">
-              اختياري — JPG أو PNG أو WEBP أو PDF بحد أقصى 5 ميجابايت.
-            </p>
-
-            {receipt && (
-              <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-sand-200 bg-sand-50 px-3 py-2">
-                <div className="text-xs text-ink-900/70 truncate">
-                  {receipt.name}
+            {selectedMethod && (
+              <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+                <div className="mb-2 text-sm font-bold text-ink-950">
+                  بيانات التحويل — {selectedMethod.name}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setReceipt(null)}
-                  className="text-xs text-red-600 shrink-0"
-                >
-                  إزالة
-                </button>
+                {renderPaymentDetails(selectedMethod)}
               </div>
             )}
+          </>
+        )}
+      </Card>
+
+      <Card className="p-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <div className="text-xs font-semibold text-ink-900/45">الخطوة 2</div>
+            <h2 className="mt-1 text-lg font-black text-ink-950">
+              تأكيد عملية التحويل
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-xs font-semibold text-ink-900/55">رقم العملية / المرجع</label>
+              <input
+                required
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="مثال: 123456789"
+                className="mt-1.5 w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm outline-none transition focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-ink-900/55">تاريخ التحويل</label>
+              <input
+                required
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-sand-200 bg-white px-3.5 py-3 text-sm outline-none transition focus:border-ink-700 focus:ring-2 focus:ring-ink-900/5"
+              />
+            </div>
           </div>
 
           <div>
-            <label className="text-xs text-ink-900/50">
-              ملاحظات (اختياري)
-            </label>
+            <label className="text-xs font-semibold text-ink-900/55">إيصال الدفع</label>
+            <div className="mt-1.5 rounded-xl border border-dashed border-ink-900/20 bg-sand-50 p-4">
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                onChange={handleReceiptChange}
+                className="w-full text-sm text-ink-900/70 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-950 file:px-3 file:py-2 file:font-semibold file:text-sand-100"
+              />
+              <p className="mt-2 text-xs text-ink-900/40">
+                اختياري — JPG أو PNG أو WEBP أو PDF، بحد أقصى 5 ميجابايت.
+              </p>
+              {receipt && (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-sand-200 bg-white px-3 py-2">
+                  <span className="truncate text-xs text-ink-900/70">{receipt.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setReceipt(null)}
+                    className="shrink-0 text-xs font-semibold text-red-600"
+                  >
+                    إزالة
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
+          <div>
+            <label className="text-xs font-semibold text-ink-900/55">ملاحظات (اختياري)</label>
             <textarea
               value={note}
-              onChange={(e) =>
-                setNote(e.target.value)
-              }
-              rows={2}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
               placeholder="أي ملاحظات إضافية..."
-              className="w-full mt-1 border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700"
+              className="mt-1.5 w-full rounded-xl border border-sand-200 px-3.5 py-3 text-sm outline-none focus:border-ink-700"
             />
           </div>
 
           {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
               {error}
             </div>
           )}
 
-          <Button
-            type="submit"
-            disabled={
-              saving ||
-              methodsLoading ||
-              methods.length === 0 ||
-              !selectedMethod ||
-              !amount
-            }
-            className="w-full"
-          >
-            {saving
-              ? 'جاري الإرسال...'
-              : 'إرسال طلب الدفع للمراجعة'}
-          </Button>
+          <div className="border-t border-ink-900/10 pt-5">
+            <div className="mb-3 flex items-center justify-between gap-4 text-sm">
+              <span className="text-ink-900/55">إجمالي الطلب</span>
+              <span className="font-black text-ink-950">
+                {amount?.toLocaleString('ar-EG')} {currency}
+              </span>
+            </div>
+            <Button
+              type="submit"
+              disabled={saving || methodsLoading || methods.length === 0 || !selectedMethod || !amount}
+              className="w-full py-3 text-base font-bold"
+            >
+              {saving ? 'جاري إرسال الطلب...' : 'تأكيد وإرسال طلب الدفع'}
+            </Button>
+            <div className="mt-3 text-center text-xs text-ink-900/40">
+              سيتم مراجعة التحويل وتفعيل الباقة بعد الاعتماد من إدارة Dragon Media.
+            </div>
+          </div>
         </form>
       </Card>
+
+      <div className="text-center text-xs text-ink-900/40">
+        🔒 بيانات الدفع والإيصال تُستخدم فقط لمراجعة طلب الاشتراك.
+      </div>
     </div>
   )
 }
