@@ -37,7 +37,6 @@ export default async function handler(
 
     if (
       !supabaseUrl ||
-      !anonKey ||
       !serviceKey ||
       !accessToken
     ) {
