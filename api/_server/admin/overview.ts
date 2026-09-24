@@ -34,6 +34,7 @@ export default async function handler(
 
     if (
       !supabaseUrl ||
+      !anonKey ||
       !serviceKey ||
       !accessToken
     ) {
@@ -41,10 +42,32 @@ export default async function handler(
         error: 'غير مصرح',
       })
     }
-const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 
-const { data: authData, error: authError } =
-      await admin.auth.getUser(accessToken)
+    const userClient =
+      createClient(
+        supabaseUrl,
+        anonKey,
+        {
+          global: {
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+            },
+          },
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        },
+      )
+
+    const {
+      data: authData,
+      error: authError,
+    } =
+      await userClient.auth.getUser(
+        accessToken,
+      )
 
     if (
       authError ||
@@ -60,7 +83,45 @@ const { data: authData, error: authError } =
           'جلسة الدخول غير صالحة',
       })
     }
-}
+
+    const admin =
+      createClient(
+        supabaseUrl,
+        serviceKey,
+        {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        },
+      )
+
+    const {
+      data: callerRow,
+      error: callerError,
+    } =
+      await admin
+        .from('users')
+        .select(
+          'is_platform_admin, active',
+        )
+        .eq(
+          'id',
+          authData.user.id,
+        )
+        .maybeSingle()
+
+    if (callerError) {
+      console.error(
+        'Admin overview permission error:',
+        callerError,
+      )
+
+      return res.status(500).json({
+        error:
+          'تعذر التحقق من صلاحيات مدير المنصة.',
+      })
+    }
 
     if (
       !callerRow?.is_platform_admin ||
