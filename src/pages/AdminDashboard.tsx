@@ -466,7 +466,9 @@ export default function AdminDashboard() {
 
   const getAccessToken =
     useCallback(async () => {
-      if (!supabase) {
+      const client = supabase
+
+      if (!client) {
         throw new Error(
           'تعذر الاتصال بخدمة البيانات.'
         )
@@ -476,7 +478,7 @@ export default function AdminDashboard() {
         const {
           data: sessionData,
           error: sessionError,
-        } = await supabase.auth.getSession()
+        } = await client.auth.getSession()
 
         if (sessionError) {
           throw sessionError
@@ -501,7 +503,7 @@ export default function AdminDashboard() {
       const {
         data: refreshedSession,
         error: refreshError,
-      } = await supabase.auth.refreshSession()
+      } = await client.auth.refreshSession()
 
       if (refreshError) {
         console.error(
