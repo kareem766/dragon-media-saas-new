@@ -7,6 +7,7 @@ type Post = {
   id:string; prompt:string; content_type:string; tone:string; image_style:string
   hook:string; content:string; cta:string; image_url:string|null; status:string
   target_platforms:string[]; scheduled_at:string|null; created_at:string; updated_at:string
+  metadata?: { image_generation_failed?: boolean; image_generation_error?: string|null; image_generation_provider?: string }
 }
 
 const types = [
@@ -113,9 +114,15 @@ export default function AIContentStudio() {
       <section className="relative overflow-hidden rounded-3xl border border-ink-900/10 bg-white p-5 shadow-sm sm:p-7">
         <div className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-gold-400/10 blur-3xl" />
         <div className="relative">
-          <div className="inline-flex items-center gap-2 rounded-full bg-gold-50 px-3 py-1.5 text-[10px] font-extrabold text-gold-700">✦ AI CONTENT STUDIO</div>
-          <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink-950 sm:text-3xl">استوديو المحتوى بالذكاء الاصطناعي</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-900/50">اكتب فكرة البوست، وGemini يحولها إلى Hook ومحتوى وCTA وCreative بصري اعتمادًا على بيانات شركتك وخدماتك.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-gold-50 px-3 py-1.5 text-[10px] font-extrabold text-gold-700">✦ AI CONTENT STUDIO</div>
+            <div className="rounded-full border border-sand-200 bg-white/80 px-3 py-1.5 text-[10px] font-bold text-ink-900/50">كتابة + Creative</div>
+          </div>
+          <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink-950 sm:text-3xl">إنشاء بوست بالـAI</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-900/50">حوّل فكرتك إلى بوست جاهز للنشر، مع Hook وContent وCTA وCreative بصري مبني على بيانات شركتك.</p>
+          <div className="mt-5 grid gap-2 sm:grid-cols-3">
+            {['اكتب الفكرة','راجع المحتوى','انشر على منصاتك'].map((item,i)=><div key={item} className="flex items-center gap-2 rounded-2xl border border-sand-100 bg-sand-50/60 px-3 py-2.5 text-xs font-bold text-ink-900/55"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[10px] text-gold-700 shadow-sm">{i+1}</span>{item}</div>)}
+          </div>
         </div>
       </section>
 
@@ -159,7 +166,8 @@ export default function AIContentStudio() {
             <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-4"><div className="text-xs font-extrabold text-ink-900/50">Preview Caption</div><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-ink-950">{caption}</p></div>
           </div>
           <div className="order-1 border-b border-sand-100 bg-sand-50/40 p-5 lg:order-2 lg:border-b-0 lg:border-r sm:p-6">
-            {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-square w-full rounded-3xl object-cover shadow-sm" /> : <div className="flex aspect-square w-full items-center justify-center rounded-3xl border border-dashed border-sand-300 bg-white text-center text-sm leading-6 text-ink-900/40">لم يتم إنشاء الصورة.<br/>يمكنك إعادة توليدها لاحقًا.</div>}
+            {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-square w-full rounded-3xl object-cover shadow-sm" /> : <div className="flex aspect-square w-full items-center justify-center rounded-3xl border border-dashed border-gold-200 bg-white px-6 text-center"><div><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-50 text-xl">◌</div><div className="mt-4 text-sm font-extrabold text-ink-950">البوست النصي جاهز</div><p className="mt-2 text-xs leading-6 text-ink-900/50">لتوليد الصورة يجب عليك الاشتراك في باقة أعمال</p></div></div>}
+            {!active.image_url && <div className="mb-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3 text-xs font-bold leading-6 text-gold-800">تم إنشاء البوست النصي بنجاح. الصورة متاحة بعد الاشتراك في باقة أعمال.</div>}
             <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4"><div className="text-xs font-extrabold text-ink-900/50">اختيار منصات النشر</div><div className="mt-3 grid grid-cols-2 gap-2"><PlatformButton label="Facebook" selected={platforms.includes('facebook')} onClick={()=>setPlatforms((p)=>p.includes('facebook')?p.filter(x=>x!=='facebook'):[...p,'facebook'])}/><PlatformButton label="Instagram" selected={platforms.includes('instagram')} onClick={()=>setPlatforms((p)=>p.includes('instagram')?p.filter(x=>x!=='instagram'):[...p,'instagram'])}/></div><button type="button" onClick={()=>void regenerateImage()} disabled={regeneratingImage||publishing} className="mt-3 w-full rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900 disabled:opacity-50">{regeneratingImage?'جاري إنشاء Creative جديد…':'إعادة إنشاء الصورة'}</button><p className="mt-3 text-[11px] leading-5 text-ink-900/40">النشر يتم من الخادم مباشرة ولا يتم إرسال Access Tokens إلى المتصفح.</p></div>
           </div>
         </div>
