@@ -32,28 +32,11 @@ const endOfDay = (date: Date) =>
   )
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' })
-    return
-  }
+  1
 
-  const authHeader = req.headers.authorization
-
-  const accessToken = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice(7)
-    : null
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (
-    !supabaseUrl ||
-    !serviceKey ||
-    !accessToken
-  ) {
-    res.status(401).json({ error: 'غير مصرح' })
-    return
-  }
+  const admin = createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
 
   const userClient = createClient(
     supabaseUrl,
