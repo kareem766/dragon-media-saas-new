@@ -169,7 +169,7 @@ export default function AIContentStudio() {
 }
 
 function PlatformButton({label,selected,onClick}:{label:string;selected:boolean;onClick:()=>void}) {
-  return <button type="button" onClick={onClick} className={\`rounded-xl border px-3 py-3 text-xs font-bold transition \${selected?'border-gold-300 bg-gold-50 text-gold-800':'border-sand-200 bg-white text-ink-900/50 hover:bg-sand-50'}\`}>{selected?'✓ ':''}{label}</button>
+  return <button type="button" onClick={onClick} className={`rounded-xl border px-3 py-3 text-xs font-bold transition ${selected?'border-gold-300 bg-gold-50 text-gold-800':'border-sand-200 bg-white text-ink-900/50 hover:bg-sand-50'}`}>{selected?'✓ ':''}{label}</button>
 }
 
 function Select({label,value,setValue,options}:{label:string;value:string;setValue:(v:string)=>void;options:string[][]}) {
