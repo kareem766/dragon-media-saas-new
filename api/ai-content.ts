@@ -204,6 +204,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return json(res,200,{post,imageGenerated:Boolean(imageUrl)})
     }
 
+    if (req.method === 'POST' && action === 'regenerate_image') {
+      const id = text(body.id,100)
+      const { data: existing, error: existingError } = await db.from('ai_content_posts').select('*').eq('id',id).eq('organization_id',ctx.organizationId).maybeSingle()
+      if (existingError || !existing) return json(res,404,{error:'المحتوى غير موجود.'})
+      ctx.contentType = text(existing.content_type || 'custom',80)
+      ctx.tone = text(existing.tone || 'professional',80)
+      ctx.imageStyle = text(existing.image_style || 'modern',80)
+      const image = await generateImage(existing.prompt,ctx,existing.hook)
+      const imagePath = `${ctx.organizationId}/${crypto.randomUUID()}.jpg`
+      const { error: uploadError } = await db.storage.from('ai-content').upload(imagePath,image,{contentType:'image/jpeg',upsert:false})
+      if (uploadError) throw uploadError
+      const imageUrl = `${url}/storage/v1/object/public/ai-content/${imagePath}`
+      if (existing.image_path) await db.storage.from('ai-content').remove([existing.image_path])
+      const { data: post, error } = await db.from('ai_content_posts').update({image_url:imageUrl,image_path:imagePath,image_model:GEMINI_IMAGE_MODEL,metadata:{...(existing.metadata||{}),image_generation_failed:false},updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',ctx.organizationId).select('*').single()
+      if (error) throw error
+      return json(res,200,{post})
+    }
+
     if (req.method === 'PATCH') {
       const id = text(body.id,100)
       if (!id) return json(res,400,{error:'معرّف المحتوى مطلوب.'})
