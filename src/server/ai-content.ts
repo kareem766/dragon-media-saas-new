@@ -22,13 +22,14 @@ async function getContext(db: any, userId: string): Promise<any> {
   if (userError || !user || user.active === false || !user.organization_id) throw new Error('الحساب غير مرتبط بمساحة عمل نشطة.')
 
   const [{ data: organization }, { data: services }, { data: permission }, { data: subscription }] = await Promise.all([
-    db.from('organizations').select('id,name,business_type,address,phone,email,logo_url,timezone').eq('id', user.organization_id).maybeSingle(),
+    db.from('organizations').select('id,name,business_type,address,phone,email,logo_url,timezone,ai_content_enabled').eq('id', user.organization_id).maybeSingle(),
     db.from('services').select('name,description,category,price').eq('organization_id', user.organization_id).order('name').limit(80),
     db.from('role_permissions').select('can_view,can_edit,can_delete').eq('role', user.role).eq('resource', 'ai_content').maybeSingle(),
     db.from('subscriptions').select('status,expires_at,renewal_date,plan_id,plan').eq('organization_id', user.organization_id).order('renewal_date',{ascending:false,nullsFirst:false}).limit(1).maybeSingle(),
   ])
 
   if (!permission?.can_view) throw new Error('ليس لديك صلاحية استخدام استوديو المحتوى.')
+  if (organization?.ai_content_enabled === false) throw new Error('استوديو المحتوى غير مفعّل لهذه الشركة.')
   const expiry = text(subscription?.expires_at || subscription?.renewal_date, 40).slice(0,10)
   const today = new Date().toISOString().slice(0,10)
   const activeSubscription = ['active','trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
