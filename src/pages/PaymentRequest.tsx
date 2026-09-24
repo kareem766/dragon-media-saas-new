@@ -519,8 +519,8 @@ export default function PaymentRequest() {
     selectedPlan.currency || 'EGP'
 
   return (
-    <div className="max-w-lg space-y-6">
-      <Card className="p-5 bg-ink-950 text-sand-100 border-0">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
+      <Card className="p-6 bg-ink-950 text-sand-100 border-0 shadow-[0_16px_40px_rgba(15,23,42,0.12)]">
         <div className="text-sm text-sand-100/60">
           الباقة المختارة
         </div>
@@ -590,7 +590,7 @@ export default function PaymentRequest() {
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="flex items-start justify-between gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <div className="text-xs text-ink-900/45">الباقة</div>
               <div className="mt-1 font-bold text-ink-950">
