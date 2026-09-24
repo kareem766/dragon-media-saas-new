@@ -30,6 +30,7 @@ export default function AIContentStudio() {
   const { can } = usePermissions()
   const canView = isAdmin || can('ai_content','view')
   const canEdit = isAdmin || can('ai_content','edit')
+  const canDelete = isAdmin || can('ai_content','delete')
   const [posts,setPosts] = useState<Post[]>([])
   const [prompt,setPrompt] = useState('')
   const [contentType,setContentType] = useState('custom')
@@ -183,15 +184,15 @@ export default function AIContentStudio() {
           <div className="border-b border-sand-100 px-3 py-3 sm:px-6 sm:py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div><div className="text-[10px] font-extrabold text-gold-700">معاينة وتحرير</div><h2 className="mt-1 text-lg font-extrabold text-ink-950 sm:text-xl">البوست جاهز للمراجعة</h2></div>
-              <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"><button onClick={()=>void update({status:'draft'})} disabled={saving} className="min-h-10 rounded-xl border border-sand-200 px-3 text-[11px] font-bold text-ink-900 disabled:opacity-50">حفظ</button><button onClick={()=>void deletePost()} disabled={saving} className="min-h-10 rounded-xl border border-red-100 px-3 text-[11px] font-bold text-red-600 disabled:opacity-50">حذف</button><button onClick={()=>void publish()} disabled={publishing||saving||!platforms.length||(!active.image_url&&canGenerateImages)} className="min-h-10 rounded-xl bg-ink-950 px-3 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{publishing?'جاري…':'نشر الآن'}</button></div>
+              <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2"><button onClick={()=>void update({status:'draft'})} disabled={saving} className="min-h-10 rounded-xl border border-sand-200 px-3 text-[11px] font-bold text-ink-900 disabled:opacity-50">حفظ</button><button onClick={()=>void deletePost()} disabled={saving||!canDelete} className="min-h-10 rounded-xl border border-red-100 px-3 text-[11px] font-bold text-red-600 disabled:opacity-50">حذف</button><button onClick={()=>void publish()} disabled={publishing||saving||!canEdit||!platforms.length||(!active.image_url&&canGenerateImages)} className="min-h-10 rounded-xl bg-ink-950 px-3 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{publishing?'جاري…':'نشر الآن'}</button></div>
             </div>
           </div>
 
           <div className="grid lg:grid-cols-[minmax(0,1fr)_420px]">
             <div className="order-2 space-y-3 p-3 sm:space-y-4 sm:p-6 lg:order-1">
-              <Editable label="Hook" value={active.hook} onChange={v=>setActive({...active,hook:v})} onBlur={()=>void update({hook:active.hook})}/>
-              <Editable label="المحتوى" value={active.content} rows={7} onChange={v=>setActive({...active,content:v})} onBlur={()=>void update({content:active.content})}/>
-              <Editable label="الدعوة للإجراء CTA" value={active.cta} onChange={v=>setActive({...active,cta:v})} onBlur={()=>void update({cta:active.cta})}/>
+              <Editable label="Hook" value={active.hook} disabled={!canEdit} onChange={v=>setActive({...active,hook:v})} onBlur={()=>void update({hook:active.hook})}/>
+              <Editable label="المحتوى" value={active.content} rows={7} disabled={!canEdit} onChange={v=>setActive({...active,content:v})} onBlur={()=>void update({content:active.content})}/>
+              <Editable label="الدعوة للإجراء CTA" value={active.cta} disabled={!canEdit} onChange={v=>setActive({...active,cta:v})} onBlur={()=>void update({cta:active.cta})}/>
               <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-4"><div className="flex items-center justify-between gap-2"><div className="text-[10px] font-extrabold text-ink-900/45">معاينة النص</div><span className="text-[10px] font-bold text-ink-900/30">جاهز للمراجعة</span></div><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-ink-950">{caption}</p></div>
             </div>
 
@@ -220,6 +221,6 @@ function Select({label,value,setValue,options}:{label:string;value:string;setVal
   return <label className="block"><span className="mb-2 block text-xs font-bold text-ink-900/60">{label}</span><select value={value} onChange={e=>setValue(e.target.value)} className="min-h-11 w-full rounded-xl border border-sand-200 bg-white px-3 py-3 text-sm font-semibold text-ink-950 outline-none focus:border-ink-800 focus:ring-4 focus:ring-ink-900/5">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
 }
 
-function Editable({label,value,onChange,onBlur,rows=4}:{label:string;value:string;onChange:(v:string)=>void;onBlur:()=>void;rows?:number}) {
-  return <label className="block"><span className="mb-2 block text-xs font-extrabold text-ink-900/60">{label}</span><textarea value={value} rows={rows} onChange={e=>onChange(e.target.value)} onBlur={onBlur} className="min-h-11 w-full resize-none rounded-xl sm:rounded-2xl border border-sand-200 bg-white px-4 py-3 text-sm leading-7 text-ink-950 outline-none focus:border-ink-800 focus:ring-4 focus:ring-ink-900/5"/></label>
+function Editable({label,value,onChange,onBlur,rows=4,disabled=false}:{label:string;value:string;onChange:(v:string)=>void;onBlur:()=>void;rows?:number;disabled?:boolean}) {
+  return <label className="block"><span className="mb-2 block text-xs font-extrabold text-ink-900/60">{label}</span><textarea value={value} rows={rows} disabled={disabled} onChange={e=>onChange(e.target.value)} onBlur={onBlur} className="min-h-11 w-full resize-none rounded-xl sm:rounded-2xl border border-sand-200 bg-white px-4 py-3 text-sm leading-7 text-ink-950 outline-none focus:border-ink-800 focus:ring-4 focus:ring-ink-900/5"/></label>
 }
