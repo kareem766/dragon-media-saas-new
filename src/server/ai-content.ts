@@ -21,7 +21,7 @@ async function authenticate(req: VercelRequest, db: any) {
   return data.user.id
 }
 
-async function getContext(db: any, userId: string) {
+async function getContext(db: any, userId: string): Promise<any> {
   const { data: user, error: userError } = await db.from('users')
     .select('id,organization_id,role,active,full_name,email')
     .eq('id', userId).maybeSingle()
@@ -54,7 +54,7 @@ async function getContext(db: any, userId: string) {
   }
 
   // Image generation is intentionally disabled for now. Text generation remains available.
-  const canGenerateImages = false
+  const canGenerateImages: boolean = false
 
   return {
     user,
