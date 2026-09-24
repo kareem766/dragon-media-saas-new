@@ -8,7 +8,7 @@ import { useSubscription } from '../lib/useSubscription'
 import { supabase } from '../lib/supabaseClient'
 
 const titles: Record<string, string> = {
-  '/': 'نظرة عامة', '/crm': 'إدارة العملاء (CRM)', '/pipeline': 'مسار المبيعات', '/services': 'الخدمات', '/campaigns': 'الحملات التسويقية', '/inbox': 'صندوق المحادثات الموحد', '/ryan': 'RYAN AI', '/automations': 'الأتمتة', '/tasks': 'المهام والمتابعات', '/appointments': 'المواعيد', '/billing': 'الفواتير والاشتراكات', '/plans': 'الباقات', '/billing/pay': 'إرسال بيانات الدفع', '/reports': 'التقارير', '/users': 'المستخدمون والصلاحيات', '/account': 'حسابي', '/settings': 'الإعدادات', '/tickets': 'الدعم الفني', '/search': 'البحث', '/admin': 'لوحة الإدارة', '/admin/organizations': 'إدارة الشركات', '/admin/payments': 'المدفوعات', '/admin/audit-logs': 'سجل النشاط', '/admin/settings': 'إعدادات المنصة', '/admin/branding': 'هوية المنصة', '/admin/plans': 'إدارة الباقات', '/admin/ryan-credits': 'باقات Ryan', '/admin/roles': 'الأدوار والصلاحيات', '/admin/tickets': 'تذاكر الدعم',
+  '/': 'نظرة عامة', '/crm': 'إدارة العملاء (CRM)', '/pipeline': 'مسار المبيعات', '/services': 'الخدمات', '/campaigns': 'الحملات التسويقية', '/ai-content': 'استوديو المحتوى بالـAI', '/inbox': 'صندوق المحادثات الموحد', '/ryan': 'RYAN AI', '/automations': 'الأتمتة', '/tasks': 'المهام والمتابعات', '/appointments': 'المواعيد', '/billing': 'الفواتير والاشتراكات', '/plans': 'الباقات', '/billing/pay': 'إرسال بيانات الدفع', '/reports': 'التقارير', '/users': 'المستخدمون والصلاحيات', '/account': 'حسابي', '/settings': 'الإعدادات', '/tickets': 'الدعم الفني', '/search': 'البحث', '/admin': 'لوحة الإدارة', '/admin/organizations': 'إدارة الشركات', '/admin/payments': 'المدفوعات', '/admin/audit-logs': 'سجل النشاط', '/admin/settings': 'إعدادات المنصة', '/admin/branding': 'هوية المنصة', '/admin/plans': 'إدارة الباقات', '/admin/ryan-credits': 'باقات Ryan', '/admin/roles': 'الأدوار والصلاحيات', '/admin/tickets': 'تذاكر الدعم',
 }
 
 const subscriptionExemptPaths = ['/plans', '/billing', '/billing/pay', '/account', '/settings', '/tickets']
@@ -23,6 +23,7 @@ const getPageTheme = (pathname: string) => {
   if (pathname.startsWith('/inbox') || pathname.startsWith('/tickets') || pathname.startsWith('/appointments')) return 'inbox'
   if (pathname.startsWith('/ryan') || pathname.startsWith('/automations')) return 'ai'
   if (pathname.startsWith('/campaigns')) return 'campaigns'
+  if (pathname.startsWith('/ai-content')) return 'ai'
   if (pathname.startsWith('/reports')) return 'reports'
   if (pathname.startsWith('/billing') || pathname.startsWith('/plans')) return 'billing'
   if (pathname.startsWith('/integrations')) return 'integrations'
