@@ -572,6 +572,58 @@ export default function PaymentRequest() {
         </div>
       </Card>
 
+      <Card className="overflow-hidden border border-blue-100/80 bg-white p-0 shadow-[0_12px_34px_rgba(15,47,107,0.05)]">
+        <div className="border-b border-blue-100/80 bg-gradient-to-l from-blue-50/90 via-white to-amber-50/70 px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold text-ink-900/45">
+                فاتورة مبدئية
+              </div>
+              <h3 className="mt-1 text-lg font-bold text-ink-950">
+                ملخص الفاتورة
+              </h3>
+            </div>
+            <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+              في انتظار الدفع
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs text-ink-900/45">الباقة</div>
+              <div className="mt-1 font-bold text-ink-950">
+                {selectedPlan.name}
+              </div>
+            </div>
+            <div className="text-left">
+              <div className="text-xs text-ink-900/45">دورة الفوترة</div>
+              <div className="mt-1 text-sm font-semibold text-ink-950">
+                {billingCycle === 'yearly' ? 'سنوية' : 'شهرية'}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-ink-900/10 pt-4 space-y-2">
+            <div className="flex items-center justify-between gap-4 text-sm text-ink-900/60">
+              <span>قيمة الباقة</span>
+              <span>{amount?.toLocaleString('ar-EG')} {currency}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 border-t border-ink-900/10 pt-3">
+              <span className="font-bold text-ink-950">الإجمالي المطلوب</span>
+              <span className="text-xl font-black text-ink-950">
+                {amount?.toLocaleString('ar-EG')} {currency}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3.5 py-3 text-xs leading-6 text-blue-900/75">
+            هذه فاتورة مبدئية مرتبطة بطلب الاشتراك. سيتم إصدار الفاتورة النهائية وتسجيل الدفع بعد مراجعة طلب التحويل واعتماده من إدارة Dragon Media.
+          </div>
+        </div>
+      </Card>
+
       <Card className="p-5">
         <h3 className="font-bold text-ink-950 mb-1">
           بيانات التحويل
