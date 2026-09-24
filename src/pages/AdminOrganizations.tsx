@@ -54,6 +54,7 @@ interface Organization {
   plan_id: string | null
   plan_name: string | null
   whatsapp_connected: boolean
+  ai_content_enabled: boolean
 }
 
 interface UsageMetric {
@@ -1356,6 +1357,27 @@ export default function AdminOrganizations() {
       }
     }
 
+  const toggleAiContent = async (org: Organization) => {
+    if (!supabase) return
+    const enabled = org.ai_content_enabled === false
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('جلسة الدخول غير صالحة')
+      const response = await fetch('/api/admin/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'set_ai_content', organizationId: org.id, enabled }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(json.error || 'تعذر تحديث استوديو المحتوى')
+      setOrganizations(previous => previous.map(item => item.id === org.id ? { ...item, ai_content_enabled: enabled } : item))
+      setToast(enabled ? `تم فتح استوديو المحتوى لشركة "${org.name}"` : `تم إغلاق استوديو المحتوى لشركة "${org.name}"`)
+    } catch (err: any) {
+      setToast(err?.message || 'حدث خطأ أثناء تحديث استوديو المحتوى')
+    }
+  }
+
   const deleteOrganization =
     async (
       org: Organization,
@@ -2362,6 +2384,21 @@ export default function AdminOrganizations() {
                     </div>
                   </div>
                 )}
+
+                <div className="mt-4 rounded-2xl border border-sand-200 bg-sand-50/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-extrabold text-ink-950">AI Content Studio</div>
+                      <div className="mt-1 text-[11px] leading-5 text-ink-900/45">تحكم مستقل لكل شركة في فتح أو إغلاق الصفحة.</div>
+                    </div>
+                    <button type="button" onClick={() => void toggleAiContent(org)} className={`relative h-7 w-12 rounded-full transition ${org.ai_content_enabled === false ? 'bg-sand-300' : 'bg-emerald-500'}`} aria-label={org.ai_content_enabled === false ? 'فتح استوديو المحتوى' : 'إغلاق استوديو المحتوى'}>
+                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${org.ai_content_enabled === false ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+                  <div className={`mt-2 text-xs font-bold ${org.ai_content_enabled === false ? 'text-ink-900/45' : 'text-emerald-600'}`}>
+                    {org.ai_content_enabled === false ? 'مغلق لهذه الشركة' : 'مفعّل لهذه الشركة'}
+                  </div>
+                </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <Button
