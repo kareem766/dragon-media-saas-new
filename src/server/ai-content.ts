@@ -1,11 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { InferenceClient } from '@huggingface/inference'
 
 const env = (...names: string[]) => names.map((n) => process.env[n]).find((v) => v?.trim())?.trim() || ''
 const GEMINI_TEXT_MODEL = env('AI_CONTENT_GEMINI_MODEL') || 'gemini-3.5-flash'
 const GEMINI_IMAGE_MODEL = env('AI_CONTENT_GEMINI_IMAGE_MODEL') || 'gemini-3.1-flash-lite-image'
-const HF_IMAGE_MODEL = env('AI_CONTENT_HF_IMAGE_MODEL') || 'black-forest-labs/FLUX.1-schnell'
 
 function json(res: VercelResponse, status: number, body: unknown) {
   return res.status(status).json(body)
@@ -106,31 +104,9 @@ ${text(prompt,6000)}
   }
 }
 
-async function generateImageWithHuggingFace(prompt: string, ctx: any, hook: string) {
-  const token = env('HF_TOKEN','HUGGINGFACE_TOKEN')
-  if (!token) throw new Error('HF_TOKEN غير مضبوط على الخادم.')
-  const imagePrompt = `Create a premium social-media marketing creative for this business.
-Business: ${text(ctx.organization?.name,200)}
-Business type: ${text(ctx.organization?.business_type,200)}
-Topic: ${text(prompt,1200)}
-Hook context: ${text(hook,500)}
-Visual style: ${text(ctx.imageStyle,80)}
-Requirements: professional commercial composition, strong visual hierarchy, clean modern lighting, brand-safe, realistic where appropriate, suitable for Facebook and Instagram, no watermarks, no invented phone numbers or claims, and no embedded Arabic text.`
-  const client = new InferenceClient(token)
-  const imageBlob = await client.textToImage({
-    model: HF_IMAGE_MODEL,
-    inputs: imagePrompt,
-    provider: 'auto',
-  })
-  return Buffer.from(await imageBlob.arrayBuffer())
-}
-
 async function generateImage(prompt: string, ctx: any, hook: string) {
-  const provider = env('AI_CONTENT_IMAGE_PROVIDER') || (env('HF_TOKEN','HUGGINGFACE_TOKEN') ? 'huggingface' : 'gemini')
-  if (provider === 'huggingface') return generateImageWithHuggingFace(prompt,ctx,hook)
-
   const key = env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
-  if (!key) throw new Error('لا يوجد مزود صور مضبوط. أضف HF_TOKEN لاستخدام Hugging Face أو GEMINI_API_KEY لاستخدام Gemini.')
+  if (!key) throw new Error('GEMINI_API_KEY غير مضبوط على الخادم.')
 
   const imagePrompt = `Create a premium social-media marketing creative for this business.
 Business: ${text(ctx.organization?.name,200)}
@@ -152,7 +128,7 @@ Requirements: professional commercial composition, strong visual hierarchy, clea
   if (!response.ok) {
     const message = text(data?.error?.message,1000) || 'فشل توليد الصورة.'
     if (response.status === 429 || /limit:\s*0|free.?tier|quota|rate limit|resource exhausted/i.test(message)) {
-      throw new Error('توليد الصور في Gemini يحتاج تفعيل الفوترة للمشروع. توليد النص يعمل بشكل مستقل.')
+      throw new Error('لتوليد الصورة يجب عليك الاشتراك في باقة أعمال')
     }
     throw new Error(message)
   }
@@ -233,8 +209,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         image_path:imagePath || null,
         status:'ready',
         generation_model:GEMINI_TEXT_MODEL,
-        image_model:imageUrl ? ((env('AI_CONTENT_IMAGE_PROVIDER') || (env('HF_TOKEN','HUGGINGFACE_TOKEN') ? 'huggingface' : 'gemini')) === 'huggingface' ? HF_IMAGE_MODEL : GEMINI_IMAGE_MODEL) : null,
-        metadata:{image_generation_failed:!imageUrl,image_generation_error:imageError || null,image_generation_provider:env('AI_CONTENT_IMAGE_PROVIDER') || (env('HF_TOKEN','HUGGINGFACE_TOKEN') ? 'huggingface' : 'gemini')},
+        image_model:imageUrl ? GEMINI_IMAGE_MODEL : null,
+        metadata:{image_generation_failed:!imageUrl,image_generation_error:imageError || null,image_generation_provider:'gemini'},
       }).select('*').single()
       if (error) throw error
       return json(res,200,{post,imageGenerated:Boolean(imageUrl),imageError:imageError || null})
