@@ -141,7 +141,7 @@ Requirements: professional commercial composition, strong visual hierarchy, clea
   if (!response.ok) {
     const message = text(data?.error?.message,1000) || 'فشل توليد الصورة.'
     if (response.status === 429 || /limit:\s*0|free.?tier|quota|rate limit|resource exhausted/i.test(message)) {
-      throw new Error('لتوليد الصورة يجب عليك الاشتراك في باقة أعمال')
+      throw new Error('وصل مفتاح Gemini المخصص للصور إلى حد الاستخدام الحالي. تحقق من حصة Gemini أو الفوترة للمفتاح GEMINI_IMAGE_API_KEY، وليس من باقة Dragon Media.')
     }
     throw new Error(message)
   }
