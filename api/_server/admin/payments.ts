@@ -11,76 +11,7 @@ export default async function handler(req: any, res: any) {
     res.status(401).json({ error: 'غير مصرح' })
     return
   }
-
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-  })
-
-  const { data: authData, error: authError } =
-    await userClient.auth.getUser()
-
-  if (authError || !authData?.user) {
-    res.status(401).json({ error: 'غير مصرح' })
-    return
-  }
-
-  const admin = createClient(supabaseUrl, serviceKey)
-
-  const { data: callerRow, error: callerError } = await admin
-    .from('users')
-    .select('is_platform_admin, active')
-    .eq('id', authData.user.id)
-    .single()
-
-  if (callerError || !callerRow?.is_platform_admin || callerRow.active === false) {
-    res.status(403).json({
-      error: 'هذه الصفحة مخصصة لمدير المنصة فقط',
-    })
-    return
-  }
-
-  // -------------------------------------------------------
-  // GET
-  // -------------------------------------------------------
-
-  if (req.method === 'GET') {
-    const { data, error } = await admin
-      .from('payment_requests')
-      .select(`
-        id,
-        organization_id,
-        plan_id,
-        amount,
-        method,
-        reference,
-        payment_date,
-        note,
-        status,
-        rejection_reason,
-        reviewed_by,
-        reviewed_at,
-        created_at,
-        request_type,
-        ryan_credit_purchase_id,
-        item_snapshot,
-        billing_cycle,
-        receipt_url,
-        payment_method_snapshot,
-        organizations (
-          name
-        ),
-        plans (
-          id,
-          name,
-          price,
-          yearly_price,
-          currency
-        )
-      `)
+`)
       .order('created_at', {
         ascending: false,
       })
