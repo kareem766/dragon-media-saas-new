@@ -245,7 +245,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         image = await generateImage(existing.prompt,ctx,existing.hook)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'فشل توليد الصورة.'
-        const quotaError = /limit:\s*0|free.?tier|quota|rate limit|resource exhausted|حد الاستخدام/i.test(message)\n        return json(res, quotaError ? 429 : 400, {error:message,code:quotaError ? 'IMAGE_GENERATION_RATE_LIMITED' : 'IMAGE_GENERATION_FAILED'})
+        const quotaError = /limit:\s*0|free.?tier|quota|rate limit|resource exhausted|حد الاستخدام/i.test(message)
+        return json(res, quotaError ? 429 : 400, {error:message,code:quotaError ? 'IMAGE_GENERATION_RATE_LIMITED' : 'IMAGE_GENERATION_FAILED'})
       }
       const imagePath = `${ctx.organizationId}/${crypto.randomUUID()}.jpg`
       const { error: uploadError } = await db.storage.from('ai-content').upload(imagePath,image,{contentType:'image/jpeg',upsert:false})
