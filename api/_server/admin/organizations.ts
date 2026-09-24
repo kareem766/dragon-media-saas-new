@@ -31,6 +31,10 @@ const getClients = (accessToken: string) => {
           Authorization: `Bearer ${accessToken}`,
         },
       },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
     },
   )
 
