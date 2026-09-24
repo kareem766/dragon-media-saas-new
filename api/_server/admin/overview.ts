@@ -32,6 +32,10 @@ export default async function handler(
       process.env.SUPABASE_SERVICE_KEY ||
       process.env.SUPABASE_SERVICE_ROLE_KEY
 
+    const anonKey =
+      process.env.VITE_SUPABASE_ANON_KEY ||
+      serviceKey
+
     if (
       !supabaseUrl ||
       !anonKey ||
