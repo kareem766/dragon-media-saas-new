@@ -25,7 +25,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const routeValue = req.query.route
   const route = Array.isArray(routeValue) ? routeValue[0] : routeValue
   let routeHandler = handlers[String(route || '')]
-  const route = String(route || '')
   if (route === 'ai-content' || route === 'ai-content-publish') {
     const module = route === 'ai-content'
       ? await import('../../src/server/ai-content.js')
