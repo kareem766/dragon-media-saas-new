@@ -168,7 +168,11 @@ export default function AIContentStudio() {
   )
 }
 
-function PlatformButton({label,selected,onClick}:{label:string;selected:boolean;onClick:()=>void}) {\n  return <button type="button" onClick={onClick} className={\`rounded-xl border px-3 py-3 text-xs font-bold transition \${selected?'border-gold-300 bg-gold-50 text-gold-800':'border-sand-200 bg-white text-ink-900/50 hover:bg-sand-50'}\`}>{selected?'✓ ':''}{label}</button>\n}\n\nfunction Select({label,value,setValue,options}:{label:string;value:string;setValue:(v:string)=>void;options:string[][]}) {
+function PlatformButton({label,selected,onClick}:{label:string;selected:boolean;onClick:()=>void}) {
+  return <button type="button" onClick={onClick} className={\`rounded-xl border px-3 py-3 text-xs font-bold transition \${selected?'border-gold-300 bg-gold-50 text-gold-800':'border-sand-200 bg-white text-ink-900/50 hover:bg-sand-50'}\`}>{selected?'✓ ':''}{label}</button>
+}
+
+function Select({label,value,setValue,options}:{label:string;value:string;setValue:(v:string)=>void;options:string[][]}) {
   return <label className="block"><span className="mb-2 block text-xs font-bold text-ink-900/60">{label}</span><select value={value} onChange={e=>setValue(e.target.value)} className="w-full rounded-xl border border-sand-200 bg-white px-3 py-3 text-sm font-semibold text-ink-950 outline-none focus:border-ink-800">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
 }
 function Editable({label,value,onChange,onBlur,rows=4}:{label:string;value:string;onChange:(v:string)=>void;onBlur:()=>void;rows?:number}) {
