@@ -122,8 +122,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const appId = env('META_APP_ID', 'FACEBOOK_APP_ID')
     const appSecret = env('META_APP_SECRET', 'FACEBOOK_APP_SECRET')
     const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
-    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
-    if (!appId || !appSecret || !supabaseUrl || !serviceKey) return errorRedirect(res, 'إعدادات Meta على الخادم غير مكتملة.')
+    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY')
+    if (!appId || !appSecret || !supabaseUrl || !serviceKey) return errorRedirect(res, 'إعدادات Meta أو Supabase على الخادم غير مكتملة.')
 
     const stateUserId = typeof stateData.userId === 'string' ? stateData.userId : ''
     if (!stateUserId) return errorRedirect(res, 'جلسة Meta غير مرتبطة بمستخدم صالح.')
