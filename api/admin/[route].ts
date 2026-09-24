@@ -7,8 +7,6 @@ import payments from '../_server/admin/payments.js'
 import tickets from '../_server/admin/tickets.js'
 import ryanAssistant from '../_server/admin/ryan-assistant.js'
 import testSubscriptionWhatsapp from '../_server/admin/test-subscription-whatsapp.js'
-import aiContent from '../../src/server/ai-content.js'
-import aiContentPublish from '../../src/server/ai-content-publish.js'
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 
@@ -21,14 +19,19 @@ const handlers: Record<string, Handler> = {
   tickets,
   'ryan-assistant': ryanAssistant,
   'test-subscription-whatsapp': testSubscriptionWhatsapp,
-  'ai-content': aiContent,
-  'ai-content-publish': aiContentPublish,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const routeValue = req.query.route
   const route = Array.isArray(routeValue) ? routeValue[0] : routeValue
-  const routeHandler = handlers[String(route || '')]
+  let routeHandler = handlers[String(route || '')]
+  const route = String(route || '')
+  if (route === 'ai-content' || route === 'ai-content-publish') {
+    const module = route === 'ai-content'
+      ? await import('../../src/server/ai-content.js')
+      : await import('../../src/server/ai-content-publish.js')
+    routeHandler = module.default as Handler
+  }
   if (!routeHandler) return res.status(404).json({ error: 'Admin API route not found' })
   try {
     return await routeHandler(req, res)
