@@ -21,6 +21,7 @@ const DealDetail = lazy(() => import('./pages/DealDetail'))
 const Pipeline = lazy(() => import('./pages/Pipeline'))
 const Services = lazy(() => import('./pages/Services'))
 const Campaigns = lazy(() => import('./pages/Campaigns'))
+const AIContentStudio = lazy(() => import('./pages/AIContentStudio'))
 const Inbox = lazy(() => import('./pages/Inbox'))
 const Account = lazy(() => import('./pages/Account'))
 const Ryan = lazy(() => import('./pages/Ryan'))
@@ -110,6 +111,7 @@ export default function App() {
               <Route path="/pipeline/deal/:id" element={<PermissionRoute resource="deals"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><DealDetail /></FeatureRoute></PermissionRoute>} />
               <Route path="/services" element={<PermissionRoute resource="services"><Services /></PermissionRoute>} />
               <Route path="/campaigns" element={<PermissionRoute resource="campaigns"><FeatureRoute feature="campaigns" featureName="الحملات التسويقية"><Campaigns /></FeatureRoute></PermissionRoute>} />
+              <Route path="/ai-content" element={<PermissionRoute resource="ai_content"><AIContentStudio /></PermissionRoute>} />
               <Route path="/inbox" element={<PermissionRoute resource="inbox"><Inbox /></PermissionRoute>} />
               <Route path="/ryan" element={<PermissionRoute resource="ryan"><FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanPageShell /></FeatureRoute></PermissionRoute>} />
               <Route path="/ryan/assistant" element={<PermissionRoute resource="ryan"><FeatureRoute feature="ryan" featureName="Ryan الذكي"><RyanAssistant /></FeatureRoute></PermissionRoute>} />
