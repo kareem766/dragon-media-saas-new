@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
-import { supabase } from '../lib/supabaseClient'
 import { usePermissions } from '../lib/usePermissions'
 
 type Post = {
@@ -46,8 +45,12 @@ export default function AIContentStudio() {
   const load = async () => {
     if (!session) return
     setLoading(true); setError('')
-    try { const data=await api('/api/admin/ai-content',session); setPosts(data.posts||[]); setActive((data.posts||[])[0]||null); setCanGenerateImages(Boolean(data.canGenerateImages)) }
-    catch(e){setError(e instanceof Error?e.message:'تعذر تحميل المحتوى.')}
+    try {
+      const data=await api('/api/admin/ai-content',session)
+      setPosts(data.posts||[])
+      setActive((data.posts||[])[0]||null)
+      setCanGenerateImages(Boolean(data.canGenerateImages))
+    } catch(e){setError(e instanceof Error?e.message:'تعذر تحميل المحتوى.')}
     finally{setLoading(false)}
   }
   useEffect(()=>{void load()},[session?.access_token])
@@ -109,82 +112,105 @@ export default function AIContentStudio() {
 
   const caption = useMemo(()=>active?[active.hook,active.content,active.cta].filter(Boolean).join('\n\n'):'',[active])
 
-  if (!can('ai_content','view')) return <div dir="rtl" className="p-6"><div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700">ليس لديك صلاحية الوصول إلى استوديو المحتوى.</div></div>
+  if (!can('ai_content','view')) return <div dir="rtl" className="p-4 sm:p-6"><div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700">ليس لديك صلاحية الوصول إلى استوديو المحتوى.</div></div>
 
   return (
-    <div dir="rtl" className="mx-auto w-full max-w-7xl space-y-5 pb-10">
-      <section className="relative overflow-hidden rounded-3xl border border-ink-900/10 bg-white p-5 shadow-sm sm:p-7">
-        <div className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-gold-400/10 blur-3xl" />
-        <div className="relative">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-gold-50 px-3 py-1.5 text-[10px] font-extrabold text-gold-700">✦ AI CONTENT STUDIO</div>
-            <div className="rounded-full border border-sand-200 bg-white/80 px-3 py-1.5 text-[10px] font-bold text-ink-900/50">كتابة + Creative</div>
+    <main dir="rtl" className="mx-auto w-full max-w-7xl px-3 pb-8 pt-3 sm:px-5 sm:pb-12 sm:pt-5">
+      <div className="space-y-4 sm:space-y-5">
+        <section className="relative overflow-hidden rounded-[28px] border border-ink-900/10 bg-white shadow-sm">
+          <div className="absolute -left-20 -top-24 h-56 w-56 rounded-full bg-gold-400/10 blur-3xl" />
+          <div className="relative p-4 sm:p-7">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-gold-50 px-3 py-1.5 text-[10px] font-extrabold tracking-wide text-gold-700">✦ AI CONTENT STUDIO</span>
+                  <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5 text-[10px] font-bold text-ink-900/45">Gemini • كتابة المحتوى</span>
+                </div>
+                <h1 className="mt-3 text-[24px] font-extrabold tracking-tight text-ink-950 sm:text-3xl">استوديو المحتوى بالـAI</h1>
+                <p className="mt-2 max-w-2xl text-xs leading-6 text-ink-900/50 sm:text-sm">حوّل فكرة بسيطة إلى بوست احترافي جاهز للمراجعة والنشر، بصياغة تناسب نشاط شركتك.</p>
+              </div>
+              <div className="hidden shrink-0 rounded-2xl border border-sand-100 bg-sand-50 px-3 py-2 text-center sm:block"><div className="text-[10px] font-bold text-ink-900/40">المرحلة الحالية</div><div className="mt-1 text-xs font-extrabold text-ink-950">كتابة + مراجعة</div></div>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-2">
+              {['اكتب الفكرة','راجع المحتوى','انشر'].map((item,i)=><div key={item} className="rounded-2xl border border-sand-100 bg-sand-50/60 px-2 py-3 text-center"><span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-white text-[10px] font-extrabold text-gold-700 shadow-sm">{i+1}</span><span className="mt-2 block text-[10px] font-bold text-ink-900/55 sm:text-xs">{item}</span></div>)}
+            </div>
           </div>
-          <h1 className="mt-4 text-2xl font-extrabold tracking-tight text-ink-950 sm:text-3xl">إنشاء بوست بالـAI</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-900/50">حوّل فكرتك إلى بوست جاهز للنشر، مع Hook وContent وCTA وCreative بصري مبني على بيانات شركتك.</p>
-          <div className="mt-5 grid gap-2 sm:grid-cols-3">
-            {['اكتب الفكرة','راجع المحتوى','انشر على منصاتك'].map((item,i)=><div key={item} className="flex items-center gap-2 rounded-2xl border border-sand-100 bg-sand-50/60 px-3 py-2.5 text-xs font-bold text-ink-900/55"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[10px] text-gold-700 shadow-sm">{i+1}</span>{item}</div>)}
-          </div>
+        </section>
+
+        {error && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold leading-6 text-red-700 sm:text-sm"><span className="mt-0.5 shrink-0">!</span><span>{error}</span></div>}
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+          <section className="rounded-[28px] border border-ink-900/10 bg-white p-4 shadow-sm sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div><h2 className="text-lg font-extrabold text-ink-950 sm:text-xl">أنشئ بوست جديد</h2><p className="mt-1 text-xs leading-5 text-ink-900/45">اكتب الفكرة بطريقتك، وخلّي Gemini يتولى الصياغة.</p></div>
+              <span className="shrink-0 rounded-xl bg-sand-50 px-2.5 py-2 text-[10px] font-extrabold text-ink-900/50">GEMINI</span>
+            </div>
+
+            <div className="relative mt-4">
+              <textarea aria-label="فكرة البوست" value={prompt} onChange={e=>setPrompt(e.target.value)} disabled={generating||!canEdit} rows={6} maxLength={1200} placeholder="مثال: عايز بوست عن أهمية إدارة الحملات الإعلانية للشركات الصغيرة مع دعوة للتواصل معنا..." className="w-full resize-none rounded-[22px] border border-sand-200 bg-sand-50/40 px-4 py-4 text-sm leading-7 text-ink-950 outline-none transition placeholder:text-ink-900/30 focus:border-ink-800 focus:bg-white focus:ring-4 focus:ring-ink-900/5 disabled:opacity-60 sm:min-h-[170px]" />
+              <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg bg-white/80 px-2 py-1 text-[10px] font-bold text-ink-900/35">{prompt.length}/1200</div>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <Select label="نوع المحتوى" value={contentType} setValue={setContentType} options={types}/>
+              <Select label="نبرة المحتوى" value={tone} setValue={setTone} options={tones}/>
+              <Select label="ستايل الـCreative" value={imageStyle} setValue={setImageStyle} options={imageStyles}/>
+            </div>
+
+            {!canGenerateImages && <div className="mt-4 flex items-start gap-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3"><span className="mt-0.5">✦</span><div><div className="text-xs font-extrabold text-gold-800">توليد الصور متوقف مؤقتًا</div><p className="mt-1 text-[11px] leading-5 text-gold-800/70">الكتابة بالـAI تعمل بشكل طبيعي. سنعيد تفعيل الـCreative عند توفر حصة توليد الصور.</p></div></div>}
+
+            <button type="button" onClick={()=>void generate()} disabled={generating||!canEdit||prompt.trim().length<5} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink-950 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-ink-800 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50">
+              <span>{generating?'جاري إنشاء المحتوى…':'إنشاء البوست بالـAI'}</span><span aria-hidden="true">{generating?'…':'✦'}</span>
+            </button>
+          </section>
+
+          <section className="rounded-[28px] border border-ink-900/10 bg-white p-4 shadow-sm sm:p-6">
+            <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-extrabold text-ink-950 sm:text-xl">المحتوى السابق</h2><p className="mt-1 text-xs text-ink-900/40">آخر البوستات التي أنشأتها</p></div><span className="rounded-xl bg-sand-50 px-3 py-2 text-[10px] font-extrabold text-ink-900/40">{posts.length} بوست</span></div>
+            {loading ? <div className="py-12 text-center text-xs text-ink-900/40">جاري تحميل المحتوى…</div> : posts.length===0 ? <div className="my-4 rounded-2xl border border-dashed border-sand-200 bg-sand-50/40 px-5 py-10 text-center"><div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-lg shadow-sm">✦</div><div className="mt-3 text-sm font-extrabold text-ink-950">لا يوجد محتوى بعد</div><p className="mt-1 text-xs leading-5 text-ink-900/40">ابدأ بفكرة بسيطة، وسنجهز لك أول بوست.</p></div> : <div className="mt-4 max-h-[430px] space-y-2 overflow-y-auto overscroll-contain pr-0.5">{posts.map(p=><button key={p.id} type="button" onClick={()=>setActive(p)} className={`w-full rounded-2xl border p-3 text-right transition active:scale-[.99] ${active?.id===p.id?'border-gold-300 bg-gold-50/70 shadow-sm':'border-sand-200 bg-white hover:bg-sand-50'}`}><div className="flex items-start gap-3">{p.image_url?<img src={p.image_url} className="h-12 w-12 shrink-0 rounded-xl object-cover sm:h-14 sm:w-14" alt="" />:<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sand-100 text-xs text-ink-900/25 sm:h-14 sm:w-14">AI</div>}<div className="min-w-0 flex-1"><div className="truncate text-xs font-extrabold text-ink-950 sm:text-sm">{p.hook||'بوست بدون Hook'}</div><div className="mt-1 line-clamp-2 text-[11px] leading-5 text-ink-900/45 sm:text-xs">{p.content}</div></div></div></button>)}</div>}
+          </section>
         </div>
-      </section>
 
-      {error && <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</div>}
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="rounded-3xl border border-ink-900/10 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div><h2 className="text-lg font-extrabold text-ink-950">أنشئ بوست جديد</h2><p className="mt-1 text-xs text-ink-900/45">صف الفكرة كما تفكر فيها، بدون الحاجة لصياغة المحتوى بنفسك.</p></div>
-            <span className="rounded-xl bg-sand-50 px-3 py-2 text-xs font-bold text-ink-900/50">Gemini</span>
+        {active && <section className="overflow-hidden rounded-[28px] border border-ink-900/10 bg-white shadow-sm">
+          <div className="border-b border-sand-100 px-4 py-4 sm:px-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><div className="text-[10px] font-extrabold text-gold-700">معاينة وتحرير</div><h2 className="mt-1 text-lg font-extrabold text-ink-950 sm:text-xl">البوست جاهز للمراجعة</h2></div>
+              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap"><button onClick={()=>void update({status:'draft'})} disabled={saving} className="min-h-10 rounded-xl border border-sand-200 px-3 text-[11px] font-bold text-ink-900 disabled:opacity-50">حفظ</button><button onClick={()=>void deletePost()} disabled={saving} className="min-h-10 rounded-xl border border-red-100 px-3 text-[11px] font-bold text-red-600 disabled:opacity-50">حذف</button><button onClick={()=>void publish()} disabled={publishing||saving||!platforms.length||(!active.image_url&&canGenerateImages)} className="min-h-10 rounded-xl bg-ink-950 px-3 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{publishing?'جاري…':'نشر الآن'}</button></div>
+            </div>
           </div>
-          <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} disabled={generating||!canEdit} rows={6} placeholder="مثال: عايز بوست عن أهمية إدارة الحملات الإعلانية للشركات الصغيرة مع دعوة للتواصل معنا..." className="mt-5 w-full resize-none rounded-2xl border border-sand-200 bg-sand-50/40 px-4 py-4 text-sm leading-7 text-ink-950 outline-none transition focus:border-ink-800 focus:ring-4 focus:ring-ink-900/5 disabled:opacity-60" />
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <Select label="نوع المحتوى" value={contentType} setValue={setContentType} options={types}/>
-            <Select label="النبرة" value={tone} setValue={setTone} options={tones}/>
-            <Select label="ستايل الصورة" value={imageStyle} setValue={setImageStyle} options={imageStyles}/>
-          </div>
-          <button type="button" onClick={()=>void generate()} disabled={generating||!canEdit||prompt.trim().length<5} className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink-950 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-50">
-            {generating ? 'جاري إنشاء المحتوى والصورة…' : 'إنشاء البوست بالـAI'}
-          </button>
-        </section>
 
-        <section className="rounded-3xl border border-ink-900/10 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-center justify-between"><h2 className="text-lg font-extrabold text-ink-950">المحتوى السابق</h2><span className="text-xs font-bold text-ink-900/40">{posts.length} بوست</span></div>
-          {loading ? <div className="py-10 text-center text-sm text-ink-900/40">جاري التحميل…</div> :
-            posts.length===0 ? <div className="py-10 text-center text-sm leading-6 text-ink-900/40">لم تنشئ أي محتوى بعد.<br/>ابدأ من النموذج بجانبك.</div> :
-            <div className="mt-4 max-h-[520px] space-y-2 overflow-auto">{posts.map(p=><button key={p.id} type="button" onClick={()=>setActive(p)} className={`w-full rounded-2xl border p-3 text-right transition ${active?.id===p.id?'border-gold-300 bg-gold-50/60':'border-sand-200 bg-white hover:bg-sand-50'}`}><div className="flex items-start gap-3">{p.image_url?<img src={p.image_url} className="h-14 w-14 shrink-0 rounded-xl object-cover" alt="" />:<div className="h-14 w-14 shrink-0 rounded-xl bg-sand-100"/>}<div className="min-w-0"><div className="truncate text-sm font-extrabold text-ink-950">{p.hook||'بوست بدون Hook'}</div><div className="mt-1 line-clamp-2 text-xs leading-5 text-ink-900/45">{p.content}</div></div></div></button>)}</div>}
-        </section>
+          <div className="grid lg:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="order-2 space-y-4 p-4 sm:p-6 lg:order-1">
+              <Editable label="Hook" value={active.hook} onChange={v=>setActive({...active,hook:v})} onBlur={()=>void update({hook:active.hook})}/>
+              <Editable label="المحتوى" value={active.content} rows={9} onChange={v=>setActive({...active,content:v})} onBlur={()=>void update({content:active.content})}/>
+              <Editable label="الدعوة للإجراء CTA" value={active.cta} onChange={v=>setActive({...active,cta:v})} onBlur={()=>void update({cta:active.cta})}/>
+              <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-4"><div className="flex items-center justify-between gap-2"><div className="text-[10px] font-extrabold text-ink-900/45">معاينة النص</div><span className="text-[10px] font-bold text-ink-900/30">جاهز للمراجعة</span></div><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-ink-950">{caption}</p></div>
+            </div>
+
+            <div className="order-1 border-b border-sand-100 bg-sand-50/40 p-4 sm:p-6 lg:order-2 lg:border-b-0 lg:border-r">
+              {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-square w-full rounded-[24px] object-cover shadow-sm" /> : <div className="flex aspect-square w-full items-center justify-center rounded-[24px] border border-dashed border-gold-200 bg-white px-6 text-center"><div><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-50 text-xl">✦</div><div className="mt-4 text-sm font-extrabold text-ink-950">النص جاهز — الـCreative غير متاح حاليًا</div><p className="mt-2 text-xs leading-6 text-ink-900/45">{canGenerateImages ? 'يمكنك محاولة إنشاء الصورة مرة أخرى.' : 'توليد الصور متوقف مؤقتًا، لكن يمكنك مراجعة النص ونشره.'}</p></div></div>}
+
+              <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-2"><div className="text-xs font-extrabold text-ink-900/55">منصات النشر</div><span className="text-[10px] font-bold text-ink-900/30">اختر منصة أو أكثر</span></div>
+                <div className="mt-3 grid grid-cols-2 gap-2"><PlatformButton label="Facebook" selected={platforms.includes('facebook')} onClick={()=>setPlatforms((p)=>p.includes('facebook')?p.filter(x=>x!=='facebook'):[...p,'facebook'])}/><PlatformButton label="Instagram" selected={platforms.includes('instagram')} onClick={()=>setPlatforms((p)=>p.includes('instagram')?p.filter(x=>x!=='instagram'):[...p,'instagram'])}/></div>
+                {canGenerateImages && <button type="button" onClick={()=>void regenerateImage()} disabled={regeneratingImage||publishing} className="mt-3 min-h-11 w-full rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900 transition hover:bg-sand-50 disabled:opacity-50">{regeneratingImage?'جاري إنشاء Creative جديد…':'إعادة إنشاء الصورة'}</button>}
+                <p className="mt-3 text-[10px] leading-5 text-ink-900/35">النشر يتم من الخادم مباشرة، ولا يتم إرسال Access Tokens إلى المتصفح.</p>
+              </div>
+            </div>
+          </div>
+        </section>}
       </div>
-
-      {active && <section className="overflow-hidden rounded-3xl border border-ink-900/10 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sand-100 px-5 py-4 sm:px-6">
-          <div><div className="text-xs font-bold text-gold-700">معاينة وتحرير</div><h2 className="mt-1 text-lg font-extrabold text-ink-950">البوست جاهز للمراجعة</h2></div>
-          <div className="flex flex-wrap gap-2"><button onClick={()=>void update({status:'draft'})} disabled={saving} className="rounded-xl border border-sand-200 px-4 py-2 text-xs font-bold text-ink-900">حفظ كمسودة</button><button onClick={()=>void deletePost()} disabled={saving} className="rounded-xl border border-red-100 px-4 py-2 text-xs font-bold text-red-600">حذف</button><button onClick={()=>void publish()} disabled={publishing||saving||!platforms.length||!active.image_url} className="rounded-xl bg-ink-950 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{publishing?'جاري النشر…':'نشر الآن'}</button></div>
-        </div>
-        <div className="grid gap-0 lg:grid-cols-[1fr_460px]">
-          <div className="order-2 space-y-4 p-5 lg:order-1 sm:p-6">
-            <Editable label="Hook" value={active.hook} onChange={v=>setActive({...active,hook:v})} onBlur={()=>void update({hook:active.hook})}/>
-            <Editable label="Content" value={active.content} rows={10} onChange={v=>setActive({...active,content:v})} onBlur={()=>void update({content:active.content})}/>
-            <Editable label="CTA" value={active.cta} onChange={v=>setActive({...active,cta:v})} onBlur={()=>void update({cta:active.cta})}/>
-            <div className="rounded-2xl border border-sand-200 bg-sand-50/60 p-4"><div className="text-xs font-extrabold text-ink-900/50">Preview Caption</div><p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-ink-950">{caption}</p></div>
-          </div>
-          <div className="order-1 border-b border-sand-100 bg-sand-50/40 p-5 lg:order-2 lg:border-b-0 lg:border-r sm:p-6">
-            {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-square w-full rounded-3xl object-cover shadow-sm" /> : <div className="flex aspect-square w-full items-center justify-center rounded-3xl border border-dashed border-gold-200 bg-white px-6 text-center"><div><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-50 text-xl">◌</div><div className="mt-4 text-sm font-extrabold text-ink-950">البوست النصي جاهز</div><p className="mt-2 text-xs leading-6 text-ink-900/50">{active.metadata?.image_generation_error || (canGenerateImages ? 'تعذر إنشاء الصورة حاليًا، يمكنك المحاولة مرة أخرى.' : 'توليد الصور متاح في الخطط التي تتضمن هذه الميزة.')}</p></div></div>}
-            {!active.image_url && <div className="mb-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3 text-xs font-bold leading-6 text-gold-800">تم إنشاء البوست النصي بنجاح. {canGenerateImages ? 'يمكنك إعادة محاولة توليد الصورة من الزر بالأسفل.' : 'توليد الصورة يحتاج إلى خطة تتضمن ميزة توليد الصور.'}</div>}
-            <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4"><div className="text-xs font-extrabold text-ink-900/50">اختيار منصات النشر</div><div className="mt-3 grid grid-cols-2 gap-2"><PlatformButton label="Facebook" selected={platforms.includes('facebook')} onClick={()=>setPlatforms((p)=>p.includes('facebook')?p.filter(x=>x!=='facebook'):[...p,'facebook'])}/><PlatformButton label="Instagram" selected={platforms.includes('instagram')} onClick={()=>setPlatforms((p)=>p.includes('instagram')?p.filter(x=>x!=='instagram'):[...p,'instagram'])}/></div><button type="button" onClick={()=>void regenerateImage()} disabled={!canGenerateImages||regeneratingImage||publishing} className="mt-3 w-full rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900 disabled:opacity-50">{regeneratingImage?'جاري إنشاء Creative جديد…':canGenerateImages?'إعادة إنشاء الصورة':'توليد الصورة متاح في الخطة الحالية'}</button><p className="mt-3 text-[11px] leading-5 text-ink-900/40">{canGenerateImages?'توليد الصور مفعّل حسب صلاحية الخطة.':'توليد الصور يحتاج إلى خطة تتضمن هذه الميزة.'}</p><p className="mt-2 text-[11px] leading-5 text-ink-900/40">النشر يتم من الخادم مباشرة ولا يتم إرسال Access Tokens إلى المتصفح.</p></div>
-          </div>
-        </div>
-      </section>}
-    </div>
+    </main>
   )
 }
 
 function PlatformButton({label,selected,onClick}:{label:string;selected:boolean;onClick:()=>void}) {
-  return <button type="button" onClick={onClick} className={`rounded-xl border px-3 py-3 text-xs font-bold transition ${selected?'border-gold-300 bg-gold-50 text-gold-800':'border-sand-200 bg-white text-ink-900/50 hover:bg-sand-50'}`}>{selected?'✓ ':''}{label}</button>
+  return <button type="button" onClick={onClick} className={`min-h-11 rounded-xl border px-3 py-3 text-xs font-bold transition active:scale-[.98] ${selected?'border-gold-300 bg-gold-50 text-gold-800':'border-sand-200 bg-white text-ink-900/50 hover:bg-sand-50'}`}>{selected?'✓ ':''}{label}</button>
 }
 
 function Select({label,value,setValue,options}:{label:string;value:string;setValue:(v:string)=>void;options:string[][]}) {
-  return <label className="block"><span className="mb-2 block text-xs font-bold text-ink-900/60">{label}</span><select value={value} onChange={e=>setValue(e.target.value)} className="w-full rounded-xl border border-sand-200 bg-white px-3 py-3 text-sm font-semibold text-ink-950 outline-none focus:border-ink-800">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+  return <label className="block"><span className="mb-2 block text-xs font-bold text-ink-900/60">{label}</span><select value={value} onChange={e=>setValue(e.target.value)} className="min-h-11 w-full rounded-xl border border-sand-200 bg-white px-3 py-3 text-sm font-semibold text-ink-950 outline-none focus:border-ink-800 focus:ring-4 focus:ring-ink-900/5">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
 }
+
 function Editable({label,value,onChange,onBlur,rows=4}:{label:string;value:string;onChange:(v:string)=>void;onBlur:()=>void;rows?:number}) {
-  return <label className="block"><span className="mb-2 block text-xs font-extrabold text-ink-900/60">{label}</span><textarea value={value} rows={rows} onChange={e=>onChange(e.target.value)} onBlur={onBlur} className="w-full resize-none rounded-2xl border border-sand-200 bg-white px-4 py-3 text-sm leading-7 text-ink-950 outline-none focus:border-ink-800 focus:ring-4 focus:ring-ink-900/5"/></label>
+  return <label className="block"><span className="mb-2 block text-xs font-extrabold text-ink-900/60">{label}</span><textarea value={value} rows={rows} onChange={e=>onChange(e.target.value)} onBlur={onBlur} className="min-h-11 w-full resize-none rounded-2xl border border-sand-200 bg-white px-4 py-3 text-sm leading-7 text-ink-950 outline-none focus:border-ink-800 focus:ring-4 focus:ring-ink-900/5"/></label>
 }
