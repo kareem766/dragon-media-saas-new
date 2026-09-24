@@ -74,6 +74,12 @@ const items: SidebarItem[] = [
     resource: 'campaigns',
   },
   {
+    to: '/ai-content',
+    label: 'استوديو المحتوى بالـAI',
+    icon: IconSpark,
+    resource: 'ai_content',
+  },
+  {
     to: '/inbox',
     label: 'صندوق المحادثات',
     icon: IconChat,
