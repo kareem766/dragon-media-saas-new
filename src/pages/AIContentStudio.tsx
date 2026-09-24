@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
+import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 import { usePermissions } from '../lib/usePermissions'
 
 type Post = {
@@ -25,8 +26,10 @@ async function api(path:string, session:any, init?:RequestInit) {
 
 export default function AIContentStudio() {
   const { session } = useAuth()
+  const { isAdmin } = useIsPlatformAdmin()
   const { can } = usePermissions()
-  const canEdit = can('ai_content','edit')
+  const canView = isAdmin || can('ai_content','view')
+  const canEdit = isAdmin || can('ai_content','edit')
   const [posts,setPosts] = useState<Post[]>([])
   const [prompt,setPrompt] = useState('')
   const [contentType,setContentType] = useState('custom')
@@ -112,7 +115,7 @@ export default function AIContentStudio() {
 
   const caption = useMemo(()=>active?[active.hook,active.content,active.cta].filter(Boolean).join('\n\n'):'',[active])
 
-  if (!can('ai_content','view')) return <div dir="rtl" className="p-4 sm:p-6"><div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700">ليس لديك صلاحية الوصول إلى استوديو المحتوى.</div></div>
+  if (!canView) return <div dir="rtl" className="p-4 sm:p-6"><div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700">ليس لديك صلاحية الوصول إلى استوديو المحتوى.</div></div>
 
   return (
     <main dir="rtl" className="mx-auto w-full max-w-7xl px-2 pb-6 pt-2 sm:px-5 sm:pb-12 sm:pt-5">
