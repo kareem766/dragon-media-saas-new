@@ -43,13 +43,11 @@ export default async function handler(req: any, res: any) {
     ? authHeader.slice(7)
     : null
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || serviceKey
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_KEY
 
   if (
     !supabaseUrl ||
-    !anonKey ||
     !serviceKey ||
     !accessToken
   ) {
@@ -59,7 +57,7 @@ export default async function handler(req: any, res: any) {
 
   const userClient = createClient(
     supabaseUrl,
-    anonKey,
+    serviceKey,
     {
       global: {
         headers: {
