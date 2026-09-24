@@ -599,7 +599,7 @@ export default async function handler(
     data: authData,
     error: authError,
   } =
-    await userClient.auth.getUser()
+    await userClient.auth.getUser(accessToken)
 
   if (
     authError ||
