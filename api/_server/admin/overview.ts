@@ -28,9 +28,6 @@ export default async function handler(
     const supabaseUrl =
       process.env.VITE_SUPABASE_URL
 
-    const anonKey =
-      process.env.VITE_SUPABASE_ANON_KEY
-
     const serviceKey =
       process.env.SUPABASE_SERVICE_KEY ||
       process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -45,31 +42,12 @@ export default async function handler(
       })
     }
 
-    const userClient =
-      createClient(
-        supabaseUrl,
-        anonKey,
-        {
-          global: {
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-            },
-          },
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-          },
-        },
-      )
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
 
-    const {
-      data: authData,
-      error: authError,
-    } =
-      await userClient.auth.getUser(
-        accessToken,
-      )
+    const { data: authData, error: authError } =
+      await admin.auth.getUser(accessToken)
 
     if (
       authError ||
