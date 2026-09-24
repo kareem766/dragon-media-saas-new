@@ -147,7 +147,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const url = env('SUPABASE_URL','VITE_SUPABASE_URL')
     const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY','SUPABASE_SECRET_KEY')
-    if (!url || !serviceKey) return json(res,500,{error:'Server configuration is incomplete.'})
+    if (!url || !serviceKey) {
+      console.error('AI content configuration missing', {
+        supabaseUrlPresent: Boolean(url),
+        supabaseServiceRolePresent: Boolean(serviceKey),
+        geminiKeyPresent: Boolean(env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')),
+      })
+      return json(res,500,{error:'Server configuration is incomplete.'})
+    }
     const db = createClient(url, serviceKey, { auth:{persistSession:false,autoRefreshToken:false} })
     const userId = await authenticate(req, db)
     const ctx = await getContext(db, userId)
