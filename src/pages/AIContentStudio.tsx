@@ -44,7 +44,7 @@ export default function AIContentStudio() {
   const load = async () => {
     if (!session) return
     setLoading(true); setError('')
-    try { const data=await api('/api/ai-content',session); setPosts(data.posts||[]); setActive((data.posts||[])[0]||null) }
+    try { const data=await api('/api/admin/ai-content',session); setPosts(data.posts||[]); setActive((data.posts||[])[0]||null) }
     catch(e){setError(e instanceof Error?e.message:'تعذر تحميل المحتوى.')}
     finally{setLoading(false)}
   }
@@ -54,7 +54,7 @@ export default function AIContentStudio() {
     if (!session || !canEdit || prompt.trim().length<5) return
     setGenerating(true); setError('')
     try {
-      const data=await api('/api/ai-content',session,{method:'POST',body:JSON.stringify({action:'generate',prompt,contentType,tone,imageStyle})})
+      const data=await api('/api/admin/ai-content',session,{method:'POST',body:JSON.stringify({action:'generate',prompt,contentType,tone,imageStyle})})
       setPosts((prev)=>[data.post,...prev.filter((p:Post)=>p.id!==data.post.id)])
       setActive(data.post); setPrompt('')
     } catch(e){setError(e instanceof Error?e.message:'تعذر إنشاء البوست.')}
@@ -65,7 +65,7 @@ export default function AIContentStudio() {
     if (!session || !active || !canEdit) return
     setSaving(true); setError('')
     try {
-      const data=await api('/api/ai-content',session,{method:'PATCH',body:JSON.stringify({id:active.id,...patch})})
+      const data=await api('/api/admin/ai-content',session,{method:'PATCH',body:JSON.stringify({id:active.id,...patch})})
       setActive(data.post); setPosts((prev)=>prev.map((p)=>p.id===data.post.id?data.post:p))
     } catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل.')}
     finally{setSaving(false)}
@@ -75,7 +75,7 @@ export default function AIContentStudio() {
     if (!session || !active || !canEdit) return
     setRegeneratingImage(true); setError('')
     try {
-      const data=await api('/api/ai-content',session,{method:'POST',body:JSON.stringify({action:'regenerate_image',id:active.id})})
+      const data=await api('/api/admin/ai-content',session,{method:'POST',body:JSON.stringify({action:'regenerate_image',id:active.id})})
       setActive(data.post); setPosts((prev)=>prev.map((p)=>p.id===data.post.id?data.post:p))
     } catch(e){setError(e instanceof Error?e.message:'تعذر إعادة إنشاء الصورة.')}
     finally{setRegeneratingImage(false)}
@@ -85,7 +85,7 @@ export default function AIContentStudio() {
     if (!session || !active || !platforms.length) return
     setPublishing(true); setError('')
     try {
-      const data=await api('/api/ai-content-publish',session,{method:'POST',body:JSON.stringify({id:active.id,platforms})})
+      const data=await api('/api/admin/ai-content-publish',session,{method:'POST',body:JSON.stringify({id:active.id,platforms})})
       setActive(data.post); setPosts((prev)=>prev.map((p)=>p.id===data.post.id?data.post:p))
       const failed=Object.values(data.results||{}).filter((x:any)=>x?.status==='failed') as any[]
       if (failed.length) setError('تم تنفيذ النشر للمنصات المتاحة، وبعض المنصات لم تنجح. راجع حالة كل منصة.')
@@ -98,7 +98,7 @@ export default function AIContentStudio() {
     if (!window.confirm('حذف مسودة البوست؟')) return
     setSaving(true)
     try {
-      await api('/api/ai-content',session,{method:'DELETE',body:JSON.stringify({id:active.id})})
+      await api('/api/admin/ai-content',session,{method:'DELETE',body:JSON.stringify({id:active.id})})
       const next=posts.filter((p)=>p.id!==active.id); setPosts(next); setActive(next[0]||null)
     } catch(e){setError(e instanceof Error?e.message:'تعذر حذف البوست.')}
     finally{setSaving(false)}
