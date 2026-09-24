@@ -74,11 +74,23 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
       }catch(error){results[platform]={status:'failed',error:error instanceof Error?error.message:'فشل النشر'}}
     }
     const published=Object.values(results).some((x:any)=>x?.status==='published')
-    const failed=Object.values(results).some((x:any)=>x?.status==='failed')
-    const status=published?(failed?'published':'published'):(failed?'failed':'ready')
+    const failedPlatforms=platforms.filter((platform:string)=>results[platform]?.status!=='published')
+    const status=published?'published':'failed'
     const {data:updated,error:updateError}=await db.from('ai_content_posts').update({target_platforms:platforms,publish_results:results,status,updated_at:new Date().toISOString()}).eq('id',id).eq('organization_id',user.organization_id).select('*').single()
     if(updateError) throw updateError
-    return json(res,200,{post:updated,results})
+    if(!published){
+      const details=failedPlatforms.map((p:string)=>`${p}: ${results[p]?.error||'فشل النشر'}`).join(' | ')
+      return json(res,400,{error:`لم يتم نشر البوست. ${details}`,post:updated,results})
+    }
+    return json(res,200,{
+      post:updated,
+      results,
+      publishedPlatforms:platforms.filter((p:string)=>results[p]?.status==='published'),
+      failedPlatforms,
+      message:failedPlatforms.length
+        ? `تم النشر جزئيًا، وفشل: ${failedPlatforms.join(' و ')}.`
+        : 'تم تأكيد النشر بنجاح.'
+    })
   }catch(error){
     console.error('AI content publish failed',error)
     const message=error instanceof Error?error.message:'فشل النشر.'
