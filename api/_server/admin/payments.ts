@@ -6,7 +6,7 @@ export default async function handler(req: any, res: any) {
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL
   const anonKey = process.env.VITE_SUPABASE_ANON_KEY
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY
+  const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !anonKey || !serviceKey || !accessToken) {
     res.status(401).json({ error: 'غير مصرح' })
