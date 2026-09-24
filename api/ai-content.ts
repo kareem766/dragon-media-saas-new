@@ -13,7 +13,7 @@ function text(value: unknown, max = 20000) {
   return String(value ?? '').trim().slice(0, max)
 }
 
-async function getContext(db: any, userId: string) {
+async function getContext(db: any, userId: string): Promise<any> {
   const { data: user, error: userError } = await db
     .from('users')
     .select('id,organization_id,role,active,full_name,email')
