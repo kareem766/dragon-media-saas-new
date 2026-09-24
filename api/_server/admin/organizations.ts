@@ -636,7 +636,8 @@ export default async function handler(
         address,
         logo_url,
         plan,
-        created_at
+        created_at,
+        ai_content_enabled
         `,
       )
       .order(
@@ -903,6 +904,9 @@ export default async function handler(
 
             whatsapp_connected:
               whatsappOrganizationIds.has(org.id),
+
+            ai_content_enabled:
+              org.ai_content_enabled !== false,
           }
         },
       )
