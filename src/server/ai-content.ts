@@ -25,7 +25,7 @@ async function getContext(db: any, userId: string): Promise<any> {
     db.from('organizations').select('id,name,business_type,address,phone,email,logo_url,timezone').eq('id', user.organization_id).maybeSingle(),
     db.from('services').select('name,description,category,price').eq('organization_id', user.organization_id).order('name').limit(80),
     db.from('role_permissions').select('can_view,can_edit,can_delete').eq('role', user.role).eq('resource', 'ai_content').maybeSingle(),
-    db.from('subscriptions').select('status,expires_at,renewal_date').eq('organization_id', user.organization_id).order('renewal_date',{ascending:false,nullsFirst:false}).limit(1).maybeSingle(),
+    db.from('subscriptions').select('status,expires_at,renewal_date,plan_id,plan').eq('organization_id', user.organization_id).order('renewal_date',{ascending:false,nullsFirst:false}).limit(1).maybeSingle(),
   ])
 
   if (!permission?.can_view) throw new Error('ليس لديك صلاحية استخدام استوديو المحتوى.')
@@ -34,7 +34,17 @@ async function getContext(db: any, userId: string): Promise<any> {
   const activeSubscription = ['active','trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
   if (!activeSubscription) throw new Error('يجب أن يكون الاشتراك فعالًا لاستخدام استوديو المحتوى.')
 
-  return { user, organization, services: services || [], canEdit: Boolean(permission?.can_edit), organizationId: user.organization_id }
+  let plan: any = null
+  if (subscription?.plan_id) {
+    const { data } = await db.from('plans').select('id,name,features').eq('id',subscription.plan_id).maybeSingle()
+    plan = data || null
+  } else if (subscription?.plan) {
+    const { data } = await db.from('plans').select('id,name,features').eq('name',subscription.plan).maybeSingle()
+    plan = data || null
+  }
+  const canGenerateImages = String(plan?.name || '') === 'أعمال' && plan?.features?.ai_image_generation === true
+
+  return { user, organization, services: services || [], canEdit: Boolean(permission?.can_edit), organizationId: user.organization_id, plan, canGenerateImages }
 }
 
 async function generateText(prompt: string, ctx: any) {
@@ -165,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET') {
       const { data, error } = await db.from('ai_content_posts').select('*').eq('organization_id',ctx.organizationId).order('updated_at',{ascending:false}).limit(50)
       if (error) throw error
-      return json(res,200,{posts:data || []})
+      return json(res,200,{posts:data || [],canGenerateImages:Boolean(ctx.canGenerateImages),planName:ctx.plan?.name || null})
     }
 
     if (!ctx.canEdit) return json(res,403,{error:'ليس لديك صلاحية تعديل المحتوى.'})
@@ -184,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let imageUrl = ''
       let imagePath = ''
       let imageError = ''
-      try {
+      if (ctx.canGenerateImages) try {
         const image = await generateImage(prompt,ctx,generated.hook)
         imagePath = `${ctx.organizationId}/${crypto.randomUUID()}.jpg`
         const { error: uploadError } = await db.storage.from('ai-content').upload(imagePath,image,{contentType:'image/jpeg',upsert:false})
@@ -194,6 +204,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         imageError = error instanceof Error ? error.message : 'فشل توليد الصورة.'
         console.error('AI content image generation failed', error)
       }
+
+      if (!ctx.canGenerateImages) imageError = 'لتوليد الصورة يجب عليك الاشتراك في باقة أعمال'
 
       const { data: post, error } = await db.from('ai_content_posts').insert({
         organization_id:ctx.organizationId,
@@ -218,6 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST' && action === 'regenerate_image') {
       const id = text(body.id,100)
+      if (!ctx.canGenerateImages) return json(res,403,{error:'لتوليد الصورة يجب عليك الاشتراك في باقة أعمال',code:'IMAGE_GENERATION_PLAN_REQUIRED'})
       const { data: existing, error: existingError } = await db.from('ai_content_posts').select('*').eq('id',id).eq('organization_id',ctx.organizationId).maybeSingle()
       if (existingError || !existing) return json(res,404,{error:'المحتوى غير موجود.'})
       ctx.contentType = text(existing.content_type || 'custom',80)
