@@ -42,7 +42,7 @@ export function useIsPlatformAdmin() {
     return () => {
       cancelled = true
     }
-  }, [user, authLoading])
+  }, [user?.id, authLoading])
 
   return { isAdmin, loading }
 }
