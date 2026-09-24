@@ -44,6 +44,7 @@ export default function AIContentStudio() {
   const [publishing,setPublishing] = useState(false)
   const [regeneratingImage,setRegeneratingImage] = useState(false)
   const [canGenerateImages,setCanGenerateImages] = useState(false)
+  const [publishSuccess,setPublishSuccess] = useState(false)
 
   const load = async () => {
     if (!session) return
@@ -98,6 +99,10 @@ export default function AIContentStudio() {
       setActive(data.post); setPosts((prev)=>prev.map((p)=>p.id===data.post.id?data.post:p))
       const failed=Object.values(data.results||{}).filter((x:any)=>x?.status==='failed') as any[]
       if (failed.length) setError('تم تنفيذ النشر للمنصات المتاحة، وبعض المنصات لم تنجح. راجع حالة كل منصة.')
+      else {
+        setPublishSuccess(true)
+        window.setTimeout(()=>setPublishSuccess(false),4500)
+      }
     } catch(e){setError(e instanceof Error?e.message:'تعذر نشر البوست.')}
     finally{setPublishing(false)}
   }
@@ -140,6 +145,7 @@ export default function AIContentStudio() {
           </div>
         </section>
 
+        {publishSuccess && <div role="status" aria-live="polite" className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm"><div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-lg font-black text-white shadow-sm">✓</div><div><div className="text-sm font-extrabold text-emerald-800 sm:text-base">مبروك، تم النشر بنجاح 🎉</div><p className="mt-0.5 text-[11px] leading-5 text-emerald-700/80 sm:text-xs">تم نشر البوست على المنصة التي اخترتها بنجاح.</p></div></div></div>}
         {error && <div role="alert" className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-semibold leading-6 text-red-700 sm:text-sm"><span className="mt-0.5 shrink-0">!</span><span>{error}</span></div>}
 
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_390px] sm:gap-4">
