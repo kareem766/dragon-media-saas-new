@@ -61,6 +61,7 @@ async function getContext(db: any, userId: string): Promise<any> {
     organization,
     services: services || [],
     canEdit: Boolean(permission?.can_edit),
+    canDelete: Boolean(permission?.can_delete),
     organizationId: user.organization_id,
     plan,
     canGenerateImages,
@@ -216,6 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method === 'DELETE') {
+      if (!ctx.canDelete) return json(res, 403, { error: 'ليس لديك صلاحية حذف المحتوى.' })
       const id = text(body.id, 100)
       if (!id) return json(res, 400, { error: 'المحتوى غير محدد.' })
       const { error } = await db.from('ai_content_posts').delete().eq('id', id).eq('organization_id', ctx.organizationId)
