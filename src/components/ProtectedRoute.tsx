@@ -59,6 +59,26 @@ export default function ProtectedRoute({
   const [suspended, setSuspended] = useState(false)
   const [suspensionError, setSuspensionError] = useState<string | null>(null)
   const [checkingSuspend, setCheckingSuspend] = useState(true)
+  const [initialChecksReady, setInitialChecksReady] = useState(false)
+
+  // لا نحول كل تحديث تلقائي للـsession أو إعادة جلب بيانات الشركة/الاشتراك
+  // إلى شاشة تحميل كاملة. شاشة التحميل مطلوبة فقط أثناء أول تهيئة للحساب.
+  useEffect(() => {
+    if (
+      !authLoading &&
+      !orgLoading &&
+      !subscriptionLoading &&
+      !(organizationId && checkingSuspend)
+    ) {
+      setInitialChecksReady(true)
+    }
+  }, [
+    authLoading,
+    orgLoading,
+    subscriptionLoading,
+    organizationId,
+    checkingSuspend,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -103,12 +123,7 @@ export default function ProtectedRoute({
     }
   }, [organizationId])
 
-  if (
-    authLoading ||
-    orgLoading ||
-    subscriptionLoading ||
-    (organizationId && checkingSuspend)
-  ) {
+  if (authLoading || !initialChecksReady) {
     return (
       <div
         dir="rtl"
