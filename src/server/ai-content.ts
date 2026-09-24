@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const env = (...names: string[]) => names.map((n) => process.env[n]).find((v) => v?.trim())?.trim() || ''
 const GEMINI_TEXT_MODEL = env('AI_CONTENT_GEMINI_MODEL') || 'gemini-3.5-flash'
-const GEMINI_IMAGE_MODEL = env('AI_CONTENT_GEMINI_IMAGE_MODEL') || 'gemini-3.1-flash-lite-image'
+const GEMINI_IMAGE_MODEL = env('AI_CONTENT_GEMINI_IMAGE_MODEL') || 'gemini-3.1-flash-image'
 
 function json(res: VercelResponse, status: number, body: unknown) {
   return res.status(status).json(body)
@@ -116,8 +116,8 @@ ${text(prompt,6000)}
 }
 
 async function generateImage(prompt: string, ctx: any, hook: string) {
-  const key = env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
-  if (!key) throw new Error('GEMINI_API_KEY غير مضبوط على الخادم.')
+  const key = env('GEMINI_IMAGE_API_KEY','GOOGLE_GEMINI_IMAGE_API_KEY')
+  if (!key) throw new Error('GEMINI_IMAGE_API_KEY غير مضبوط على الخادم.')
 
   const imagePrompt = `Create a premium social-media marketing creative for this business.
 Business: ${text(ctx.organization?.name,200)}
@@ -165,7 +165,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('AI content configuration missing', {
         supabaseUrlPresent: Boolean(url),
         supabaseServiceRolePresent: Boolean(serviceKey),
-        geminiKeyPresent: Boolean(env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')),
+        geminiTextKeyPresent: Boolean(env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')),
+        geminiImageKeyPresent: Boolean(env('GEMINI_IMAGE_API_KEY','GOOGLE_GEMINI_IMAGE_API_KEY')),
       })
       return json(res,500,{error:'Server configuration is incomplete.'})
     }
