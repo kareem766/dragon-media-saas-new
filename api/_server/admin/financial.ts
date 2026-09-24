@@ -32,32 +32,16 @@ const endOfDay = (date: Date) =>
   )
 
 export default async function handler(req: any, res: any) {
-  1
+const {
+    data: authData,
+    error: authError,
+  } = await userClient.auth.getUser(accessToken)
 
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  const userClient = createClient(
-    supabaseUrl,
-    anonKey,
-    {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      },
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  )
-
-  const {
-    data: authData,
-    error: authError,
-  } = await userClient.auth.getUser(accessToken)
+  const { data: authData, error: authError } = await admin.auth.getUser(accessToken)
 
   if (authError || !authData?.user) {
     res.status(401).json({ error: 'غير مصرح' })
