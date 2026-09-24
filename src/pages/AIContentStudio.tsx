@@ -37,6 +37,9 @@ export default function AIContentStudio() {
   const [generating,setGenerating] = useState(false)
   const [saving,setSaving] = useState(false)
   const [error,setError] = useState('')
+  const [platforms,setPlatforms] = useState<string[]>(['facebook'])
+  const [publishing,setPublishing] = useState(false)
+  const [regeneratingImage,setRegeneratingImage] = useState(false)
 
   const load = async () => {
     if (!session) return
@@ -66,6 +69,28 @@ export default function AIContentStudio() {
       setActive(data.post); setPosts((prev)=>prev.map((p)=>p.id===data.post.id?data.post:p))
     } catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل.')}
     finally{setSaving(false)}
+  }
+
+  const regenerateImage = async () => {
+    if (!session || !active || !canEdit) return
+    setRegeneratingImage(true); setError('')
+    try {
+      const data=await api('/api/ai-content',session,{method:'POST',body:JSON.stringify({action:'regenerate_image',id:active.id})})
+      setActive(data.post); setPosts((prev)=>prev.map((p)=>p.id===data.post.id?data.post:p))
+    } catch(e){setError(e instanceof Error?e.message:'تعذر إعادة إنشاء الصورة.')}
+    finally{setRegeneratingImage(false)}
+  }
+
+  const publish = async () => {
+    if (!session || !active || !platforms.length) return
+    setPublishing(true); setError('')
+    try {
+      const data=await api('/api/ai-content-publish',session,{method:'POST',body:JSON.stringify({id:active.id,platforms})})
+      setActive(data.post); setPosts((prev)=>prev.map((p)=>p.id===data.post.id?data.post:p))
+      const failed=Object.values(data.results||{}).filter((x:any)=>x?.status==='failed') as any[]
+      if (failed.length) setError('تم تنفيذ النشر للمنصات المتاحة، وبعض المنصات لم تنجح. راجع حالة كل منصة.')
+    } catch(e){setError(e instanceof Error?e.message:'تعذر نشر البوست.')}
+    finally{setPublishing(false)}
   }
 
   const deletePost = async () => {
@@ -124,7 +149,7 @@ export default function AIContentStudio() {
       {active && <section className="overflow-hidden rounded-3xl border border-ink-900/10 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-sand-100 px-5 py-4 sm:px-6">
           <div><div className="text-xs font-bold text-gold-700">معاينة وتحرير</div><h2 className="mt-1 text-lg font-extrabold text-ink-950">البوست جاهز للمراجعة</h2></div>
-          <div className="flex flex-wrap gap-2"><button onClick={()=>void update({status:'draft'})} disabled={saving} className="rounded-xl border border-sand-200 px-4 py-2 text-xs font-bold text-ink-900">حفظ كمسودة</button><button onClick={()=>void deletePost()} disabled={saving} className="rounded-xl border border-red-100 px-4 py-2 text-xs font-bold text-red-600">حذف</button><button disabled className="rounded-xl bg-ink-950 px-4 py-2 text-xs font-bold text-white opacity-60">النشر — في المرحلة التالية</button></div>
+          <div className="flex flex-wrap gap-2"><button onClick={()=>void update({status:'draft'})} disabled={saving} className="rounded-xl border border-sand-200 px-4 py-2 text-xs font-bold text-ink-900">حفظ كمسودة</button><button onClick={()=>void deletePost()} disabled={saving} className="rounded-xl border border-red-100 px-4 py-2 text-xs font-bold text-red-600">حذف</button><button onClick={()=>void publish()} disabled={publishing||saving||!platforms.length||!active.image_url} className="rounded-xl bg-ink-950 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{publishing?'جاري النشر…':'نشر الآن'}</button></div>
         </div>
         <div className="grid gap-0 lg:grid-cols-[1fr_460px]">
           <div className="order-2 space-y-4 p-5 lg:order-1 sm:p-6">
@@ -135,7 +160,7 @@ export default function AIContentStudio() {
           </div>
           <div className="order-1 border-b border-sand-100 bg-sand-50/40 p-5 lg:order-2 lg:border-b-0 lg:border-r sm:p-6">
             {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-square w-full rounded-3xl object-cover shadow-sm" /> : <div className="flex aspect-square w-full items-center justify-center rounded-3xl border border-dashed border-sand-300 bg-white text-center text-sm leading-6 text-ink-900/40">لم يتم إنشاء الصورة.<br/>يمكنك إعادة توليدها لاحقًا.</div>}
-            <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4"><div className="text-xs font-extrabold text-ink-900/50">النشر</div><div className="mt-3 grid grid-cols-2 gap-2"><button disabled className="rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900/50">Facebook</button><button disabled className="rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900/50">Instagram</button></div><p className="mt-3 text-[11px] leading-5 text-ink-900/40">سيتم تفعيل النشر المباشر بعد ربط حسابات Meta المناسبة وإضافة مسار النشر الآمن.</p></div>
+            <div className="mt-4 rounded-2xl border border-sand-200 bg-white p-4"><div className="text-xs font-extrabold text-ink-900/50">اختيار منصات النشر</div><div className="mt-3 grid grid-cols-2 gap-2"><PlatformButton label="Facebook" selected={platforms.includes('facebook')} onClick={()=>setPlatforms((p)=>p.includes('facebook')?p.filter(x=>x!=='facebook'):[...p,'facebook'])}/><PlatformButton label="Instagram" selected={platforms.includes('instagram')} onClick={()=>setPlatforms((p)=>p.includes('instagram')?p.filter(x=>x!=='instagram'):[...p,'instagram'])}/></div><button type="button" onClick={()=>void regenerateImage()} disabled={regeneratingImage||publishing} className="mt-3 w-full rounded-xl border border-sand-200 px-3 py-3 text-xs font-bold text-ink-900 disabled:opacity-50">{regeneratingImage?'جاري إنشاء Creative جديد…':'إعادة إنشاء الصورة'}</button><p className="mt-3 text-[11px] leading-5 text-ink-900/40">النشر يتم من الخادم مباشرة ولا يتم إرسال Access Tokens إلى المتصفح.</p></div>
           </div>
         </div>
       </section>}
@@ -143,7 +168,7 @@ export default function AIContentStudio() {
   )
 }
 
-function Select({label,value,setValue,options}:{label:string;value:string;setValue:(v:string)=>void;options:string[][]}) {
+function PlatformButton({label,selected,onClick}:{label:string;selected:boolean;onClick:()=>void}) {\n  return <button type="button" onClick={onClick} className={\`rounded-xl border px-3 py-3 text-xs font-bold transition \${selected?'border-gold-300 bg-gold-50 text-gold-800':'border-sand-200 bg-white text-ink-900/50 hover:bg-sand-50'}\`}>{selected?'✓ ':''}{label}</button>\n}\n\nfunction Select({label,value,setValue,options}:{label:string;value:string;setValue:(v:string)=>void;options:string[][]}) {
   return <label className="block"><span className="mb-2 block text-xs font-bold text-ink-900/60">{label}</span><select value={value} onChange={e=>setValue(e.target.value)} className="w-full rounded-xl border border-sand-200 bg-white px-3 py-3 text-sm font-semibold text-ink-950 outline-none focus:border-ink-800">{options.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
 }
 function Editable({label,value,onChange,onBlur,rows=4}:{label:string;value:string;onChange:(v:string)=>void;onBlur:()=>void;rows?:number}) {
