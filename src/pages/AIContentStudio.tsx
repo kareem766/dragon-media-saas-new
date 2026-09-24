@@ -157,7 +157,7 @@ export default function AIContentStudio() {
               <Select label="ستايل الـCreative" value={imageStyle} setValue={setImageStyle} options={imageStyles}/>
             </div>
 
-            {!canGenerateImages && <div className="mt-4 flex items-start gap-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3"><span className="mt-0.5">✦</span><div><div className="text-xs font-extrabold text-gold-800">توليد الصور متوقف مؤقتًا</div><p className="mt-1 text-[11px] leading-5 text-gold-800/70">الكتابة بالـAI تعمل بشكل طبيعي. سنعيد تفعيل الـCreative عند توفر حصة توليد الصور.</p></div></div>}
+            {!canGenerateImages && <div className="mt-4 flex items-start gap-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3"><span className="mt-0.5">✦</span><div><div className="text-xs font-extrabold text-gold-800">سوف تتوفر خدمة توليد الصور قريبًا على منصة دراجون ميديا</div><p className="mt-1 text-[11px] leading-5 text-gold-800/70">الكتابة بالـAI تعمل بشكل طبيعي. سنعيد تفعيل الـCreative عند توفر حصة توليد الصور.</p></div></div>}
 
             <button type="button" onClick={()=>void generate()} disabled={generating||!canEdit||prompt.trim().length<5} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink-950 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-ink-800 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50">
               <span>{generating?'جاري إنشاء المحتوى…':'إنشاء البوست بالـAI'}</span><span aria-hidden="true">{generating?'…':'✦'}</span>
