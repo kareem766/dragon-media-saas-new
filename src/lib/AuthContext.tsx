@@ -122,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? normalizeAuthError(error.message) : null }
   }
 
-  const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent): Promise<SignUpResult> => {
+  const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent, inviteCode?: string): Promise<SignUpResult> => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد', needsEmailConfirmation: false }
 
     const metadata: Record<string, string> = { full_name: fullName }
