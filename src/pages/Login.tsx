@@ -241,7 +241,8 @@ export default function Login() {
           termsVersion: TERMS_VERSION,
           privacyAcceptedAt: acceptedAt,
           privacyVersion: PRIVACY_VERSION,
-        }
+        },
+        inviteCode.trim() || undefined
       );
 
       if (result?.error) {
