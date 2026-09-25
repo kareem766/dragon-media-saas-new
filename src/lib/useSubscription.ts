@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { useOrganization } from './useOrganization'
+import { useAuth } from './AuthContext'
+import { isPlatformOwnerEmail } from './platformOwner'
 
 interface PlanData {
   id: string
@@ -40,10 +42,12 @@ export type SubscriptionAccessState =
   | 'unknown'
 
 export function useSubscription() {
+  const { user, loading: authLoading } = useAuth()
   const {
     organizationId,
     loading: organizationLoading,
   } = useOrganization()
+  const isPlatformOwner = isPlatformOwnerEmail(user?.email)
 
   const [subscription, setSubscription] =
     useState<SubscriptionData | null>(null)
@@ -55,7 +59,16 @@ export function useSubscription() {
     let cancelled = false
 
     const loadSubscription = async () => {
-      if (organizationLoading) {
+      if (authLoading || organizationLoading) {
+        return
+      }
+
+      if (isPlatformOwner) {
+        if (!cancelled) {
+          setSubscription(null)
+          setError(null)
+          setLoading(false)
+        }
         return
       }
 
@@ -165,7 +178,7 @@ export function useSubscription() {
     return () => {
       cancelled = true
     }
-  }, [organizationId, organizationLoading])
+  }, [organizationId, organizationLoading, authLoading, isPlatformOwner])
 
   const rawStatus =
     subscription?.status ?? 'no_subscription'
@@ -336,6 +349,7 @@ export function useSubscription() {
    * التحقق من Features حسب الباقة الحالية.
    */
   const hasFeature = (key: string) => {
+    if (isPlatformOwner) return true
     if (!isActive) {
       return false
     }
@@ -349,6 +363,7 @@ export function useSubscription() {
    * الحصول على Limit من الباقة.
    */
   const getLimit = (key: string) => {
+    if (isPlatformOwner) return Number.POSITIVE_INFINITY
     if (!isActive) {
       return 0
     }
@@ -361,6 +376,7 @@ export function useSubscription() {
 
   return {
     subscription,
+    isPlatformOwner,
 
     loading,
     error,
@@ -369,8 +385,8 @@ export function useSubscription() {
 
     accessState,
 
-    isActive,
-    isExpired,
+    isActive: isPlatformOwner || isActive,
+    isExpired: isPlatformOwner ? false : isExpired,
     isPendingPayment,
 
     daysRemaining,
