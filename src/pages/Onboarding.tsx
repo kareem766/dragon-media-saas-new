@@ -83,7 +83,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       const { data: sessionData } = await supabase?.auth.getSession() || { data: { session: null } }
       const accessToken = sessionData.session?.access_token || ''
       if (accessToken) {
-        await fetch('/api/auth/rollback-signup', {
+        await fetch('/api/admin/rollback-signup?route=rollback-signup', {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}` },
         })
