@@ -294,7 +294,7 @@ async function handleMetaComment(db: any, integration: any, comment: any, platfo
     updated_at: now,
     unread_count: Number(conversation.unread_count || 0) + (existed ? 1 : 0),
     status: 'open',
-    metadata: { ...obj(conversation.metadata), ...metadata, facebook_psid: senderId, facebook_page_id: pageId },
+    metadata: { ...(conversation.metadata && typeof conversation.metadata === 'object' ? conversation.metadata : {}), ...metadata, facebook_psid: senderId, facebook_page_id: pageId },
   }).eq('id', conversation.id)
 }
 
