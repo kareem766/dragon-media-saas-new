@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useBranding } from '../hooks/useBranding'
@@ -52,9 +52,23 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
       if (acceptError) {
         if (cancelled) return
-        // Do not delete/sign out a valid employee account just because invite
-        // acceptance needs a retry. The account must remain recoverable.
-        setInviteError(acceptError.message)
+
+        // If the invite was already accepted but the client missed the RPC
+        // response, recover by checking the current user's workspace directly.
+        const { data: existingUser } = await client
+          .from('users')
+          .select('organization_id')
+          .eq('id', user?.id || '')
+          .maybeSingle()
+
+        if (existingUser?.organization_id) {
+          localStorage.removeItem('dragon_media_invite_code')
+          setCheckingInvite(false)
+          onDone()
+          return
+        }
+
+        setInviteError(acceptError.message || 'تعذر ربط الحساب بالشركة. يمكنك إعادة المحاولة.')
         setCheckingInvite(false)
         return
       }
@@ -65,7 +79,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
       if (!inviteResult?.organization_id) {
         if (cancelled) return
-        setInviteError('تعذر ربط الحساب بالشركة. حاول مرة أخرى.')
+        setInviteError('تعذر ربط الحساب بالشركة. يمكنك إعادة المحاولة أو العودة لتسجيل الدخول.')
         setCheckingInvite(false)
         return
       }
@@ -181,7 +195,32 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             <img src={logoUrl} alt={platformName} className="mx-auto h-16 w-16 rounded-2xl object-contain" />
             <h1 className="mt-5 text-2xl font-black text-slate-950">تعذر قبول دعوة الشركة</h1>
             <p className="mt-3 text-sm leading-7 text-red-600">{inviteError}</p>
-            <p className="mt-3 text-xs leading-6 text-slate-400">تأكد من استخدام كود دعوة صالح ولم يتم استخدامه من قبل.</p>
+            <p className="mt-3 text-xs leading-6 text-slate-400">حسابك لم يتم حذفه. يمكنك إعادة المحاولة، أو العودة لتسجيل الدخول واستخدام نفس الحساب.</p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <Button
+                type="button"
+                className="w-full rounded-2xl py-3.5 text-sm font-black"
+                onClick={() => {
+                  setInviteError(null)
+                  setCheckingInvite(true)
+                  window.location.reload()
+                }}
+              >
+                إعادة المحاولة
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full rounded-2xl py-3.5 text-sm font-black"
+                onClick={async () => {
+                  localStorage.removeItem('dragon_media_invite_code')
+                  await signOut()
+                  window.location.hash = '#/login'
+                }}
+              >
+                العودة لتسجيل الدخول
+              </Button>
+            </div>
           </Card>
         </div>
       </div>
