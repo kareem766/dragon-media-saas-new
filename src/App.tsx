@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react'
-import { HashRouter, Routes, Route, Link, Outlet } from 'react-router-dom'
+import { HashRouter, Routes, Route, Link, Outlet, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import { useIsPlatformAdmin } from './lib/useIsPlatformAdmin'
 import { ToastProvider } from './lib/ToastContext'
