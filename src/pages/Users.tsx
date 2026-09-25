@@ -18,6 +18,7 @@ interface InviteCode {
   role: string
   used_by: string | null
   created_at: string
+  expires_at: string
 }
 
 const roleLabels: Record<string, string> = {
@@ -50,7 +51,7 @@ export default function Users() {
     setLoading(true)
     const [usersRes, invitesRes] = await Promise.all([
       supabase.from('users').select('id, full_name, email, role, active').eq('organization_id', organizationId),
-      supabase.from('invite_codes').select('id, code, role, used_by, created_at').eq('organization_id', organizationId).order('created_at', { ascending: false }),
+      supabase.from('invite_codes').select('id, code, role, used_by, created_at, expires_at').eq('organization_id', organizationId).is('used_by', null).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }),
     ])
     if (usersRes.data) setTeamUsers(usersRes.data as TeamUser[])
     if (invitesRes.data) setInvites(invitesRes.data as InviteCode[])
@@ -109,13 +110,13 @@ export default function Users() {
           </Button>
         </div>
         {genError && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">{genError}</div>}
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
-          <div className="text-sm font-semibold text-amber-900">صلاحية كود الدعوة</div>
-          <p className="text-xs leading-6 text-amber-900/70 mt-1">
+        <div className="mt-3 rounded-xl border border-blue-200/70 bg-blue-50/60 backdrop-blur-sm px-3.5 py-3 shadow-sm">
+          <div className="text-sm font-semibold text-blue-900">صلاحية كود الدعوة</div>
+          <p className="text-xs leading-6 text-blue-900/70 mt-1">
             كود الدعوة صالح لمدة <strong>24 ساعة فقط من وقت إنشائه</strong>. بعد انتهاء المدة لن يمكن استخدامه، وسيكون عليك إنشاء دعوة جديدة.
           </p>
-          <p className="text-xs leading-6 text-ink-900/45 mt-1">
-            شارك الكود مع الموظف عبر واتساب أو البريد الإلكتروني، ليستخدمه أثناء إنشاء حسابه والانضمام إلى مؤسستك تلقائيًا.
+          <p className="text-xs leading-6 text-blue-900/50 mt-1">
+            شارك الكود مع الموظف عبر واتساب أو البريد الإلكتروني، ليستخدمه أثناء إنشاء حسابه والانضمام إلى مؤسستك تلقائيًا. يتم إخفاء الكود تلقائيًا بعد انتهاء صلاحيته.
           </p>
         </div>
 
@@ -125,7 +126,7 @@ export default function Users() {
               <div key={inv.id} className="flex items-center justify-between border border-sand-200 rounded-lg px-3.5 py-2.5">
                 <span className="font-mono text-sm text-ink-950">{inv.code}</span>
                 <span className="text-xs text-ink-900/50">{roleLabels[inv.role] ?? inv.role}</span>
-                <Badge tone={inv.used_by ? 'success' : 'warning'}>{inv.used_by ? 'مستخدم' : 'متاح'}</Badge>
+                <span className="text-xs text-blue-700/70">متاح حتى {new Date(inv.expires_at).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
               </div>
             ))}
           </div>
