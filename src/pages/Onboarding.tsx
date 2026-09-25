@@ -10,7 +10,6 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [inviteCode, setInviteCode] = useState('')
   const [checkingInvite, setCheckingInvite] = useState(true)
   const [inviteError, setInviteError] = useState<string | null>(null)
-  const inviteAcceptanceStarted = useRef(false)
 
   const [name, setName] = useState('')
   const [businessType, setBusinessType] = useState('')
@@ -30,20 +29,17 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     if (code && !storedCode) localStorage.setItem('dragon_media_invite_code', code)
     setInviteCode(code)
 
-    if (!code || !supabase || inviteAcceptanceStarted.current) {
+    if (!code || !supabase) {
       setCheckingInvite(false)
       return
     }
 
     let cancelled = false
-    inviteAcceptanceStarted.current = true
-
     const acceptInvite = async () => {
       setCheckingInvite(true)
       setInviteError(null)
       const client = supabase
       if (!client) {
-        inviteAcceptanceStarted.current = false
         setCheckingInvite(false)
         return
       }
