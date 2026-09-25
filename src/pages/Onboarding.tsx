@@ -51,8 +51,9 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       if (cancelled) return
 
       if (acceptError) {
-        await cleanupFailedSignup()
         if (cancelled) return
+        // Do not delete/sign out a valid employee account just because invite
+        // acceptance needs a retry. The account must remain recoverable.
         setInviteError(acceptError.message)
         setCheckingInvite(false)
         return
@@ -63,7 +64,6 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       const inviteResult = Array.isArray(data) ? data[0] : data
 
       if (!inviteResult?.organization_id) {
-        await cleanupFailedSignup()
         if (cancelled) return
         setInviteError('تعذر ربط الحساب بالشركة. حاول مرة أخرى.')
         setCheckingInvite(false)
