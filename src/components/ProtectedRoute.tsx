@@ -61,9 +61,12 @@ export default function ProtectedRoute({
   const [checkingSuspend, setCheckingSuspend] = useState(true)
   const [initialChecksReady, setInitialChecksReady] = useState(false)
 
-  const handleOnboardingDone = useCallback(() => {
-    void refresh()
-  }, [refresh])
+  const handleOnboardingDone = useCallback(async () => {
+    const organizationId = await refresh()
+    if (organizationId) {
+      navigate('/', { replace: true })
+    }
+  }, [refresh, navigate])
 
   // لا نحول كل تحديث تلقائي للـsession أو إعادة جلب بيانات الشركة/الاشتراك
   // إلى شاشة تحميل كاملة. شاشة التحميل مطلوبة فقط أثناء أول تهيئة للحساب.
