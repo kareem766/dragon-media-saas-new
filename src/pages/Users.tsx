@@ -121,14 +121,59 @@ export default function Users() {
         </div>
 
         {invites.length > 0 && (
-          <div className="mt-4 space-y-2">
-            {invites.map(inv => (
-              <div key={inv.id} className="flex items-center justify-between border border-sand-200 rounded-lg px-3.5 py-2.5">
-                <span className="font-mono text-sm text-ink-950">{inv.code}</span>
-                <span className="text-xs text-ink-900/50">{roleLabels[inv.role] ?? inv.role}</span>
-                <span className="text-xs text-blue-700/70">متاح حتى {new Date(inv.expires_at).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</span>
-              </div>
-            ))}
+          <div className="mt-4 grid gap-3">
+            {invites.map(inv => {
+              const roleLabel = roleLabels[inv.role] ?? inv.role
+              const roleDetails = roles.find(r => r.name === roleLabel)?.desc ?? 'صلاحيات حسب الدور المحدد داخل الشركة'
+              const createdAt = new Date(inv.created_at)
+              const expiresAt = new Date(inv.expires_at)
+
+              return (
+                <div key={inv.id} className="rounded-2xl border border-blue-200/70 bg-blue-50/50 backdrop-blur-sm p-4 shadow-sm">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] font-semibold text-blue-900/55 mb-1">كود دعوة الموظف</div>
+                        <div className="font-mono text-lg font-bold tracking-wider text-blue-950" dir="ltr">{inv.code}</div>
+                      </div>
+                      <Badge tone="gold">{roleLabel}</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-blue-200/60 bg-white/55 px-3 py-2.5">
+                        <div className="text-[11px] text-blue-900/50">تاريخ ووقت الإنشاء</div>
+                        <div className="mt-1 text-sm font-semibold text-blue-950">
+                          {createdAt.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </div>
+                        <div className="text-xs text-blue-900/60">
+                          {createdAt.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' })}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-blue-200/60 bg-white/55 px-3 py-2.5">
+                        <div className="text-[11px] text-blue-900/50">ينتهي في</div>
+                        <div className="mt-1 text-sm font-semibold text-blue-950">
+                          {expiresAt.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </div>
+                        <div className="text-xs font-medium text-blue-700">
+                          الساعة {expiresAt.toLocaleTimeString('ar-EG', { hour: 'numeric', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-blue-200/60 bg-white/45 px-3 py-2.5">
+                      <div className="text-[11px] text-blue-900/50">صلاحيات الموظف</div>
+                      <div className="mt-1 text-sm font-semibold text-blue-950">{roleLabel}</div>
+                      <div className="mt-1 text-xs leading-5 text-blue-900/65">{roleDetails}</div>
+                    </div>
+
+                    <div className="text-[11px] text-blue-900/45">
+                      الكود صالح لمدة 24 ساعة من وقت الإنشاء، ويختفي من هذه الصفحة تلقائيًا بعد انتهاء صلاحيته.
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </Card>
