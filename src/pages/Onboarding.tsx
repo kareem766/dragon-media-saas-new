@@ -154,7 +154,6 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     }
   }
 
-  }
 
   if (checkingInvite && inviteCode) {
     return (
