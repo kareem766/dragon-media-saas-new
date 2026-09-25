@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createDecipheriv, createHash } from 'node:crypto'
 
 const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
+const PLATFORM_OWNER_EMAIL = 'kalnoby0@gmail.com'
 const env = (...names:string[]) => names.map(n=>process.env[n]).find(v=>v?.trim())?.trim() || ''
 const text=(v:unknown,max=12000)=>String(v??'').trim().slice(0,max)
 const json=(res:VercelResponse,status:number,body:unknown)=>res.status(status).json(body)
@@ -10,16 +11,13 @@ const json=(res:VercelResponse,status:number,body:unknown)=>res.status(status).j
 function decryptToken(value:any){
   if(!value?.iv||!value?.tag||!value?.data) throw new Error('Meta access token غير متاح.')
   const seeds=[env('META_TOKEN_ENCRYPTION_KEY'),env('META_APP_SECRET')].filter(Boolean)
-  let lastError: unknown = null
   for(const seed of seeds){
     try{
       const key=createHash('sha256').update(seed).digest()
       const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(String(value.iv),'base64'))
       decipher.setAuthTag(Buffer.from(String(value.tag),'base64'))
       return Buffer.concat([decipher.update(Buffer.from(String(value.data),'base64')),decipher.final()]).toString('utf8')
-    }catch(error){
-      lastError=error
-    }
+    }catch{}
   }
   throw new Error('تعذر فك تشفير اتصال Facebook. مفتاح تشفير Meta الحالي لا يطابق المفتاح المستخدم عند حفظ الاتصال. أعد ربط Facebook من إعدادات Meta.')
 }
@@ -46,10 +44,11 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     const body=typeof req.body==='string'?JSON.parse(req.body):(req.body||{})
     const id=text(body.id,100), platforms=Array.isArray(body.platforms)?body.platforms.map((x:any)=>text(x,30).toLowerCase()).filter(Boolean):[]
     if(!id||!platforms.length) return json(res,400,{error:'اختر منصة نشر واحدة على الأقل.'})
-    const {data:user}=await db.from('users').select('organization_id,role,active').eq('id',userId).maybeSingle()
+    const {data:user}=await db.from('users').select('organization_id,role,active,email,is_platform_admin').eq('id',userId).maybeSingle()
     if(!user?.organization_id||user.active===false) throw new Error('الحساب غير مرتبط بمساحة عمل نشطة.')
+    const isPlatformOwner=String(user.email||'').trim().toLowerCase()===PLATFORM_OWNER_EMAIL && user.is_platform_admin===true
     const {data:permission}=await db.from('role_permissions').select('can_edit').eq('role',user.role).eq('resource','ai_content').maybeSingle()
-    if(!permission?.can_edit) return json(res,403,{error:'ليس لديك صلاحية نشر المحتوى.'})
+    if(!permission?.can_edit && !isPlatformOwner) return json(res,403,{error:'ليس لديك صلاحية نشر المحتوى.'})
     const {data:post,error:postError}=await db.from('ai_content_posts').select('*').eq('id',id).eq('organization_id',user.organization_id).maybeSingle()
     if(postError||!post) return json(res,404,{error:'المحتوى غير موجود.'})
     const caption=[post.hook,post.content,post.cta].filter(Boolean).join('\n\n')
@@ -90,15 +89,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
       const details=failedPlatforms.map((p:string)=>`${p}: ${results[p]?.error||'فشل النشر'}`).join(' | ')
       return json(res,400,{error:`لم يتم نشر البوست. ${details}`,post:updated,results})
     }
-    return json(res,200,{
-      post:updated,
-      results,
-      publishedPlatforms:platforms.filter((p:string)=>results[p]?.status==='published'),
-      failedPlatforms,
-      message:failedPlatforms.length
-        ? `تم النشر جزئيًا، وفشل: ${failedPlatforms.join(' و ')}.`
-        : 'تم تأكيد النشر بنجاح.'
-    })
+    return json(res,200,{post:updated,results,publishedPlatforms:platforms.filter((p:string)=>results[p]?.status==='published'),failedPlatforms,message:failedPlatforms.length?`تم النشر جزئيًا، وفشل: ${failedPlatforms.join(' و ')}.`:'تم تأكيد النشر بنجاح.'})
   }catch(error){
     console.error('AI content publish failed',error)
     const message=error instanceof Error?error.message:'فشل النشر.'
