@@ -321,12 +321,12 @@ async function handleFacebookWebhook(db: any, payload: any) {
   for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
     const pageId = String(entry?.id || '')
     if (!pageId) continue
-    const { data: integration } = await db.from('integrations').select('organization_id,metadata').eq('provider', 'facebook').eq('connected', true).filter('metadata->>facebook_page_id', 'eq', pageId).maybeSingle()
+    const { data: integration } = await db.from('integrations').select('organization_id,config,metadata').eq('provider', 'facebook').eq('connected', true).filter('metadata->>facebook_page_id', 'eq', pageId).maybeSingle()
     if (!integration) { console.warn('Facebook webhook integration not found', { pageId }); continue }
     const organizationId = String(integration.organization_id)
     for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
       if (change?.field === 'feed' && String(change?.value?.item || '') === 'comment') {
-        await handleMetaComment(db, integration, change.value, 'facebook', '', '')
+        await handleMetaComment(db, integration, change.value, 'facebook', pageId, '')
       }
     }
     for (const event of Array.isArray(entry?.messaging) ? entry.messaging : []) {
