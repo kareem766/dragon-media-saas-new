@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useBranding } from '../hooks/useBranding'
@@ -8,6 +8,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const [inviteCode, setInviteCode] = useState('')
   const [checkingInvite, setCheckingInvite] = useState(true)
   const [inviteError, setInviteError] = useState<string | null>(null)
+  const inviteAcceptanceStarted = useRef(false)
 
   const [name, setName] = useState('')
   const [businessType, setBusinessType] = useState('')
@@ -24,18 +25,23 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     const code = localStorage.getItem('dragon_media_invite_code')?.trim().toUpperCase() || ''
     setInviteCode(code)
 
-    if (!code || !supabase) {
+    if (!code || !supabase || inviteAcceptanceStarted.current) {
       setCheckingInvite(false)
       return
     }
 
     let cancelled = false
+    inviteAcceptanceStarted.current = true
 
     const acceptInvite = async () => {
       setCheckingInvite(true)
       setInviteError(null)
       const client = supabase
-      if (!client) return
+      if (!client) {
+        inviteAcceptanceStarted.current = false
+        setCheckingInvite(false)
+        return
+      }
 
       const { data, error: acceptError } = await client.rpc('accept_invite_code', {
         p_code: code,
@@ -56,6 +62,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       }
 
       localStorage.removeItem('dragon_media_invite_code')
+      setCheckingInvite(false)
       onDone()
     }
 
