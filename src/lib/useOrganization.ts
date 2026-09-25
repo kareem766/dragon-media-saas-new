@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext'
 
 export function useOrganization() {
   const { user, loading: authLoading } = useAuth()
+  const userId = user?.id ?? null
   const [organizationId, setOrganizationId] = useState<string | null>(null)
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -12,7 +13,7 @@ export function useOrganization() {
   const refresh = useCallback(() => {
     if (authLoading) return
 
-    if (!supabase || !user) {
+    if (!supabase || !userId) {
       setOrganizationId(null)
       setNeedsOnboarding(false)
       setError(null)
@@ -27,7 +28,7 @@ export function useOrganization() {
     supabase
       .from('users')
       .select('organization_id')
-      .eq('id', user.id)
+      .eq('id', userId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (error) {
@@ -46,7 +47,7 @@ export function useOrganization() {
 
         setLoading(false)
       })
-  }, [user, authLoading])
+  }, [userId, authLoading])
 
   useEffect(() => {
     refresh()

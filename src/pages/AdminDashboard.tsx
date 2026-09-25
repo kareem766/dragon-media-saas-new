@@ -466,22 +466,49 @@ export default function AdminDashboard() {
 
   const getAccessToken =
     useCallback(async () => {
-      if (!supabase) {
+      const client = supabase
+
+      if (!client) {
         throw new Error(
           'تعذر الاتصال بخدمة البيانات.'
         )
       }
 
-      const {
-        data: sessionData,
-        error: sessionError,
-      } =
-        await supabase.auth.getSession()
+      const getSessionToken = async () => {
+        const {
+          data: sessionData,
+          error: sessionError,
+        } = await client.auth.getSession()
 
-      if (sessionError) {
+        if (sessionError) {
+          throw sessionError
+        }
+
+        return sessionData.session?.access_token || null
+      }
+
+      try {
+        const token = await getSessionToken()
+
+        if (token) {
+          return token
+        }
+      } catch (error) {
         console.error(
-          'Admin dashboard session error:',
-          sessionError
+          'Admin dashboard session read failed, trying refresh:',
+          error
+        )
+      }
+
+      const {
+        data: refreshedSession,
+        error: refreshError,
+      } = await client.auth.refreshSession()
+
+      if (refreshError) {
+        console.error(
+          'Admin dashboard session refresh error:',
+          refreshError
         )
 
         throw new Error(
@@ -490,7 +517,8 @@ export default function AdminDashboard() {
       }
 
       const token =
-        sessionData.session?.access_token
+        refreshedSession.session?.access_token ||
+        (await getSessionToken())
 
       if (!token) {
         throw new Error(
@@ -500,6 +528,44 @@ export default function AdminDashboard() {
 
       return token
     }, [])
+
+  const fetchAdmin = useCallback(
+    async (
+      input: RequestInfo | URL,
+      init: RequestInit,
+    ) => {
+      let lastError: unknown = null
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const response = await fetch(input, init)
+
+          if (response.ok || response.status < 500 || attempt === 2) {
+            return response
+          }
+
+          await new Promise(resolve =>
+            window.setTimeout(resolve, 350 * (attempt + 1))
+          )
+        } catch (error) {
+          lastError = error
+
+          if (attempt === 2) {
+            throw error
+          }
+
+          await new Promise(resolve =>
+            window.setTimeout(resolve, 350 * (attempt + 1))
+          )
+        }
+      }
+
+      throw lastError instanceof Error
+        ? lastError
+        : new Error('تعذر الاتصال بخدمة لوحة الإدارة.')
+    },
+    [],
+  )
 
   const loadOverview =
     useCallback(async () => {
@@ -519,7 +585,7 @@ export default function AdminDashboard() {
           await getAccessToken()
 
         const overviewRes =
-          await fetch(
+          await fetchAdmin(
             '/api/admin/overview',
             {
               method: 'GET',
@@ -656,7 +722,7 @@ export default function AdminDashboard() {
       } finally {
         setLoading(false)
       }
-    }, [getAccessToken])
+    }, [fetchAdmin, getAccessToken])
 
   const loadFinancial =
     useCallback(async () => {
@@ -703,7 +769,7 @@ export default function AdminDashboard() {
           params.toString()
 
         const response =
-          await fetch(
+          await fetchAdmin(
             `/api/admin/financial${
               queryString
                 ? `?${queryString}`
@@ -952,6 +1018,7 @@ export default function AdminDashboard() {
         setFinancialLoading(false)
       }
     }, [
+      fetchAdmin,
       getAccessToken,
       paymentMethod,
       fromDate,

@@ -1,0 +1,1 @@
+Force Vercel rebuild after platform-owner unlimited access, permission/auth-refresh stability, and Meta/AI subscription bypass fixes. No production behavior change beyond the reviewed owner-only rules.

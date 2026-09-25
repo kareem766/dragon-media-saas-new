@@ -1,13 +1,23 @@
 import React from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
+import { useRef, useState, useEffect } from 'react'
 import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 
 export default function AdminRoute({ children }: { children: React.ReactNode }) {
   const { session, loading: authLoading } = useAuth()
   const { isAdmin, loading: adminLoading } = useIsPlatformAdmin()
+  const [initialCheckReady, setInitialCheckReady] = useState(false)
+  const hasCompletedInitialCheck = useRef(false)
 
-  if (authLoading || adminLoading) {
+  useEffect(() => {
+    if (!authLoading && !adminLoading) {
+      hasCompletedInitialCheck.current = true
+      setInitialCheckReady(true)
+    }
+  }, [authLoading, adminLoading])
+
+  if (authLoading || (!initialCheckReady && !hasCompletedInitialCheck.current)) {
     return (
       <div
         dir="rtl"

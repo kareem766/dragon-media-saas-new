@@ -90,7 +90,6 @@ const items: SidebarItem[] = [
     label: 'RYAN AI',
     icon: IconSpark,
     feature: 'ryan',
-    resource: 'ryan',
   },
   {
     to: '/automations',

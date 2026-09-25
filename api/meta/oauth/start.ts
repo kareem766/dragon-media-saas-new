@@ -38,6 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const { data: userData, error: userError } = await db.auth.getUser(accessToken)
     if (userError || !userData.user) return json(res, 401, { error: 'جلسة الدخول غير صالحة.' })
+    const isPlatformOwner = String(userData.user.email || '').trim().toLowerCase() === 'kalnoby0@gmail.com'
 
     let organizationId = ''
     if (req.method === 'POST') {
@@ -80,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const expiry = String(subscription?.expires_at || subscription?.renewal_date || '')
     const today = new Date().toISOString().slice(0, 10)
     const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
-    if (!subscriptionActive && !allowBeforeSubscription) return json(res, 403, { error: 'ربط التكاملات متاح بعد تفعيل الاشتراك.' })
+    if (!subscriptionActive && !allowBeforeSubscription && !isPlatformOwner) return json(res, 403, { error: 'ربط التكاملات متاح بعد تفعيل الاشتراك.' })
 
     const { data: permission } = await db
       .from('role_permissions')

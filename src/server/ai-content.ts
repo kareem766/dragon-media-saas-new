@@ -36,13 +36,14 @@ async function getContext(db: any, userId: string): Promise<any> {
     db.from('subscriptions').select('status,expires_at,renewal_date,plan_id,plan').eq('organization_id', user.organization_id).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle(),
   ])
 
-  if (!permission?.can_view) throw new Error('ليس لديك صلاحية استخدام استوديو المحتوى.')
+  const isPlatformOwner = String(user.email || '').trim().toLowerCase() === 'kalnoby0@gmail.com'
+  if (!permission?.can_view && !isPlatformOwner) throw new Error('ليس لديك صلاحية استخدام استوديو المحتوى.')
   if (organization?.ai_content_enabled === false) throw new Error('استوديو المحتوى غير مفعّل لهذه الشركة.')
 
   const expiry = text(subscription?.expires_at || subscription?.renewal_date, 40).slice(0, 10)
   const today = new Date().toISOString().slice(0, 10)
   const activeSubscription = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
-  if (!activeSubscription) throw new Error('يجب أن يكون الاشتراك فعالًا لاستخدام استوديو المحتوى.')
+  if (!activeSubscription && !isPlatformOwner) throw new Error('يجب أن يكون الاشتراك فعالًا لاستخدام استوديو المحتوى.')
 
   let plan: any = null
   if (subscription?.plan_id) {
@@ -60,8 +61,8 @@ async function getContext(db: any, userId: string): Promise<any> {
     user,
     organization,
     services: services || [],
-    canEdit: Boolean(permission?.can_edit),
-    canDelete: Boolean(permission?.can_delete),
+    canEdit: isPlatformOwner || Boolean(permission?.can_edit),
+    canDelete: isPlatformOwner || Boolean(permission?.can_delete),
     organizationId: user.organization_id,
     plan,
     canGenerateImages,

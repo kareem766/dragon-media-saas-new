@@ -1,0 +1,1 @@
+Preview hardening checkpoint: resilient auth retries, global UI error boundary, platform-owner unlimited access, legal navigation, and no full-page reload retry paths. This marker exists only to force the preview deployment to rebuild the complete latest branch state.

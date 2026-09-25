@@ -4,16 +4,21 @@ export default async function handler(req: any, res: any) {
   const authHeader = req.headers.authorization
   const accessToken = authHeader?.replace('Bearer ', '')
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY
-  const serviceKey = process.env.SUPABASE_SERVICE_KEY
+  const supabaseUrl =
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL
 
-  if (!supabaseUrl || !anonKey || !serviceKey || !accessToken) {
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_KEY
+
+  if (!supabaseUrl || !serviceKey || !accessToken) {
     res.status(401).json({ error: 'غير مصرح' })
     return
   }
 
-  const userClient = createClient(supabaseUrl, anonKey, {
+  const userClient = createClient(supabaseUrl, serviceKey, {
     global: {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -22,7 +27,7 @@ export default async function handler(req: any, res: any) {
   })
 
   const { data: authData, error: authError } =
-    await userClient.auth.getUser()
+    await userClient.auth.getUser(accessToken)
 
   if (authError || !authData?.user) {
     res.status(401).json({ error: 'غير مصرح' })
