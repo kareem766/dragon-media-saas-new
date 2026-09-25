@@ -96,7 +96,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) =>
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const client = supabase
     if (!client) {
@@ -152,6 +152,8 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     } finally {
       setSaving(false)
     }
+  }
+
   }
 
   if (checkingInvite && inviteCode) {
