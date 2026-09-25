@@ -48,6 +48,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let conversationId = String(body.conversationId || '')
     let recipientId = String(body.recipientId || '')
     let content = String(body.content || '').trim()
+    let commentId = ''
+    let commentPlatform = ''
     const messageId = String(body.message_id || body.messageId || '')
     let sourceSenderType = 'agent'
 
@@ -60,6 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       content = String(sourceMessage.content || '').trim()
       sourceSenderType = String(sourceMessage.sender_type)
       const sourceMetadata = sourceMessage.metadata && typeof sourceMessage.metadata === 'object' ? sourceMessage.metadata : {}
+      commentId = String((sourceMetadata as any).comment_id || '')
+      commentPlatform = String((sourceMetadata as any).comment_platform || '')
       if ((sourceMetadata as any).outbound_status === 'failed') return json(res, 200, { ok: true, skipped: true, reason: 'previously_failed' })
     }
 
@@ -86,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const customer = Array.isArray((conversation as any).customers) ? (conversation as any).customers[0] : (conversation as any).customers
     recipientId = recipientId || String(customer?.phone || '')
-    if (!recipientId) return json(res, 400, { error: 'Facebook recipient is not configured.' })
+    if (!recipientId && !commentId) return json(res, 400, { error: 'Facebook recipient is not configured.' })
 
     const { data: connection } = await db.from('integrations').select('config,metadata,status,connected').eq('organization_id', organizationId).eq('provider', 'facebook').maybeSingle()
     if (!connection?.connected || connection.status !== 'connected') return json(res, 422, { error: 'Facebook connection is not ready.', code: 'FACEBOOK_NOT_READY' })
@@ -94,13 +98,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!pageId) return json(res, 422, { error: 'Facebook Page is not configured.', code: 'FACEBOOK_PAGE_NOT_READY' })
     const pageToken = decryptToken(connection.config?.access_token)
 
-    const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/messages`, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text: content } }) })
+    const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(commentId
+        ? { recipient: { comment_id: commentId }, message: { text: content } }
+        : { recipient: { id: recipientId }, message: { text: content } }),
+    })
     const payload = await response.json().catch(() => ({}))
-    if (!response.ok) return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' })
+    if (!response.ok) return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED', comment_id: commentId || null })
 
     const externalId = String(payload?.message_id || payload?.messages?.[0]?.id || '')
     if (messageId) {
-      const { data: message, error: updateError } = await db.from('messages').update({ external_id: externalId || null, metadata: { source: sourceSenderType === 'ai' ? 'ryan' : 'inbox', outbound_status: 'accepted', sent_by: authenticatedUserId || null, meta_message_id: externalId || null, facebook_page_id: pageId, facebook_outbound: true, facebook_recipient_id: recipientId, dispatch: internalDispatch ? 'database_trigger' : 'inbox' } }).eq('id', messageId).select('id,conversation_id,sender_type,content,created_at,metadata,external_id').single()
+      const { data: message, error: updateError } = await db.from('messages').update({ external_id: externalId || null, metadata: { source: sourceSenderType === 'ai' ? 'ryan' : 'inbox', outbound_status: 'accepted', sent_by: authenticatedUserId || null, meta_message_id: externalId || null, facebook_page_id: pageId, facebook_outbound: true, facebook_recipient_id: recipientId || null, comment_id: commentId || null, comment_platform: commentPlatform || null, dispatch: internalDispatch ? 'database_trigger' : 'inbox' } }).eq('id', messageId).select('id,conversation_id,sender_type,content,created_at,metadata,external_id').single()
       if (updateError) throw updateError
       await db.from('conversations').update({ handled_by: sourceSenderType === 'ai' ? 'ai' : 'human', last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', conversationId).eq('organization_id', organizationId)
       return json(res, 200, { ok: true, message })
