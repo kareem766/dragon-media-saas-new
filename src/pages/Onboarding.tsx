@@ -34,8 +34,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     const acceptInvite = async () => {
       setCheckingInvite(true)
       setInviteError(null)
+      const client = supabase
+      if (!client) return
 
-      const { data, error: acceptError } = await supabase.rpc('accept_invite_code', {
+      const { data, error: acceptError } = await client.rpc('accept_invite_code', {
         p_code: code,
       })
 
@@ -65,7 +67,8 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!supabase) {
+    const client = supabase
+    if (!client) {
       setError('تعذر الاتصال بالخدمة حاليًا. حاول مرة أخرى.')
       return
     }
@@ -81,7 +84,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
     try {
       const consentTimestamp = new Date().toISOString()
-      const { error: consentError } = await supabase.auth.updateUser({
+      const { error: consentError } = await client.auth.updateUser({
         data: {
           terms_accepted_at: consentTimestamp,
           terms_version: '1.0',
@@ -94,7 +97,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         return
       }
 
-      const { data: organizationId, error: createError } = await supabase.rpc('create_organization_for_user', {
+      const { data: organizationId, error: createError } = await client.rpc('create_organization_for_user', {
         p_name: name.trim(),
         p_business_type: businessType,
         p_phone: phone.trim(),
@@ -102,7 +105,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       if (createError) return setError(createError.message)
       if (!organizationId) return setError('تم إنشاء الحساب ولكن تعذر تحديد مساحة العمل. حاول مرة أخرى.')
 
-      const { error: updateError } = await supabase.from('organizations').update({ address: address.trim() }).eq('id', organizationId)
+      const { error: updateError } = await client.from('organizations').update({ address: address.trim() }).eq('id', organizationId)
       if (updateError) return setError('تم إنشاء مساحة العمل، ولكن تعذر حفظ عنوان الشركة. حاول مرة أخرى.')
 
       onDone()
@@ -170,8 +173,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               <div>
                 <label className="mb-2 block text-sm font-bold text-slate-700">نوع النشاط</label>
                 <select required value={businessType} onChange={e => setBusinessType(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10">
-                  <option value="">اختر نوع النشاط</option>
-                  <option value="عقارات">عقارات</option><option value="مطاعم">مطاعم</option><option value="عيادات">عيادات</option><option value="تعليم">مراكز تعليمية</option><option value="سيارات">معارض سيارات</option><option value="تجارة إلكترونية">تجارة إلكترونية</option><option value="سوشيال ميديا">تسويق وسوشيال ميديا</option><option value="خدمات">خدمات</option><option value="تجزئة">تجزئة</option><option value="أخرى">أخرى</option>
+                  <option value="">اختر نوع النشاط</option><option value="عقارات">عقارات</option><option value="مطاعم">مطاعم</option><option value="عيادات">عيادات</option><option value="تعليم">مراكز تعليمية</option><option value="سيارات">معارض سيارات</option><option value="تجارة إلكترونية">تجارة إلكترونية</option><option value="سوشيال ميديا">تسويق وسوشيال ميديا</option><option value="خدمات">خدمات</option><option value="تجزئة">تجزئة</option><option value="أخرى">أخرى</option>
                 </select>
               </div>
               <div>
@@ -201,25 +203,6 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 }
 
 function SignupStepper() {
-  const steps = [
-    { number: 1, title: 'إنشاء الحساب', completed: true },
-    { number: 2, title: 'تأكيد البريد', completed: true },
-    { number: 3, title: 'بيانات الشركة', completed: false },
-  ]
-  return (
-    <div className="mb-7 rounded-3xl border border-slate-200 bg-white px-4 py-5 shadow-sm sm:px-6">
-      <div className="flex items-start">
-        {steps.map((step, index) => {
-          const isCurrent = step.number === 3
-          return <React.Fragment key={step.number}>
-            <div className="flex min-w-0 flex-1 flex-col items-center">
-              <div className={['flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-black transition', step.completed ? 'border-emerald-500 bg-emerald-500 text-white' : isCurrent ? 'border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'border-slate-200 bg-white text-slate-400'].join(' ')}>{step.completed ? '✓' : step.number}</div>
-              <span className={['mt-2 text-center text-[11px] font-bold sm:text-xs', step.completed || isCurrent ? 'text-slate-800' : 'text-slate-400'].join(' ')}>{step.title}</span>
-            </div>
-            {index < steps.length - 1 && <div className="mt-5 h-0.5 flex-1 overflow-hidden bg-slate-200"><div className="h-full w-full bg-emerald-500" /></div>}
-          </React.Fragment>
-        })}
-      </div>
-    </div>
-  )
+  const steps = [{ number: 1, title: 'إنشاء الحساب', completed: true }, { number: 2, title: 'تأكيد البريد', completed: true }, { number: 3, title: 'بيانات الشركة', completed: false }]
+  return <div className="mb-7 rounded-3xl border border-slate-200 bg-white px-4 py-5 shadow-sm sm:px-6"><div className="flex items-start">{steps.map((step, index) => { const isCurrent = step.number === 3; return <React.Fragment key={step.number}><div className="flex min-w-0 flex-1 flex-col items-center"><div className={['flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-black transition', step.completed ? 'border-emerald-500 bg-emerald-500 text-white' : isCurrent ? 'border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'border-slate-200 bg-white text-slate-400'].join(' ')}>{step.completed ? '✓' : step.number}</div><span className={['mt-2 text-center text-[11px] font-bold sm:text-xs', step.completed || isCurrent ? 'text-slate-800' : 'text-slate-400'].join(' ')}>{step.title}</span></div>{index < steps.length - 1 && <div className="mt-5 h-0.5 flex-1 overflow-hidden bg-slate-200"><div className="h-full w-full bg-blue-500" /></div>}</React.Fragment> })}</div></div>
 }
