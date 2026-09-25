@@ -6,7 +6,7 @@ import { useAuth } from '../lib/AuthContext'
 
 export default function Onboarding({ onDone }: { onDone: () => void }) {
   const { branding, logoUrl } = useBranding()
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
   const [inviteCode, setInviteCode] = useState('')
   const [checkingInvite, setCheckingInvite] = useState(true)
   const [inviteError, setInviteError] = useState<string | null>(null)
@@ -24,7 +24,10 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const platformName = branding?.platform_name?.trim() || 'Dragon Media'
 
   useEffect(() => {
-    const code = localStorage.getItem('dragon_media_invite_code')?.trim().toUpperCase() || ''
+    const storedCode = localStorage.getItem('dragon_media_invite_code')?.trim().toUpperCase() || ''
+    const metadataCode = String(user?.user_metadata?.invite_code || '').trim().toUpperCase()
+    const code = storedCode || metadataCode
+    if (code && !storedCode) localStorage.setItem('dragon_media_invite_code', code)
     setInviteCode(code)
 
     if (!code || !supabase || inviteAcceptanceStarted.current) {
@@ -76,7 +79,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     return () => {
       cancelled = true
     }
-  }, [onDone])
+  }, [onDone, user])
 
   const cleanupFailedSignup = async () => {
     try {
