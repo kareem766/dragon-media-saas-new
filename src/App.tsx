@@ -69,7 +69,7 @@ function PageLoading() {
 }
 
 function isPlatformOwner(user: ReturnType<typeof useAuth>['user']) {
-  return Boolean(user?.email?.trim().toLowerCase() === 'kalnoby0@gmail.com' && user?.user_metadata?.is_platform_admin !== false)
+  return Boolean(user?.email?.trim().toLowerCase() === 'kalnoby0@gmail.com')
 }
 
 function RyanPageShell() {
