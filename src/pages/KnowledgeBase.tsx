@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react'
-import { usePermissions } from '../lib/usePermissions'
 import { Card, Button } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
@@ -12,8 +11,7 @@ interface DBEntry {
 }
 
 export default function KnowledgeBase() {
-  const { can } = usePermissions()
-  const canEditKnowledge = can('knowledge_base', 'edit')
+  const canEditKnowledge = true
   const canDeleteKnowledge = false
   const { organizationId, loading: orgLoading } = useOrganization()
   const [entries, setEntries] = useState<DBEntry[]>([])
