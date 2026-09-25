@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createDecipheriv, createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
 export const config = { api: { bodyParser: false } }
@@ -187,7 +187,6 @@ async function updateFacebookCampaignStatus(db: any, organizationId: string, ext
 }
 function decryptMetaToken(value: any) {
   if (!value?.iv || !value?.tag || !value?.data) throw new Error('Meta token is not encrypted in the expected format.')
-  const { createDecipheriv, createHash } = require('node:crypto') as typeof import('node:crypto')
   const seed = env('META_TOKEN_ENCRYPTION_KEY', 'META_APP_SECRET')
   if (!seed) throw new Error('Meta token encryption configuration is missing.')
   const key = createHash('sha256').update(seed).digest()
