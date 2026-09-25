@@ -10,13 +10,16 @@ interface Permission {
 
 export function usePermissions() {
   const { user } = useAuth()
+  const userId = user?.id ?? null
+  const isPlatformOwner = String(user?.email || '').trim().toLowerCase() === 'kalnoby0@gmail.com'
   const [permissions, setPermissions] = useState<Record<string, Permission>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!supabase || !user) { setLoading(false); return }
+    if (!supabase || !userId) { setLoading(false); return }
+    if (isPlatformOwner) { setLoading(false); return }
     const sb = supabase
-    sb.from('users').select('role').eq('id', user.id).single()
+    sb.from('users').select('role').eq('id', userId).single()
       .then(async ({ data: userRow }) => {
         if (!userRow) { setLoading(false); return }
         const { data } = await sb.from('role_permissions').select('resource, can_view, can_edit, can_delete').eq('role', userRow.role)
@@ -27,12 +30,13 @@ export function usePermissions() {
         }
         setLoading(false)
       })
-  }, [user])
+  }, [userId, isPlatformOwner])
 
   const can = (resource: string, action: 'view' | 'edit' | 'delete') => {
     const key = action === 'view' ? 'can_view' : action === 'edit' ? 'can_edit' : 'can_delete'
+    if (isPlatformOwner) return true
     return Boolean(permissions[resource]?.[key])
   }
 
-  return { can, loading }
+  return { can, loading, isPlatformOwner }
 }
