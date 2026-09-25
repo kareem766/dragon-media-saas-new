@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { useOrganization } from './useOrganization'
+import { useIsPlatformAdmin } from './useIsPlatformAdmin'
 
 interface PlanData {
   id: string
@@ -44,6 +45,7 @@ export function useSubscription() {
     organizationId,
     loading: organizationLoading,
   } = useOrganization()
+  const { isAdmin, loading: platformAdminLoading } = useIsPlatformAdmin()
 
   const [subscription, setSubscription] =
     useState<SubscriptionData | null>(null)
@@ -55,7 +57,15 @@ export function useSubscription() {
     let cancelled = false
 
     const loadSubscription = async () => {
-      if (organizationLoading) {
+      if (organizationLoading || platformAdminLoading) {
+        return
+      }
+
+      if (isAdmin) {
+        if (!cancelled) {
+          setSubscription(null)
+          setLoading(false)
+        }
         return
       }
 
@@ -165,7 +175,7 @@ export function useSubscription() {
     return () => {
       cancelled = true
     }
-  }, [organizationId, organizationLoading])
+  }, [organizationId, organizationLoading, isAdmin, platformAdminLoading])
 
   const rawStatus =
     subscription?.status ?? 'no_subscription'
@@ -335,7 +345,17 @@ export function useSubscription() {
   /*
    * التحقق من Features حسب الباقة الحالية.
    */
+  const effectiveIsActive = isAdmin || isActive
+  const effectiveIsExpired = isAdmin ? false : isExpired
+  const effectiveIsPendingPayment = isAdmin ? false : isPendingPayment
+  const effectiveDaysRemaining = isAdmin ? null : daysRemaining
+  const effectiveAccessState: SubscriptionAccessState = isAdmin ? 'active' : accessState
+
   const hasFeature = (key: string) => {
+    if (isAdmin) {
+      return true
+    }
+
     if (!isActive) {
       return false
     }
@@ -349,6 +369,10 @@ export function useSubscription() {
    * الحصول على Limit من الباقة.
    */
   const getLimit = (key: string) => {
+    if (isAdmin) {
+      return Number.POSITIVE_INFINITY
+    }
+
     if (!isActive) {
       return 0
     }
@@ -367,13 +391,13 @@ export function useSubscription() {
 
     status: rawStatus,
 
-    accessState,
+    accessState: effectiveAccessState,
 
-    isActive,
-    isExpired,
-    isPendingPayment,
+    isActive: effectiveIsActive,
+    isExpired: effectiveIsExpired,
+    isPendingPayment: effectiveIsPendingPayment,
 
-    daysRemaining,
+    daysRemaining: effectiveDaysRemaining,
 
     /*
      * بيانات الاشتراك الحقيقية.
@@ -389,9 +413,11 @@ export function useSubscription() {
       subscription?.renewal_date ??
       null,
 
-    formattedRenewalDate,
+    formattedRenewalDate: isAdmin ? null : formattedRenewalDate,
 
     hasFeature,
+
+    isPlatformAdmin: isAdmin,
     getLimit,
 
     plan:

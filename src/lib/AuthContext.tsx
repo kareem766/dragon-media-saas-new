@@ -15,7 +15,7 @@ interface AuthContextValue {
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signInWithGoogle: () => Promise<{ error: string | null }>
-  signUp: (email: string, password: string, fullName: string, consent?: SignupConsent) => Promise<SignUpResult>
+  signUp: (email: string, password: string, fullName: string, consent?: SignupConsent, inviteCode?: string) => Promise<SignUpResult>
   resendConfirmation: (email: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
 }
@@ -122,10 +122,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error ? normalizeAuthError(error.message) : null }
   }
 
-  const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent): Promise<SignUpResult> => {
+  const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent, inviteCode?: string): Promise<SignUpResult> => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد', needsEmailConfirmation: false }
 
     const metadata: Record<string, string> = { full_name: fullName }
+    if (inviteCode?.trim()) metadata.invite_code = inviteCode.trim().toUpperCase()
     if (consent) {
       metadata.terms_accepted_at = consent.termsAcceptedAt
       metadata.terms_version = consent.termsVersion

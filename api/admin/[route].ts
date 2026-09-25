@@ -7,6 +7,7 @@ import payments from '../_server/admin/payments.js'
 import tickets from '../_server/admin/tickets.js'
 import ryanAssistant from '../_server/admin/ryan-assistant.js'
 import testSubscriptionWhatsapp from '../_server/admin/test-subscription-whatsapp.js'
+import rollbackSignup from '../../src/server/admin/rollback-signup.js'
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 
@@ -19,6 +20,7 @@ const handlers: Record<string, Handler> = {
   tickets,
   'ryan-assistant': ryanAssistant,
   'test-subscription-whatsapp': testSubscriptionWhatsapp,
+  'rollback-signup': rollbackSignup,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

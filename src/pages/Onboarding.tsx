@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Card, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useBranding } from '../hooks/useBranding'
+import { useAuth } from '../lib/AuthContext'
 
 export default function Onboarding({ onDone }: { onDone: () => void }) {
   const { branding, logoUrl } = useBranding()
+  const { signOut, user } = useAuth()
   const [inviteCode, setInviteCode] = useState('')
   const [checkingInvite, setCheckingInvite] = useState(true)
   const [inviteError, setInviteError] = useState<string | null>(null)
+  const inviteAcceptanceStarted = useRef(false)
 
   const [name, setName] = useState('')
   const [businessType, setBusinessType] = useState('')
@@ -21,21 +24,29 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const platformName = branding?.platform_name?.trim() || 'Dragon Media'
 
   useEffect(() => {
-    const code = localStorage.getItem('dragon_media_invite_code')?.trim().toUpperCase() || ''
+    const storedCode = localStorage.getItem('dragon_media_invite_code')?.trim().toUpperCase() || ''
+    const metadataCode = String(user?.user_metadata?.invite_code || '').trim().toUpperCase()
+    const code = storedCode || metadataCode
+    if (code && !storedCode) localStorage.setItem('dragon_media_invite_code', code)
     setInviteCode(code)
 
-    if (!code || !supabase) {
+    if (!code || !supabase || inviteAcceptanceStarted.current) {
       setCheckingInvite(false)
       return
     }
 
     let cancelled = false
+    inviteAcceptanceStarted.current = true
 
     const acceptInvite = async () => {
       setCheckingInvite(true)
       setInviteError(null)
       const client = supabase
-      if (!client) return
+      if (!client) {
+        inviteAcceptanceStarted.current = false
+        setCheckingInvite(false)
+        return
+      }
 
       const { data, error: acceptError } = await client.rpc('accept_invite_code', {
         p_code: code,
@@ -44,18 +55,23 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       if (cancelled) return
 
       if (acceptError) {
+        await cleanupFailedSignup()
+        if (cancelled) return
         setInviteError(acceptError.message)
         setCheckingInvite(false)
         return
       }
 
       if (!data?.organization_id) {
+        await cleanupFailedSignup()
+        if (cancelled) return
         setInviteError('تعذر ربط الحساب بالشركة. حاول مرة أخرى.')
         setCheckingInvite(false)
         return
       }
 
       localStorage.removeItem('dragon_media_invite_code')
+      setCheckingInvite(false)
       onDone()
     }
 
@@ -63,7 +79,25 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     return () => {
       cancelled = true
     }
-  }, [onDone])
+  }, [onDone, user])
+
+  const cleanupFailedSignup = async () => {
+    try {
+      const { data: sessionData } = await supabase?.auth.getSession() || { data: { session: null } }
+      const accessToken = sessionData.session?.access_token || ''
+      if (accessToken) {
+        await fetch('/api/admin/rollback-signup?route=rollback-signup', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+      }
+    } catch {
+      // Cleanup is best-effort; signOut below still prevents the failed session from lingering.
+    } finally {
+      localStorage.removeItem('dragon_media_invite_code')
+      await signOut()
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,20 +127,27 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         },
       })
       if (consentError) {
-        setError('تعذر حفظ الموافقة على الشروط والسياسة. حاول مرة أخرى.')
+        await cleanupFailedSignup()
+        setError('تعذر حفظ الموافقة على الشروط والسياسة. تم إلغاء التسجيل، ويمكنك المحاولة مرة أخرى.')
         return
       }
 
-      const { data: organizationId, error: createError } = await client.rpc('create_organization_for_user', {
+      const { data: organizationId, error: createError } = await client.rpc('create_organization_onboarding', {
         p_name: name.trim(),
         p_business_type: businessType,
         p_phone: phone.trim(),
+        p_address: address.trim(),
       })
-      if (createError) return setError(createError.message)
-      if (!organizationId) return setError('تم إنشاء الحساب ولكن تعذر تحديد مساحة العمل. حاول مرة أخرى.')
-
-      const { error: updateError } = await client.from('organizations').update({ address: address.trim() }).eq('id', organizationId)
-      if (updateError) return setError('تم إنشاء مساحة العمل، ولكن تعذر حفظ عنوان الشركة. حاول مرة أخرى.')
+      if (createError) {
+        await cleanupFailedSignup()
+        setError(`تعذر إنشاء مساحة العمل. تم إلغاء التسجيل، ويمكنك المحاولة مرة أخرى. ${createError.message}`)
+        return
+      }
+      if (!organizationId) {
+        await cleanupFailedSignup()
+        setError('تعذر إنشاء مساحة العمل. تم إلغاء التسجيل، ويمكنك المحاولة مرة أخرى.')
+        return
+      }
 
       onDone()
     } catch (err) {
@@ -115,6 +156,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       setSaving(false)
     }
   }
+
 
   if (checkingInvite && inviteCode) {
     return (
