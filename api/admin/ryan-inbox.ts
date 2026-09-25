@@ -229,9 +229,18 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle();if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:agent},{data:services}]=await Promise.all([supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)]);if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
  const settings=obj(agent.settings),model=(/^gemini-3\./i.test(text(settings.model,100))?text(settings.model,100):'gemini-3.1-flash-lite'),temperature=Math.min(1,Math.max(0,Number(settings.temperature)||0.45)),allowFallback=settings.fallback_on_llm_failure!==false,rememberCustomer=settings.remember_customer!==false,useKnowledge=settings.use_knowledge_base!==false,crmContext=settings.crm_context!==false,noRepeatQuestions=settings.no_repeat_questions!==false,apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
- const {data:quota,error:quotaError}=await supabase.rpc('consume_ryan_message',{p_organization_id:organizationId,p_agent_id:agent.id,p_conversation_id:conversationId,p_customer_id:customer.id,p_model:model})
- if(quotaError)return res.status(500).json({error:'Failed to verify Ryan message quota',details:text(quotaError.message,500)})
- const quotaRow=Array.isArray(quota)?quota[0]:quota
+ const {data:ownerRow}=await supabase.from('users').select('id,email,is_platform_admin,active').eq('id',text((await supabase.from('users').select('id').eq('organization_id',organizationId).eq('email','kalnoby0@gmail.com').eq('is_platform_admin',true).eq('active',true).limit(1).maybeSingle()).data?.id,100)).maybeSingle()
+ const isPlatformOwner=String(ownerRow?.email||'').trim().toLowerCase()==='kalnoby0@gmail.com' && ownerRow?.is_platform_admin===true && ownerRow?.active!==false
+ let quotaRow:any
+ if(isPlatformOwner){
+  const {data:ownerRun,error:ownerRunError}=await supabase.from('ai_agent_runs').insert({agent_id:agent.id,conversation_id:conversationId,customer_id:customer.id,model,status:'processing',input_tokens:0,output_tokens:0,tool_calls:[],metadata:{source:'ryan',billing_month:new Date().toISOString().slice(0,7),platform_owner_unlimited:true}}).select('id').single()
+  if(ownerRunError||!ownerRun)return res.status(500).json({error:'Failed to initialize Ryan run',details:text(ownerRunError?.message,500)})
+  quotaRow={run_id:ownerRun.id,allowed:true,used_messages:0,plan_messages:null,purchased_messages:null,total_limit:null,remaining_messages:null,reset_at:null}
+ } else {
+  const {data:quota,error:quotaError}=await supabase.rpc('consume_ryan_message',{p_organization_id:organizationId,p_agent_id:agent.id,p_conversation_id:conversationId,p_customer_id:customer.id,p_model:model})
+  if(quotaError)return res.status(500).json({error:'Failed to verify Ryan message quota',details:text(quotaError.message,500)})
+  quotaRow=Array.isArray(quota)?quota[0]:quota
+ }
  if(!quotaRow?.allowed){
   const quotaReply='رصيد رسائل Ryan في الباقة الحالية اكتمل، ومش هقدر أكمل المحادثة دلوقتي. تقدر تختار أو تجدد باقة من صفحة الباقات داخل المنصة.'
   const {data:savedQuota,error:savedQuotaError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:quotaReply,metadata:{source:'ryan',ai_agent_id:agent.id,type:'quota_exhausted',plan_path:'/plans',used_messages:Number(quotaRow?.used_messages||0),total_limit:Number(quotaRow?.total_limit||0),reset_at:quotaRow?.reset_at||null}}).select('id').single()
