@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom'
 import { useBranding } from '../hooks/useBranding'
 
 const features = [
-  ['إدارة العملاء CRM','نظّم العملاء والفرص والصفقات في مكان واحد.'],
-  ['المبيعات والصفقات','تابع مراحل البيع والمهام والمتابعات بسهولة.'],
-  ['التسويق والحملات','أنشئ حملاتك وتابع نتائجها من مساحة واحدة.'],
-  ['صندوق محادثات موحّد','اجمع محادثات قنوات التواصل في تجربة منظمة.'],
-  ['Ryan AI','مساعد ذكي لفهم المحادثات والتعامل مع العملاء بصورة طبيعية.'],
-  ['تقارير ورؤية أوضح','حوّل بيانات نشاطك إلى مؤشرات تساعدك على اتخاذ القرار.']
+  ['إدارة العملاء CRM','نظّم العملاء والفرص والصفقات في مكان واحد مع متابعة واضحة لكل مرحلة.','CRM'],
+  ['المبيعات والصفقات','تابع مراحل البيع والمهام والمتابعات من أول فرصة حتى إتمام الصفقة.','SALE'],
+  ['استوديو المحتوى بالـAI','حوّل فكرتك إلى بوست احترافي بالـAI، اختَر نوع المحتوى والنبرة والستايل، راجع النص ثم انشره.','AI'],
+  ['النشر على السوشيال','جهّز المحتوى للنشر واختر Facebook أو Instagram من نفس التجربة.','SOC'],
+  ['Ryan AI','مساعد ذكي يفهم سياق المحادثات ويساعد في التعامل مع العملاء وجمع بياناتهم.','RYAN'],
+  ['صندوق محادثات موحّد','اجمع محادثات قنوات التواصل في تجربة منظمة مع رؤية أوضح لكل عميل.','INBOX'],
+  ['التسويق والحملات','أنشئ حملاتك وتابع نشاطك التسويقي من مساحة واحدة.','MKT'],
+  ['التقارير والرؤية','حوّل نشاطك وبياناتك إلى مؤشرات تساعدك على متابعة الأداء واتخاذ القرار.','DATA']
 ]
 
 export default function Landing() {
@@ -42,13 +44,45 @@ export default function Landing() {
           </div>
         </section>
 
-        <section id="features" className="relative py-20 lg:py-28 bg-white border-y border-blue-100 overflow-hidden">
-          <div className="absolute top-16 inset-inline-start-10 dm-gold-ornament" aria-hidden="true"/>
-          <div className="max-w-7xl mx-auto px-5"><div className="max-w-2xl mb-12"><span className="text-sm font-bold text-gold-600">كل أدواتك في مكان واحد</span><h2 className="mt-3 text-3xl lg:text-4xl font-black">منصة مصممة لنمو نشاطك</h2><p className="mt-4 text-ink-900/55 leading-8">اجمع أهم عمليات العمل والعملاء والمبيعات في تجربة واحدة.</p></div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">{features.map(([title,description]) => <article key={title} className="relative rounded-2xl border border-blue-100/80 bg-white/90 p-6 shadow-[0_10px_30px_rgba(15,47,107,0.04)] backdrop-blur-sm hover:-translate-y-1 hover:shadow-xl transition-all"><div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-xl font-black">✦</div><div className="absolute top-5 inset-inline-end-5 h-px w-10 bg-amber-500/70"/><h3 className="font-black text-lg mt-6">{title}</h3><p className="mt-3 text-sm leading-7 text-ink-900/55">{description}</p></article>)}</div>
+        <section id="features" className="relative overflow-hidden border-y border-blue-100 bg-white py-20 lg:py-28">
+          <div className="absolute -top-32 inset-inline-end-0 h-80 w-80 rounded-full bg-blue-100/40 blur-3xl" aria-hidden="true"/>
+          <div className="absolute bottom-0 inset-inline-start-0 h-72 w-72 rounded-full bg-amber-100/30 blur-3xl" aria-hidden="true"/>
+          <div className="relative mx-auto max-w-7xl px-5">
+            <div className="mx-auto max-w-3xl text-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-extrabold text-blue-800">✦ أدوات متكاملة لنمو نشاطك</span>
+              <h2 className="mt-5 text-3xl font-black leading-tight lg:text-5xl">كل ما تحتاجه لإدارة العميل<br/><span className="text-blue-700">من أول تواصل إلى البيع والنمو</span></h2>
+              <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-ink-900/55 lg:text-lg">Dragon Media تجمع التشغيل، المبيعات، التسويق والذكاء الاصطناعي في تجربة واحدة بسيطة واحترافية.</p>
+            </div>
+
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {features.map(([title,description,code], index) => (
+                <article key={title} className={`group relative overflow-hidden rounded-[26px] border bg-white p-6 shadow-[0_14px_40px_rgba(15,47,107,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_22px_55px_rgba(15,47,107,0.11)] ${code==='AI'?'border-blue-200 bg-[linear-gradient(145deg,#ffffff_0%,#f3f8ff_100%)] lg:col-span-2':''}`}>
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-blue-700 via-cyan-400 to-amber-400 opacity-80"/>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl font-black shadow-sm ${code==='AI'?'bg-blue-700 text-white':'bg-blue-50 text-blue-700'}`}>{code}</div>
+                    <span className="text-xs font-black text-ink-900/20">0{index+1}</span>
+                  </div>
+                  <h3 className="mt-6 text-lg font-black text-ink-950">{title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-ink-900/55">{description}</p>
+                  {code==='AI' && <div className="mt-5 flex flex-wrap gap-2">
+                    {['كتابة بالـAI','أنواع محتوى متعددة','نبرات مختلفة','مراجعة وتحرير','Facebook + Instagram'].map(x=><span key={x} className="rounded-full border border-blue-100 bg-white px-3 py-1.5 text-[10px] font-bold text-blue-800 shadow-sm">{x}</span>)}
+                  </div>}
+                </article>
+              ))}
+            </div>
+
+            <div className="mt-8 overflow-hidden rounded-[30px] border border-blue-100 bg-[#071f45] p-5 text-white shadow-2xl sm:p-7">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div className="max-w-2xl">
+                  <span className="text-xs font-extrabold text-cyan-300">AI CONTENT STUDIO</span>
+                  <h3 className="mt-2 text-2xl font-black lg:text-3xl">فكرة واحدة → محتوى جاهز للنشر</h3>
+                  <p className="mt-3 text-sm leading-7 text-white/65">اكتب فكرتك، اختَر نوع المحتوى والنبرة والستايل، راجع النتيجة وعدّلها، ثم اختر المنصة التي تريد النشر عليها.</p>
+                </div>
+                <Link to="/ai-content" className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-white px-6 py-3.5 text-sm font-black text-[#071f45] transition hover:-translate-y-0.5">استكشف استوديو المحتوى <span className="mr-2">←</span></Link>
+              </div>
+            </div>
           </div>
         </section>
-
         <section id="ryan" className="relative py-20 lg:py-28 bg-[#f7faff] overflow-hidden"><div className="max-w-7xl mx-auto px-5 grid lg:grid-cols-2 gap-12 items-center"><div><span className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-800">الذكاء الاصطناعي داخل المنصة</span><h2 className="mt-5 text-3xl lg:text-4xl font-black">Ryan AI — موظفك الذكي لخدمة العملاء</h2><p className="text-ink-900/60 leading-8 mt-6">مساعد ذكي مصمم لفهم سياق المحادثة والتعامل مع العميل بصورة طبيعية.</p><div className="mt-7 space-y-3">{['يفهم سياق المحادثة','يساعد في جمع بيانات العميل ومتابعته','تجربة محادثة عربية طبيعية'].map(x=><div key={x} className="flex items-center gap-3 rounded-xl border border-blue-100 bg-white p-4"><span className="w-6 h-6 rounded-full bg-blue-700 text-white flex items-center justify-center">✓</span><span className="text-sm font-semibold">{x}</span></div>)}</div></div><div className="relative rounded-3xl border border-blue-900/30 bg-[#071f45] p-5 shadow-2xl overflow-hidden"><div className="flex items-center gap-3 border-b border-white/10 pb-4"><div className="w-11 h-11 rounded-full bg-cyan-300 text-[#071f45] flex items-center justify-center font-black">R</div><div><div className="font-black text-white">Ryan AI</div><div className="text-xs text-cyan-200 mt-1">مساعد {name}</div></div></div><div className="space-y-4 py-6"><div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/90">أهلاً بحضرتك، أنا ريان. أقدر أساعدك إزاي النهاردة؟</div><div className="max-w-[75%] mr-auto rounded-2xl rounded-tl-md bg-cyan-300 text-[#071f45] p-4 text-sm leading-7 font-semibold">محتاج أعرف خدماتكم وأسعارها.</div><div className="max-w-[80%] rounded-2xl rounded-tr-md bg-white/10 p-4 text-sm leading-7 text-white/90">أكيد، خليني أعرف احتياج حضرتك الأول وأرشح لك الأنسب.</div></div></div></div></section>
 
         <section id="how-it-works" className="relative py-20 lg:py-28 bg-sand-50 overflow-hidden"><div className="max-w-7xl mx-auto px-5"><span className="text-sm font-bold text-gold-600">طريقة العمل</span><h2 className="mt-3 text-3xl lg:text-4xl font-black">ابدأ ببساطة وتوسع مع نشاطك</h2><div className="grid md:grid-cols-3 gap-5 mt-10">{[['01','أنشئ مساحة عملك'],['02','نظّم عملاءك ومبيعاتك'],['03','طوّر التشغيل مع الأتمتة']].map(([n,t])=><div key={n} className="rounded-2xl bg-white border border-sand-200 p-6"><span className="text-sm font-black text-blue-700">{n}</span><h3 className="mt-4 font-black text-lg">{t}</h3></div>)}</div></div></section>
