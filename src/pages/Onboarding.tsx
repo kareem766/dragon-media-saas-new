@@ -62,7 +62,11 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         return
       }
 
-      if (!data?.organization_id) {
+      // Supabase returns TABLE(...) RPC results as an array. Normalize the
+      // response so a valid invite is not mistaken for a failed acceptance.
+      const inviteResult = Array.isArray(data) ? data[0] : data
+
+      if (!inviteResult?.organization_id) {
         await cleanupFailedSignup()
         if (cancelled) return
         setInviteError('تعذر ربط الحساب بالشركة. حاول مرة أخرى.')
