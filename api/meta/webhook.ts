@@ -185,6 +185,138 @@ async function updateFacebookCampaignStatus(db: any, organizationId: string, ext
     await db.from('campaigns').update({ sent_count: counts['تم الإرسال'] || 0, delivered_count: counts['تم التسليم'] || 0, failed_count: counts['فشلت'] || 0, queued_count: counts['قيد الإرسال'] || 0, skipped_count: counts['تم التخطي'] || 0, total_recipients: all?.length || 0, updated_at: now }).eq('id', row.campaign_id).eq('organization_id', organizationId)
   }
 }
+function decryptMetaToken(value: any) {
+  if (!value?.iv || !value?.tag || !value?.data) throw new Error('Meta token is not encrypted in the expected format.')
+  const { createDecipheriv, createHash } = require('node:crypto') as typeof import('node:crypto')
+  const seed = env('META_TOKEN_ENCRYPTION_KEY', 'META_APP_SECRET')
+  if (!seed) throw new Error('Meta token encryption configuration is missing.')
+  const key = createHash('sha256').update(seed).digest()
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(String(value.iv), 'base64'))
+  decipher.setAuthTag(Buffer.from(String(value.tag), 'base64'))
+  return Buffer.concat([decipher.update(Buffer.from(String(value.data), 'base64')), decipher.final()]).toString('utf8')
+}
+
+async function handleMetaComment(db: any, integration: any, comment: any, platform: 'facebook' | 'instagram', pageId: string, igUserId = '') {
+  const commentId = String(comment?.comment_id || comment?.id || '')
+  const text = String(comment?.message || comment?.text || '').trim()
+  const senderId = String(comment?.sender_id || comment?.from?.id || '')
+  const senderName = String(comment?.sender_name || comment?.from?.name || comment?.from?.username || 'عميل جديد').trim()
+  const verb = String(comment?.verb || 'add')
+  if (!commentId || !text || !senderId || verb !== 'add') return
+  if (senderId === pageId || (igUserId && senderId === igUserId)) return
+
+  const externalId = 'comment:' + platform + ':' + commentId
+  const { data: existing } = await db.from('messages').select('id').eq('external_id', externalId).maybeSingle()
+  if (existing) return
+
+  const organizationId = String(integration.organization_id)
+  const metadata = {
+    source: platform + '_comment_webhook',
+    comment_id: commentId,
+    comment_platform: platform,
+    comment_text: text,
+    comment_sender_id: senderId,
+    comment_sender_name: senderName,
+    post_id: String(comment?.post_id || comment?.media?.id || ''),
+    parent_id: String(comment?.parent_id || ''),
+    page_id: pageId,
+    instagram_user_id: igUserId || null,
+  }
+
+  const connectionToken = decryptMetaToken(integration.config?.access_token)
+  const graphVersion = env('META_GRAPH_API_VERSION') || 'v23.0'
+  const publicReply = 'أهلاً وسهلاً بحضرتك يا فندم، تم الرد على حضرتك.'
+  const publicPath = platform === 'instagram'
+    ? '/' + encodeURIComponent(commentId) + '/replies'
+    : '/' + encodeURIComponent(commentId) + '/comments'
+  const publicResponse = await fetch('https://graph.facebook.com/' + graphVersion + publicPath, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + connectionToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: publicReply }),
+  })
+  const publicPayload = await publicResponse.json().catch(() => ({}))
+  if (!publicResponse.ok) {
+    console.error('Meta comment public reply failed', { platform, commentId, error: publicPayload?.error?.message || publicResponse.status })
+    return
+  }
+
+  const { data: customersByComment } = await db.from('conversations')
+    .select('customer_id')
+    .eq('organization_id', organizationId)
+    .eq('channel', 'facebook')
+    .filter('metadata->>comment_platform', 'eq', platform)
+    .filter('metadata->>comment_sender_id', 'eq', senderId)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let customer: any = null
+  if (customersByComment?.customer_id) {
+    const { data } = await db.from('customers').select('id,name,phone').eq('id', customersByComment.customer_id).eq('organization_id', organizationId).maybeSingle()
+    customer = data
+  }
+  if (!customer) {
+    const { data: created, error } = await db.from('customers').insert({
+      organization_id: organizationId,
+      name: senderName || 'عميل جديد',
+      phone: null,
+      source: platform + '_comment',
+    }).select('id,name,phone').single()
+    if (error) throw error
+    customer = created
+  }
+
+  const now = new Date().toISOString()
+  const { conversation, existed } = await findOrCreateConversation(
+    db,
+    organizationId,
+    customer.id,
+    'messenger',
+    { ...metadata, provider: 'meta_comment', facebook_page_id: pageId, facebook_psid: senderId },
+    now,
+    text,
+  )
+  const { error: insertError } = await db.from('messages').insert({
+    conversation_id: conversation.id,
+    sender_type: 'customer',
+    content: text,
+    external_id: externalId,
+    metadata: { ...metadata, public_reply_text: publicReply, public_reply_id: String(publicPayload?.id || '') },
+    created_at: comment?.created_time ? new Date(Number(comment.created_time) * 1000).toISOString() : now,
+  })
+  if (insertError) {
+    // A duplicate webhook can race with another delivery; the unique external_id
+    // index makes the second insert harmless and the first one remains authoritative.
+    if (!/duplicate key|unique/i.test(String(insertError.message || ''))) throw insertError
+    return
+  }
+  await db.from('conversations').update({
+    last_message_at: now,
+    updated_at: now,
+    unread_count: Number(conversation.unread_count || 0) + (existed ? 1 : 0),
+    status: 'open',
+    metadata: { ...obj(conversation.metadata), ...metadata, facebook_psid: senderId, facebook_page_id: pageId },
+  }).eq('id', conversation.id)
+}
+
+async function handleInstagramWebhook(db: any, payload: any) {
+  for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
+    const igUserId = String(entry?.id || '')
+    if (!igUserId) continue
+    const { data: integration } = await db.from('integrations')
+      .select('organization_id,config,metadata')
+      .eq('provider', 'facebook')
+      .eq('connected', true)
+      .filter('metadata->>instagram_user_id', 'eq', igUserId)
+      .maybeSingle()
+    if (!integration) { console.warn('Instagram webhook integration not found', { igUserId }); continue }
+    for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+      if (String(change?.field || '') !== 'comments') continue
+      await handleMetaComment(db, integration, change?.value || {}, 'instagram', String(integration.metadata?.facebook_page_id || ''), igUserId)
+    }
+  }
+}
+
 async function handleFacebookWebhook(db: any, payload: any) {
   for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
     const pageId = String(entry?.id || '')
@@ -192,6 +324,11 @@ async function handleFacebookWebhook(db: any, payload: any) {
     const { data: integration } = await db.from('integrations').select('organization_id,metadata').eq('provider', 'facebook').eq('connected', true).filter('metadata->>facebook_page_id', 'eq', pageId).maybeSingle()
     if (!integration) { console.warn('Facebook webhook integration not found', { pageId }); continue }
     const organizationId = String(integration.organization_id)
+    for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+      if (change?.field === 'feed' && String(change?.value?.item || '') === 'comment') {
+        await handleMetaComment(db, integration, change.value, 'facebook', '', '')
+      }
+    }
     for (const event of Array.isArray(entry?.messaging) ? entry.messaging : []) {
       const deliveryMids = Array.isArray(event?.delivery?.mids) ? event.delivery.mids : []
       for (const mid of deliveryMids) {
@@ -251,6 +388,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const payload = JSON.parse(rawBody)
     const db = await getDb()
     if (payload.object === 'page') { await handleFacebookWebhook(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }
+    if (payload.object === 'instagram') { await handleInstagramWebhook(db, payload); return json(res, 200, { ok: true, provider: 'instagram' }) }
     if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
     for (const entry of Array.isArray(payload.entry) ? payload.entry : []) {
       const wabaId = String(entry?.id || '')
