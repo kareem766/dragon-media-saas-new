@@ -109,7 +109,15 @@ export default function Users() {
           </Button>
         </div>
         {genError && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3.5 py-2.5">{genError}</div>}
-        <p className="text-xs text-ink-900/40 mt-3">ابعت الكود للموظف يدويًا (واتساب/إيميل)، وهو يدخله وقت إنشاء الحساب عشان ينضم لمؤسستك تلقائيًا.</p>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+          <div className="text-sm font-semibold text-amber-900">صلاحية كود الدعوة</div>
+          <p className="text-xs leading-6 text-amber-900/70 mt-1">
+            كود الدعوة صالح لمدة <strong>24 ساعة فقط من وقت إنشائه</strong>. بعد انتهاء المدة لن يمكن استخدامه، وسيكون عليك إنشاء دعوة جديدة.
+          </p>
+          <p className="text-xs leading-6 text-ink-900/45 mt-1">
+            شارك الكود مع الموظف عبر واتساب أو البريد الإلكتروني، ليستخدمه أثناء إنشاء حسابه والانضمام إلى مؤسستك تلقائيًا.
+          </p>
+        </div>
 
         {invites.length > 0 && (
           <div className="mt-4 space-y-2">
