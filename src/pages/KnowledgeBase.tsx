@@ -14,7 +14,7 @@ interface DBEntry {
 export default function KnowledgeBase() {
   const { can } = usePermissions()
   const canEditKnowledge = can('knowledge_base', 'edit')
-  const canDeleteKnowledge = can('knowledge_base', 'delete')
+  const canDeleteKnowledge = false
   const { organizationId, loading: orgLoading } = useOrganization()
   const [entries, setEntries] = useState<DBEntry[]>([])
   const [loading, setLoading] = useState(true)
