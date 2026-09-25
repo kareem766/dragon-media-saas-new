@@ -24,16 +24,16 @@ export function useOrganization() {
     setNeedsOnboarding(false)
     setError(null)
 
-    const { data, error } = await supabase
+    const { data, error: queryError } = await supabase
       .from('users')
       .select('organization_id')
       .eq('id', user.id)
       .maybeSingle()
 
-    if (error) {
+    if (queryError) {
       setOrganizationId(null)
       setNeedsOnboarding(false)
-      setError(error.message)
+      setError(queryError.message)
     } else if (!data || !data.organization_id) {
       setOrganizationId(null)
       setNeedsOnboarding(true)
@@ -48,31 +48,6 @@ export function useOrganization() {
 
   useEffect(() => {
     void refresh()
-  }, [refresh])
-
-  return { organizationId, loading, error, needsOnboarding, refresh }
-}
-
-        if (error) {
-          setOrganizationId(null)
-          setNeedsOnboarding(false)
-          setError(error.message)
-        } else if (!data || !data.organization_id) {
-          // A confirmed auth user can exist before the app-level organization row.
-          // Send that user to workspace setup instead of falling through.
-          setOrganizationId(null)
-          setNeedsOnboarding(true)
-        } else {
-          setOrganizationId(data.organization_id as string)
-          setNeedsOnboarding(false)
-        }
-
-        setLoading(false)
-      })
-  }, [user, authLoading])
-
-  useEffect(() => {
-    refresh()
   }, [refresh])
 
   return { organizationId, loading, error, needsOnboarding, refresh }
