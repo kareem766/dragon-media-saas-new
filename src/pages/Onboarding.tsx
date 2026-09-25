@@ -210,7 +210,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 className="w-full rounded-2xl py-3.5 text-sm font-black"
                 onClick={async () => {
                   localStorage.removeItem('dragon_media_invite_code')
