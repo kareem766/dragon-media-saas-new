@@ -183,7 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Facebook uses this same already-whitelisted callback, distinguished by
     // the signed provider value in state. Keep the WhatsApp branch below intact.
     if (stateData.provider === 'facebook') {
-      const pages = await graph('/me/accounts?fields=id,name,category,access_token,tasks&limit=100', token)
+      const pages = await graph('/me/accounts?fields=id,name,category,access_token,tasks,instagram_business_account{id,username}&limit=100', token)
       const page = Array.isArray(pages?.data)
         ? pages.data.find((item: any) => item?.id && item?.access_token)
         : null
@@ -191,10 +191,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const pageToken = String(page.access_token)
       const subscription = await graph(
-        `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`,
+        `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries,feed`,
         pageToken,
         { method: 'POST' },
       ).then(() => true).catch(() => false)
+      const instagramUserId = String(page?.instagram_business_account?.id || '')
+      const instagramSubscription = instagramUserId
+        ? await graph(
+            `/${encodeURIComponent(instagramUserId)}/subscribed_apps?subscribed_fields=comments`,
+            pageToken,
+            { method: 'POST' },
+          ).then(() => true).catch(() => false)
+        : false
 
       const { error: saveError } = await db.from('integrations').upsert({
         organization_id: String(stateData.organizationId),
@@ -208,6 +216,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           facebook_page_category: String(page.category || ''),
           facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [],
           facebook_webhook_subscribed: subscription,
+          instagram_user_id: instagramUserId || null,
+          instagram_username: String(page?.instagram_business_account?.username || ''),
+          instagram_comments_webhook_subscribed: instagramSubscription,
           ready_for_messaging: subscription,
           connected_via: 'facebook_oauth',
         },
