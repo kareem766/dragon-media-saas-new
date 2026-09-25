@@ -69,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const stateUserId = String(stateData.userId || '')
     const organizationId = String(stateData.organizationId || '')
     if (!stateUserId || !organizationId) throw new Error('بيانات جلسة Facebook غير مكتملة.')
+    const isPlatformOwner = stateData.owner === true
 
     const { data: membership } = await db
       .from('users')
@@ -84,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const expiry = String(subscription?.expires_at || subscription?.renewal_date || '')
     const today = new Date().toISOString().slice(0, 10)
     const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
-    if (!subscriptionActive && !allowBeforeSubscription) throw new Error('ربط التكاملات متاح بعد تفعيل الاشتراك.')
+    if (!subscriptionActive && !allowBeforeSubscription && !isPlatformOwner) throw new Error('ربط التكاملات متاح بعد تفعيل الاشتراك.')
 
     const { data: permission } = await db.from('role_permissions').select('can_edit').eq('role', membership.role).eq('resource', 'settings').maybeSingle()
     if (!permission?.can_edit) throw new Error('ربط Facebook متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.')
