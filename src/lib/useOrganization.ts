@@ -9,27 +9,50 @@ export function useOrganization() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const refresh = useCallback(() => {
-    if (authLoading) return
+  const refresh = useCallback(async () => {
+    if (authLoading) return null
 
     if (!supabase || !user) {
       setOrganizationId(null)
       setNeedsOnboarding(false)
       setError(null)
       setLoading(false)
-      return
+      return null
     }
 
     setLoading(true)
     setNeedsOnboarding(false)
     setError(null)
 
-    supabase
+    const { data, error } = await supabase
       .from('users')
       .select('organization_id')
       .eq('id', user.id)
       .maybeSingle()
-      .then(({ data, error }) => {
+
+    if (error) {
+      setOrganizationId(null)
+      setNeedsOnboarding(false)
+      setError(error.message)
+    } else if (!data || !data.organization_id) {
+      setOrganizationId(null)
+      setNeedsOnboarding(true)
+    } else {
+      setOrganizationId(data.organization_id as string)
+      setNeedsOnboarding(false)
+    }
+
+    setLoading(false)
+    return data?.organization_id ? (data.organization_id as string) : null
+  }, [user, authLoading])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  return { organizationId, loading, error, needsOnboarding, refresh }
+}
+
         if (error) {
           setOrganizationId(null)
           setNeedsOnboarding(false)
