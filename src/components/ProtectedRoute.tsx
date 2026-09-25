@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import {
   Navigate,
   Link,
@@ -60,6 +60,10 @@ export default function ProtectedRoute({
   const [suspensionError, setSuspensionError] = useState<string | null>(null)
   const [checkingSuspend, setCheckingSuspend] = useState(true)
   const [initialChecksReady, setInitialChecksReady] = useState(false)
+
+  const handleOnboardingDone = useCallback(() => {
+    void refresh()
+  }, [refresh])
 
   // لا نحول كل تحديث تلقائي للـsession أو إعادة جلب بيانات الشركة/الاشتراك
   // إلى شاشة تحميل كاملة. شاشة التحميل مطلوبة فقط أثناء أول تهيئة للحساب.
@@ -166,14 +170,8 @@ export default function ProtectedRoute({
   }
 
   if (needsOnboarding) {
-  return (
-    <Onboarding
-      onDone={() => {
-        refresh()
-      }}
-    />
-  )
-}
+    return <Onboarding onDone={handleOnboardingDone} />
+  }
 
   if (suspensionError) {
     return (
