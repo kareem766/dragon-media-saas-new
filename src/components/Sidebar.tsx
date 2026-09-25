@@ -638,7 +638,7 @@ export default function Sidebar({
           )}
         </nav>
 
-        {/* Subscription Card */}
+        {!isAdmin && (
         <div className="shrink-0 p-3 sm:p-4 border-t border-white/10">
           <Link
             to="/billing"
@@ -691,6 +691,7 @@ export default function Sidebar({
             </div>
           </Link>
         </div>
+        )}
       </aside>
     </>
   )
