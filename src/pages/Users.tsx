@@ -66,12 +66,35 @@ export default function Users() {
     if (!supabase) return
     setGenerating(true)
     setGenError(null)
+
+    // Make sure the RPC is sent with a current authenticated session.
+    // A stale/expired browser token can make PostgREST execute the call as
+    // anon and return "permission denied for function generate_invite_code".
+    let { data: sessionData } = await supabase.auth.getSession()
+
+    if (!sessionData.session) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+      if (refreshError || !refreshed.session) {
+        setGenerating(false)
+        setGenError('انتهت جلسة تسجيل الدخول. حدّث الصفحة أو سجّل الدخول مرة أخرى ثم حاول توليد كود الدعوة.')
+        return
+      }
+      sessionData = refreshed
+    }
+
     const { error } = await supabase.rpc('generate_invite_code', { p_role: newRole })
     setGenerating(false)
+
     if (error) {
-      setGenError(error.message)
+      const message = error.message || ''
+      if (message.toLowerCase().includes('permission denied for function generate_invite_code')) {
+        setGenError('جلسة تسجيل الدخول الحالية غير صالحة لتوليد كود الدعوة. حدّث الصفحة مرة واحدة ثم حاول مرة أخرى.')
+      } else {
+        setGenError(message)
+      }
       return
     }
+
     loadData()
   }
 
