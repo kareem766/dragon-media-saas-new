@@ -126,14 +126,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('Facebook page webhook subscription verification failed', { pageId: String(page.id), appId: String(appId), error: webhookVerificationError })
       }
       try {
-        const appSubscriptions = await graph('/app/subscriptions', `${appId}|${appSecret}`)
-        const safeSubscriptions = Array.isArray(appSubscriptions?.data) ? appSubscriptions.data.map((item: any) => ({ object: item?.object ?? null, callback_url: item?.callback_url ?? null, fields: Array.isArray(item?.fields) ? item.fields.map(String) : [] })) : []
-        console.log('Facebook app webhook subscriptions', { appId: String(appId), subscriptions: safeSubscriptions, raw: JSON.stringify(safeSubscriptions) })
-        const pageSubscription = safeSubscriptions.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
+        const appAccessToken = `${appId}|${appSecret}`
+        const appSubscriptions = await graph('/app/subscriptions', appAccessToken)
+        let safeSubscriptions = Array.isArray(appSubscriptions?.data) ? appSubscriptions.data.map((item: any) => ({ object: item?.object ?? null, callback_url: item?.callback_url ?? null, fields: Array.isArray(item?.fields) ? item.fields.map(String) : [] })) : []
+        let pageSubscription = safeSubscriptions.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
         if (!pageSubscription?.fields?.includes('feed')) {
-          const message = 'Meta لم تؤكد حقل feed في اشتراك Webhook على مستوى التطبيق.'
+          const callbackUrl = REDIRECT_URI.replace('/api/meta/oauth/callback', '/api/meta/webhook')
+          const params = new URLSearchParams({
+            object: 'page',
+            callback_url: callbackUrl,
+            fields: 'feed,messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries',
+            verify_token: env('META_WEBHOOK_VERIFY_TOKEN', 'META_STATE_SECRET'),
+          })
+          try {
+            const repair = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(appId)}/subscriptions?${params.toString()}`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${appAccessToken}` },
+            })
+            const repairPayload = await repair.json().catch(() => ({}))
+            console.log('Facebook app webhook auto-repair response', { appId: String(appId), status: repair.status, payload: repairPayload })
+          } catch (repairError) {
+            console.error('Facebook app webhook auto-repair request failed', { appId: String(appId), error: repairError instanceof Error ? repairError.message : String(repairError) })
+          }
+          const refreshed = await graph('/app/subscriptions', appAccessToken)
+          safeSubscriptions = Array.isArray(refreshed?.data) ? refreshed.data.map((item: any) => ({ object: item?.object ?? null, callback_url: item?.callback_url ?? null, fields: Array.isArray(item?.fields) ? item.fields.map(String) : [] })) : []
+          pageSubscription = safeSubscriptions.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
+        }
+        console.log('Facebook app webhook subscriptions', { appId: String(appId), subscriptions: safeSubscriptions, raw: JSON.stringify(safeSubscriptions) })
+        if (!pageSubscription?.fields?.includes('feed')) {
+          const message = 'Meta لم تؤكد حقل feed في اشتراك Webhook على مستوى التطبيق بعد محاولة الإصلاح.'
           webhookVerificationError = webhookVerificationError ? webhookVerificationError + ' ' + message : message
-          console.warn('Facebook app webhook feed field missing', { appId: String(appId), pageSubscription: pageSubscription || null })
+          console.warn('Facebook app webhook feed field still missing', { appId: String(appId), pageSubscription: pageSubscription || null })
         }
       } catch (appWebhookError) {
         console.error('Facebook app webhook subscription check failed', { appId: String(appId), error: appWebhookError instanceof Error ? appWebhookError.message : String(appWebhookError) })
