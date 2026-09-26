@@ -5,6 +5,7 @@ import type {
 
 import { createClient } from '@supabase/supabase-js'
 import { handleCampaignRequest } from './_server/campaign-run.js'
+import subscriptionWhatsappNotifications from './subscription-whatsapp-notifications.js'
 
 type Automation = {
   id: string
@@ -812,6 +813,12 @@ export default async function handler(
 ) {
   if (req.method === 'POST') {
     return handleCampaignRequest(req, res)
+  }
+
+  // Keep the subscription WhatsApp cron endpoint behind this existing
+  // serverless function so Hobby deployments stay within the function limit.
+  if (String(req.query.job || '') === 'subscription') {
+    return subscriptionWhatsappNotifications(req, res)
   }
 
   /**
