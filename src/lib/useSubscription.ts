@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { useOrganization } from './useOrganization'
 import { useIsPlatformAdmin } from './useIsPlatformAdmin'
+import { useAuth } from './AuthContext'
 
 interface PlanData {
   id: string
@@ -40,30 +41,56 @@ export type SubscriptionAccessState =
   | 'no_subscription'
   | 'unknown'
 
+const managerRoles = new Set(['admin', 'super_admin'])
+
 export function useSubscription() {
-  const {
-    organizationId,
-    loading: organizationLoading,
-  } = useOrganization()
+  const { user } = useAuth()
+  const { organizationId, loading: organizationLoading } = useOrganization()
   const { isAdmin, loading: platformAdminLoading } = useIsPlatformAdmin()
 
-  const [subscription, setSubscription] =
-    useState<SubscriptionData | null>(null)
-
+  const [role, setRole] = useState<string | null>(null)
+  const [rawSubscription, setRawSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const canManageSubscription = isAdmin || managerRoles.has(role || '')
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadRole = async () => {
+      if (!supabase || !user?.id) {
+        setRole(null)
+        return
+      }
+
+      const { data } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!cancelled) setRole(data?.role ? String(data.role) : null)
+    }
+
+    void loadRole()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   useEffect(() => {
     let cancelled = false
 
     const loadSubscription = async () => {
-      if (organizationLoading || platformAdminLoading) {
+      if (organizationLoading || platformAdminLoading || (user?.id && role === null)) {
         return
       }
 
       if (isAdmin) {
         if (!cancelled) {
-          setSubscription(null)
+          setRawSubscription(null)
           setLoading(false)
         }
         return
@@ -71,7 +98,7 @@ export function useSubscription() {
 
       if (!supabase || !organizationId) {
         if (!cancelled) {
-          setSubscription(null)
+          setRawSubscription(null)
           setLoading(false)
         }
         return
@@ -108,23 +135,15 @@ export function useSubscription() {
             )
           `)
           .eq('organization_id', organizationId)
-          .order('renewal_date', {
-            ascending: false,
-            nullsFirst: false,
-          })
+          .order('renewal_date', { ascending: false, nullsFirst: false })
           .limit(1)
           .maybeSingle()
 
-        if (subscriptionError) {
-          throw subscriptionError
-        }
-
-        if (cancelled) {
-          return
-        }
+        if (subscriptionError) throw subscriptionError
+        if (cancelled) return
 
         if (!data) {
-          setSubscription({
+          setRawSubscription({
             id: '',
             status: 'no_subscription',
             renewal_date: null,
@@ -134,15 +153,12 @@ export function useSubscription() {
             plan_id: null,
             plan: null,
           })
-
           return
         }
 
-        const plan = Array.isArray(data.plans)
-          ? data.plans[0] ?? null
-          : data.plans ?? null
+        const plan = Array.isArray(data.plans) ? data.plans[0] ?? null : data.plans ?? null
 
-        setSubscription({
+        setRawSubscription({
           id: data.id,
           status: data.status ?? 'pending_payment',
           renewal_date: data.renewal_date ?? null,
@@ -153,274 +169,97 @@ export function useSubscription() {
           plan: plan as PlanData | null,
         })
       } catch (err: any) {
-        if (cancelled) {
-          return
-        }
-
-        setSubscription(null)
-
-        setError(
-          err?.message ||
-            'تعذر تحميل بيانات الاشتراك.'
-        )
+        if (cancelled) return
+        setRawSubscription(null)
+        setError(err?.message || 'تعذر تحميل بيانات الاشتراك.')
       } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
+        if (!cancelled) setLoading(false)
       }
     }
 
-    loadSubscription()
+    void loadSubscription()
 
     return () => {
       cancelled = true
     }
-  }, [organizationId, organizationLoading, isAdmin, platformAdminLoading])
+  }, [organizationId, organizationLoading, isAdmin, platformAdminLoading, role, user?.id])
 
-  const rawStatus =
-    subscription?.status ?? 'no_subscription'
+  const rawStatus = rawSubscription?.status ?? 'no_subscription'
+  const effectiveExpiryDate = rawSubscription?.expires_at ?? rawSubscription?.renewal_date ?? null
+  const expiryDateOnly = effectiveExpiryDate ? effectiveExpiryDate.slice(0, 10) : null
 
-  /*
-   * expires_at هو المصدر الأساسي.
-   * renewal_date يظل fallback للبيانات القديمة.
-   */
-  const effectiveExpiryDate =
-    subscription?.expires_at ??
-    subscription?.renewal_date ??
-    null
-
-  /*
-   * expires_at قد يأتي من Supabase كتاريخ فقط:
-   * 2026-10-12
-   *
-   * أو كتوقيت:
-   * 2026-10-12T21:30:00+00:00
-   *
-   * نستخدم أول 10 أحرف للحصول على تاريخ التقويم
-   * بدون التأثر بالـ timezone.
-   */
-  const expiryDateOnly = effectiveExpiryDate
-    ? effectiveExpiryDate.slice(0, 10)
-    : null
-
-  const daysRemaining = (() => {
-    if (!expiryDateOnly) {
-      return null
-    }
-
+  const daysRemainingInternal = (() => {
+    if (!expiryDateOnly) return null
     const today = new Date()
-
-    const todayUTC = Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth(),
-      today.getUTCDate()
-    )
-
-    const [year, month, day] =
-      expiryDateOnly.split('-').map(Number)
-
-    if (!year || !month || !day) {
-      return null
-    }
-
-    const expiryUTC = Date.UTC(
-      year,
-      month - 1,
-      day
-    )
-
-    return Math.max(
-      0,
-      Math.ceil(
-        (expiryUTC - todayUTC) /
-          (1000 * 60 * 60 * 24)
-      )
-    )
+    const todayUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+    const [year, month, day] = expiryDateOnly.split('-').map(Number)
+    if (!year || !month || !day) return null
+    const expiryUTC = Date.UTC(year, month - 1, day)
+    return Math.max(0, Math.ceil((expiryUTC - todayUTC) / (1000 * 60 * 60 * 24)))
   })()
 
-  /*
-   * الاشتراك يعتبر منتهيًا فقط إذا مر تاريخ الانتهاء.
-   *
-   * إذا كان تاريخ الانتهاء هو اليوم،
-   * يظل الاشتراك فعالًا خلال اليوم الحالي.
-   */
   const isDateExpired = (() => {
-    if (!expiryDateOnly) {
-      return false
-    }
-
+    if (!expiryDateOnly) return false
     const today = new Date()
-
-    const todayUTC = Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth(),
-      today.getUTCDate()
-    )
-
-    const [year, month, day] =
-      expiryDateOnly.split('-').map(Number)
-
-    if (!year || !month || !day) {
-      return false
-    }
-
-    const expiryUTC = Date.UTC(
-      year,
-      month - 1,
-      day
-    )
-
-    return expiryUTC < todayUTC
+    const todayUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+    const [year, month, day] = expiryDateOnly.split('-').map(Number)
+    if (!year || !month || !day) return false
+    return Date.UTC(year, month - 1, day) < todayUTC
   })()
 
-  const isSubscriptionStatusActive =
-    rawStatus === 'active' ||
-    rawStatus === 'trialing'
-
-  const isPendingPayment =
-    rawStatus === 'pending_payment' ||
-    rawStatus === 'pending_review'
-
-  const isCancelled =
-    rawStatus === 'cancelled' ||
-    rawStatus === 'canceled'
-
-  const isActive =
-    isSubscriptionStatusActive &&
-    !isDateExpired
-
-  /*
-   * cancelled لا يعني expired.
-   * no_subscription لا يعني expired.
-   * نحتفظ بالحالات بشكل منفصل حتى تستخدمها الواجهة
-   * والـ ProtectedRoute بشكل صحيح.
-   */
-  const isExpired =
-    rawStatus === 'expired' ||
-    (
-      isSubscriptionStatusActive &&
-      isDateExpired
-    )
+  const isSubscriptionStatusActive = rawStatus === 'active' || rawStatus === 'trialing'
+  const isPendingPayment = rawStatus === 'pending_payment' || rawStatus === 'pending_review'
+  const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled'
+  const isActive = isSubscriptionStatusActive && !isDateExpired
+  const isExpired = rawStatus === 'expired' || (isSubscriptionStatusActive && isDateExpired)
 
   let accessState: SubscriptionAccessState = 'unknown'
+  if (rawStatus === 'no_subscription') accessState = 'no_subscription'
+  else if (isCancelled) accessState = 'cancelled'
+  else if (isExpired) accessState = 'expired'
+  else if (isPendingPayment) accessState = 'pending_payment'
+  else if (isActive) accessState = daysRemainingInternal === 0 ? 'expires_today' : daysRemainingInternal !== null && daysRemainingInternal <= 7 ? 'expiring_soon' : 'active'
 
-  if (rawStatus === 'no_subscription') {
-    accessState = 'no_subscription'
-  } else if (isCancelled) {
-    accessState = 'cancelled'
-  } else if (isExpired) {
-    accessState = 'expired'
-  } else if (isPendingPayment) {
-    accessState = 'pending_payment'
-  } else if (isActive) {
-    if (daysRemaining === 0) {
-      accessState = 'expires_today'
-    } else if (
-      daysRemaining !== null &&
-      daysRemaining <= 7
-    ) {
-      accessState = 'expiring_soon'
-    } else {
-      accessState = 'active'
-    }
-  } else {
-    accessState = 'unknown'
-  }
-
-  /*
-   * تاريخ انتهاء الاشتراك بصيغة عربية.
-   */
-  const formattedRenewalDate = expiryDateOnly
-    ? new Intl.DateTimeFormat('ar-EG', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }).format(
-        new Date(
-          `${expiryDateOnly}T00:00:00`
-        )
-      )
+  const formattedRenewalDateInternal = expiryDateOnly
+    ? new Intl.DateTimeFormat('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(`${expiryDateOnly}T00:00:00`))
     : null
 
-  /*
-   * التحقق من Features حسب الباقة الحالية.
-   */
-  const effectiveIsActive = isAdmin || isActive
-  const effectiveIsExpired = isAdmin ? false : isExpired
-  const effectiveIsPendingPayment = isAdmin ? false : isPendingPayment
-  const effectiveDaysRemaining = isAdmin ? null : daysRemaining
-  const effectiveAccessState: SubscriptionAccessState = isAdmin ? 'active' : accessState
-
   const hasFeature = (key: string) => {
-    if (isAdmin) {
-      return true
-    }
-
-    if (!isActive) {
-      return false
-    }
-
-    return Boolean(
-      subscription?.plan?.features?.[key]
-    )
+    if (isAdmin) return true
+    if (!isActive) return false
+    return Boolean(rawSubscription?.plan?.features?.[key])
   }
 
-  /*
-   * الحصول على Limit من الباقة.
-   */
   const getLimit = (key: string) => {
-    if (isAdmin) {
-      return Number.POSITIVE_INFINITY
-    }
-
-    if (!isActive) {
-      return 0
-    }
-
-    return (
-      subscription?.plan?.limits?.[key] ??
-      0
-    )
+    if (isAdmin) return Number.POSITIVE_INFINITY
+    if (!isActive) return 0
+    return rawSubscription?.plan?.limits?.[key] ?? 0
   }
+
+  // Employees can use the workspace according to their role, but subscription
+  // identity, plan name, dates and billing state are deliberately not exposed.
+  const visibleSubscription = canManageSubscription ? rawSubscription : null
+  const visibleDaysRemaining = canManageSubscription ? daysRemainingInternal : null
+  const visibleFormattedRenewalDate = canManageSubscription ? formattedRenewalDateInternal : null
 
   return {
-    subscription,
-
+    subscription: visibleSubscription,
     loading,
     error,
-
     status: rawStatus,
-
-    accessState: effectiveAccessState,
-
-    isActive: effectiveIsActive,
-    isExpired: effectiveIsExpired,
-    isPendingPayment: effectiveIsPendingPayment,
-
-    daysRemaining: effectiveDaysRemaining,
-
-    /*
-     * بيانات الاشتراك الحقيقية.
-     */
-    billingCycle:
-      subscription?.billing_cycle ?? null,
-
-    startedAt:
-      subscription?.started_at ?? null,
-
-    expiresAt:
-      subscription?.expires_at ??
-      subscription?.renewal_date ??
-      null,
-
-    formattedRenewalDate: isAdmin ? null : formattedRenewalDate,
-
+    accessState,
+    isActive: isAdmin ? true : isActive,
+    isExpired: isAdmin ? false : isExpired,
+    isPendingPayment: isAdmin ? false : isPendingPayment,
+    daysRemaining: visibleDaysRemaining,
+    billingCycle: canManageSubscription ? rawSubscription?.billing_cycle ?? null : null,
+    startedAt: canManageSubscription ? rawSubscription?.started_at ?? null : null,
+    expiresAt: canManageSubscription ? rawSubscription?.expires_at ?? rawSubscription?.renewal_date ?? null : null,
+    formattedRenewalDate: visibleFormattedRenewalDate,
     hasFeature,
-
     isPlatformAdmin: isAdmin,
+    canManageSubscription,
     getLimit,
-
-    plan:
-      subscription?.plan ?? null,
+    plan: canManageSubscription ? rawSubscription?.plan ?? null : null,
   }
 }
