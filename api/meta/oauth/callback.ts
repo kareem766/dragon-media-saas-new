@@ -126,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('Facebook page webhook subscription verification failed', { pageId: String(page.id), appId: String(appId), error: webhookVerificationError })
       }
       try {
-        const appSubscriptions = await graph('/app/subscriptions', \`${appId}|${appSecret}\`)
+        const appSubscriptions = await graph('/app/subscriptions', `${appId}|${appSecret}`)
         const safeSubscriptions = Array.isArray(appSubscriptions?.data) ? appSubscriptions.data.map((item: any) => ({ object: item?.object ?? null, callback_url: item?.callback_url ?? null, fields: Array.isArray(item?.fields) ? item.fields.map(String) : [] })) : []
         console.log('Facebook app webhook subscriptions', { appId: String(appId), subscriptions: safeSubscriptions, raw: JSON.stringify(safeSubscriptions) })
         const pageSubscription = safeSubscriptions.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
