@@ -190,11 +190,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!page) throw new Error('تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.')
 
       const pageToken = String(page.access_token)
-      const subscription = await graph(
-        `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries,feed`,
-        pageToken,
-        { method: 'POST' },
-      ).then(() => true).catch(() => false)
+      let subscription = false
+      let webhookFields: string[] = []
+      let webhookVerificationError = ''
+      try {
+        const subscribeResponse = await graph(
+          `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries,feed`,
+          pageToken,
+          { method: 'POST' },
+        )
+        subscription = subscribeResponse?.success === true || Object.keys(subscribeResponse || {}).length > 0
+        try {
+          const current = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps`, pageToken)
+          const apps = Array.isArray(current?.data) ? current.data : []
+          const appRow = apps.find((item: any) => String(item?.id || item?.app_id || '') === String(appId))
+          webhookFields = Array.isArray(appRow?.subscribed_fields) ? appRow.subscribed_fields.map(String) : []
+          if (webhookFields.length) subscription = webhookFields.includes('feed')
+        } catch (verifyError) {
+          webhookVerificationError = verifyError instanceof Error ? verifyError.message : 'تعذر التحقق من اشتراك Webhook لدى Meta.'
+        }
+      } catch (subscribeError) {
+        webhookVerificationError = subscribeError instanceof Error ? subscribeError.message : 'فشل اشتراك Webhook للصفحة لدى Meta.'
+      }
 
       const { error: saveError } = await db.from('integrations').upsert({
         organization_id: String(stateData.organizationId),
@@ -208,12 +225,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           facebook_page_category: String(page.category || ''),
           facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [],
           facebook_webhook_subscribed: subscription,
+          facebook_webhook_fields: webhookFields,
+          facebook_webhook_feed_verified: webhookFields.includes('feed'),
+          facebook_webhook_verification_error: webhookVerificationError || null,
           ready_for_messaging: subscription,
           connected_via: 'facebook_oauth',
         },
         connected_at: new Date().toISOString(),
         last_verified_at: new Date().toISOString(),
-        error_message: subscription ? null : 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.',
+        error_message: subscription ? null : (webhookVerificationError || 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.'),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'organization_id,provider' })
 
