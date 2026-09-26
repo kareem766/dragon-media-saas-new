@@ -94,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!page) throw new Error('تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.')
 
     const pageToken = String(page.access_token)
-    const webhookSubscribed = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`, pageToken, { method: 'POST' }).then(() => true).catch(() => false)
+    const webhookSubscribed = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries,feed`, pageToken, { method: 'POST' }).then(() => true).catch(() => false)
 
     const { error } = await db.from('integrations').upsert({
       organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected',
