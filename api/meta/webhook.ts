@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
-import { handleComment } from './comment-webhook'
+import { handleComment } from './comment-webhook.js'
 
 // meta webhook
 export const config = { api: { bodyParser: false } }
