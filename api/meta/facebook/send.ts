@@ -65,8 +65,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!conversationId || !content) return json(res, 400, { error: 'conversationId and content are required.' })
 
-    const { data: conversation } = await db.from('conversations').select('id,organization_id,channel,customer_id,customers(id,phone)').eq('id', conversationId).maybeSingle()
-    if (!conversation || !['facebook', 'messenger'].includes(String(conversation.channel || ''))) return json(res, 404, { error: 'Facebook conversation not found.' })
+    const { data: conversation } = await db.from('conversations').select('id,organization_id,channel,customer_id,metadata,customers(id,phone)').eq('id', conversationId).maybeSingle()
+    const conversationChannel = String(conversation?.channel || '')
+    if (!conversation || !['facebook', 'messenger', 'instagram'].includes(conversationChannel)) return json(res, 404, { error: 'Meta conversation not found.' })
     organizationId = organizationId || String(conversation.organization_id || '')
     if (!organizationId) return json(res, 400, { error: 'Organization is required.' })
 
@@ -85,16 +86,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const customer = Array.isArray((conversation as any).customers) ? (conversation as any).customers[0] : (conversation as any).customers
-    recipientId = recipientId || String(customer?.phone || '')
+    recipientId = recipientId || (conversationChannel === 'instagram' ? String((conversation as any)?.metadata?.instagram_user_id || '') : String(customer?.phone || ''))
     if (!recipientId) return json(res, 400, { error: 'Facebook recipient is not configured.' })
 
-    const { data: connection } = await db.from('integrations').select('config,metadata,status,connected').eq('organization_id', organizationId).eq('provider', 'facebook').maybeSingle()
+    const provider = conversationChannel === 'instagram' ? 'instagram' : 'facebook'
+    const { data: connection } = await db.from('integrations').select('config,metadata,status,connected').eq('organization_id', organizationId).eq('provider', provider).maybeSingle()
     if (!connection?.connected || connection.status !== 'connected') return json(res, 422, { error: 'Facebook connection is not ready.', code: 'FACEBOOK_NOT_READY' })
     const pageId = String(connection.metadata?.facebook_page_id || '')
-    if (!pageId) return json(res, 422, { error: 'Facebook Page is not configured.', code: 'FACEBOOK_PAGE_NOT_READY' })
+    const instagramUserId = String(connection.metadata?.instagram_user_id || '')
+    const senderId = provider === 'instagram' ? instagramUserId : pageId
+    if (!senderId) return json(res, 422, { error: provider === 'instagram' ? 'Instagram account is not configured.' : 'Facebook Page is not configured.', code: provider === 'instagram' ? 'INSTAGRAM_NOT_READY' : 'FACEBOOK_PAGE_NOT_READY' })
     const pageToken = decryptToken(connection.config?.access_token)
 
-    const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${pageId}/messages`, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text: content } }) })
+    const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${senderId}/messages`, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text: content } }) })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' })
 
