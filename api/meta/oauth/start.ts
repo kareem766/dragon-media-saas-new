@@ -95,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (provider === 'facebook') {
       const state = signState({ provider: 'facebook', organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
-      const scope = ['pages_show_list', 'pages_read_engagement', 'pages_manage_metadata', 'pages_messaging', 'pages_manage_posts'].join(',')
+      const scope = ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'pages_manage_engagement', 'pages_manage_metadata', 'pages_messaging', 'pages_manage_posts'].join(',')
       const params = new URLSearchParams({ client_id: appId, redirect_uri: FACEBOOK_REDIRECT_URI, response_type: 'code', state, scope })
       const url = `https://www.facebook.com/dialog/oauth?${params.toString()}`
       return json(res, 200, { url, auth_url: url, redirect_uri: FACEBOOK_REDIRECT_URI, state, app_id: appId, provider: 'facebook' })
