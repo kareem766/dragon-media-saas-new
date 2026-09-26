@@ -1,0 +1,104 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { createClient } from '@supabase/supabase-js'
+import { createHmac, randomBytes } from 'node:crypto'
+
+const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
+const GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v23.0'
+const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
+
+function json(res: VercelResponse, status: number, body: unknown) {
+  return res.status(status).json(body)
+}
+
+function signState(payload: Record<string, unknown>) {
+  const raw = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const secret = env('META_STATE_SECRET', 'META_APP_SECRET')
+  const signature = createHmac('sha256', secret).update(raw).digest('base64url')
+  return `${raw}.${signature}`
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET' && req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
+
+  try {
+    const appId = env('META_APP_ID', 'FACEBOOK_APP_ID')
+    const stateSecret = env('META_STATE_SECRET', 'META_APP_SECRET')
+    const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
+    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY')
+    const missing = [
+      !appId ? 'META_APP_ID' : '',
+      !stateSecret ? 'META_STATE_SECRET أو META_APP_SECRET' : '',
+      !supabaseUrl ? 'SUPABASE_URL أو VITE_SUPABASE_URL' : '',
+      !serviceKey ? 'SUPABASE_SERVICE_ROLE_KEY أو SUPABASE_SECRET_KEY' : '',
+    ].filter(Boolean)
+    if (missing.length) return json(res, 500, { error: 'إعدادات Facebook أو Supabase غير مكتملة على الخادم.', missing })
+
+    const authorization = String(req.headers.authorization || '')
+    const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
+    if (!accessToken) return json(res, 401, { error: 'جلسة الدخول غير موجودة.' })
+
+    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    const { data: userData, error: userError } = await db.auth.getUser(accessToken)
+    if (userError || !userData.user) return json(res, 401, { error: 'جلسة الدخول غير صالحة.' })
+
+    let organizationId = ''
+    if (req.method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
+      organizationId = String(body.organizationId || '')
+    }
+    let membership: { id: string; organization_id: string; active: boolean; role: string } | null = null
+    if (!organizationId) {
+      const { data, error } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).maybeSingle()
+      if (error) return json(res, 500, { error: 'تعذر التحقق من الشركة المرتبطة بالحساب.' })
+      membership = data as { id: string; organization_id: string; active: boolean; role: string } | null
+      organizationId = String(membership?.organization_id || '')
+    } else {
+      const { data } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).eq('organization_id', organizationId).maybeSingle()
+      membership = data as { id: string; organization_id: string; active: boolean; role: string } | null
+    }
+    if (!membership || membership.active === false || !membership.organization_id) return json(res, 403, { error: 'لا تملك صلاحية ربط Facebook لهذه الشركة.' })
+
+    const { data: platformSettings } = await db.from('platform_settings').select('integrations_enabled_before_subscription').eq('id', 1).maybeSingle()
+    const allowBeforeSubscription = Boolean(platformSettings?.integrations_enabled_before_subscription)
+    const { data: subscription } = await db.from('subscriptions').select('status,expires_at,renewal_date').eq('organization_id', organizationId).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
+    const expiry = String(subscription?.expires_at || subscription?.renewal_date || '')
+    const today = new Date().toISOString().slice(0, 10)
+    const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
+    if (!subscriptionActive && !allowBeforeSubscription) return json(res, 403, { error: 'ربط التكاملات متاح بعد تفعيل الاشتراك.' })
+
+    const { data: permission } = await db.from('role_permissions').select('can_edit').eq('role', membership.role).eq('resource', 'settings').maybeSingle()
+    if (!permission?.can_edit) return json(res, 403, { error: 'ربط Facebook متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.' })
+
+    const state = signState({
+      provider: 'facebook',
+      organizationId,
+      userId: userData.user.id,
+      nonce: randomBytes(16).toString('hex'),
+      iat: Date.now(),
+    })
+
+    const scope = [
+      'pages_show_list',
+      'pages_read_engagement',
+      'pages_manage_metadata',
+      'pages_messaging',
+      'pages_manage_posts',
+    ].join(',')
+
+    const params = new URLSearchParams({
+      client_id: appId,
+      redirect_uri: REDIRECT_URI,
+      response_type: 'code',
+      state,
+      scope,
+      display: 'popup',
+      v: GRAPH_VERSION,
+    })
+
+    const authUrl = `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${params.toString()}`
+    return json(res, 200, { ok: true, provider: 'facebook', auth_url: authUrl, redirect_uri: REDIRECT_URI, state })
+  } catch (error) {
+    console.error('Facebook OAuth start failed', error)
+    return json(res, 500, { error: 'تعذر بدء ربط Facebook.' })
+  }
+}
