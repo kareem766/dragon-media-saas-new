@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
+// meta webhook
 export const config = { api: { bodyParser: false } }
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 function json(res: VercelResponse, status: number, body: unknown) { return res.status(status).json(body) }
