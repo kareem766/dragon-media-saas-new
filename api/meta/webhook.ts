@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
+import { handleComment } from './comment-webhook'
 
 // meta webhook
 export const config = { api: { bodyParser: false } }
@@ -225,6 +226,32 @@ async function updateFacebookCampaignStatus(db: any, organizationId: string, ext
     await db.from('campaigns').update({ sent_count: counts['تم الإرسال'] || 0, delivered_count: counts['تم التسليم'] || 0, failed_count: counts['فشلت'] || 0, queued_count: counts['قيد الإرسال'] || 0, skipped_count: counts['تم التخطي'] || 0, total_recipients: all?.length || 0, updated_at: now }).eq('id', row.campaign_id).eq('organization_id', organizationId)
   }
 }
+async function handleFacebookCommentChanges(db: any, payload: any) {
+  for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
+    const pageId = String(entry?.id || '')
+    if (!pageId) continue
+    const { data: integration } = await db
+      .from('integrations')
+      .select('organization_id')
+      .eq('provider', 'facebook')
+      .eq('connected', true)
+      .filter('metadata->>facebook_page_id', 'eq', pageId)
+      .maybeSingle()
+    if (!integration) continue
+    const organizationId = String(integration.organization_id)
+    for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+      if (String(change?.field || '') !== 'feed') continue
+      const value = change?.value || {}
+      const commentId = String(value?.comment_id || value?.comment?.id || '')
+      const authorId = String(value?.from?.id || value?.sender?.id || '')
+      const comment = String(value?.message || value?.comment?.message || '').trim()
+      const postId = String(value?.post_id || value?.post?.id || '')
+      if (!commentId || !authorId || !comment || authorId === pageId) continue
+      await handleComment(db, 'facebook', organizationId, pageId, commentId, authorId, comment, postId)
+    }
+  }
+}
+
 async function handleFacebookWebhook(db: any, payload: any) {
   for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
     const pageId = String(entry?.id || '')
@@ -290,7 +317,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!verifySignature(req, rawBody)) return json(res, 401, { error: 'Invalid webhook signature.' })
     const payload = JSON.parse(rawBody)
     const db = await getDb()
-    if (payload.object === 'page') { await handleFacebookWebhook(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }
+    if (payload.object === 'page') { await handleFacebookWebhook(db, payload); await handleFacebookCommentChanges(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }
     if (payload.object === 'instagram') { await handleInstagramWebhook(db, payload); return json(res, 200, { ok: true, provider: 'instagram' }) }
     if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
     for (const entry of Array.isArray(payload.entry) ? payload.entry : []) {
