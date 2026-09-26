@@ -125,6 +125,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         webhookVerificationError = subscribeError instanceof Error ? subscribeError.message : 'فشل اشتراك Webhook للصفحة لدى Meta.'
         console.error('Facebook page webhook subscription verification failed', { pageId: String(page.id), appId: String(appId), error: webhookVerificationError })
       }
+      try {
+        const appSubscriptions = await graph('/app/subscriptions', \`${appId}|${appSecret}\`)
+        const safeSubscriptions = Array.isArray(appSubscriptions?.data) ? appSubscriptions.data.map((item: any) => ({ object: item?.object ?? null, callback_url: item?.callback_url ?? null, fields: Array.isArray(item?.fields) ? item.fields.map(String) : [] })) : []
+        console.log('Facebook app webhook subscriptions', { appId: String(appId), subscriptions: safeSubscriptions, raw: JSON.stringify(safeSubscriptions) })
+        const pageSubscription = safeSubscriptions.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
+        if (!pageSubscription?.fields?.includes('feed')) {
+          const message = 'Meta لم تؤكد حقل feed في اشتراك Webhook على مستوى التطبيق.'
+          webhookVerificationError = webhookVerificationError ? webhookVerificationError + ' ' + message : message
+          console.warn('Facebook app webhook feed field missing', { appId: String(appId), pageSubscription: pageSubscription || null })
+        }
+      } catch (appWebhookError) {
+        console.error('Facebook app webhook subscription check failed', { appId: String(appId), error: appWebhookError instanceof Error ? appWebhookError.message : String(appWebhookError) })
+      }
       const { error: saveError } = await db.from('integrations').upsert({
         organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected', config: { access_token: encryptToken(pageToken) },
         metadata: { facebook_page_id: String(page.id), facebook_page_name: String(page.name || ''), facebook_page_category: String(page.category || ''), facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [], facebook_webhook_subscribed: subscription, facebook_webhook_fields: webhookFields, facebook_webhook_feed_verified: webhookFields.includes('feed'), facebook_webhook_verification_error: webhookVerificationError || null, ready_for_messaging: subscription, connected_via: 'facebook_oauth' },
