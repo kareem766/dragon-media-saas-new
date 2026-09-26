@@ -84,6 +84,45 @@ async function handleMessage(db: any, organizationId: string, phoneNumberId: str
   const nextUnread = Number(conversation.unread_count || 0) + (existed ? 1 : 0)
   await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: nextUnread, status: 'open' }).eq('id', conversation.id)
 }
+async function handleInstagramWebhook(db: any, payload: any) {
+  for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
+    const instagramUserId = String(entry?.id || '')
+    if (!instagramUserId) continue
+    const { data: integration } = await db.from('integrations').select('organization_id,metadata').eq('provider', 'instagram').eq('connected', true).filter('metadata->>instagram_user_id', 'eq', instagramUserId).maybeSingle()
+    if (!integration) continue
+    const organizationId = String(integration.organization_id)
+    for (const event of Array.isArray(entry?.messaging) ? entry.messaging : []) {
+      const externalId = String(event?.message?.mid || event?.postback?.mid || '')
+      const senderId = String(event?.sender?.id || '')
+      if (!externalId || !senderId || senderId === instagramUserId) continue
+      const { data: existing } = await db.from('messages').select('id').eq('external_id', externalId).maybeSingle()
+      if (existing) continue
+      const content = String(event?.message?.text || event?.postback?.title || event?.postback?.payload || '').trim()
+      const attachments = Array.isArray(event?.message?.attachments) ? event.message.attachments : []
+      const normalizedAttachments = attachments.slice(0, 4).map((a: any) => ({ type: String(a?.type || ''), url: String(a?.payload?.url || a?.url || ''), mime_type: String(a?.payload?.mime_type || 'application/octet-stream'), source: 'instagram' })).filter((a: any) => a.url)
+      if (!content && !normalizedAttachments.length) continue
+      const { data: existingConversation } = await db.from('conversations').select('customer_id').eq('organization_id', organizationId).eq('channel', 'instagram').filter('metadata->>instagram_user_id', 'eq', senderId).order('updated_at', { ascending: false }).limit(1).maybeSingle()
+      let customerId = String(existingConversation?.customer_id || '')
+      if (!customerId) {
+        const { data: customer, error } = await db.from('customers').insert({ organization_id: organizationId, name: 'عميل جديد', phone: null, source: 'instagram' }).select('id').single()
+        if (error) throw error
+        customerId = String(customer.id)
+      }
+      const now = new Date().toISOString()
+      let { data: conversation, error: conversationError } = await db.from('conversations').select('id,unread_count').eq('organization_id', organizationId).eq('customer_id', customerId).eq('channel', 'instagram').order('updated_at', { ascending: false }).limit(1).maybeSingle()
+      if (conversationError) throw conversationError
+      if (!conversation) {
+        const { data: created, error } = await db.from('conversations').insert({ organization_id: organizationId, customer_id: customerId, channel: 'instagram', handled_by: 'ai', status: 'open', unread_count: 1, last_message_at: now, updated_at: now, metadata: { provider: 'instagram', instagram_user_id: senderId, instagram_business_user_id: instagramUserId, source: 'instagram_webhook' } }).select('id,unread_count').single()
+        if (error) throw error
+        conversation = created
+      }
+      const { error: messageError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'instagram_webhook', instagram_user_id: senderId, instagram_business_user_id: instagramUserId, instagram_message_id: externalId, attachments: normalizedAttachments }, created_at: now })
+      if (messageError) throw messageError
+      await db.from('conversations').update({ updated_at: now, last_message_at: now, unread_count: Number(conversation.unread_count || 0) + 1, status: 'open', handled_by: 'ai', metadata: { provider: 'instagram', instagram_user_id: senderId, instagram_business_user_id: instagramUserId, source: 'instagram_webhook' } }).eq('id', conversation.id).eq('organization_id', organizationId)
+    }
+  }
+}
+
 async function handleStatus(db: any, organizationId: string, status: any) {
   const externalId = String(status?.id || ''), state = String(status?.status || '').toLowerCase()
   if (!externalId) return
@@ -252,6 +291,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const payload = JSON.parse(rawBody)
     const db = await getDb()
     if (payload.object === 'page') { await handleFacebookWebhook(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }
+    if (payload.object === 'instagram') { await handleInstagramWebhook(db, payload); return json(res, 200, { ok: true, provider: 'instagram' }) }
     if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
     for (const entry of Array.isArray(payload.entry) ? payload.entry : []) {
       const wabaId = String(entry?.id || '')
