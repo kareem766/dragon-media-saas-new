@@ -292,16 +292,27 @@ async function handleFacebookCommentChanges(db: any, payload: any) {
 
       if (!commentId || !authorId || !comment || authorId === pageId) continue
 
-      await handleComment(
-        db,
-        'facebook',
-        organizationId,
-        pageId,
-        commentId,
-        authorId,
-        comment,
-        postId
-      )
+      try {
+        await handleComment(
+          db,
+          'facebook',
+          organizationId,
+          pageId,
+          commentId,
+          authorId,
+          comment,
+          postId
+        )
+      } catch (commentError) {
+        // A comment/Ryan failure must never make the shared Meta webhook return 500.
+        // Facebook/Messenger and WhatsApp webhook processing must remain isolated.
+        console.error('Facebook comment/Ryan processing failed', {
+          pageId,
+          organizationId,
+          commentId,
+          error: commentError instanceof Error ? commentError.message : String(commentError),
+        })
+      }
     }
   }
 }
