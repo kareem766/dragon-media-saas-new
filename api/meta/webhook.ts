@@ -228,7 +228,7 @@ async function updateFacebookCampaignStatus(db: any, organizationId: string, ext
 }
 async function handleFacebookCommentChanges(db: any, payload: any) {
   for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
-    const pageId = String(entry?.id || '')
+    const pageId = String(entry?.id || '').trim()
     if (!pageId) continue
     const { data: integration } = await db
       .from('integrations')
@@ -237,17 +237,71 @@ async function handleFacebookCommentChanges(db: any, payload: any) {
       .eq('connected', true)
       .filter('metadata->>facebook_page_id', 'eq', pageId)
       .maybeSingle()
-    if (!integration) continue
+    if (!integration) {
+      console.warn('Facebook feed webhook integration not found', { pageId })
+      continue
+    }
     const organizationId = String(integration.organization_id)
     for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
       if (String(change?.field || '') !== 'feed') continue
+
       const value = change?.value || {}
-      const commentId = String(value?.comment_id || value?.comment?.id || '')
-      const authorId = String(value?.from?.id || value?.sender?.id || '')
-      const comment = String(value?.message || value?.comment?.message || '').trim()
-      const postId = String(value?.post_id || value?.post?.id || '')
+      const item = String(value?.item || '').toLowerCase()
+      const verb = String(value?.verb || '').toLowerCase()
+
+      // Meta can represent a comment with either the legacy top-level fields
+      // or a nested comment object. Only treat the feed event as a comment
+      // when an actual comment id is present; status/post events must remain ignored.
+      const commentId = String(
+        value?.comment_id ||
+        value?.comment?.id ||
+        (item === 'comment' ? value?.id : '') ||
+        ''
+      ).trim()
+      const authorId = String(
+        value?.from?.id ||
+        value?.sender?.id ||
+        value?.comment?.from?.id ||
+        ''
+      ).trim()
+      const comment = String(
+        value?.message ||
+        value?.text ||
+        value?.comment?.message ||
+        value?.comment?.text ||
+        ''
+      ).trim()
+      const postId = String(
+        value?.post_id ||
+        value?.post?.id ||
+        value?.comment?.post_id ||
+        value?.parent_id ||
+        ''
+      ).trim()
+
+      console.log('Facebook feed webhook received', {
+        pageId,
+        organizationId,
+        item,
+        verb,
+        hasCommentId: Boolean(commentId),
+        hasAuthorId: Boolean(authorId),
+        hasCommentText: Boolean(comment),
+        postId: postId || null,
+      })
+
       if (!commentId || !authorId || !comment || authorId === pageId) continue
-      await handleComment(db, 'facebook', organizationId, pageId, commentId, authorId, comment, postId)
+
+      await handleComment(
+        db,
+        'facebook',
+        organizationId,
+        pageId,
+        commentId,
+        authorId,
+        comment,
+        postId
+      )
     }
   }
 }
