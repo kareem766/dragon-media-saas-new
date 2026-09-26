@@ -96,6 +96,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pageToken = String(page.access_token)
     const webhookSubscribed = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries,feed`, pageToken, { method: 'POST' }).then(() => true).catch(() => false)
 
+    // Page-level subscription alone is not enough: the Meta App itself must also subscribe to the Page feed webhook.
+    // Repair it automatically during Facebook reconnect so comment events can reach /api/meta/webhook.
+    try {
+      const appAccessToken = `${appId}|${appSecret}`
+      const current = await graph('/app/subscriptions', appAccessToken)
+      const subscriptions = Array.isArray(current?.data) ? current.data : []
+      const pageSubscription = subscriptions.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
+      if (!Array.isArray(pageSubscription?.fields) || !pageSubscription.fields.map(String).includes('feed')) {
+        const callbackUrl = `${APP_URL}/api/meta/webhook`
+        const repairParams = new URLSearchParams({
+          object: 'page',
+          callback_url: callbackUrl,
+          fields: 'feed,messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries',
+          verify_token: env('META_WEBHOOK_VERIFY_TOKEN', 'META_STATE_SECRET'),
+        })
+        const repairResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(appId)}/subscriptions?${repairParams.toString()}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${appAccessToken}` },
+        })
+        const repairPayload = await repairResponse.json().catch(() => ({}))
+        console.log('Facebook app webhook auto-repair', { status: repairResponse.status, payload: repairPayload })
+      }
+      const verified = await graph('/app/subscriptions', appAccessToken)
+      const verifiedRows = Array.isArray(verified?.data) ? verified.data : []
+      const verifiedPage = verifiedRows.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
+      console.log('Facebook app webhook verification', {
+        appId: String(appId),
+        feed: Array.isArray(verifiedPage?.fields) && verifiedPage.fields.map(String).includes('feed'),
+        fields: Array.isArray(verifiedPage?.fields) ? verifiedPage.fields.map(String) : [],
+      })
+    } catch (appWebhookError) {
+      console.error('Facebook app webhook auto-repair failed', { error: appWebhookError instanceof Error ? appWebhookError.message : String(appWebhookError) })
+    }
+
     const { error } = await db.from('integrations').upsert({
       organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected',
       config: { access_token: encryptToken(pageToken) },
