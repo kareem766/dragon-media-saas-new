@@ -128,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         const appAccessToken = `${appId}|${appSecret}`
         const appSubscriptions = await graph('/app/subscriptions', appAccessToken)
-        let safeSubscriptions = Array.isArray(appSubscriptions?.data) ? appSubscriptions.data.map((item: any) => ({ object: item?.object ?? null, callback_url: item?.callback_url ?? null, fields: Array.isArray(item?.fields) ? item.fields.map(String) : [] })) : []
+        let safeSubscriptions = Array.isArray(appSubscriptions?.data) ? appSubscriptions.data.map((item: any) => ({ object: item?.object ?? null, callback_url: item?.callback_url ?? null, fields: Array.isArray(item?.fields) ? item.fields.map((field: any) => typeof field === 'string' ? field : String(field?.name || field?.field || field?.value || '')).filter(Boolean) : [] })) : []
         let pageSubscription = safeSubscriptions.find((item: any) => String(item?.object || '').toLowerCase() === 'page')
         if (!pageSubscription?.fields?.includes('feed')) {
           const callbackUrl = REDIRECT_URI.replace('/api/meta/oauth/callback', '/api/meta/webhook')
