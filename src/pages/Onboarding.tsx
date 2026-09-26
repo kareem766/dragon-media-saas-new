@@ -53,19 +53,31 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       if (acceptError) {
         if (cancelled) return
 
-        // If the invite was already accepted but the client missed the RPC
-        // response, recover by checking the current user's workspace directly.
-        const { data: existingUser } = await client
-          .from('users')
-          .select('organization_id')
-          .eq('id', user?.id || '')
-          .maybeSingle()
+        // The auth session can become available a little after the email
+        // confirmation redirect. Before showing an error, give the session
+        // and workspace lookup a few short retries.
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          const { data: sessionData } = await client.auth.getSession()
+          const currentUserId = sessionData.session?.user?.id || user?.id || ''
 
-        if (existingUser?.organization_id) {
-          localStorage.removeItem('dragon_media_invite_code')
-          setCheckingInvite(false)
-          onDone()
-          return
+          if (currentUserId) {
+            const { data: existingUser } = await client
+              .from('users')
+              .select('organization_id')
+              .eq('id', currentUserId)
+              .maybeSingle()
+
+            if (existingUser?.organization_id) {
+              localStorage.removeItem('dragon_media_invite_code')
+              setCheckingInvite(false)
+              onDone()
+              return
+            }
+          }
+
+          if (attempt < 5) {
+            await new Promise((resolve) => window.setTimeout(resolve, 400))
+          }
         }
 
         setInviteError(acceptError.message || 'تعذر ربط الحساب بالشركة. يمكنك إعادة المحاولة.')
@@ -80,6 +92,38 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       if (!inviteResult?.organization_id) {
         if (cancelled) return
         setInviteError('تعذر ربط الحساب بالشركة. يمكنك إعادة المحاولة أو العودة لتسجيل الدخول.')
+        setCheckingInvite(false)
+        return
+      }
+
+      // Confirm the organization link is visible to the authenticated user
+      // before leaving the linking screen. This prevents a race where the UI
+      // navigates before the employee row is readable.
+      const currentUserId = user?.id || (await client.auth.getUser()).data.user?.id || ''
+      let linkedOrganizationId: string | null = null
+
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        if (currentUserId) {
+          const { data: linkedUser } = await client
+            .from('users')
+            .select('organization_id')
+            .eq('id', currentUserId)
+            .maybeSingle()
+
+          if (linkedUser?.organization_id) {
+            linkedOrganizationId = linkedUser.organization_id
+            break
+          }
+        }
+
+        if (attempt < 5) {
+          await new Promise((resolve) => window.setTimeout(resolve, 350))
+        }
+      }
+
+      if (!linkedOrganizationId) {
+        if (cancelled) return
+        setInviteError('تم قبول الدعوة، لكن جاري تثبيت ربط الحساب بالشركة. اضغط إعادة المحاولة للمتابعة.')
         setCheckingInvite(false)
         return
       }
