@@ -92,7 +92,8 @@ export function usePermissions() {
       ? `
         html[data-dm-role="${role}"] a[href="#/billing"],
         html[data-dm-role="${role}"] a[href="#/plans"],
-        html[data-dm-role="${role}"] a[href="#/billing/pay"] { display: none !important; }
+        html[data-dm-role="${role}"] a[href="#/billing/pay"],
+        html[data-dm-role="${role}"] .dm-sidebar div:has(> a[href="#/billing"]) { display: none !important; }
       `
       : ''
 
