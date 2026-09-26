@@ -5,7 +5,7 @@ import type {
 
 import { createClient } from '@supabase/supabase-js'
 import { handleCampaignRequest } from './_server/campaign-run.js'
-import subscriptionWhatsappNotifications from './subscription-whatsapp-notifications.js'
+import subscriptionWhatsappNotifications from './_server/subscription-whatsapp-notifications.js'
 
 type Automation = {
   id: string
