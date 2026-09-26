@@ -14,13 +14,82 @@ function decryptToken(value:any){if(typeof value==='string')return value;if(!val
 async function db(){const url=env('SUPABASE_URL','VITE_SUPABASE_URL'),key=env('SUPABASE_SERVICE_ROLE_KEY','SUPABASE_SECRET_KEY');if(!url||!key)throw new Error('Supabase server configuration is incomplete.');return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})}
 async function metaToken(client:any,organizationId:string,provider:string){const {data}=await client.from('integrations').select('config').eq('organization_id',organizationId).eq('provider',provider).eq('connected',true).maybeSingle();return decryptToken(obj(data?.config).access_token)}
 async function publicCommentReply(client:any,organizationId:string,provider:'facebook'|'instagram',commentId:string,message:string){const token=await metaToken(client,organizationId,provider);if(!token)throw new Error(provider+' token is not available');const version=env('META_GRAPH_API_VERSION')||'v23.0';const path=provider==='instagram'?`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/replies`:`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/comments`;const response=await fetch(path,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message})});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||provider+' comment reply failed');return payload}
-export async function handleComment(client:any,provider:'facebook'|'instagram',organizationId:string,pageId:string,commentId:string,authorId:string,comment:string,postId:string){if(!commentId||!authorId||!comment)return;const externalId=`${provider}_comment_${commentId}`;const {data:existing}=await client.from('messages').select('id').eq('external_id',externalId).maybeSingle();if(existing)return;let customer:any=null;if(provider==='facebook'){const {data:conversation}=await client.from('conversations').select('customer_id').eq('organization_id',organizationId).in('channel',['messenger','facebook']).filter('metadata->>facebook_psid','eq',authorId).order('updated_at',{ascending:false}).limit(1).maybeSingle();if(conversation?.customer_id){const {data}=await client.from('customers').select('id,name,phone').eq('organization_id',organizationId).eq('id',conversation.customer_id).maybeSingle();customer=data}}
-if(provider==='instagram'){const {data:conversation}=await client.from('conversations').select('customer_id').eq('organization_id',organizationId).eq('channel','instagram').filter('metadata->>instagram_user_id','eq',authorId).order('updated_at',{ascending:false}).limit(1).maybeSingle();if(conversation?.customer_id){const {data}=await client.from('customers').select('id,name,phone').eq('organization_id',organizationId).eq('id',conversation.customer_id).maybeSingle();customer=data}}
-if(!customer){const {data,error}=await client.from('customers').insert({organization_id:organizationId,name:'عميل جديد',phone:null,source:provider==='instagram'?'instagram':'messenger'}).select('id,name,phone').single();if(error)throw error;customer=data}
-const now=new Date().toISOString();const channel=provider==='instagram'?'instagram':'messenger';const metadata=provider==='instagram'?{provider:'instagram',instagram_user_id:authorId,instagram_comment_id:commentId,instagram_media_id:postId,source:'meta_comment'}:{provider:'facebook',facebook_page_id:pageId,facebook_psid:authorId,facebook_comment_id:commentId,facebook_post_id:postId,source:'meta_comment'};const {data:conversation,error:conversationError}=await client.from('conversations').select('id,unread_count,channel').eq('organization_id',organizationId).eq('customer_id',customer.id).in('channel',provider==='instagram'?['instagram']:['messenger','facebook']).order('updated_at',{ascending:false}).limit(1).maybeSingle();if(conversationError)throw conversationError;let conversationId=conversation?.id;if(!conversationId){const {data:created,error}=await client.from('conversations').insert({organization_id:organizationId,customer_id:customer.id,channel,handled_by:'ai',status:'open',unread_count:1,last_message_at:now,updated_at:now,metadata}).select('id,unread_count').single();if(error)throw error;conversationId=created.id}else await client.from('conversations').update({updated_at:now,last_message_at:now,status:'open',metadata}).eq('id',conversationId)
-const {error:messageError}=await client.from('messages').insert({conversation_id:conversationId,sender_type:'customer',content:comment,external_id:externalId,metadata:{...metadata,comment:true,comment_id:commentId,post_id:postId},created_at:now});if(messageError)throw messageError
-// Ryan is dispatched by the existing messages database trigger. Acknowledge the public comment immediately and continue the sales conversation in DM.
-try{await publicCommentReply(client,organizationId,provider,commentId,'أهلاً بحضرتك، بعتلك رسالة على الخاص ونكمل معاك هناك.')}catch(error){console.error('Ryan public comment reply failed',{provider,commentId,error:error instanceof Error?error.message:String(error)})}}
-async function handleFacebook(client:any,payload:any){for(const entry of Array.isArray(payload?.entry)?payload.entry:[]){const pageId=normalizeId(entry?.id);const {data:integration}=await client.from('integrations').select('organization_id').eq('provider','facebook').eq('connected',true).filter('metadata->>facebook_page_id','eq',pageId).maybeSingle();if(!integration)continue;const organizationId=String(integration.organization_id);for(const change of Array.isArray(entry?.changes)?entry.changes:[]){if(String(change?.field||'')!=='feed')continue;const value=change?.value||{};const commentId=normalizeId(value?.comment_id||value?.comment?.id);const authorId=normalizeId(value?.from?.id||value?.sender?.id);const comment=text(value?.message||value?.comment?.message);const postId=normalizeId(value?.post_id||value?.post?.id);if(commentId&&authorId&&comment)await handleComment(client,'facebook',organizationId,pageId,commentId,authorId,comment,postId)}}}
+async function dispatchRyanForComment(client:any,organizationId:string,conversationId:string,messageId:string){
+  const {data:secretRow,error:secretError}=await client.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle();
+  if(secretError) throw new Error('Ryan dispatch secret lookup failed: '+secretError.message);
+  const secret=String(secretRow?.value||'').trim();
+  if(!secret) throw new Error('Ryan dispatch secret is missing');
+  const response=await fetch('https://dragon-media-saas-new.vercel.app/api/admin/ryan-inbox',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-ryan-inbox-secret':secret},
+    body:JSON.stringify({organization_id:organizationId,conversation_id:conversationId,message_id:messageId}),
+  });
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(payload?.error||'Ryan inbox dispatch failed');
+  return payload;
+}
+export async function handleComment(client:any,provider:'facebook'|'instagram',organizationId:string,pageId:string,commentId:string,authorId:string,comment:string,postId:string){
+  if(!commentId||!authorId||!comment)return;
+  const externalId=`${provider}_comment_${commentId}`;
+  const {data:existing}=await client.from('messages').select('id').eq('external_id',externalId).maybeSingle();
+  if(existing)return;
+  let customer:any=null;
+  if(provider==='facebook'){
+    const {data:conversation}=await client.from('conversations').select('customer_id').eq('organization_id',organizationId).in('channel',['messenger','facebook']).filter('metadata->>facebook_psid','eq',authorId).order('updated_at',{ascending:false}).limit(1).maybeSingle();
+    if(conversation?.customer_id){
+      const {data}=await client.from('customers').select('id,name,phone').eq('organization_id',organizationId).eq('id',conversation.customer_id).maybeSingle();
+      customer=data;
+    }
+  }
+  if(provider==='instagram'){
+    const {data:conversation}=await client.from('conversations').select('customer_id').eq('organization_id',organizationId).eq('channel','instagram').filter('metadata->>instagram_user_id','eq',authorId).order('updated_at',{ascending:false}).limit(1).maybeSingle();
+    if(conversation?.customer_id){
+      const {data}=await client.from('customers').select('id,name,phone').eq('organization_id',organizationId).eq('id',conversation.customer_id).maybeSingle();
+      customer=data;
+    }
+  }
+  if(!customer){
+    const {data,error}=await client.from('customers').insert({organization_id:organizationId,name:'عميل جديد',phone:null,source:provider==='instagram'?'instagram':'messenger'}).select('id,name,phone').single();
+    if(error)throw error;
+    customer=data;
+  }
+  const now=new Date().toISOString();
+  const channel=provider==='instagram'?'instagram':'messenger';
+  const metadata=provider==='instagram'
+    ? {provider:'instagram',instagram_user_id:authorId,instagram_comment_id:commentId,instagram_media_id:postId,source:'meta_comment',ai_dispatch:'direct'}
+    : {provider:'facebook',facebook_page_id:pageId,facebook_psid:authorId,facebook_comment_id:commentId,facebook_post_id:postId,source:'meta_comment',ai_dispatch:'direct'};
+  const {data:conversation,error:conversationError}=await client.from('conversations').select('id,unread_count,channel').eq('organization_id',organizationId).eq('customer_id',customer.id).in('channel',provider==='instagram'?['instagram']:['messenger','facebook']).order('updated_at',{ascending:false}).limit(1).maybeSingle();
+  if(conversationError)throw conversationError;
+  let conversationId=conversation?.id;
+  if(!conversationId){
+    const {data:created,error}=await client.from('conversations').insert({organization_id:organizationId,customer_id:customer.id,channel,handled_by:'ai',status:'open',unread_count:1,last_message_at:now,updated_at:now,metadata}).select('id,unread_count').single();
+    if(error)throw error;
+    conversationId=created.id;
+  }else{
+    await client.from('conversations').update({updated_at:now,last_message_at:now,status:'open',handled_by:'ai',metadata}).eq('id',conversationId);
+  }
+  const {data:savedMessage,error:messageError}=await client.from('messages').insert({
+    conversation_id:conversationId,
+    sender_type:'customer',
+    content:comment,
+    external_id:externalId,
+    metadata:{...metadata,comment:true,comment_id:commentId,post_id:postId},
+    created_at:now
+  }).select('id').single();
+  if(messageError)throw messageError;
+  let ryanReply='';
+  try{
+    const ryan=await dispatchRyanForComment(client,organizationId,conversationId,String(savedMessage.id));
+    ryanReply=String(ryan?.reply||'').trim();
+  }catch(error){
+    console.error('Ryan comment dispatch failed',{provider,commentId,conversationId,messageId:savedMessage.id,error:error instanceof Error?error.message:String(error)});
+  }
+  const publicReply=ryanReply||'أهلاً بحضرتك، بعتلك رسالة على الخاص ونكمل معاك هناك.';
+  try{
+    await publicCommentReply(client,organizationId,provider,commentId,publicReply);
+  }catch(error){
+    console.error('Ryan public comment reply failed',{provider,commentId,error:error instanceof Error?error.message:String(error)});
+  }
+}async function handleFacebook(client:any,payload:any){for(const entry of Array.isArray(payload?.entry)?payload.entry:[]){const pageId=normalizeId(entry?.id);const {data:integration}=await client.from('integrations').select('organization_id').eq('provider','facebook').eq('connected',true).filter('metadata->>facebook_page_id','eq',pageId).maybeSingle();if(!integration)continue;const organizationId=String(integration.organization_id);for(const change of Array.isArray(entry?.changes)?entry.changes:[]){if(String(change?.field||'')!=='feed')continue;const value=change?.value||{};const commentId=normalizeId(value?.comment_id||value?.comment?.id);const authorId=normalizeId(value?.from?.id||value?.sender?.id);const comment=text(value?.message||value?.comment?.message);const postId=normalizeId(value?.post_id||value?.post?.id);if(commentId&&authorId&&comment)await handleComment(client,'facebook',organizationId,pageId,commentId,authorId,comment,postId)}}}
 async function handleInstagram(client:any,payload:any){for(const entry of Array.isArray(payload?.entry)?payload.entry:[]){const igUserId=normalizeId(entry?.id);const {data:integration}=await client.from('integrations').select('organization_id').eq('provider','instagram').eq('connected',true).filter('metadata->>instagram_user_id','eq',igUserId).maybeSingle();if(!integration)continue;const organizationId=String(integration.organization_id);for(const change of Array.isArray(entry?.changes)?entry.changes:[]){if(String(change?.field||'')!=='comments')continue;const value=change?.value||{};const commentId=normalizeId(value?.id||value?.comment_id);const authorId=normalizeId(value?.from?.id||value?.from?.id);const comment=text(value?.text||value?.message);const mediaId=normalizeId(value?.media?.id||value?.media_id);if(commentId&&authorId&&comment)await handleComment(client,'instagram',organizationId,igUserId,commentId,authorId,comment,mediaId)}}}
 export default async function handler(req:VercelRequest,res:VercelResponse){if(req.method==='GET'){const mode=String(req.query['hub.mode']||''),token=String(req.query['hub.verify_token']||''),challenge=String(req.query['hub.challenge']||'');const verify=env('META_WEBHOOK_VERIFY_TOKEN','META_STATE_SECRET');if(mode==='subscribe'&&verify&&token===verify)return res.status(200).send(challenge);return json(res,403,{error:'Webhook verification failed.'})}if(req.method!=='POST')return json(res,405,{error:'Method not allowed.'});try{const raw=await readRawBody(req);if(!verifySignature(req,raw))return json(res,401,{error:'Invalid webhook signature.'});const payload=JSON.parse(raw),client=await db();if(payload.object==='page')await handleFacebook(client,payload);else if(payload.object==='instagram')await handleInstagram(client,payload);else return json(res,200,{ok:true,ignored:true});return json(res,200,{ok:true})}catch(error){console.error('Meta comment webhook failed',error);return json(res,500,{error:error instanceof Error?error.message:'Webhook processing failed.'})}}
