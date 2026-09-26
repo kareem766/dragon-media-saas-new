@@ -62,9 +62,20 @@ export default function ProtectedRoute({
   const [initialChecksReady, setInitialChecksReady] = useState(false)
 
   const handleOnboardingDone = useCallback(async () => {
-    const organizationId = await refresh()
-    if (organizationId) {
-      navigate('/', { replace: true })
+    // After invite acceptance, the database write and the browser auth/session
+    // state can settle a moment apart. Retry the organization lookup before
+    // deciding that the employee still needs onboarding.
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const organizationId = await refresh()
+
+      if (organizationId) {
+        navigate('/', { replace: true })
+        return
+      }
+
+      if (attempt < 5) {
+        await new Promise((resolve) => window.setTimeout(resolve, 350))
+      }
     }
   }, [refresh, navigate])
 
