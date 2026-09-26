@@ -195,17 +195,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let webhookVerificationError = ''
       try {
         const subscribeResponse = await graph(
-          `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries,feed`,
+          `/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=feed,messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`,
           pageToken,
           { method: 'POST' },
         )
-        subscription = subscribeResponse?.success === true || Object.keys(subscribeResponse || {}).length > 0
+        console.log('Facebook page webhook subscribe response', { pageId: String(page.id), appId: String(appId), response: subscribeResponse })
+        subscription = subscribeResponse?.success === true
         try {
-          const current = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps`, pageToken)
+          const current = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?fields=id,app_id,subscribed_fields`, pageToken)
           const apps = Array.isArray(current?.data) ? current.data : []
+          console.log('Facebook page webhook subscriptions', { pageId: String(page.id), appId: String(appId), apps })
           const appRow = apps.find((item: any) => String(item?.id || item?.app_id || '') === String(appId))
           webhookFields = Array.isArray(appRow?.subscribed_fields) ? appRow.subscribed_fields.map(String) : []
-          if (webhookFields.length) subscription = webhookFields.includes('feed')
+          subscription = webhookFields.includes('feed') || subscribeResponse?.success === true
+          if (!webhookFields.includes('feed')) webhookVerificationError = 'Meta لم تؤكد حقل feed على اشتراك الصفحة.'
         } catch (verifyError) {
           webhookVerificationError = verifyError instanceof Error ? verifyError.message : 'تعذر التحقق من اشتراك Webhook لدى Meta.'
         }
