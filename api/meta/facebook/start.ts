@@ -80,6 +80,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const scope = [
       'pages_show_list',
       'pages_read_engagement',
+      'pages_read_user_content',
+      'pages_manage_engagement',
       'pages_manage_metadata',
       'pages_messaging',
       'pages_manage_posts',
