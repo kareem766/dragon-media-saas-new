@@ -92,6 +92,21 @@ async function notifyOrgAdmins(supabase:any,organizationId:string,title:string,b
  if(admins?.length)await supabase.from('notifications').insert(admins.map((u:any)=>({organization_id:organizationId,user_id:u.id,type:'ryan_action',title,body,message:body,link,entity_type:entityType,entity_id:entityId,is_read:false})))
 }
 
+async function notifyImageHandoff(supabase:any,organizationId:string,customer:any,conversation:any){
+ const channel=text(conversation.channel,40)||'ريان';
+ const channelNames:Record<string,string>={whatsapp:'واتساب',messenger:'ماسنجر',instagram:'إنستجرام',facebook:'فيسبوك',web:'الموقع'};
+ const channelLabel=channelNames[channel.toLowerCase()]||channel;
+ const {data:existing}=await supabase.from('human_handoff_requests').select('id').eq('organization_id',organizationId).eq('conversation_id',conversation.id).eq('status','open').limit(1).maybeSingle();
+ if(existing?.id)return {handoffId:existing.id,created:false};
+ const customerName=text(customer?.name,120)||'العميل';
+ const {data:req,error}=await supabase.from('human_handoff_requests').insert({organization_id:organizationId,customer_name:customerName,reason:'العميل أرسل صورة ويحتاج إلى تدخل بشري.',status:'open',conversation_id:conversation.id}).select('id').single();
+ if(error)throw new Error(error.message);
+ const {error:updateError}=await supabase.from('conversations').update({handled_by:'human',status:'open',updated_at:new Date().toISOString()}).eq('id',conversation.id).eq('organization_id',organizationId);
+ if(updateError)throw new Error(updateError.message);
+ await notifyOrgAdmins(supabase,organizationId,'تدخل بشري مطلوب — العميل أرسل صورة','العميل '+customerName+' أرسل صورة عبر '+channelLabel+'. يرجى تدخل موظف بشري ومتابعة المحادثة.','/handoff-requests?request='+req.id,'handoff',req.id);
+ return {handoffId:req.id,created:true};
+}
+
 
 function isRyanUrgentRequest(message:string){
  const x=text(message,1200).replace(/\s+/g,' ').trim();
@@ -228,6 +243,28 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle();if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const [{data:customer},{data:agent},{data:services}]=await Promise.all([supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)]);if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
  const settings=obj(agent.settings),model=(/^gemini-3\./i.test(text(settings.model,100))?text(settings.model,100):'gemini-3.1-flash-lite'),temperature=Math.min(1,Math.max(0,Number(settings.temperature)||0.45)),allowFallback=settings.fallback_on_llm_failure!==false,rememberCustomer=settings.remember_customer!==false,useKnowledge=settings.use_knowledge_base!==false,crmContext=settings.crm_context!==false,noRepeatQuestions=settings.no_repeat_questions!==false,apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
+ const incomingMetadata=obj(incoming.metadata);
+ const attachmentCandidates=[incomingMetadata.attachments,incomingMetadata.files,incomingMetadata.media,incomingMetadata.file,incomingMetadata.attachment];
+ const imageAttachment=attachmentCandidates.flatMap((value:any)=>Array.isArray(value)?value:[value]).filter(Boolean).some((attachment:any)=>{
+  const a=obj(attachment);
+  const mime=text(a.mime_type||a.mimeType,120).toLowerCase();
+  const type=text(a.type,80).toLowerCase();
+  const url=text(a.url||a.media_url||a.mediaUrl||a.download_url,5000).toLowerCase();
+  return /^image\//i.test(mime)||type==='image'||/\.(?:png|jpe?g|webp|heic|heif|gif|avif)(?:[?#]|$)/i.test(url);
+ });
+ if(imageAttachment){
+  try{
+   const handoff=await notifyImageHandoff(supabase,organizationId,customer,conversation);
+   const imageReply='وصلت الصورة، وهخلي موظف من الفريق يتابع مع حضرتك.';
+   const {data:savedImage,error:savedImageError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:imageReply,metadata:{source:'ryan',type:'image_handoff',human_handoff:true,handoff_id:handoff.handoffId}}).select('id').single();
+   if(savedImageError||!savedImage)throw new Error(savedImageError?.message||'Failed to save image handoff reply');
+   await supabase.from('messages').update({metadata:{...incomingMetadata,ai_agent_processed_at:new Date().toISOString(),image_handoff:true,handoff_id:handoff.handoffId}}).eq('id',messageId).eq('conversation_id',conversationId);
+   return res.status(200).json({ok:true,reply:imageReply,message_id:savedImage.id,action:'handoff_human',image_handoff:true,handoff_id:handoff.handoffId});
+  }catch(e:any){
+   console.error('Ryan image handoff failed',text(e?.message,500));
+   return res.status(500).json({error:'Failed to create human handoff for image',details:text(e?.message,500)});
+  }
+ }
  const {data:quota,error:quotaError}=await supabase.rpc('consume_ryan_message',{p_organization_id:organizationId,p_agent_id:agent.id,p_conversation_id:conversationId,p_customer_id:customer.id,p_model:model})
  if(quotaError)return res.status(500).json({error:'Failed to verify Ryan message quota',details:text(quotaError.message,500)})
  const quotaRow=Array.isArray(quota)?quota[0]:quota
