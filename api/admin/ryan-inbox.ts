@@ -310,6 +310,10 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
   actionResult={success:false,message:'Action execution failed'}
  }}
  let reply=text(plan.reply,5000);
+ const isMetaComment=String(obj(incoming.metadata).source||'')==='meta_comment';
+ if(isMetaComment&&current.trim()&&!reply.includes(current.trim())){
+  reply=`بخصوص تعليق حضرتك: «${current.trim().slice(0,800)}»\\n\\n${reply}`;
+ }
  if(actionResult.success&&text(plan.action,60)!=='continue')reply=text(plan.reply,5000)||'تم تنفيذ طلب حضرتك بنجاح.'
  const previousService=text(memory.service,160),previousBudget=text(memory.budget,120),previousIntent=text(memory.intent,100);const currentBudget=budgetFromText(current);const updateSummary=(()=>{const parts:string[]=[];if(currentBudget&&currentBudget!==previousBudget)parts.push('تحديث الميزانية إلى '+currentBudget+' جنيه');if(text(plan.service,160)&&text(plan.service,160)!==previousService)parts.push('تحديث الخدمة إلى '+text(plan.service,160));if(customerUpdates.phone)parts.push('تحديث رقم التواصل');if(customerUpdates.name)parts.push('تحديث اسم العميل');if(text(plan.action,60)==='handoff_human'||messageRecord.urgent)parts.push('طلب تواصل سريع مع الفريق');if(!parts.length&&text(plan.intent,100))parts.push('تحديث بخصوص '+text(plan.intent,100));if(!parts.length)parts.push('تحديث جديد من العميل');return parts.join(' — ');})();try{await appendRyanCustomerUpdateNote(supabase,organizationId,customer,conversation,updateSummary,messageRecord.urgent)}catch(e:any){console.error('Ryan customer update note failed',text(e?.message,500))}if(currentBudget&&currentBudget!==previousBudget){ const budgetReply='تمام يا أستاذ '+(text(customer.name,120)||'حضرتك')+'، سجلت الميزانية الجديدة '+currentBudget+' وهبني عليها المتابعة.'; if(!reply||!/ميزاني(?:ة|ه)|ميزانية/iu.test(reply))reply=budgetReply; }
 const leadService=text(plan.service,160)||previousService;const leadBudget=currentBudget||text(plan.budget,120)||previousBudget;try{await ensureRyanLead(supabase,organizationId,customer,conversation,leadService,leadBudget)}catch(e:any){console.error('Ryan lead sync failed',text(e?.message,500))}
