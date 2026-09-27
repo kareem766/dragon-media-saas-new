@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await client.auth.exchangeCodeForSession(code)
         if (error) console.error('[auth] code exchange failed', error)
 
-        const cleanUrl = \\`${'${window.location.origin}'}${'${window.location.pathname}'}${'${window.location.hash || \'#/\'}'}\\`
+        const cleanUrl = window.location.origin + window.location.pathname + (window.location.hash || '#/')
         window.history.replaceState({}, document.title, cleanUrl)
       }
 
