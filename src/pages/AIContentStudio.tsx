@@ -133,12 +133,12 @@ export default function AIContentStudio() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center rounded-full bg-gold-50 px-3 py-1.5 text-[10px] font-extrabold tracking-wide text-gold-700">✦ AI CONTENT STUDIO</span>
-                  <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5 text-[10px] font-bold text-ink-900/45">Gemini • كتابة المحتوى</span>
+                  <span className="rounded-full border border-sand-200 bg-white px-3 py-1.5 text-[10px] font-bold text-ink-900/45">Gemini • كتابة المحتوى + الصور</span>
                 </div>
                 <h1 className="mt-2 text-xl font-extrabold tracking-tight text-ink-950 sm:mt-3 sm:text-3xl">استوديو المحتوى بالـAI</h1>
-                <p className="mt-1.5 max-w-2xl text-[11px] leading-5 text-ink-900/50 sm:mt-2 sm:text-sm sm:leading-6">حوّل فكرة بسيطة إلى بوست احترافي جاهز للمراجعة والنشر، بصياغة تناسب نشاط شركتك.</p>
+                <p className="mt-1.5 max-w-2xl text-[11px] leading-5 text-ink-900/50 sm:mt-2 sm:text-sm sm:leading-6">حوّل فكرة بسيطة إلى بوست احترافي كامل: كتابة + Creative بصري جاهز للمراجعة والنشر.</p>
               </div>
-              <div className="hidden shrink-0 rounded-2xl border border-sand-100 bg-sand-50 px-3 py-2 text-center sm:block"><div className="text-[10px] font-bold text-ink-900/40">المرحلة الحالية</div><div className="mt-1 text-xs font-extrabold text-ink-950">كتابة + مراجعة</div></div>
+              <div className="hidden shrink-0 rounded-2xl border border-sand-100 bg-sand-50 px-3 py-2 text-center sm:block"><div className="text-[10px] font-bold text-ink-900/40">المرحلة الحالية</div><div className="mt-1 text-xs font-extrabold text-ink-950">كتابة + Creative + مراجعة</div></div>
             </div>
             <div className="mt-3 hidden grid-cols-3 gap-2 sm:grid">
               {['اكتب الفكرة','راجع المحتوى','انشر'].map((item,i)=><div key={item} className="rounded-2xl border border-sand-100 bg-sand-50/60 px-2 py-3 text-center"><span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-white text-[10px] font-extrabold text-gold-700 shadow-sm">{i+1}</span><span className="mt-2 block text-[10px] font-bold text-ink-900/55 sm:text-xs">{item}</span></div>)}
@@ -152,7 +152,7 @@ export default function AIContentStudio() {
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_390px] sm:gap-4">
           <section className="rounded-2xl border border-ink-900/10 bg-white p-3 shadow-sm sm:rounded-[28px] sm:p-6">
             <div className="flex items-start justify-between gap-3">
-              <div><h2 className="text-lg font-extrabold text-ink-950 sm:text-xl">أنشئ بوست جديد</h2><p className="mt-1 text-xs leading-5 text-ink-900/45">اكتب الفكرة بطريقتك، وخلّي Gemini يتولى الصياغة.</p></div>
+              <div><h2 className="text-lg font-extrabold text-ink-950 sm:text-xl">أنشئ بوست جديد</h2><p className="mt-1 text-xs leading-5 text-ink-900/45">اكتب الفكرة بطريقتك، وخلّي Gemini يتولى الصياغة وتصميم الـCreative.</p></div>
               <span className="shrink-0 rounded-xl bg-sand-50 px-2.5 py-2 text-[10px] font-extrabold text-ink-900/50">GEMINI</span>
             </div>
 
@@ -167,7 +167,7 @@ export default function AIContentStudio() {
               <Select label="ستايل الـCreative" value={imageStyle} setValue={setImageStyle} options={imageStyles}/>
             </div>
 
-            {!canGenerateImages && <div className="mt-4 flex items-start gap-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3"><span className="mt-0.5">✦</span><div><div className="text-xs font-extrabold text-gold-800">سوف تتوفر خدمة توليد الصور قريبًا على منصة دراجون ميديا</div><p className="mt-1 text-[11px] leading-5 text-gold-800/70">الكتابة بالـAI تعمل بشكل طبيعي. سنعيد تفعيل الـCreative عند توفر حصة توليد الصور.</p></div></div>}
+            {!canGenerateImages && <div className="mt-4 flex items-start gap-3 rounded-2xl border border-gold-100 bg-gold-50/60 px-4 py-3"><span className="mt-0.5">✦</span><div><div className="text-xs font-extrabold text-gold-800">توليد الصور بالـAI مفعّل</div><p className="mt-1 text-[11px] leading-5 text-gold-800/70">سيتم إنشاء الـCreative تلقائيًا مع كل بوست جديد، ويمكنك إعادة إنشائه من المعاينة.</p></div></div>}
 
             <button type="button" onClick={()=>void generate()} disabled={generating||!canEdit||prompt.trim().length<5} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-ink-950 px-5 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-ink-800 active:scale-[.99] disabled:cursor-not-allowed disabled:opacity-50">
               <span>{generating?'جاري إنشاء المحتوى…':'إنشاء البوست بالـAI'}</span><span aria-hidden="true">{generating?'…':'✦'}</span>
@@ -197,7 +197,7 @@ export default function AIContentStudio() {
             </div>
 
             <div className="order-1 border-b border-sand-100 bg-sand-50/40 p-3 sm:p-6 lg:order-2 lg:border-b-0 lg:border-r">
-              {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-[4/3] w-full rounded-2xl sm:aspect-square sm:rounded-[24px] object-cover shadow-sm" /> : <div className="flex aspect-[4/3] w-full items-center justify-center rounded-[24px] border border-dashed border-gold-200 bg-white px-6 text-center"><div><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-50 text-xl">✦</div><div className="mt-4 text-sm font-extrabold text-ink-950">النص جاهز — الـCreative غير متاح حاليًا</div><p className="mt-2 text-xs leading-6 text-ink-900/45">{canGenerateImages ? 'يمكنك محاولة إنشاء الصورة مرة أخرى.' : 'توليد الصور متوقف مؤقتًا، لكن يمكنك مراجعة النص ونشره.'}</p></div></div>}
+              {active.image_url ? <img src={active.image_url} alt="Creative البوست" className="aspect-[4/3] w-full rounded-2xl sm:aspect-square sm:rounded-[24px] object-cover shadow-sm" /> : <div className="flex aspect-[4/3] w-full items-center justify-center rounded-[24px] border border-dashed border-gold-200 bg-white px-6 text-center"><div><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-gold-50 text-xl">✦</div><div className="mt-4 text-sm font-extrabold text-ink-950">لم يتم إنشاء الـCreative</div><p className="mt-2 text-xs leading-6 text-ink-900/45">{canGenerateImages ? 'يمكنك إنشاء الصورة مرة أخرى من الزر بالأسفل.' : 'أضف مفتاح Gemini الخاص بالصور إلى Vercel لتفعيل الـCreative.'}</p></div></div>}
 
               <div className="mt-3 rounded-2xl border border-sand-200 bg-white p-3 sm:mt-4 sm:p-4">
                 <div className="flex items-center justify-between gap-2"><div className="text-xs font-extrabold text-ink-900/55">منصات النشر</div><span className="text-[10px] font-bold text-ink-900/30">اختر منصة أو أكثر</span></div>
