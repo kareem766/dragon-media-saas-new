@@ -116,7 +116,9 @@ function formatRyanNote(timestamp:string,channel:string,content:string,urgent:bo
  const channelNames:Record<string,string>={whatsapp:'واتساب',messenger:'ماسنجر',instagram:'إنستجرام',facebook:'فيسبوك',web:'الموقع'};
  const label=channelNames[channel.toLowerCase()]||channel||'Ryan';
  const date=new Intl.DateTimeFormat('ar-EG',{dateStyle:'medium',timeStyle:'short',timeZone:'Africa/Cairo'}).format(new Date(timestamp));
- return '• '+date+' — '+label+(urgent?' — استعجال':'')+': '+content;
+ const clean=text(content,180).replace(/\\s+/g,' ').replace(/\\n/g,' ').replace(/\\r/g,' ').trim();
+ const short=clean.length>140?clean.slice(0,137).trimEnd()+'...':clean;
+ return '• '+date+' — '+label+(urgent?' — استعجال':'')+': '+short;
 }
 const normalizeRyanNotes=(notes:string)=>{
  const normalized=notes.replace(/\\\\n/g,'\\n').replace(/\\r?\\n/g,'\\n');
