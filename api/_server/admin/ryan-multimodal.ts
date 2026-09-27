@@ -37,7 +37,10 @@ async function metaAccessToken(supabase:any,organizationId:string,channel:string
  return decryptMetaToken(obj(integration?.config).access_token)
 }
 async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
- const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase().split(';')[0].trim()
+ const declaredMime=text(attachment.mime_type||attachment.mimeType,120).toLowerCase().split(';')[0].trim()
+ const attachmentType=text(attachment.type,80).toLowerCase().trim()
+ const urlHint=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000).toLowerCase()
+ const mime=declaredMime&&declaredMime!=='application/octet-stream'?declaredMime:attachmentType==='image'?'image/jpeg':attachmentType==='audio'?'audio/ogg':attachmentType==='video'?'video/mp4':attachmentType==='document'?'application/pdf':/\.(?:png|jpe?g|webp|gif|heic|heif|avif)(?:[?#]|$)/iu.test(urlHint)?'image/jpeg':/\.(?:ogg|mp3|wav|m4a|aac|webm)(?:[?#]|$)/iu.test(urlHint)?'audio/ogg':declaredMime
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
  if(!url&&mediaId&&/^whatsapp$/iu.test(channel))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
