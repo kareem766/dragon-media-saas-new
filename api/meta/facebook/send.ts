@@ -99,15 +99,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pageToken = decryptToken(connection.config?.access_token)
 
     const commentId = provider === 'facebook' ? String((conversation as any)?.metadata?.facebook_comment_id || '') : ''
+    let response: Response
+    let payload: any
+    let deliveryMode = 'direct'
+
     const sendUrl = commentId ? `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(commentId)}/private_replies` : `https://graph.facebook.com/${GRAPH_VERSION}/${senderId}/messages`
     const sendBody = commentId ? { message: content } : { recipient: { id: recipientId }, message: { text: content } }
-    const response = await fetch(sendUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(sendBody) })
-    const payload = await response.json().catch(() => ({}))
-    if (!response.ok) { console.error('Facebook outbound provider rejected message', { provider, commentId: commentId || null, recipientId, graphCode: payload?.error?.code || null, graphType: payload?.error?.type || null, graphMessage: payload?.error?.message || null }); return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' }) }
+    response = await fetch(sendUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(sendBody) })
+    payload = await response.json().catch(() => ({}))
 
-    const externalId = String(payload?.message_id || payload?.messages?.[0]?.id || '')
+    if (!response.ok && commentId) {
+      const publicUrl = `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(commentId)}/comments`
+      const publicResponse = await fetch(publicUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content }) })
+      const publicPayload = await publicResponse.json().catch(() => ({}))
+      if (publicResponse.ok) {
+        response = publicResponse
+        payload = publicPayload
+        deliveryMode = 'public_comment_fallback'
+        console.warn('Facebook Ryan public comment fallback succeeded', { commentId })
+      } else {
+        console.error('Facebook private reply and public comment reply both failed', { commentId, recipientId, privateGraphCode: payload?.error?.code || null, privateGraphMessage: payload?.error?.message || null, publicGraphCode: publicPayload?.error?.code || null, publicGraphMessage: publicPayload?.error?.message || null })
+      }
+    }
+
+    if (!response.ok) {
+      return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' })
+    }
+
+    const externalId = String(payload?.message_id || payload?.id || payload?.messages?.[0]?.id || '')
     if (messageId) {
-      const { data: message, error: updateError } = await db.from('messages').update({ external_id: externalId || null, metadata: { source: sourceSenderType === 'ai' ? 'ryan' : 'inbox', outbound_status: 'accepted', sent_by: authenticatedUserId || null, meta_message_id: externalId || null, facebook_page_id: pageId, facebook_outbound: true, facebook_recipient_id: recipientId, dispatch: internalDispatch ? 'database_trigger' : 'inbox' } }).eq('id', messageId).select('id,conversation_id,sender_type,content,created_at,metadata,external_id').single()
+      const { data: message, error: updateError } = await db.from('messages').update({ external_id: externalId || null, metadata: { source: sourceSenderType === 'ai' ? 'ryan' : 'inbox', outbound_status: 'accepted', sent_by: authenticatedUserId || null, meta_message_id: externalId || null, facebook_page_id: pageId, facebook_outbound: true, facebook_recipient_id: recipientId, dispatch: internalDispatch ? 'database_trigger' : 'inbox', delivery_mode: deliveryMode } }).eq('id', messageId).select('id,conversation_id,sender_type,content,created_at,metadata,external_id').single()
       if (updateError) throw updateError
       await db.from('conversations').update({ handled_by: sourceSenderType === 'ai' ? 'ai' : 'human', last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', conversationId).eq('organization_id', organizationId)
       return json(res, 200, { ok: true, message })
