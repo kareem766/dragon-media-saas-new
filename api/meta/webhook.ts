@@ -301,7 +301,8 @@ async function handleFacebookCommentChanges(db: any, payload: any) {
           commentId,
           authorId,
           comment,
-          postId
+          postId,
+          String(value?.from?.name || value?.from?.username || value?.sender?.name || '')
         )
       } catch (commentError) {
         // A comment/Ryan failure must never make the shared Meta webhook return 500.
