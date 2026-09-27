@@ -40,6 +40,7 @@ export function useSubscription() {
   const { organizationId, loading: organizationLoading } = useOrganization()
   const { isAdmin, loading: platformAdminLoading } = useIsPlatformAdmin()
   const [role, setRole] = useState<string | null>(null)
+  const [roleLoaded, setRoleLoaded] = useState(false)
   const [rawSubscription, setRawSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,9 +49,20 @@ export function useSubscription() {
   useEffect(() => {
     let cancelled = false
     const loadRole = async () => {
-      if (!supabase || !user?.id) { setRole(null); return }
-      const { data } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
-      if (!cancelled) setRole(data?.role ? String(data.role) : null)
+      setRoleLoaded(false)
+      if (!supabase || !user?.id) {
+        if (!cancelled) {
+          setRole(null)
+          setRoleLoaded(true)
+        }
+        return
+      }
+      const { data, error: roleError } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
+      if (!cancelled) {
+        setRole(data?.role ? String(data.role) : null)
+        setRoleLoaded(true)
+        if (roleError) setError(roleError.message)
+      }
     }
     void loadRole()
     return () => { cancelled = true }
@@ -59,7 +71,7 @@ export function useSubscription() {
   useEffect(() => {
     let cancelled = false
     const loadSubscription = async () => {
-      if (organizationLoading || platformAdminLoading || (user?.id && role === null)) return
+      if (organizationLoading || platformAdminLoading || !roleLoaded) return
       if (isAdmin) {
         if (!cancelled) { setRawSubscription(null); setLoading(false) }
         return
@@ -93,7 +105,7 @@ export function useSubscription() {
     }
     void loadSubscription()
     return () => { cancelled = true }
-  }, [organizationId, organizationLoading, isAdmin, platformAdminLoading, role, user?.id])
+  }, [organizationId, organizationLoading, isAdmin, platformAdminLoading, roleLoaded])
 
   const rawStatus = rawSubscription?.status ?? 'no_subscription'
   const effectiveExpiryDate = rawSubscription?.expires_at ?? rawSubscription?.renewal_date ?? null
@@ -129,9 +141,6 @@ export function useSubscription() {
 
   const formattedRenewalDateInternal = expiryDateOnly ? new Intl.DateTimeFormat('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(`${expiryDateOnly}T00:00:00`)) : null
 
-  // Company managers are governed by subscription features. Invited employees
-  // are governed by their role permissions only; billing/subscription state is
-  // intentionally irrelevant to their UI and feature visibility.
   const effectiveIsActive = isAdmin || !canManageSubscription ? true : rawIsActive
   const effectiveIsExpired = isAdmin ? false : canManageSubscription ? rawIsExpired : false
   const effectivePendingPayment = isAdmin ? false : canManageSubscription ? rawPendingPayment : false
