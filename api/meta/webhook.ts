@@ -381,6 +381,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rawBody = await readRawBody(req)
     if (!verifySignature(req, rawBody)) return json(res, 401, { error: 'Invalid webhook signature.' })
     const payload = JSON.parse(rawBody)
+    if (payload?.object === 'page') {
+      console.log('Meta Facebook webhook diagnostic', {
+        object: payload?.object,
+        entryIds: Array.isArray(payload?.entry) ? payload.entry.map((entry: any) => String(entry?.id || '')) : [],
+        entries: Array.isArray(payload?.entry) ? payload.entry.map((entry: any) => ({
+          id: String(entry?.id || ''),
+          changes: Array.isArray(entry?.changes) ? entry.changes.map((change: any) => ({
+            field: String(change?.field || ''),
+            item: String(change?.value?.item || ''),
+            verb: String(change?.value?.verb || ''),
+            hasId: Boolean(change?.value?.id || change?.value?.comment_id || change?.value?.comment?.id),
+            hasMessage: Boolean(change?.value?.message || change?.value?.comment?.message),
+          })) : [],
+          messagingCount: Array.isArray(entry?.messaging) ? entry.messaging.length : 0,
+        })) : [],
+      })
+    }
     const db = await getDb()
     if (payload.object === 'page') { await handleFacebookWebhook(db, payload); await handleFacebookCommentChanges(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }
     if (payload.object === 'instagram') { await handleInstagramWebhook(db, payload); return json(res, 200, { ok: true, provider: 'instagram' }) }
