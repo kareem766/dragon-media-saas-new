@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext'
 
 export function useIsPlatformAdmin() {
   const { user, loading: authLoading } = useAuth()
+  const userId = user?.id ?? null
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -12,7 +13,7 @@ export function useIsPlatformAdmin() {
 
     if (authLoading) return
 
-    if (!supabase || !user) {
+    if (!supabase || !userId) {
       setIsAdmin(false)
       setLoading(false)
       return
@@ -23,7 +24,7 @@ export function useIsPlatformAdmin() {
     supabase
       .from('users')
       .select('is_platform_admin, active')
-      .eq('id', user.id)
+      .eq('id', userId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return
@@ -42,7 +43,7 @@ export function useIsPlatformAdmin() {
     return () => {
       cancelled = true
     }
-  }, [user, authLoading])
+  }, [userId, authLoading])
 
   return { isAdmin, loading }
 }
