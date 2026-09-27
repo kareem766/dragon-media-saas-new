@@ -53,7 +53,7 @@ async function getContext(db: any, userId: string): Promise<any> {
     plan = data || null
   }
 
-  const canGenerateImages = Boolean(env('GEMINI_IMAGE_API_KEY','GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY'))
+  const canGenerateImages: boolean = false
 
   return {
     user,
@@ -65,42 +65,6 @@ async function getContext(db: any, userId: string): Promise<any> {
     plan,
     canGenerateImages,
   }
-}
-
-async function generateImage(prompt: string, ctx: any) {
-  const key = env('GEMINI_IMAGE_API_KEY','GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
-  if (!key) throw new Error('GEMINI_IMAGE_API_KEY غير مضبوط على الخادم.')
-  const model = env('GEMINI_IMAGE_MODEL','AI_CONTENT_GEMINI_IMAGE_MODEL') || 'gemini-3.1-flash-image'
-  const imagePrompt = `أنشئ صورة تسويقية احترافية أصلية لمنشور سوشيال ميديا.
-النشاط: ${text(ctx.organization?.business_type,200)}
-اسم الشركة: ${text(ctx.organization?.name,200)}
-الخدمات: ${(ctx.services||[]).map((s:any)=>text(s.name,120)).filter(Boolean).slice(0,20).join('، ')}
-أسلوب الصورة: ${text(ctx.imageStyle||'modern',100)}
-الفكرة:
-${text(prompt,6000)}
-اجعل الصورة مناسبة للنشر التجاري، نظيفة واحترافية، وبدون شعارات أو نصوص عشوائية غير مطلوبة.`
-  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: imagePrompt }] }],
-      generationConfig: { responseModalities: ['TEXT','IMAGE'] },
-    }),
-  })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(text(data?.error?.message, 800) || 'فشل توليد الصورة.')
-  const parts = Array.isArray(data?.candidates?.[0]?.content?.parts) ? data.candidates[0].content.parts : []
-  const imagePart = parts.find((p:any) => p?.inlineData?.data)
-  if (!imagePart?.inlineData?.data) throw new Error('Gemini لم يرجع صورة.')
-  const mime = text(imagePart.inlineData.mimeType,80) || 'image/png'
-  const extension = mime.includes('jpeg') ? 'jpg' : mime.includes('webp') ? 'webp' : 'png'
-  const path = ctx.organizationId + '/ai-' + Date.now() + '-' + Math.random().toString(36).slice(2,8) + '.' + extension
-  const bytes = Buffer.from(String(imagePart.inlineData.data), 'base64')
-  const { error: uploadError } = await ctx.db.storage.from('ai-content').upload(path, bytes, { contentType: mime, upsert: false })
-  if (uploadError) throw new Error(uploadError.message)
-  const { data: publicData } = ctx.db.storage.from('ai-content').getPublicUrl(path)
-  if (!publicData?.publicUrl) throw new Error('تعذر إنشاء رابط الصورة.')
-  return { url: publicData.publicUrl, path, model }
 }
 
 async function generateText(prompt: string, ctx: any) {
@@ -163,17 +127,9 @@ ${text(prompt, 6000)}
 
   const raw = text(data?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || '').join(''), 12000)
   let parsed: any
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    throw new Error('تعذر قراءة نتيجة Gemini بشكل صحيح.')
-  }
+  try { parsed = JSON.parse(raw) } catch { throw new Error('تعذر قراءة نتيجة Gemini بشكل صحيح.') }
 
-  return {
-    hook: text(parsed?.hook, 1000),
-    content: text(parsed?.content, 12000),
-    cta: text(parsed?.cta, 1000),
-  }
+  return { hook: text(parsed?.hook, 1000), content: text(parsed?.content, 12000), cta: text(parsed?.cta, 1000) }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -207,10 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ctx.tone = text(body.tone || 'professional', 80)
 
       const generated = await generateText(prompt, ctx)
-      ctx.imageStyle = text(body.imageStyle || 'modern', 80)
-      let generatedImage: any = null
-      let imageError = ''
-      try { generatedImage = await generateImage(prompt, { ...ctx, db }) } catch (imageGenerationError) { imageError = imageGenerationError instanceof Error ? imageGenerationError.message : 'فشل توليد الصورة.'; console.error('AI image generation failed', imageGenerationError) }
+      const imageError = 'توليد الصور متوقف مؤقتًا في استوديو المحتوى.'
 
       const { data: post, error } = await db.from('ai_content_posts').insert({
         organization_id: ctx.organizationId,
@@ -222,37 +175,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         hook: generated.hook,
         content: generated.content,
         cta: generated.cta,
-        image_url: generatedImage?.url || null,
-        image_path: generatedImage?.path || null,
+        image_url: null,
+        image_path: null,
         status: 'ready',
         generation_model: GEMINI_TEXT_MODEL,
-        image_model: generatedImage?.model || (imageError ? env('GEMINI_IMAGE_MODEL','AI_CONTENT_GEMINI_IMAGE_MODEL') || 'gemini-3.1-flash-image' : null),
+        image_model: null,
         metadata: {
-          image_generation_failed: Boolean(imageError),
-          image_generation_error: imageError || null,
-          image_generation_provider: generatedImage ? 'gemini' : (imageError ? 'gemini' : null),
+          image_generation_failed: true,
+          image_generation_error: imageError,
+          image_generation_provider: 'disabled',
         },
       }).select('*').single()
 
       if (error) throw error
-      return json(res, 200, { post, imageGenerated: Boolean(generatedImage), imageError: imageError || null })
+      return json(res, 200, { post, imageGenerated: false, imageError })
     }
 
     if (req.method === 'POST' && action === 'regenerate_image') {
-      const id = text(body.id, 100)
-      if (!id) return json(res, 400, { error: 'المحتوى غير محدد.' })
-      const { data: existing, error: lookupError } = await db.from('ai_content_posts').select('*').eq('id', id).eq('organization_id', ctx.organizationId).maybeSingle()
-      if (lookupError || !existing) return json(res, 404, { error: 'المحتوى غير موجود.' })
-      ctx.imageStyle = text(body.imageStyle || existing.image_style || 'modern', 80)
-      try {
-        const generatedImage = await generateImage([existing.prompt, existing.content, existing.cta].filter(Boolean).join('\\n'), { ...ctx, db })
-        const { data: post, error } = await db.from('ai_content_posts').update({ image_url: generatedImage.url, image_path: generatedImage.path, image_model: generatedImage.model, metadata: { ...(existing.metadata || {}), image_generation_failed: false, image_generation_error: null, image_generation_provider: 'gemini' }, updated_at: new Date().toISOString() }).eq('id', id).eq('organization_id', ctx.organizationId).select('*').single()
-        if (error) throw error
-        return json(res, 200, { post, imageGenerated: true })
-      } catch (error) {
-        console.error('AI image regeneration failed', error)
-        return json(res, 500, { error: error instanceof Error ? error.message : 'فشل توليد الصورة.' })
-      }
+      return json(res, 403, { error: 'توليد الصور متوقف مؤقتًا في استوديو المحتوى.', code: 'IMAGE_GENERATION_DISABLED' })
     }
 
     if (req.method === 'PATCH') {
