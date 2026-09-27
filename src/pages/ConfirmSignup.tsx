@@ -16,45 +16,42 @@ export default function ConfirmSignup() {
 
   const platformName = branding?.platform_name?.trim() || 'Dragon Media'
 
-  useEffect(() => {
-    const tokenHash = searchParams.get('token_hash')?.trim() || ''
-    const type = (searchParams.get('type')?.trim() || 'email') as EmailOtpType
+  const tokenHash = searchParams.get('token_hash')?.trim() || ''
+  const type = (searchParams.get('type')?.trim() || 'email') as EmailOtpType
 
+  useEffect(() => {
     if (session) {
       setVerified(true)
       setVerifying(false)
-      return
+    } else {
+      setVerifying(false)
     }
+  }, [session])
 
+  const handleConfirm = async () => {
     if (!tokenHash || !supabase) {
       setError('رابط التأكيد غير مكتمل أو غير صالح.')
+      return
+    }
+
+    setError('')
+    setVerifying(true)
+
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type,
+    })
+
+    if (verifyError) {
+      setError('تعذر تأكيد البريد الإلكتروني. قد يكون الرابط مستخدمًا بالفعل أو منتهي الصلاحية.')
       setVerifying(false)
       return
     }
 
-    let cancelled = false
-    const verify = async () => {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        token_hash: tokenHash,
-        type,
-      })
-
-      if (cancelled) return
-
-      if (verifyError) {
-        setError('تعذر تأكيد البريد الإلكتروني. قد يكون الرابط مستخدمًا بالفعل أو منتهي الصلاحية.')
-      } else {
-        setVerified(true)
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
-      }
-      setVerifying(false)
-    }
-
-    void verify()
-    return () => {
-      cancelled = true
-    }
-  }, [searchParams, session])
+    setVerified(true)
+    setVerifying(false)
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
+  }
 
   useEffect(() => {
     if (!verified || !session) return
@@ -75,6 +72,16 @@ export default function ConfirmSignup() {
               <h1 className="mt-7 text-2xl font-black text-slate-950">جاري تأكيد البريد الإلكتروني</h1>
               <p className="mt-3 text-sm leading-7 text-slate-500">لحظات ونجهز حسابك للدخول إلى المنصة.</p>
               <div className="mx-auto mt-7 h-10 w-10 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600" />
+            </>
+          )}
+
+          {!verifying && !verified && !error && tokenHash && (
+            <>
+              <h1 className="mt-7 text-2xl font-black text-slate-950">تأكيد البريد الإلكتروني</h1>
+              <p className="mt-3 text-sm leading-7 text-slate-500">اضغط الزر التالي لتأكيد بريدك الإلكتروني وتسجيل الدخول إلى المنصة.</p>
+              <button type="button" onClick={() => void handleConfirm()} className="mt-7 w-full rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-black text-white transition hover:bg-blue-700">
+                تأكيد البريد الإلكتروني والمتابعة
+              </button>
             </>
           )}
 
