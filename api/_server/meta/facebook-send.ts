@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const customer = Array.isArray((conversation as any).customers) ? (conversation as any).customers[0] : (conversation as any).customers
-    recipientId = recipientId || (conversationChannel === 'instagram' ? String((conversation as any)?.metadata?.instagram_user_id || '') : String(customer?.phone || ''))
+    recipientId = recipientId || (conversationChannel === 'instagram' ? String((conversation as any)?.metadata?.instagram_user_id || '') : String((conversation as any)?.metadata?.facebook_psid || customer?.phone || ''))
     if (!recipientId) return json(res, 400, { error: 'Facebook recipient is not configured.' })
 
     const provider = conversationChannel === 'instagram' ? 'instagram' : 'facebook'
