@@ -43,13 +43,75 @@ export default async function handler(req: any, res: any) {
     return
   }
 
-  const { data } = await admin
+  // Fetch the audit rows first. Do not let an optional PostgREST
+  // relationship turn a populated activity log into an empty response.
+  const { data: rows, error: rowsError } = await admin
     .from('audit_logs')
-    .select('*, organizations(name), actor:actor_id(full_name)')
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(200)
 
+  if (rowsError) {
+    console.error('Admin audit logs query error:', rowsError)
+    res.status(500).json({
+      error: 'تعذر تحميل سجل النشاط.',
+      details: rowsError.message,
+    })
+    return
+  }
+
+  const logs = rows ?? []
+  const organizationIds = Array.from(
+    new Set(
+      logs
+        .map((row: any) => row.organization_id)
+        .filter(Boolean),
+    ),
+  )
+  const actorIds = Array.from(
+    new Set(
+      logs
+        .map((row: any) => row.actor_id)
+        .filter(Boolean),
+    ),
+  )
+
+  const [organizationsRes, actorsRes] = await Promise.all([
+    organizationIds.length
+      ? admin
+          .from('organizations')
+          .select('id, name')
+          .in('id', organizationIds)
+      : Promise.resolve({ data: [], error: null }),
+    actorIds.length
+      ? admin
+          .from('users')
+          .select('id, full_name')
+          .in('id', actorIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (organizationsRes.error) {
+    console.error('Admin audit organizations lookup error:', organizationsRes.error)
+  }
+  if (actorsRes.error) {
+    console.error('Admin audit actors lookup error:', actorsRes.error)
+  }
+
+  const organizations = new Map(
+    (organizationsRes.data ?? []).map((row: any) => [row.id, row]),
+  )
+  const actors = new Map(
+    (actorsRes.data ?? []).map((row: any) => [row.id, row]),
+  )
+
+  const enrichedLogs = logs.map((row: any) => ({
+    ...row,
+    organizations: organizations.get(row.organization_id) ?? null,
+    actor: actors.get(row.actor_id) ?? null,
+  }))
+
   res.status(200).json({
-    logs: data ?? [],
+    logs: enrichedLogs,
   })
 }
