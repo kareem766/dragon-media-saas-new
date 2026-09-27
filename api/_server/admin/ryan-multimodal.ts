@@ -54,6 +54,7 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  if(!r.ok)return {error:'media_fetch_'+r.status}
  const buffer=Buffer.from(await r.arrayBuffer())
  const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
+ const detected=(mime&&mime!=='application/octet-stream')?mime:(headerMime&&headerMime!=='application/octet-stream'?headerMime:'application/octet-stream')
  return {mime:detected,base64:buffer.toString('base64'),bytes:buffer.byteLength}
 }
 
@@ -104,7 +105,7 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
   const fetchedBase64=fetched.base64??''
   if(fetchedBytes>MAX_INLINE_BYTES){summaries.push({type:'too_large',mime:fetchedMime,bytes:fetchedBytes});continue}
   if(/^audio\//iu.test(fetched.mime)){
-   parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}})
+   parts.push({inlineData:{mimeType:fetchedMime,data:fetchedBase64}})
    try{
     const audioText=await transcribeAudio(apiKey,model,{mime:fetchedMime,base64:fetchedBase64})
     transcript=[transcript,audioText].filter(Boolean).join('\n')
