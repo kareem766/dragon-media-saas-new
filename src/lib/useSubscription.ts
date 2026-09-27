@@ -104,7 +104,21 @@ export function useSubscription() {
       }
     }
     void loadSubscription()
-    return () => { cancelled = true }
+
+    const refreshSubscription = () => {
+      void loadSubscription()
+    }
+
+    window.addEventListener('focus', refreshSubscription)
+    window.addEventListener('pageshow', refreshSubscription)
+    window.addEventListener('dragon-media:subscription-updated', refreshSubscription)
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', refreshSubscription)
+      window.removeEventListener('pageshow', refreshSubscription)
+      window.removeEventListener('dragon-media:subscription-updated', refreshSubscription)
+    }
   }, [organizationId, organizationLoading, isAdmin, platformAdminLoading, roleLoaded])
 
   const rawStatus = rawSubscription?.status ?? 'no_subscription'
