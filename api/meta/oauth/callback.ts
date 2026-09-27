@@ -137,9 +137,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Verify the Page token before changing webhook subscriptions. This catches
       // stale/revoked tokens and tokens issued for a different Meta App/Page.
-      const appAccessToken = \`${appId}|${appSecret}\`
+      const appAccessToken = `${appId}|${appSecret}`
       const debugToken = await graph(
-        \`/debug_token?input_token=${encodeURIComponent(pageToken)}\`,
+        `/debug_token?input_token=${encodeURIComponent(pageToken)}`,
         appAccessToken,
       )
       const tokenData = debugToken?.data || {}
@@ -181,7 +181,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!subscription) webhookVerificationError = 'Meta لم تؤكد حقل feed على اشتراك الصفحة.'
       } catch (subscribeError) {
         webhookVerificationError = subscribeError instanceof Error ? subscribeError.message : 'فشل اشتراك Webhook للصفحة لدى Meta.'
-        console.error('Facebook page webhook subscription verification failed', { pageId: String(page.id), appId: String(appId), error: webhookVerificationError })
+        console.error('Facebook page webhook subscription verification failed', { pageId, appId: String(appId), error: webhookVerificationError })
       }
       try {
         const appAccessToken = `${appId}|${appSecret}`
