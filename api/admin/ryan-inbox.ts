@@ -250,7 +250,7 @@ const trustedCustomerName=(storedCustomerName&&!invalidCustomerName(storedCustom
  // Only stable, verified profile facts may cross conversation boundaries. Do not treat prior intent/budget/service as active context.
  const safeMemory=rememberCustomer?{name:isWhatsApp?rememberedExplicitName:(looksLikeName(String(memory.name||''))?text(memory.name,120):''),phone:validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):'' ,company:text(memory.company,160),email:text(memory.email,160)}:{}
  let multimodal:any={parts:[],currentText:'',transcript:'',attachmentSummary:[]};try{multimodal=await prepareRyanMultimodal(supabase,organizationId,text(conversation.channel,40),obj(incoming.metadata),apiKey,model)}catch(e){console.error('Ryan multimodal unavailable',e)}
- const current=text(incoming.content,4000)+(multimodal.currentText||'');const currentParts=multimodal.parts||[]
+ let current=text(incoming.content,4000)+(multimodal.currentText||'');const currentParts=multimodal.parts||[]
  if(currentParts.some((p:any)=>p?.inlineData?.mimeType?.startsWith('image/'))){current+='\n[تنبيه: توجد صورة مرفقة في هذه الرسالة. حلّل الصورة نفسها أولاً وأجب عن محتواها مباشرة، ولا تقل إنك لا تستطيع رؤية الصور.]'}
  console.log('Ryan multimodal prepared',{conversationId,messageId,channel:text(conversation.channel,40),attachmentCount:Array.isArray(obj(incoming.metadata).attachments)?obj(incoming.metadata).attachments.length:0,partCount:currentParts.length,attachmentSummary:multimodal.attachmentSummary||[]})
  let messageRecord:any={recorded:false,urgent:false};
