@@ -58,7 +58,14 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
   const mediaToken=decryptMetaToken(config.access_token)||decryptMetaToken(metadata.access_token)
   if(mediaToken)headers.Authorization='Bearer '+mediaToken
  }
- const r=await fetch(url,{headers})
+ let r=await fetch(url,{headers})
+ if(!r.ok&&token&&(r.status===401||r.status===403)){
+  try{
+   const retryUrl=new URL(url)
+   retryUrl.searchParams.set('access_token',token)
+   r=await fetch(retryUrl.toString(),{headers:{}})
+  }catch{}
+ }
  if(!r.ok)return {error:'media_fetch_'+r.status}
  const buffer=Buffer.from(await r.arrayBuffer())
  const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
