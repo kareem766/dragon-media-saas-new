@@ -5,7 +5,7 @@ const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ||
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || 'sb_publishable_669C-v4vPedeUWt8Kiqcjw_v-sqWluW'
 
 export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {\n      auth: { flowType: 'pkce' },\n    })
   : null
 
 export const isSupabaseConnected = () => supabase !== null
