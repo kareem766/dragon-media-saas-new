@@ -10,6 +10,7 @@ import Layout from './components/Layout'
 import SiteFooter from './components/SiteFooter'
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))
+const ConfirmSignup = lazy(() => import('./pages/ConfirmSignup'))
 const Privacy = lazy(() => import('./pages/Privacy'))
 const Terms = lazy(() => import('./pages/Terms'))
 const Support = lazy(() => import('./pages/Support'))
@@ -95,6 +96,7 @@ export default function App() {
 
             <Route element={<PublicShell />}>
               <Route path="/login" element={<Login />} />
+              <Route path="/confirm-signup" element={<ConfirmSignup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/privacy" element={<Privacy />} />
