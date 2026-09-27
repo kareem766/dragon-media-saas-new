@@ -97,7 +97,6 @@ function isRyanUrgentRequest(message:string){
  const x=text(message,1200).replace(/\s+/g,' ').trim();
  return /(?:مستعجل|مستعجلة|عاجل|عاجلة|ضروري|ضرورية|بسرعة|بأسرع وقت|في أسرع وقت|حالاً|حالا|النهارده|اليوم|اتصلوا بيا|يتصلوا بيا|حد يكلمني|حد يتواصل معايا|الفريق يتواصل معايا|الفريق يكلمني|عايز الفريق يكلمني|عاوز الفريق يكلمني|محتاج الفريق يكلمني|محتاج حد يكلمني|عايز حد يكلمني|عاوز حد يكلمني|ضروري حد يكلمني)/iu.test(x);
 }
-
 function formatRyanNote(timestamp:string,channel:string,content:string,urgent:boolean){
  const channelNames:Record<string,string>={whatsapp:'واتساب',messenger:'ماسنجر',instagram:'إنستجرام',facebook:'فيسبوك',web:'الموقع'};
  const label=channelNames[channel.toLowerCase()]||channel||'Ryan';
@@ -197,8 +196,7 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
  }
  if(action==='follow_up'){
   const at=text(d.follow_up_at,80),date=new Date(at);if(!at||Number.isNaN(date.getTime())||date.getTime()<=Date.now())return {success:false,message:'Invalid follow-up time'}
-  const actionMarker='Ryan message:'+messageId
-  const {data:existingFollowUp}=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('description','%'+actionMarker+'%').limit(1).maybeSingle()
+  const actionMarker='Ryan message:'+messageId  const {data:existingFollowUp}=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('description','%'+actionMarker+'%').limit(1).maybeSingle()
   if(existingFollowUp?.id)return {success:true,data:{task_id:existingFollowUp.id,existing:true,follow_up_at:date.toISOString()}}
   const {data:u}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).order('created_at').limit(1).maybeSingle()
   const {data:t,error}=await supabase.from('tasks').insert({organization_id:organizationId,title:'متابعة عميل بواسطة Ryan',assigned_to:u?.id||null,due_date:date.toISOString().slice(0,10),priority:'متوسطة',status:'قيد التنفيذ',description:'متابعة أنشأها Ryan من محادثة العميل. ['+actionMarker+']',customer_id:customer.id,created_by:u?.id||null,reminder_at:date.toISOString()}).select('id').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ متابعة',`تم إنشاء متابعة للعميل ${text(customer.name,120)||'العميل'}.`,`/tasks?task=${t.id}`,'task',t.id);return {success:true,data:{task_id:t.id,follow_up_at:date.toISOString()}}
@@ -297,8 +295,7 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
  // Hard safety guard: a new customer must be asked for their name before Ryan moves into qualification.
  // Gemini remains responsible for the wording; this only prevents it from skipping a required identity field.
  const effectiveName=isWhatsApp?(rememberedExplicitName||text(explicitName,120)):text(customer.name,120);const hasTrustedName=Boolean(effectiveName&&looksLikeName(effectiveName)&&!invalidCustomerName(effectiveName));const nameWasProvidedNow=Boolean(explicitName&&looksLikeName(explicitName)&&!invalidCustomerName(explicitName));const phoneWasProvidedNow=Boolean(phoneFromText(current)||validPhone(cleanPhone(text(plan.learned_phone,80))));
- if(!hasTrustedName&&!nameWasProvidedNow&&!aiUnavailable){
-  plan.reply='اهلاً وسهلا بحضرتك يافندم ، ممكن أتشرف بأسم حضرتك';plan.action='continue';plan.action_data={};
+ if(!hasTrustedName&&!nameWasProvidedNow&&!aiUnavailable&&!isMetaCommentSource){  plan.reply='اهلاً وسهلا بحضرتك يافندم ، ممكن أتشرف بأسم حضرتك';plan.action='continue';plan.action_data={};
  }
  if((hasTrustedName||nameWasProvidedNow)&&!phoneWasProvidedNow&&!aiUnavailable&&['handoff_human','create_lead'].includes(text(plan.action,60))){
   plan.reply='تمام يا فندم، ممكن أعرف رقم حضرتك للتواصل؟';plan.action='continue';plan.action_data={};
