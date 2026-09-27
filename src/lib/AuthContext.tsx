@@ -57,11 +57,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let mounted = true
 
-    supabase.auth.getSession().then(({ data, error }) => {
+    const initializeAuth = async () => {
+      // With HashRouter, Supabase's implicit flow can place access tokens in
+      // the URL fragment and the router may mistake them for an application route.
+      // Use PKCE and exchange the confirmation/OAuth code before the router renders.
+      const code = new URLSearchParams(window.location.search).get('code')
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) {
+          console.error('[auth] code exchange failed', error)
+        }
+
+        const cleanUrl = `${window.location.origin}${window.location.pathname}${window.location.hash || '#/'}`
+        window.history.replaceState({}, document.title, cleanUrl)
+      }
+
+      const { data, error } = await supabase.auth.getSession()
       if (!mounted) return
       updateSession(error ? null : data.session)
       setLoading(false)
-    })
+    }
+
+    void initializeAuth()
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return
