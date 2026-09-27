@@ -113,7 +113,10 @@ export function useSubscription() {
     window.addEventListener('pageshow', refreshSubscription)
     window.addEventListener('dragon-media:subscription-updated', refreshSubscription)
 
-    const channel = supabase
+    const client = supabase
+    if (!client) return
+
+    const channel = client
       .channel(`subscription-${organizationId}`)
       .on(
         'postgres_changes',
@@ -132,7 +135,7 @@ export function useSubscription() {
       window.removeEventListener('focus', refreshSubscription)
       window.removeEventListener('pageshow', refreshSubscription)
       window.removeEventListener('dragon-media:subscription-updated', refreshSubscription)
-      void supabase.removeChannel(channel)
+      void client.removeChannel(channel)
     }
   }, [organizationId, organizationLoading, isAdmin, platformAdminLoading, roleLoaded])
 
