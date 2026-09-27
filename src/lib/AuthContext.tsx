@@ -130,10 +130,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({ email, password, options: { data: metadata, emailRedirectTo: window.location.origin } })
     if (error) return { error: normalizeAuthError(error.message), needsEmailConfirmation: false }
     const needsEmailConfirmation = Boolean(data.user && !isEmailConfirmed(data.user))
-    if (data.session) await supabase.auth.signOut()
-    updateSession(null)
-    setLoading(false)
     if (!data.user) return { error: 'تعذر إنشاء حساب المستخدم. حاول مرة أخرى.', needsEmailConfirmation: false }
+
+    // If Supabase returned a session, the account is already authenticated.
+    // Keep that session so employee invites can be accepted immediately and
+    // company signup can continue to onboarding instead of bouncing back to login.
+    if (data.session) {
+      updateSession(data.session)
+      setLoading(false)
+    } else {
+      updateSession(null)
+      setLoading(false)
+    }
+
     return { error: null, needsEmailConfirmation }
   }
 
