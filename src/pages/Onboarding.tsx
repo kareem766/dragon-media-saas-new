@@ -24,10 +24,14 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
     const signupFlow = localStorage.getItem('dragon_media_signup_flow')?.trim().toLowerCase() || ''
     const storedCode = localStorage.getItem('dragon_media_invite_code')?.trim().toUpperCase() || ''
     const metadataCode = String(user?.user_metadata?.invite_code || '').trim().toUpperCase()
-    const code = signupFlow === 'employee' ? (storedCode || metadataCode) : ''
+    // The employee invite is also stored in auth metadata during signup.
+    // Use that metadata as a safe fallback when email confirmation opens in
+    // another browser/container where localStorage is not available.
+    const code = signupFlow === 'employee' || metadataCode ? (storedCode || metadataCode) : ''
     if (code && !storedCode) localStorage.setItem('dragon_media_invite_code', code)
+    if (code && !signupFlow) localStorage.setItem('dragon_media_signup_flow', 'employee')
     setInviteCode(code)
-    if (signupFlow !== 'employee') {
+    if (!code) {
       localStorage.removeItem('dragon_media_invite_code')
     }
     if (!code || !supabase) { setCheckingInvite(false); return }
