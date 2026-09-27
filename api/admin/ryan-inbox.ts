@@ -196,7 +196,8 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
  }
  if(action==='follow_up'){
   const at=text(d.follow_up_at,80),date=new Date(at);if(!at||Number.isNaN(date.getTime())||date.getTime()<=Date.now())return {success:false,message:'Invalid follow-up time'}
-  const actionMarker='Ryan message:'+messageId  const {data:existingFollowUp}=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('description','%'+actionMarker+'%').limit(1).maybeSingle()
+  const actionMarker='Ryan message:'+messageId
+  const {data:existingFollowUp}=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('description','%'+actionMarker+'%').limit(1).maybeSingle()
   if(existingFollowUp?.id)return {success:true,data:{task_id:existingFollowUp.id,existing:true,follow_up_at:date.toISOString()}}
   const {data:u}=await supabase.from('users').select('id').eq('organization_id',organizationId).eq('active',true).order('created_at').limit(1).maybeSingle()
   const {data:t,error}=await supabase.from('tasks').insert({organization_id:organizationId,title:'متابعة عميل بواسطة Ryan',assigned_to:u?.id||null,due_date:date.toISOString().slice(0,10),priority:'متوسطة',status:'قيد التنفيذ',description:'متابعة أنشأها Ryan من محادثة العميل. ['+actionMarker+']',customer_id:customer.id,created_by:u?.id||null,reminder_at:date.toISOString()}).select('id').single();if(error)throw new Error(error.message);await notifyOrgAdmins(supabase,organizationId,'ريان أنشأ متابعة',`تم إنشاء متابعة للعميل ${text(customer.name,120)||'العميل'}.`,`/tasks?task=${t.id}`,'task',t.id);return {success:true,data:{task_id:t.id,follow_up_at:date.toISOString()}}
