@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const commentId = provider === 'facebook' ? String((conversation as any)?.metadata?.facebook_comment_id || '') : ''
     const sendUrl = commentId ? `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(commentId)}/private_replies` : `https://graph.facebook.com/${GRAPH_VERSION}/${senderId}/messages`
-    const sendBody = commentId ? { message: { text: content } } : { recipient: { id: recipientId }, message: { text: content } }
+    const sendBody = commentId ? { message: content } : { recipient: { id: recipientId }, message: { text: content } }
     const response = await fetch(sendUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(sendBody) })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) { console.error('Facebook outbound provider rejected message', { provider, commentId: commentId || null, recipientId, graphCode: payload?.error?.code || null, graphType: payload?.error?.type || null, graphMessage: payload?.error?.message || null }); return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' }) }
