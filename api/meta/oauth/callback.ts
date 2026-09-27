@@ -103,20 +103,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!tokenResponse.ok || !tokenData.access_token) throw new Error(tokenData?.error?.message || 'فشل تبادل authorization code مع Meta.')
     const token = String(tokenData.access_token)
     if (stateData.provider === 'facebook') {
+      // Resolve the exact Page instead of blindly taking the first Page returned by Meta.
+      // On reconnect, prefer the Page already stored for this organization; otherwise only
+      // auto-select when Meta returns a single usable Page. This prevents subscribing the
+      // wrong Page when a Facebook account manages multiple Pages.
+      const { data: existingIntegration } = await db
+        .from('integrations')
+        .select('metadata')
+        .eq('organization_id', String(stateData.organizationId))
+        .eq('provider', 'facebook')
+        .maybeSingle()
+      const existingPageId = String(existingIntegration?.metadata?.facebook_page_id || '')
       const pages = await graph('/me/accounts?fields=id,name,category,access_token,tasks&limit=100', token)
-      const page = Array.isArray(pages?.data) ? pages.data.find((item: any) => item?.id && item?.access_token) : null
-      if (!page) throw new Error('تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.')
+      const availablePages = Array.isArray(pages?.data)
+        ? pages.data.filter((item: any) => item?.id && item?.access_token)
+        : []
+      const page = existingPageId
+        ? availablePages.find((item: any) => String(item.id) === existingPageId)
+        : availablePages.length === 1
+          ? availablePages[0]
+          : null
+      if (!page) {
+        const reason = existingPageId
+          ? 'صفحة Facebook المرتبطة سابقًا لم تعد متاحة في حساب Meta الحالي. أعد منح صلاحية الصفحة ثم أعد الربط.'
+          : availablePages.length > 1
+            ? 'حساب Facebook يحتوي على أكثر من صفحة قابلة للربط، ولم يتم اختيار الصفحة المطلوبة بأمان.'
+            : 'تم تسجيل الدخول إلى Facebook، لكن لم يتم العثور على صفحة قابلة للربط.'
+        throw new Error(reason)
+      }
+
+      const pageId = String(page.id)
       const pageToken = String(page.access_token)
+
+      // Verify the Page token before changing webhook subscriptions. This catches
+      // stale/revoked tokens and tokens issued for a different Meta App/Page.
+      const appAccessToken = \`${appId}|${appSecret}\`
+      const debugToken = await graph(
+        \`/debug_token?input_token=${encodeURIComponent(pageToken)}\`,
+        appAccessToken,
+      )
+      const tokenData = debugToken?.data || {}
+      const tokenAppId = String(tokenData?.app_id || '')
+      const tokenUserId = String(tokenData?.user_id || '')
+      const tokenIsValid = tokenData?.is_valid !== false
+      if (!tokenIsValid) throw new Error('Meta أعادت Page Access Token غير صالح أو منتهي الصلاحية.')
+      if (tokenAppId && tokenAppId !== String(appId)) {
+        throw new Error('Page Access Token تابع لتطبيق Meta مختلف عن تطبيق Dragon Media.')
+      }
+      console.log('Facebook Page token verification', {
+        pageId,
+        appId: String(appId),
+        tokenAppId: tokenAppId || null,
+        tokenUserId: tokenUserId || null,
+        isValid: tokenIsValid,
+        expiresAt: tokenData?.expires_at || null,
+        dataAccessExpiresAt: tokenData?.data_access_expiration_time || null,
+        granularScopes: Array.isArray(tokenData?.granular_scopes)
+          ? tokenData.granular_scopes.map((scope: any) => ({
+              scope: String(scope?.scope || ''),
+              targetIds: Array.isArray(scope?.target_ids) ? scope.target_ids.map(String) : [],
+            }))
+          : [],
+      })
       let subscription = false
       let webhookFields: string[] = []
       let webhookVerificationError = ''
       try {
-        const subscribeResponse = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?subscribed_fields=feed,messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`, pageToken, { method: 'POST' })
-        console.log('Facebook page webhook subscribe response', { pageId: String(page.id), appId: String(appId), response: subscribeResponse })
-        const current = await graph(`/${encodeURIComponent(String(page.id))}/subscribed_apps?fields=id,app_id,subscribed_fields`, pageToken)
+        const subscribeResponse = await graph(`/${encodeURIComponent(pageId)}/subscribed_apps?subscribed_fields=feed,messages,messaging_postbacks,messaging_optins,messaging_referrals,message_deliveries`, pageToken, { method: 'POST' })
+        console.log('Facebook page webhook subscribe response', { pageId, appId: String(appId), response: subscribeResponse })
+        const current = await graph(`/${encodeURIComponent(pageId)}/subscribed_apps?fields=id,app_id,subscribed_fields`, pageToken)
         const apps = Array.isArray(current?.data) ? current.data : []
         const safeApps = apps.map((item: any) => ({ id: item?.id ?? null, app_id: item?.app_id ?? null, subscribed_fields: Array.isArray(item?.subscribed_fields) ? item.subscribed_fields.map(String) : [] }))
-        console.log('Facebook page webhook subscriptions', { pageId: String(page.id), appId: String(appId), apps: safeApps, raw: JSON.stringify(safeApps) })
+        console.log('Facebook page webhook subscriptions', { pageId, appId: String(appId), apps: safeApps, raw: JSON.stringify(safeApps) })
         const appRow = safeApps.find((item: any) => String(item.id || item.app_id || '') === String(appId))
         webhookFields = Array.isArray(appRow?.subscribed_fields) ? appRow.subscribed_fields : []
         subscription = webhookFields.includes('feed')
@@ -163,7 +221,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const { error: saveError } = await db.from('integrations').upsert({
         organization_id: String(stateData.organizationId), provider: 'facebook', connected: true, status: 'connected', config: { access_token: encryptToken(pageToken) },
-        metadata: { facebook_page_id: String(page.id), facebook_page_name: String(page.name || ''), facebook_page_category: String(page.category || ''), facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [], facebook_webhook_subscribed: subscription, facebook_webhook_fields: webhookFields, facebook_webhook_feed_verified: webhookFields.includes('feed'), facebook_webhook_verification_error: webhookVerificationError || null, ready_for_messaging: subscription, connected_via: 'facebook_oauth' },
+        metadata: { facebook_page_id: pageId, facebook_page_name: String(page.name || ''), facebook_page_category: String(page.category || ''), facebook_tasks: Array.isArray(page.tasks) ? page.tasks : [], facebook_webhook_subscribed: subscription, facebook_webhook_fields: webhookFields, facebook_webhook_feed_verified: webhookFields.includes('feed'), facebook_webhook_verification_error: webhookVerificationError || null, ready_for_messaging: subscription, connected_via: 'facebook_oauth' },
         connected_at: new Date().toISOString(), last_verified_at: new Date().toISOString(), error_message: subscription ? null : (webhookVerificationError || 'تم الربط لكن اشتراك Webhook للصفحة لم يكتمل.'), updated_at: new Date().toISOString(),
       }, { onConflict: 'organization_id,provider' })
       if (saveError) throw new Error('تمت مصادقة Facebook لكن تعذر حفظ الاتصال في Dragon Media.')
