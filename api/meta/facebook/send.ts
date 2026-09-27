@@ -98,9 +98,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!senderId) return json(res, 422, { error: provider === 'instagram' ? 'Instagram account is not configured.' : 'Facebook Page is not configured.', code: provider === 'instagram' ? 'INSTAGRAM_NOT_READY' : 'FACEBOOK_PAGE_NOT_READY' })
     const pageToken = decryptToken(connection.config?.access_token)
 
-    const response = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${senderId}/messages`, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text: content } }) })
+    const commentId = provider === 'facebook' ? String((conversation as any)?.metadata?.facebook_comment_id || '') : ''
+    const sendUrl = commentId ? `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(commentId)}/private_replies` : `https://graph.facebook.com/${GRAPH_VERSION}/${senderId}/messages`
+    const sendBody = commentId ? { message: { text: content } } : { recipient: { id: recipientId }, message: { text: content } }
+    const response = await fetch(sendUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(sendBody) })
     const payload = await response.json().catch(() => ({}))
-    if (!response.ok) return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' })
+    if (!response.ok) { console.error('Facebook outbound provider rejected message', { provider, commentId: commentId || null, recipientId, graphCode: payload?.error?.code || null, graphType: payload?.error?.type || null, graphMessage: payload?.error?.message || null }); return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' }) }
 
     const externalId = String(payload?.message_id || payload?.messages?.[0]?.id || '')
     if (messageId) {
