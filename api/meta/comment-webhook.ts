@@ -13,6 +13,23 @@ function verifySignature(req:VercelRequest,raw:string){const signature=String(re
 function decryptToken(value:any){if(typeof value==='string')return value;if(!value?.iv||!value?.tag||!value?.data)return '';const seed=env('META_TOKEN_ENCRYPTION_KEY','META_APP_SECRET');if(!seed)return '';try{const key=createHash('sha256').update(seed).digest();const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(String(value.iv),'base64'));decipher.setAuthTag(Buffer.from(String(value.tag),'base64'));return Buffer.concat([decipher.update(Buffer.from(String(value.data),'base64')),decipher.final()]).toString('utf8')}catch{return ''}}
 async function db(){const url=env('SUPABASE_URL','VITE_SUPABASE_URL'),key=env('SUPABASE_SERVICE_ROLE_KEY','SUPABASE_SECRET_KEY');if(!url||!key)throw new Error('Supabase server configuration is incomplete.');return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}})}
 async function metaToken(client:any,organizationId:string,provider:string){const {data}=await client.from('integrations').select('config').eq('organization_id',organizationId).eq('provider',provider).eq('connected',true).maybeSingle();return decryptToken(obj(data?.config).access_token)}
+async function fetchPostContext(client:any,organizationId:string,provider:'facebook'|'instagram',postId:string){
+  if(!postId)return '';
+  const token=await metaToken(client,organizationId,provider);
+  if(!token)return '';
+  const version=env('META_GRAPH_API_VERSION')||'v23.0';
+  const fields=provider==='instagram'?'caption,media_type,permalink':'message,story,description,permalink_url';
+  try{
+    const response=await fetch(`https://graph.facebook.com/${version}/${encodeURIComponent(postId)}?fields=${encodeURIComponent(fields)}`,{headers:{Authorization:`Bearer ${token}`}});
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok)return '';
+    const context=provider==='instagram'?text(payload?.caption,5000):text(payload?.message||payload?.story||payload?.description,5000);
+    return context;
+  }catch(error){
+    console.error('Meta post context lookup failed',{provider,postId,error:error instanceof Error?error.message:String(error)});
+    return '';
+  }
+}
 async function publicCommentReply(client:any,organizationId:string,provider:'facebook'|'instagram',commentId:string,message:string){const token=await metaToken(client,organizationId,provider);if(!token)throw new Error(provider+' token is not available');const version=env('META_GRAPH_API_VERSION')||'v23.0';const path=provider==='instagram'?`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/replies`:`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/comments`;const response=await fetch(path,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message})});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||provider+' comment reply failed');return payload}
 async function dispatchRyanForComment(client:any,organizationId:string,conversationId:string,messageId:string){
   const {data:secretRow,error:secretError}=await client.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle();
@@ -55,9 +72,10 @@ export async function handleComment(client:any,provider:'facebook'|'instagram',o
   }
   const now=new Date().toISOString();
   const channel=provider==='instagram'?'instagram':'messenger';
+  const postContext=await fetchPostContext(client,organizationId,provider,postId);
   const metadata=provider==='instagram'
-    ? {provider:'instagram',instagram_user_id:authorId,instagram_comment_id:commentId,instagram_media_id:postId,source:'meta_comment',ai_dispatch:'direct',account_name:accountName||null}
-    : {provider:'facebook',facebook_page_id:pageId,facebook_psid:authorId,facebook_comment_id:commentId,facebook_post_id:postId,source:'meta_comment',ai_dispatch:'direct',account_name:accountName||null};
+    ? {provider:'instagram',instagram_user_id:authorId,instagram_comment_id:commentId,instagram_media_id:postId,source:'meta_comment',ai_dispatch:'direct',account_name:accountName||null,post_context:postContext||null}
+    : {provider:'facebook',facebook_page_id:pageId,facebook_psid:authorId,facebook_comment_id:commentId,facebook_post_id:postId,source:'meta_comment',ai_dispatch:'direct',account_name:accountName||null,post_context:postContext||null};
   const {data:conversation,error:conversationError}=await client.from('conversations').select('id,unread_count,channel').eq('organization_id',organizationId).eq('customer_id',customer.id).in('channel',provider==='instagram'?['instagram']:['messenger','facebook']).order('updated_at',{ascending:false}).limit(1).maybeSingle();
   if(conversationError)throw conversationError;
   let conversationId=conversation?.id;
