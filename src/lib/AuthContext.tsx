@@ -55,25 +55,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    const client = supabase
     let mounted = true
 
     const initializeAuth = async () => {
-      // With HashRouter, Supabase's implicit flow can place access tokens in
-      // the URL fragment and the router may mistake them for an application route.
-      // Use PKCE and exchange the confirmation/OAuth code before the router renders.
       const code = new URLSearchParams(window.location.search).get('code')
 
       if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (error) {
-          console.error('[auth] code exchange failed', error)
-        }
+        const { error } = await client.auth.exchangeCodeForSession(code)
+        if (error) console.error('[auth] code exchange failed', error)
 
-        const cleanUrl = `${window.location.origin}${window.location.pathname}${window.location.hash || '#/'}`
+        const cleanUrl = \\`${'${window.location.origin}'}${'${window.location.pathname}'}${'${window.location.hash || \'#/\'}'}\\`
         window.history.replaceState({}, document.title, cleanUrl)
       }
 
-      const { data, error } = await supabase.auth.getSession()
+      const { data, error } = await client.auth.getSession()
       if (!mounted) return
       updateSession(error ? null : data.session)
       setLoading(false)
@@ -81,19 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void initializeAuth()
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+    const { data: listener } = client.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return
-
       updateSession(newSession)
-
-      // getSession() is the single source of truth for the initial
-      // loading state. Do not let INITIAL_SESSION race with it and
-      // temporarily expose a null session to protected routes.
-      if (
-        event === 'SIGNED_IN' ||
-        event === 'SIGNED_OUT' ||
-        event === 'USER_UPDATED'
-      ) {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
         setLoading(false)
       }
     })
@@ -106,27 +93,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد' }
-
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       const message = error.message.toLowerCase()
-      if (message.includes('email not confirmed') || message.includes('email_not_confirmed')) {
-        return { error: 'البريد الإلكتروني غير مؤكد. افتح رسالة التأكيد ثم حاول تسجيل الدخول مرة أخرى.' }
-      }
+      if (message.includes('email not confirmed') || message.includes('email_not_confirmed')) return { error: 'البريد الإلكتروني غير مؤكد. افتح رسالة التأكيد ثم حاول تسجيل الدخول مرة أخرى.' }
       return { error: normalizeAuthError(error.message) }
     }
-
-    if (!data.session || !data.user) {
-      return { error: 'تعذر إنشاء جلسة تسجيل الدخول. حاول مرة أخرى.' }
-    }
-
+    if (!data.session || !data.user) return { error: 'تعذر إنشاء جلسة تسجيل الدخول. حاول مرة أخرى.' }
     if (!isEmailConfirmed(data.user)) {
       await supabase.auth.signOut()
       updateSession(null)
       setLoading(false)
       return { error: 'البريد الإلكتروني غير مؤكد. افتح رسالة التأكيد ثم حاول تسجيل الدخول مرة أخرى.' }
     }
-
     updateSession(data.session)
     setLoading(false)
     return { error: null }
@@ -134,18 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد' }
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    })
-
+    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
     return { error: error ? normalizeAuthError(error.message) : null }
   }
 
   const signUp = async (email: string, password: string, fullName: string, consent?: SignupConsent, inviteCode?: string): Promise<SignUpResult> => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد', needsEmailConfirmation: false }
-
     const metadata: Record<string, string> = { full_name: fullName }
     if (inviteCode?.trim()) metadata.invite_code = inviteCode.trim().toUpperCase()
     if (consent) {
@@ -154,40 +127,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       metadata.privacy_policy_accepted_at = consent.privacyAcceptedAt
       metadata.privacy_policy_version = consent.privacyVersion
     }
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metadata,
-        emailRedirectTo: window.location.origin,
-      },
-    })
-
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: metadata, emailRedirectTo: window.location.origin } })
     if (error) return { error: normalizeAuthError(error.message), needsEmailConfirmation: false }
-
     const needsEmailConfirmation = Boolean(data.user && !isEmailConfirmed(data.user))
-
     if (data.session) await supabase.auth.signOut()
     updateSession(null)
     setLoading(false)
-
-    if (!data.user) {
-      return { error: 'تعذر إنشاء حساب المستخدم. حاول مرة أخرى.', needsEmailConfirmation: false }
-    }
-
+    if (!data.user) return { error: 'تعذر إنشاء حساب المستخدم. حاول مرة أخرى.', needsEmailConfirmation: false }
     return { error: null, needsEmailConfirmation }
   }
 
   const resendConfirmation = async (email: string) => {
     if (!supabase) return { error: 'لم يتم ربط قاعدة البيانات بعد' }
-
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    })
-
+    const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin } })
     return { error: error ? normalizeAuthError(error.message) : null }
   }
 
