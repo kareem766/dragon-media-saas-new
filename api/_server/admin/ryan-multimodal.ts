@@ -22,8 +22,9 @@ function attachmentList(metadata:any){
 }
 
 async function whatsappMediaUrl(supabase:any,organizationId:string,mediaId:string){
- const {data:integration}=await supabase.from('integrations').select('config').eq('organization_id',organizationId).eq('provider','whatsapp').eq('connected',true).maybeSingle()
- const token=decryptMetaToken(obj(integration?.config).access_token)
+ const {data:integration}=await supabase.from('integrations').select('config,metadata').eq('organization_id',organizationId).eq('provider','whatsapp').eq('connected',true).maybeSingle()
+ const config=obj(integration?.config),metadata=obj(integration?.metadata)
+ const token=decryptMetaToken(config.access_token)||decryptMetaToken(metadata.access_token)
  if(!token)return ''
  const graphVersion=text(process.env.META_GRAPH_API_VERSION,30)||'v23.0'
  const r=await fetch('https://graph.facebook.com/'+graphVersion+'/'+encodeURIComponent(mediaId),{headers:{Authorization:'Bearer '+token}})
@@ -43,18 +44,25 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  const mime=declaredMime&&declaredMime!=='application/octet-stream'?declaredMime:attachmentType==='image'?'image/jpeg':attachmentType==='audio'?'audio/ogg':attachmentType==='video'?'video/mp4':attachmentType==='document'?'application/pdf':/\.(?:png|jpe?g|webp|gif|heic|heif|avif)(?:[?#]|$)/iu.test(urlHint)?'image/jpeg':/\.(?:ogg|mp3|wav|m4a|aac|webm)(?:[?#]|$)/iu.test(urlHint)?'audio/ogg':declaredMime
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
- if(!url&&mediaId&&/^whatsapp$/iu.test(channel))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
+ if(!url&&mediaId&&(/^whatsapp$/iu.test(channel)||/^whatsapp$/iu.test(text(attachment.channel)||'')))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
+ if(!url&&mediaId&&/^whatsapp$/iu.test(text(attachment.source)||''))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
  let base64=text(attachment.base64||attachment.data,30000000).replace(/^data:[^;]+;base64,/i,'')
  if(base64)return {mime:mime||'application/octet-stream',base64,bytes:Math.floor(base64.length*0.75)}
  if(!url)return {error:'missing_media_url'}
  const headers:Record<string,string>={}
  const token=await metaAccessToken(supabase,organizationId,channel)
  if(token&&/^(whatsapp|facebook|messenger|instagram)$/iu.test(channel))headers.Authorization='Bearer '+token
+ if(mediaId&&/graph\\.facebook\\.com/iu.test(url)){
+  const {data:integration}=await supabase.from('integrations').select('config,metadata').eq('organization_id',organizationId).eq('provider','whatsapp').eq('connected',true).maybeSingle()
+  const config=obj(integration?.config),metadata=obj(integration?.metadata)
+  const mediaToken=decryptMetaToken(config.access_token)||decryptMetaToken(metadata.access_token)
+  if(mediaToken)headers.Authorization='Bearer '+mediaToken
+ }
  const r=await fetch(url,{headers})
  if(!r.ok)return {error:'media_fetch_'+r.status}
  const buffer=Buffer.from(await r.arrayBuffer())
  const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
- const detected=(mime&&mime!=='application/octet-stream')?mime:(headerMime&&headerMime!=='application/octet-stream'?headerMime:'application/octet-stream')
+ const detected=(headerMime&&headerMime!=='application/octet-stream')?headerMime:(mime&&mime!=='application/octet-stream'?mime:'application/octet-stream')
  return {mime:detected,base64:buffer.toString('base64'),bytes:buffer.byteLength}
 }
 
