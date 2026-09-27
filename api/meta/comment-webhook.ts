@@ -102,7 +102,7 @@ export async function handleComment(client:any,provider:'facebook'|'instagram',o
   }catch(error){
     console.error('Ryan comment dispatch failed',{provider,commentId,conversationId,messageId:savedMessage.id,error:error instanceof Error?error.message:String(error)});
   }
-  const publicReply=ryanReply||'أهلاً بحضرتك، هبعت لحضرتك التفاصيل على الخاص ونكمل معاك هناك.';
+  const publicReply='أهلاً وسهلاً بحضرتك يافندم، بعتنا لحضرتك التفاصيل في رسالة 🤍📌';
   try{
     await publicCommentReply(client,organizationId,provider,commentId,publicReply);
   }catch(error){
