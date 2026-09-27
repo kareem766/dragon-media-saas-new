@@ -112,10 +112,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Private reply is preferred. If Meta rejects it, try a direct Messenger
       // message to the comment author's PSID before falling back to a public comment.
       const privatePayload = payload
+      let messengerPayload: any = {}
       if (recipientId) {
         const messengerUrl = `https://graph.facebook.com/${GRAPH_VERSION}/${senderId}/messages`
         const messengerResponse = await fetch(messengerUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text: content } }) })
-        const messengerPayload = await messengerResponse.json().catch(() => ({}))
+        messengerPayload = await messengerResponse.json().catch(() => ({}))
         if (messengerResponse.ok) {
           response = messengerResponse
           payload = messengerPayload
