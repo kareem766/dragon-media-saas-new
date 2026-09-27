@@ -44,27 +44,88 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method === 'GET' && req.query?.messages) {
-    const { data } = await admin
+    const ticketId = Array.isArray(req.query.messages)
+      ? req.query.messages[0]
+      : req.query.messages
+
+    const { data: messages, error: messagesError } = await admin
       .from('support_ticket_messages')
       .select('*')
-      .eq('ticket_id', req.query.messages)
+      .eq('ticket_id', ticketId)
       .order('created_at', { ascending: true })
 
+    if (messagesError) {
+      console.error('Admin ticket messages query error:', messagesError)
+      res.status(500).json({
+        error: 'تعذر تحميل رسائل التذكرة.',
+        details: messagesError.message,
+      })
+      return
+    }
+
     res.status(200).json({
-      messages: data ?? [],
+      messages: messages ?? [],
     })
 
     return
   }
 
   if (req.method === 'GET') {
-    const { data: tickets } = await admin
+    // Keep the ticket query independent from the organization relationship.
+    // A relationship error must never hide existing support tickets.
+    const { data: rows, error: rowsError } = await admin
       .from('support_tickets')
-      .select('*, organizations(name)')
+      .select('*')
       .order('updated_at', { ascending: false })
 
+    if (rowsError) {
+      console.error('Admin tickets query error:', rowsError)
+      res.status(500).json({
+        error: 'تعذر تحميل تذاكر الدعم.',
+        details: rowsError.message,
+      })
+      return
+    }
+
+    const tickets = rows ?? []
+    const organizationIds = Array.from(
+      new Set(
+        tickets
+          .map((ticket: any) => ticket.organization_id)
+          .filter(Boolean),
+      ),
+    )
+
+    const { data: organizations, error: organizationsError } =
+      organizationIds.length
+        ? await admin
+            .from('organizations')
+            .select('id, name')
+            .in('id', organizationIds)
+        : { data: [], error: null }
+
+    if (organizationsError) {
+      console.error(
+        'Admin ticket organizations lookup error:',
+        organizationsError,
+      )
+    }
+
+    const organizationMap = new Map(
+      (organizations ?? []).map((organization: any) => [
+        organization.id,
+        organization,
+      ]),
+    )
+
+    const enrichedTickets = tickets.map((ticket: any) => ({
+      ...ticket,
+      organizations:
+        organizationMap.get(ticket.organization_id) ?? null,
+    }))
+
     res.status(200).json({
-      tickets: tickets ?? [],
+      tickets: enrichedTickets,
     })
 
     return
