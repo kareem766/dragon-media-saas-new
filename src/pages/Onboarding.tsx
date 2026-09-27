@@ -21,11 +21,15 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
   const platformName = branding?.platform_name?.trim() || 'Dragon Media'
 
   useEffect(() => {
+    const signupFlow = localStorage.getItem('dragon_media_signup_flow')?.trim().toLowerCase() || ''
     const storedCode = localStorage.getItem('dragon_media_invite_code')?.trim().toUpperCase() || ''
     const metadataCode = String(user?.user_metadata?.invite_code || '').trim().toUpperCase()
-    const code = storedCode || metadataCode
+    const code = signupFlow === 'employee' ? (storedCode || metadataCode) : ''
     if (code && !storedCode) localStorage.setItem('dragon_media_invite_code', code)
     setInviteCode(code)
+    if (signupFlow !== 'employee') {
+      localStorage.removeItem('dragon_media_invite_code')
+    }
     if (!code || !supabase) { setCheckingInvite(false); return }
 
     let cancelled = false
@@ -45,6 +49,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
             const { data: existingUser } = await client.from('users').select('organization_id').eq('id', currentUserId).maybeSingle()
             if (existingUser?.organization_id) {
               localStorage.removeItem('dragon_media_invite_code')
+              localStorage.removeItem('dragon_media_signup_flow')
               setCheckingInvite(false)
               onDone()
               return
@@ -81,6 +86,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
         return
       }
       localStorage.removeItem('dragon_media_invite_code')
+      localStorage.removeItem('dragon_media_signup_flow')
       setCheckingInvite(false)
       onDone()
     }
@@ -97,6 +103,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       // Best effort cleanup.
     } finally {
       localStorage.removeItem('dragon_media_invite_code')
+      localStorage.removeItem('dragon_media_signup_flow')
       await signOut()
     }
   }
