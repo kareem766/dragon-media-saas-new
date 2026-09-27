@@ -65,12 +65,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return
+
       updateSession(newSession)
+
+      // getSession() is the single source of truth for the initial
+      // loading state. Do not let INITIAL_SESSION race with it and
+      // temporarily expose a null session to protected routes.
       if (
-        event === 'INITIAL_SESSION' ||
         event === 'SIGNED_IN' ||
         event === 'SIGNED_OUT' ||
-        event === 'TOKEN_REFRESHED' ||
         event === 'USER_UPDATED'
       ) {
         setLoading(false)
