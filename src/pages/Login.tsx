@@ -223,10 +223,12 @@ export default function Login() {
           'dragon_media_invite_code',
           inviteCode.trim().toUpperCase()
         );
+        localStorage.setItem('dragon_media_signup_flow', 'employee');
       } else {
         localStorage.removeItem(
           'dragon_media_invite_code'
         );
+        localStorage.setItem('dragon_media_signup_flow', 'company');
       }
 
       const acceptedAt =
@@ -653,6 +655,17 @@ export default function Login() {
                 setSubmitting(true);
 
                 try {
+                  if (mode === 'signup') {
+                    const normalizedInviteCode = inviteCode.trim().toUpperCase();
+                    if (normalizedInviteCode) {
+                      localStorage.setItem('dragon_media_invite_code', normalizedInviteCode);
+                      localStorage.setItem('dragon_media_signup_flow', 'employee');
+                    } else {
+                      localStorage.removeItem('dragon_media_invite_code');
+                      localStorage.setItem('dragon_media_signup_flow', 'company');
+                    }
+                  }
+
                   const result = await signInWithGoogle();
 
                   if (result?.error) {
