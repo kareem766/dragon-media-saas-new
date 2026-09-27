@@ -30,7 +30,7 @@ async function fetchPostContext(client:any,organizationId:string,provider:'faceb
     return '';
   }
 }
-async function publicCommentReply(client:any,organizationId:string,provider:'facebook'|'instagram',commentId:string,message:string){const token=await metaToken(client,organizationId,provider);if(!token)throw new Error(provider+' token is not available');const version=env('META_GRAPH_API_VERSION')||'v23.0';const path=provider==='instagram'?`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/replies`:`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/comments`;const response=await fetch(path,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message})});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||provider+' comment reply failed');return payload}
+async function publicCommentReply(client:any,organizationId:string,provider:'facebook'|'instagram',commentId:string,message:string){const token=await metaToken(client,organizationId,provider);if(!token)throw new Error(provider+' token is not available');const version=env('META_GRAPH_API_VERSION')||'v26.0';const path=provider==='instagram'?`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/replies`:`https://graph.facebook.com/${version}/${encodeURIComponent(commentId)}/comments`;const response=await fetch(path,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message})});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload?.error?.message||provider+' comment reply failed');return payload}
 async function dispatchRyanForComment(client:any,organizationId:string,conversationId:string,messageId:string){
   const {data:secretRow,error:secretError}=await client.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle();
   if(secretError) throw new Error('Ryan dispatch secret lookup failed: '+secretError.message);
@@ -96,7 +96,7 @@ export async function handleComment(client:any,provider:'facebook'|'instagram',o
   }).select('id').single();
   if(messageError)throw messageError;
   // The public acknowledgement must be sent first. Ryan's private follow-up comes second.
-  const publicReply='أهلاً وسهلاً بحضرتك يافندم، بعتنا لحضرتك التفاصيل في رسالة 🤍📌';
+  const publicReply='اهلاً وسهلا بحضرتك يافندم ، بعتنا لحضرتك التفاصيل في رسالة 🤍📌';
   try{
     const publicResult=await publicCommentReply(client,organizationId,provider,commentId,publicReply);
     console.log('Ryan public comment reply sent',{provider,commentId,publicReplyId:String(publicResult?.id||'')});
