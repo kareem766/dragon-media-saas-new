@@ -3,6 +3,7 @@ import { Card, Badge, Button, Table } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useAuth } from '../lib/AuthContext'
 
 interface TeamUser {
   id: string
@@ -39,12 +40,15 @@ const roles = [
 
 export default function Users() {
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
+  const { session } = useAuth()
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([])
   const [invites, setInvites] = useState<InviteCode[]>([])
   const [loading, setLoading] = useState(true)
   const [newRole, setNewRole] = useState('employee')
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   const loadData = async () => {
     if (!supabase || !organizationId) return
@@ -61,6 +65,41 @@ export default function Users() {
   useEffect(() => {
     if (organizationId) loadData()
   }, [organizationId])
+
+  const handleRemoveMember = async (member: TeamUser) => {
+    if (!supabase || !session?.access_token) return
+
+    const confirmed = window.confirm(
+      `هل أنت متأكد من حذف ${member.full_name} من الشركة؟\\n\\nسيتم إلغاء وصوله للشركة ولن يتم حذف حساب تسجيل الدخول نهائيًا.`
+    )
+    if (!confirmed) return
+
+    setRemovingId(member.id)
+    setRemoveError(null)
+
+    try {
+      const response = await fetch('/api/admin/remove-member', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ user_id: member.id }),
+      })
+
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setRemoveError(body.error || 'تعذر إزالة الموظف. حاول مرة أخرى.')
+        return
+      }
+
+      await loadData()
+    } catch {
+      setRemoveError('تعذر الاتصال بالخادم. حاول مرة أخرى.')
+    } finally {
+      setRemovingId(null)
+    }
+  }
 
   const handleGenerate = async () => {
     if (!supabase) return
@@ -105,6 +144,9 @@ export default function Users() {
       </div>
     )
   }
+
+  const currentUser = teamUsers.find(user => user.id === session?.user.id)
+  const canRemoveMembers = currentUser?.role === 'super_admin'
 
   if (orgError || !organizationId) {
     return (
@@ -203,13 +245,27 @@ export default function Users() {
 
       <Card className="p-2 sm:p-4">
         <div className="p-3 font-bold text-ink-950">أعضاء الفريق الحاليين</div>
-        <Table head={['الاسم', 'الدور', 'البريد الإلكتروني', 'الحالة']}>
+        {removeError && <div className="mx-3 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{removeError}</div>}\n        <Table head={['الاسم', 'الدور', 'البريد الإلكتروني', 'الحالة', ...(canRemoveMembers ? ['الإجراء'] : [])]}>
           {teamUsers.map(u => (
             <tr key={u.id} className="hover:bg-sand-50">
               <td className="py-3 px-3 font-semibold text-ink-950 whitespace-nowrap">{u.full_name}</td>
               <td className="py-3 px-3"><Badge tone="gold">{roleLabels[u.role] ?? u.role}</Badge></td>
               <td className="py-3 px-3 text-ink-900/70 whitespace-nowrap" dir="ltr">{u.email}</td>
               <td className="py-3 px-3"><Badge tone={u.active ? 'success' : 'default'}>{u.active ? 'نشط' : 'موقوف'}</Badge></td>
+              {canRemoveMembers && (
+                <td className="py-3 px-3">
+                  {u.id !== session?.user.id && u.role !== 'super_admin' && (
+                    <Button
+                      variant="ghost"
+                      className="!text-red-700 hover:!bg-red-50"
+                      onClick={() => handleRemoveMember(u)}
+                      disabled={removingId === u.id}
+                    >
+                      {removingId === u.id ? 'جاري الحذف...' : 'حذف الموظف'}
+                    </Button>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </Table>
