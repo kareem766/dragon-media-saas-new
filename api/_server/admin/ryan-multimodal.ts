@@ -37,6 +37,30 @@ async function metaAccessToken(supabase:any,organizationId:string,channel:string
  const {data:integration}=await supabase.from('integrations').select('config').eq('organization_id',organizationId).eq('provider',provider).eq('connected',true).maybeSingle()
  return decryptMetaToken(obj(integration?.config).access_token)
 }
+async function fetchMetaMedia(url:string,token:string){
+ let current=url
+ for(let i=0;i<6;i++){
+  const headers:Record<string,string>={}
+  if(token)headers.Authorization='Bearer '+token
+  let r=await fetch(current,{headers,redirect:'manual'})
+  if(r.status>=300&&r.status<400){
+   const location=r.headers.get('location')
+   if(!location)return r
+   const next=new URL(location,current)
+   if(token&&!next.searchParams.has('access_token'))next.searchParams.set('access_token',token)
+   current=next.toString()
+   continue
+  }
+  if(!r.ok&&token&&(r.status===401||r.status===403)){
+   const retry=new URL(current)
+   retry.searchParams.set('access_token',token)
+   r=await fetch(retry.toString(),{headers:{},redirect:'manual'})
+  }
+  return r
+ }
+ throw new Error('Meta media redirect limit exceeded')
+}
+
 async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
  const declaredMime=text(attachment.mime_type||attachment.mimeType,120).toLowerCase().split(';')[0].trim()
  const attachmentType=text(attachment.type,80).toLowerCase().trim()
