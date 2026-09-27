@@ -109,16 +109,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     payload = await response.json().catch(() => ({}))
 
     if (!response.ok && commentId) {
-      const publicUrl = `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(commentId)}/comments`
-      const publicResponse = await fetch(publicUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content }) })
-      const publicPayload = await publicResponse.json().catch(() => ({}))
-      if (publicResponse.ok) {
-        response = publicResponse
-        payload = publicPayload
-        deliveryMode = 'public_comment_fallback'
-        console.warn('Facebook Ryan public comment fallback succeeded', { commentId })
-      } else {
-        console.error('Facebook private reply and public comment reply both failed', { commentId, recipientId, privateGraphCode: payload?.error?.code || null, privateGraphMessage: payload?.error?.message || null, publicGraphCode: publicPayload?.error?.code || null, publicGraphMessage: publicPayload?.error?.message || null })
+      // Private reply is preferred. If Meta rejects it, try a direct Messenger
+      // message to the comment author's PSID before falling back to a public comment.
+      const privatePayload = payload
+      let messengerPayload: any = {}
+      if (recipientId) {
+        const messengerUrl = `https://graph.facebook.com/${GRAPH_VERSION}/${senderId}/messages`
+        const messengerResponse = await fetch(messengerUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient: { id: recipientId }, message: { text: content } }) })
+        messengerPayload = await messengerResponse.json().catch(() => ({}))
+        if (messengerResponse.ok) {
+          response = messengerResponse
+          payload = messengerPayload
+          deliveryMode = 'messenger_direct_fallback'
+          console.warn('Facebook Ryan Messenger direct fallback succeeded', { commentId, recipientId })
+        } else {
+          console.warn('Facebook Ryan Messenger direct fallback failed', { commentId, recipientId, graphCode: messengerPayload?.error?.code || null, graphMessage: messengerPayload?.error?.message || null })
+        }
+      }
+
+      if (!response.ok) {
+        const publicUrl = `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(commentId)}/comments`
+        const publicResponse = await fetch(publicUrl, { method: 'POST', headers: { Authorization: `Bearer ${pageToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: content }) })
+        const publicPayload = await publicResponse.json().catch(() => ({}))
+        if (publicResponse.ok) {
+          response = publicResponse
+          payload = publicPayload
+          deliveryMode = 'public_comment_fallback'
+          console.warn('Facebook Ryan public comment fallback succeeded', { commentId })
+        } else {
+          console.error('Facebook private reply, Messenger direct fallback, and public comment reply all failed', { commentId, recipientId, privateGraphCode: privatePayload?.error?.code || null, privateGraphMessage: privatePayload?.error?.message || null, messengerGraphCode: messengerPayload?.error?.code || null, messengerGraphMessage: messengerPayload?.error?.message || null, publicGraphCode: publicPayload?.error?.code || null, publicGraphMessage: publicPayload?.error?.message || null })
+        }
       }
     }
 
