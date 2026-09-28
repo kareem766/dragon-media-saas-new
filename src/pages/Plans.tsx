@@ -23,6 +23,15 @@ const featureLabels: Record<string, string> = {
   campaigns: 'الحملات التسويقية',
   automations: 'الأتمتة',
   advanced_reports: 'تقارير متقدمة',
+  services: 'الخدمات',
+  ai_content: 'استوديو المحتوى بالـAI',
+  inbox: 'صندوق المحادثات الموحد',
+  tasks: 'المهام والمتابعات',
+  appointments: 'المواعيد',
+  integrations: 'التكاملات',
+  tickets: 'الدعم الفني',
+  billing: 'الفواتير والاشتراكات',
+  settings: 'إعدادات الشركة',
 }
 
 const limitLabels: Record<string, string> = {
