@@ -80,6 +80,8 @@ export default function AdminSettings() {
   const [email, setEmail] = useState('')
   const [integrationsEnabledBeforeSubscription, setIntegrationsEnabledBeforeSubscription] = useState(false)
   const [whatsappSettingsEnabledBeforeSubscription, setWhatsappSettingsEnabledBeforeSubscription] = useState(false)
+  const [platformEnabled, setPlatformEnabled] = useState(true)
+  const [maintenanceMessage, setMaintenanceMessage] = useState('المنصة متوقفة مؤقتًا للصيانة. سنعود للعمل قريبًا.')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -98,7 +100,7 @@ export default function AdminSettings() {
 
       const { data, error: loadError } = await supabase
         .from('platform_settings')
-        .select('support_phone, support_email, support_whatsapp, integrations_enabled_before_subscription, whatsapp_settings_enabled_before_subscription')
+        .select('support_phone, support_email, support_whatsapp, integrations_enabled_before_subscription, whatsapp_settings_enabled_before_subscription, platform_enabled, maintenance_message')
         .eq('id', 1)
         .single()
 
@@ -111,6 +113,8 @@ export default function AdminSettings() {
       setEmail(data?.support_email ?? '')
       setIntegrationsEnabledBeforeSubscription(Boolean(data?.integrations_enabled_before_subscription))
       setWhatsappSettingsEnabledBeforeSubscription(Boolean(data?.whatsapp_settings_enabled_before_subscription))
+      setPlatformEnabled(data?.platform_enabled !== false)
+      setMaintenanceMessage(data?.maintenance_message ?? 'المنصة متوقفة مؤقتًا للصيانة. سنعود للعمل قريبًا.')
     } catch (err) {
       const message =
         err instanceof Error
@@ -143,6 +147,8 @@ export default function AdminSettings() {
           support_email: email.trim(),
           integrations_enabled_before_subscription: integrationsEnabledBeforeSubscription,
           whatsapp_settings_enabled_before_subscription: whatsappSettingsEnabledBeforeSubscription,
+          platform_enabled: platformEnabled,
+          maintenance_message: maintenanceMessage.trim() || 'المنصة متوقفة مؤقتًا للصيانة. سنعود للعمل قريبًا.',
         })
         .eq('id', 1)
 
@@ -319,6 +325,22 @@ export default function AdminSettings() {
               </div>
             )}
           </div>
+        </div>
+      </Card>
+
+
+      <Card className="overflow-hidden border border-red-100 bg-white/95 p-0 shadow-[0_12px_34px_rgba(15,47,107,0.05)]">
+        <div className="border-b border-red-100 bg-red-50/50 px-5 py-4 sm:px-6">
+          <h2 className="text-sm font-bold text-ink-950">التحكم في حالة المنصة</h2>
+          <p className="mt-1 text-xs leading-5 text-ink-900/50">إيقاف المنصة يمنع العملاء من استخدام واجهة المنصة مع بقاء لوحة الإدارة متاحة لك لإعادة التشغيل.</p>
+        </div>
+        <div className="space-y-4 p-5 sm:p-6">
+          <AdminAccessToggle label="المنصة تعمل" description={platformEnabled ? 'المنصة متاحة للشركات والمستخدمين.' : 'المنصة متوقفة حاليًا عن العملاء.'} checked={platformEnabled} onChange={setPlatformEnabled} />
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink-950">رسالة الإيقاف</label>
+            <textarea value={maintenanceMessage} onChange={e => setMaintenanceMessage(e.target.value)} rows={3} className="w-full resize-none rounded-xl border border-sand-200 bg-white px-3.5 py-2.5 text-sm leading-6 text-ink-950 outline-none focus:border-ink-700 focus:ring-2 focus:ring-ink-950/5" />
+          </div>
+          <Button onClick={handleSave} disabled={saving} className="min-h-11 w-full sm:w-auto">{saving ? 'جاري الحفظ...' : 'حفظ حالة المنصة'}</Button>
         </div>
       </Card>
 
