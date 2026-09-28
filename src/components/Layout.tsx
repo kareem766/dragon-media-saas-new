@@ -40,6 +40,20 @@ function SubscriptionExpiredScreen({ isNewCompany, daysRemaining, formattedRenew
   return <div dir="rtl" className="min-h-[calc(100vh-140px)] flex items-center justify-center py-8 sm:py-10 dm-page-enter"><div className="w-full max-w-xl dm-fade-up"><div className="bg-white border border-sand-200 rounded-3xl shadow-sm p-6 sm:p-10 text-center dm-card-lift"><div className="mx-auto mb-6 w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center text-red-600 text-2xl dm-float">!</div><h2 className="text-2xl sm:text-3xl font-bold text-ink-950 mb-3">انتهى اشتراكك</h2><p className="text-sand-600 leading-7 mb-6">انتهت مدة باقتك الحالية وتم إيقاف الوصول إلى مميزات Dragon Media. يمكنك تجديد اشتراكك الآن لاستعادة الوصول.</p>{formattedRenewalDate && <div className="bg-sand-50 rounded-2xl px-4 py-3 mb-6 text-sm text-sand-700">تاريخ انتهاء الاشتراك: <span className="font-semibold text-ink-950">{formattedRenewalDate}</span></div>}<div className="flex flex-col sm:flex-row gap-3 justify-center"><Link to="/plans" className="inline-flex items-center justify-center rounded-xl bg-ink-950 px-6 py-3 text-sm font-semibold text-white hover:opacity-90 dm-interactive">تجديد الاشتراك</Link><Link to="/billing" className="inline-flex items-center justify-center rounded-xl border border-sand-300 bg-white px-6 py-3 text-sm font-semibold text-ink-950 hover:bg-sand-50 dm-interactive">الفواتير والمدفوعات</Link></div>{daysRemaining !== null && <p className="mt-4 text-xs text-sand-500">انتهاء الاشتراك: {daysRemaining === 0 ? 'اليوم' : `${daysRemaining} يوم`}</p>}</div></div></div>
 }
 
+function PlatformMaintenanceScreen({ message }: { message: string }) {
+  return <div dir="rtl" className="min-h-[calc(100vh-140px)] flex items-center justify-center py-8 sm:py-10 dm-page-enter">
+    <div className="w-full max-w-2xl dm-fade-up">
+      <div className="bg-white border border-sand-200 rounded-3xl shadow-sm p-7 sm:p-10 text-center dm-card-lift">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 text-xl font-bold">!</div>
+        <p className="mb-2 text-sm font-semibold text-amber-700">Dragon Media</p>
+        <h2 className="text-2xl sm:text-3xl font-bold text-ink-950 mb-3">المنصة متوقفة مؤقتًا</h2>
+        <p className="mx-auto max-w-xl text-sand-600 leading-7">{message}</p>
+        <p className="mt-5 text-xs text-sand-500">يمكنك المحاولة مرة أخرى بعد إعادة تشغيل المنصة.</p>
+      </div>
+    </div>
+  </div>
+}
+
 function SubscriptionBanner({ daysRemaining, formattedRenewalDate }: { daysRemaining: number | null; formattedRenewalDate: string | null }) {
   if (daysRemaining === null || daysRemaining > 14) return null
   const isToday = daysRemaining === 0
@@ -54,9 +68,10 @@ export default function Layout() {
   const pageTheme = getPageTheme(pathname)
   const { loading, isActive, isExpired, isPendingPayment, daysRemaining, formattedRenewalDate, accessState } = useSubscription()
   const [preSubscriptionAccess, setPreSubscriptionAccess] = useState({ integrations: false })
+  const [platformControl, setPlatformControl] = useState({ enabled: true, message: 'المنصة متوقفة مؤقتًا للصيانة. سنعود للعمل قريبًا.' })
   useEffect(() => {
     if (!supabase) return
-    void supabase.from('platform_settings').select('integrations_enabled_before_subscription').eq('id', 1).single().then(({ data }) => setPreSubscriptionAccess({ integrations: Boolean(data?.integrations_enabled_before_subscription) }))
+    void supabase.from('platform_settings').select('integrations_enabled_before_subscription, platform_enabled, maintenance_message').eq('id', 1).single().then(({ data }) => { setPreSubscriptionAccess({ integrations: Boolean(data?.integrations_enabled_before_subscription) }); setPlatformControl({ enabled: data?.platform_enabled !== false, message: data?.maintenance_message || 'المنصة متوقفة مؤقتًا للصيانة. سنعود للعمل قريبًا.' }) })
   }, [])
   const [accessResolved, setAccessResolved] = useState(false)
 
@@ -65,9 +80,10 @@ export default function Layout() {
 
   const exempt = isPathAllowedWithoutSubscription(pathname) || (pathname.startsWith('/integrations') && preSubscriptionAccess.integrations)
   const adminRoute = isAdminPath(pathname)
+  const platformLocked = accessResolved && !loading && !platformControl.enabled && !adminRoute
   const shouldLockPage = accessResolved && !loading && !isActive && !exempt && !adminRoute
   const showPendingBanner = accessResolved && !loading && isPendingPayment && !exempt && !adminRoute
   const isNewCompany = accessState === 'no_subscription'
 
-  return <div dir="rtl" data-page-theme={pageTheme} className="flex h-screen min-h-0 overflow-hidden bg-sand-50 dm-app-shell"><div className="dm-page-backdrop" aria-hidden="true" /><Sidebar open={open} onClose={() => setOpen(false)} /><div className="flex-1 flex min-w-0 min-h-0 flex-col"><Topbar title={title} onMenuClick={() => setOpen(true)} />{!loading && isActive && <SubscriptionBanner daysRemaining={daysRemaining} formattedRenewalDate={formattedRenewalDate} />}{showPendingBanner && <div role="status" aria-live="polite" className="bg-gold-500/15 border-b border-gold-500/30 px-3 sm:px-4 md:px-8 py-3 dm-fade-up"><div className="mx-auto max-w-[1600px] flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-ink-950">طلب الاشتراك قيد المراجعة</p><p className="text-xs text-sand-600 mt-0.5">سيتم تفعيل مميزات الباقة بعد تأكيد الدفع.</p></div><Link to="/billing" className="shrink-0 rounded-xl px-4 py-2 bg-gold-100 text-sm font-bold text-gold-700 hover:bg-gold-200 dm-interactive">متابعة الدفع</Link></div></div>}{!loading && isExpired && !exempt && !adminRoute && <div role="alert" className="bg-red-50 border-b border-red-200 px-3 sm:px-4 md:px-8 py-3 dm-fade-up"><div className="mx-auto max-w-[1600px] flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-red-800">انتهى اشتراكك وتم إيقاف مميزات المنصة</p><p className="text-xs text-red-700/80 mt-0.5">جدد اشتراكك لاستعادة الوصول.</p></div><Link to="/plans" className="shrink-0 rounded-xl px-4 py-2 bg-red-100 text-sm font-bold text-red-700 hover:bg-red-200 dm-interactive">تجديد الاشتراك</Link></div></div>}<main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 dm-main-stage"><div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col dm-page-enter dm-page-content"><div className="flex-1"><BackButton />{shouldLockPage ? <SubscriptionExpiredScreen isNewCompany={isNewCompany} daysRemaining={daysRemaining} formattedRenewalDate={formattedRenewalDate} /> : <Outlet />}</div><SiteFooter /></div></main></div></div>
+  return <div dir="rtl" data-page-theme={pageTheme} className="flex h-screen min-h-0 overflow-hidden bg-sand-50 dm-app-shell"><div className="dm-page-backdrop" aria-hidden="true" /><Sidebar open={open} onClose={() => setOpen(false)} /><div className="flex-1 flex min-w-0 min-h-0 flex-col"><Topbar title={title} onMenuClick={() => setOpen(true)} />{!loading && isActive && <SubscriptionBanner daysRemaining={daysRemaining} formattedRenewalDate={formattedRenewalDate} />}{showPendingBanner && <div role="status" aria-live="polite" className="bg-gold-500/15 border-b border-gold-500/30 px-3 sm:px-4 md:px-8 py-3 dm-fade-up"><div className="mx-auto max-w-[1600px] flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-ink-950">طلب الاشتراك قيد المراجعة</p><p className="text-xs text-sand-600 mt-0.5">سيتم تفعيل مميزات الباقة بعد تأكيد الدفع.</p></div><Link to="/billing" className="shrink-0 rounded-xl px-4 py-2 bg-gold-100 text-sm font-bold text-gold-700 hover:bg-gold-200 dm-interactive">متابعة الدفع</Link></div></div>}{!loading && isExpired && !exempt && !adminRoute && <div role="alert" className="bg-red-50 border-b border-red-200 px-3 sm:px-4 md:px-8 py-3 dm-fade-up"><div className="mx-auto max-w-[1600px] flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-red-800">انتهى اشتراكك وتم إيقاف مميزات المنصة</p><p className="text-xs text-red-700/80 mt-0.5">جدد اشتراكك لاستعادة الوصول.</p></div><Link to="/plans" className="shrink-0 rounded-xl px-4 py-2 bg-red-100 text-sm font-bold text-red-700 hover:bg-red-200 dm-interactive">تجديد الاشتراك</Link></div></div>}<main className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 dm-main-stage"><div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col dm-page-enter dm-page-content"><div className="flex-1"><BackButton />{platformLocked ? <PlatformMaintenanceScreen message={platformControl.message} /> : shouldLockPage ? <SubscriptionExpiredScreen isNewCompany={isNewCompany} daysRemaining={daysRemaining} formattedRenewalDate={formattedRenewalDate} /> : <Outlet />}</div><SiteFooter /></div></main></div></div>
 }
