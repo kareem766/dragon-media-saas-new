@@ -17,10 +17,6 @@ for (const fallbackPattern of fallbackPatterns) {
     break
   }
 }
-if (source.includes(oldFallback)) {
-  source = source.replace(oldFallback, newFallback)
-  changed = true
-}
 
 const malformedMemory = "name_source:(isWhatsApp?(rememberedExplicitName||explicitName)?'customer_explicit':null):(explicitName?'customer_explicit':'crm')"
 const safeMemory = "name_source:(isWhatsApp ? ((rememberedExplicitName||explicitName) ? 'customer_explicit' : null) : (explicitName ? 'customer_explicit' : 'crm'))"
