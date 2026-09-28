@@ -104,39 +104,7 @@ export function useSubscription() {
       }
     }
     void loadSubscription()
-
-    const refreshSubscription = () => {
-      void loadSubscription()
-    }
-
-    window.addEventListener('focus', refreshSubscription)
-    window.addEventListener('pageshow', refreshSubscription)
-    window.addEventListener('dragon-media:subscription-updated', refreshSubscription)
-
-    const client = supabase
-    if (!client) return
-
-    const channel = client
-      .channel(`subscription-${organizationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'subscriptions',
-          filter: `organization_id=eq.${organizationId}`,
-        },
-        refreshSubscription,
-      )
-      .subscribe()
-
-    return () => {
-      cancelled = true
-      window.removeEventListener('focus', refreshSubscription)
-      window.removeEventListener('pageshow', refreshSubscription)
-      window.removeEventListener('dragon-media:subscription-updated', refreshSubscription)
-      void client.removeChannel(channel)
-    }
+    return () => { cancelled = true }
   }, [organizationId, organizationLoading, isAdmin, platformAdminLoading, roleLoaded])
 
   const rawStatus = rawSubscription?.status ?? 'no_subscription'
