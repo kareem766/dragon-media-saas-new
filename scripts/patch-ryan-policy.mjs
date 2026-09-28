@@ -4,8 +4,19 @@ const path = 'api/admin/ryan-inbox.ts'
 let source = readFileSync(path, 'utf8')
 
 let changed = false
-const oldFallback = "const fallbackModels=allowFallback?['gemini-3.5-flash-lite']:[]"
-const newFallback = "const fallbackModels=allowFallback?['gemini-3.1-flash-lite']:[]"
+const fallbackModelsLine = "const fallbackModels=allowFallback?['gemini-3.5-flash-lite','gemini-2.5-flash','gemini-2.5-flash-lite']:[]"
+const fallbackPatterns = [
+  "const fallbackModels=allowFallback?['gemini-3.5-flash-lite']:[]",
+  "const fallbackModels=allowFallback?['gemini-3.1-flash-lite']:[]",
+  "const fallbackModels=allowFallback?['gemini-3.5-flash-lite','gemini-3.1-flash-lite']:[]",
+]
+for (const fallbackPattern of fallbackPatterns) {
+  if (source.includes(fallbackPattern)) {
+    source = source.replace(fallbackPattern, fallbackModelsLine)
+    changed = true
+    break
+  }
+}
 if (source.includes(oldFallback)) {
   source = source.replace(oldFallback, newFallback)
   changed = true
