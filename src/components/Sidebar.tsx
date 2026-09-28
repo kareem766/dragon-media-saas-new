@@ -23,12 +23,7 @@ import { useSubscription } from '../lib/useSubscription'
 import { usePermissions } from '../lib/usePermissions'
 import { useBranding } from '../hooks/useBranding'
 
-type FeatureKey =
-  | 'crm'
-  | 'campaigns'
-  | 'ryan'
-  | 'automations'
-  | 'advanced_reports'
+type FeatureKey = string
 
 type SidebarItem = {
   to: string
@@ -45,6 +40,7 @@ const items: SidebarItem[] = [
     label: 'الرئيسية',
     icon: IconGrid,
     end: true,
+    feature: 'dashboard',
   },
   {
     to: '/crm',
@@ -64,6 +60,7 @@ const items: SidebarItem[] = [
     to: '/services',
     label: 'الخدمات',
     icon: IconLayers,
+    feature: 'services',
     resource: 'services',
   },
   {
@@ -77,12 +74,14 @@ const items: SidebarItem[] = [
     to: '/ai-content',
     label: 'استوديو المحتوى بالـAI',
     icon: IconSpark,
+    feature: 'ai_content',
     resource: 'ai_content',
   },
   {
     to: '/inbox',
     label: 'صندوق المحادثات',
     icon: IconChat,
+    feature: 'inbox',
     resource: 'inbox',
   },
   {
@@ -103,18 +102,21 @@ const items: SidebarItem[] = [
     to: '/tasks',
     label: 'المهام والمتابعات',
     icon: IconCheck,
+    feature: 'tasks',
     resource: 'tasks',
   },
   {
     to: '/appointments',
     label: 'المواعيد',
     icon: IconCalendar,
+    feature: 'appointments',
     resource: 'appointments',
   },
   {
     to: '/billing',
     label: 'الفواتير والاشتراكات',
     icon: IconCard,
+    feature: 'billing',
     resource: 'billing',
   },
   {
@@ -128,18 +130,21 @@ const items: SidebarItem[] = [
     to: '/users',
     label: 'المستخدمون والصلاحيات',
     icon: IconShield,
+    feature: 'users',
     resource: 'users',
   },
   {
     to: '/tickets',
     label: 'الدعم الفني',
     icon: IconChat,
+    feature: 'tickets',
     resource: 'tickets',
   },
   {
     to: '/settings',
     label: 'الإعدادات',
     icon: IconSettings,
+    feature: 'settings',
     resource: 'settings',
   },
 ]
@@ -165,6 +170,11 @@ const adminItems = [
     to: '/admin/plans',
     label: 'إدارة الباقات',
     icon: IconLayers,
+  },
+  {
+    to: '/admin/features',
+    label: 'تحكم مميزات المنصة',
+    icon: IconShield,
   },
   {
     to: '/admin/ryan-credits',
