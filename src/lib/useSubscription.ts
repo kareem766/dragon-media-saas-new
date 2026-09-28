@@ -181,7 +181,10 @@ export function useSubscription() {
 
   const hasFeature = (key: string) => {
     if (isAdmin) return true
-    if (platformFeaturesLoaded && !platformFeatures.has(key)) return false
+    if (platformFeaturesLoaded) {
+      const requiredPlatformKeys = key === 'advanced_reports' ? ['reports', 'advanced_reports'] : [key]
+      if (requiredPlatformKeys.some(platformKey => !platformFeatures.has(platformKey))) return false
+    }
     if (!rawIsActive) return false
     return Boolean(rawSubscription?.plan?.features?.[key])
   }
