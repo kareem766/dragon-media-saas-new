@@ -41,10 +41,42 @@ export function useSubscription() {
   const { isAdmin, loading: platformAdminLoading } = useIsPlatformAdmin()
   const [role, setRole] = useState<string | null>(null)
   const [roleLoaded, setRoleLoaded] = useState(false)
+  const [platformFeatures, setPlatformFeatures] = useState<Set<string>>(new Set())
+  const [platformFeaturesLoaded, setPlatformFeaturesLoaded] = useState(false)
   const [rawSubscription, setRawSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const canManageSubscription = isAdmin || managerRoles.has(role || '')
+
+  useEffect(() => {
+    let cancelled = false
+    const loadPlatformFeatures = async () => {
+      if (!supabase || !user?.id) {
+        if (!cancelled) {
+          setPlatformFeatures(new Set())
+          setPlatformFeaturesLoaded(false)
+        }
+        return
+      }
+      const { data, error } = await supabase.rpc('platform_enabled_features')
+      if (cancelled) return
+      if (error) {
+        // Keep the platform available if a non-critical feature-control read fails.
+        setPlatformFeatures(new Set())
+        setPlatformFeaturesLoaded(false)
+        return
+      }
+      const enabled = new Set<string>(
+        (data || [])
+          .map((row: { feature_key?: string }) => String(row?.feature_key || ''))
+          .filter(Boolean)
+      )
+      setPlatformFeatures(enabled)
+      setPlatformFeaturesLoaded(true)
+    }
+    void loadPlatformFeatures()
+    return () => { cancelled = true }
+  }, [user?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -146,7 +178,8 @@ export function useSubscription() {
   const effectivePendingPayment = isAdmin ? false : canManageSubscription ? rawPendingPayment : false
 
   const hasFeature = (key: string) => {
-    if (isAdmin || !canManageSubscription) return true
+    if (isAdmin) return true
+    if (platformFeaturesLoaded && !platformFeatures.has(key)) return false
     if (!rawIsActive) return false
     return Boolean(rawSubscription?.plan?.features?.[key])
   }
@@ -158,7 +191,7 @@ export function useSubscription() {
   }
 
   return {
-    subscription: canManageSubscription ? rawSubscription : null,
+    subscription: rawSubscription,
     loading,
     error,
     status: rawStatus,
@@ -166,15 +199,16 @@ export function useSubscription() {
     isActive: effectiveIsActive,
     isExpired: effectiveIsExpired,
     isPendingPayment: effectivePendingPayment,
-    daysRemaining: canManageSubscription ? daysRemainingInternal : null,
-    billingCycle: canManageSubscription ? rawSubscription?.billing_cycle ?? null : null,
-    startedAt: canManageSubscription ? rawSubscription?.started_at ?? null : null,
-    expiresAt: canManageSubscription ? rawSubscription?.expires_at ?? rawSubscription?.renewal_date ?? null : null,
-    formattedRenewalDate: canManageSubscription ? formattedRenewalDateInternal : null,
+    daysRemaining: daysRemainingInternal,
+    billingCycle: rawSubscription?.billing_cycle ?? null,
+    startedAt: rawSubscription?.started_at ?? null,
+    expiresAt: rawSubscription?.expires_at ?? rawSubscription?.renewal_date ?? null,
+    formattedRenewalDate: formattedRenewalDateInternal,
     hasFeature,
+    platformFeaturesLoaded,
     isPlatformAdmin: isAdmin,
     canManageSubscription,
     getLimit,
-    plan: canManageSubscription ? rawSubscription?.plan ?? null : null,
+    plan: rawSubscription?.plan ?? null,
   }
 }
