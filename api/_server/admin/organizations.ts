@@ -2064,7 +2064,9 @@ export default async function handler(
           price,
           yearly_price,
           currency,
-          status
+          status,
+          features,
+          limits
           `,
         )
         .eq(
