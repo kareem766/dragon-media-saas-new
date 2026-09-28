@@ -1,0 +1,1 @@
+create index if not exists ai_content_posts_created_by_idx on public.ai_content_posts(created_by);
