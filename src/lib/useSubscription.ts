@@ -28,6 +28,8 @@ interface SubscriptionData {
   started_at: string | null
   expires_at: string | null
   plan_id: string | null
+  features_snapshot?: Record<string, boolean> | null
+  limits_snapshot?: Record<string, number> | null
   plan: PlanData | null
 }
 
@@ -116,7 +118,7 @@ export function useSubscription() {
       setError(null)
       try {
         const { data, error: subscriptionError } = await supabase.from('subscriptions').select(`
-          id, status, renewal_date, billing_cycle, started_at, expires_at, plan_id,
+          id, status, renewal_date, billing_cycle, started_at, expires_at, plan_id, features_snapshot, limits_snapshot,
           plans (id, name, price, currency, billing_cycle, features, limits, trial_days, status, sort_order, yearly_price, is_popular, tagline)
         `).eq('organization_id', organizationId).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
         if (subscriptionError) throw subscriptionError
@@ -126,7 +128,7 @@ export function useSubscription() {
           return
         }
         const plan = Array.isArray(data.plans) ? data.plans[0] ?? null : data.plans ?? null
-        setRawSubscription({ id: data.id, status: data.status ?? 'pending_payment', renewal_date: data.renewal_date ?? null, billing_cycle: data.billing_cycle ?? null, started_at: data.started_at ?? null, expires_at: data.expires_at ?? null, plan_id: data.plan_id, plan: plan as PlanData | null })
+        setRawSubscription({ id: data.id, status: data.status ?? 'pending_payment', renewal_date: data.renewal_date ?? null, billing_cycle: data.billing_cycle ?? null, started_at: data.started_at ?? null, expires_at: data.expires_at ?? null, plan_id: data.plan_id, features_snapshot: data.features_snapshot ?? null, limits_snapshot: data.limits_snapshot ?? null, plan: plan ? ({ ...plan, features: data.features_snapshot ?? plan.features ?? {}, limits: data.limits_snapshot ?? plan.limits ?? {} } as PlanData) : null })
       } catch (err: any) {
         if (cancelled) return
         setRawSubscription(null)
