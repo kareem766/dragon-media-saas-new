@@ -25,6 +25,15 @@ const featureKeys = [
   { key: 'campaigns', label: 'الحملات التسويقية' },
   { key: 'automations', label: 'الأتمتة' },
   { key: 'advanced_reports', label: 'تقارير متقدمة' },
+  { key: 'services', label: 'الخدمات' },
+  { key: 'ai_content', label: 'استوديو المحتوى بالـAI' },
+  { key: 'inbox', label: 'صندوق المحادثات الموحد' },
+  { key: 'tasks', label: 'المهام والمتابعات' },
+  { key: 'appointments', label: 'المواعيد' },
+  { key: 'integrations', label: 'التكاملات' },
+  { key: 'tickets', label: 'الدعم الفني' },
+  { key: 'billing', label: 'الفواتير والاشتراكات' },
+  { key: 'settings', label: 'إعدادات الشركة' },
 ]
 
 const limitKeys = [
