@@ -2160,6 +2160,12 @@ export default async function handler(
             plan:
               plan.name,
 
+            features_snapshot:
+              plan.features ?? {},
+
+            limits_snapshot:
+              plan.limits ?? {},
+
             status:
               'active',
 
