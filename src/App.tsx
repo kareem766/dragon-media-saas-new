@@ -125,7 +125,7 @@ export default function App() {
               <Route path="/tickets" element={<PermissionRoute resource="tickets"><FeatureRoute feature="tickets" featureName="الدعم الفني"><Tickets /></FeatureRoute></PermissionRoute>} />
               <Route path="/search" element={<FeatureRoute feature="dashboard" featureName="البحث"><Search /></FeatureRoute>} />
               <Route path="/plans" element={<Plans />} />
-              <Route path="/billing/pay" element={<PermissionRoute resource="billing"><FeatureRoute feature="billing" featureName="الفواتير والاشتراكات"><PaymentRequest /></FeatureRoute></PermissionRoute>} />
+              <Route path="/billing/pay" element={<PaymentRequest />} />
               <Route path="/tasks" element={<PermissionRoute resource="tasks"><FeatureRoute feature="tasks" featureName="المهام والمتابعات"><Tasks /></FeatureRoute></PermissionRoute>} />
               <Route path="/appointments" element={<PermissionRoute resource="appointments"><FeatureRoute feature="appointments" featureName="المواعيد"><Appointments /></FeatureRoute></PermissionRoute>} />
               <Route path="/billing" element={<PermissionRoute resource="billing"><FeatureRoute feature="billing" featureName="الفواتير والاشتراكات"><Billing /></FeatureRoute></PermissionRoute>} />
