@@ -149,6 +149,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .maybeSingle()
       if (permissionError) throw permissionError
       if (!permission?.can_edit) return json(res, 403, { error: 'ليس لديك صلاحية إرسال رسائل من صندوق المحادثات.' })
+      const { data: inboxFeatureEnabled, error: inboxFeatureError } = await admin.rpc('subscription_has_feature', { p_organization_id: organizationId, p_feature: 'inbox' })
+      if (inboxFeatureError) throw inboxFeatureError
+      if (inboxFeatureEnabled !== true) return json(res, 403, { error: 'صندوق المحادثات غير متاح في الباقة الحالية.' })
     }
 
     const { data: conversation, error: conversationError } = await admin
