@@ -1,0 +1,67 @@
+name: Apply Ryan notes fix
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/fix-ryan-notes.yml
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch Ryan notes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('api/admin/ryan-inbox.ts')
+          s=p.read_text()
+          old="""async function appendRyanCustomerUpdateNote(supabase:any,organizationId:string,customer:any,conversation:any,details:any,urgent:boolean){
+ if(!customer?.id)return;
+ const channel=(text(conversation.channel,40)||'ryan').toLowerCase();
+ const service=text(details?.service,160)||'غير محددة';
+ const activity=text(details?.activity,160)||'غير محدد';
+ const goal=text(details?.goal,200)||text(details?.intent,200)||'غير محدد';
+ const budget=text(details?.budget,120)||'غير محددة';
+ const note='بيانات تم جمعها بواسطة Ryan | الخدمة: '+service+' | النشاط: '+activity+' | الهدف: '+goal+' | ميزانية الإعلان: '+budget+' | القناة: '+channel+(urgent?' | استعجال':'');
+ const {data:latest}=await supabase.from('customers').select('notes').eq('id',customer.id).eq('organization_id',organizationId).maybeSingle();
+ const previousNotes=normalizeRyanNotes(text(latest?.notes,10000));
+ const notes=(previousNotes?'\\n':'')+note;
+ const {error}=await supabase.from('customers').update({notes:notes.slice(-12000),updated_at:new Date().toISOString()}).eq('id',customer.id).eq('organization_id',organizationId);
+ if(error)throw new Error(error.message);
+}"""
+          new="""async function appendRyanCustomerUpdateNote(supabase:any,organizationId:string,customer:any,conversation:any,details:any,urgent:boolean){
+ if(!customer?.id)return;
+ const name=text(customer?.name,120)||text(details?.name,120)||'غير مسجل';
+ const phone=text(customer?.phone,80)||text(details?.phone,80)||'غير مسجل';
+ const service=text(details?.service,160)||text(details?.intent,160)||'غير محددة';
+ const budget=text(details?.budget,120)||budgetFromText(text(details?.raw_message,1000))||'غير محددة';
+ const governorate=text(details?.governorate,120)||text(details?.city,120)||text(details?.location,120)||'غير محددة';
+ const note='بيانات العميل | الاسم: '+name+' | الهاتف: '+phone+' | الخدمة المطلوبة: '+service+' | الميزانية: '+budget+' | المحافظة: '+governorate;
+ const {data:latest}=await supabase.from('customers').select('notes').eq('id',customer.id).eq('organization_id',organizationId).maybeSingle();
+ const current=String(latest?.notes||'').replace(/\\\\n/g,'\\n');
+ const lines=current.split('\\n').map((line:string)=>line.trim()).filter(Boolean);
+ const humanLines=lines.filter((line:string)=>!/^بيانات العميل \\|/.test(line)&&!/^بيانات تم جمعها بواسطة Ryan \\|/.test(line));
+ const notes=[...humanLines,note].join('\\n').slice(-12000);
+ const {error}=await supabase.from('customers').update({notes,updated_at:new Date().toISOString()}).eq('id',customer.id).eq('organization_id',organizationId);
+ if(error)throw new Error(error.message);
+}"""
+          if old not in s:
+              raise SystemExit('target function not found')
+          s=s.replace(old,new)
+          old_schema="governorate:{type:'string'},"
+          if old_schema not in s:
+              marker="budget:{type:'string'},intent:{type:'string'},confidence:{type:'number'}"
+              s=s.replace(marker,"budget:{type:'string'},governorate:{type:'string'},intent:{type:'string'},confidence:{type:'number'}")
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add api/admin/ryan-inbox.ts
+          git diff --cached --quiet || git commit -m 'fix: keep Ryan customer notes concise and current'
+          git push
