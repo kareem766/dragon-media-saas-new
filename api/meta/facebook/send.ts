@@ -67,6 +67,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { data: permission, error: permissionError } = await db.from('role_permissions').select('can_edit').eq('role', membership.role || '').eq('resource', 'inbox').maybeSingle()
       if (permissionError) throw permissionError
       if (!permission?.can_edit) return json(res, 403, { error: 'ليس لديك صلاحية إرسال رسائل من صندوق المحادثات.' })
+      const { data: inboxFeatureEnabled, error: inboxFeatureError } = await db.rpc('subscription_has_feature', { p_organization_id: organizationId, p_feature: 'inbox' })
+      if (inboxFeatureError) throw inboxFeatureError
+      if (inboxFeatureEnabled !== true) return json(res, 403, { error: 'صندوق المحادثات غير متاح في الباقة الحالية.' })
     }
     const customer = Array.isArray((conversation as any).customers) ? (conversation as any).customers[0] : (conversation as any).customers
     recipientId = recipientId || (conversationChannel === 'instagram' ? String((conversation as any)?.metadata?.instagram_user_id || '') : String((conversation as any)?.metadata?.facebook_psid || customer?.phone || ''))
