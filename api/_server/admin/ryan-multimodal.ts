@@ -141,6 +141,7 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
  const parts:GeminiPart[]=[]
  const summaries:any[]=[]
  let transcript=''
+ let transcriptionFailed=false
  for(const attachment of attachments.slice(0,4)){
   const fetched=await fetchAttachment(supabase,organizationId,channel,attachment)
   if(fetched.error){summaries.push({type:'unsupported',reason:fetched.error});continue}
@@ -156,11 +157,12 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
     transcript=[transcript,audioText].filter(Boolean).join('\n')
     summaries.push({type:'audio',mime:fetchedMime,transcribed:true})
    }catch(error:any){
+    transcriptionFailed=true
     summaries.push({type:'audio',mime:fetchedMime,transcribed:false,error:text(error?.message,300)||'transcription_failed'})
    }
   }else{parts.push({inlineData:{mimeType:fetchedMime,data:fetchedBase64}});summaries.push({type:/^image\//iu.test(fetchedMime)?'image':fetchedMime==='application/pdf'?'pdf':'file',mime:fetchedMime})}
  }
  const attachmentText=summaries.length?'\n[مرفقات العميل: '+summaries.map(x=>x.type+(x.mime?' ('+x.mime+')':'')).join('، ')+']':''
- return {currentText:transcript?transcript+attachmentText:attachmentText,parts,attachmentSummary:summaries,transcript}
+ return {currentText:transcript?transcript+attachmentText:attachmentText,parts,attachmentSummary:summaries,transcript,transcriptionFailed}
 }
 // Meta CDN auth fix deployed
