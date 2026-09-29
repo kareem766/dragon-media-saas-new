@@ -465,8 +465,11 @@ export default function Sidebar({
               feature,
               resource,
             }) => {
-              if (resource && !permissionsLoading && !isAdmin && !can(resource, 'view')) return null
-              const locked = isFeatureLocked(feature)
+              // Never render permission-controlled items before permissions are
+              // resolved; otherwise restricted items briefly flash and disappear.
+              if (resource && !isAdmin && (permissionsLoading || !can(resource, 'view'))) return null
+              // Avoid showing temporary lock icons while subscription data is loading.
+              const locked = !subscriptionLoading && isFeatureLocked(feature)
 
               return (
                 <NavLink
