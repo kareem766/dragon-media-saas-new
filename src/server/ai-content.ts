@@ -29,12 +29,18 @@ async function getContext(db: any, userId: string): Promise<any> {
     throw new Error('الحساب غير مرتبط بمساحة عمل نشطة.')
   }
 
-  const [{ data: organization }, { data: services }, { data: permission }, { data: subscription }] = await Promise.all([
+  const [{ data: organization }, { data: services }, { data: permission }, { data: subscriptions }] = await Promise.all([
     db.from('organizations').select('id,name,business_type,address,phone,email,logo_url,timezone,ai_content_enabled').eq('id', user.organization_id).maybeSingle(),
     db.from('services').select('name,description,category,price').eq('organization_id', user.organization_id).order('name').limit(80),
     db.from('role_permissions').select('can_view,can_edit,can_delete').eq('role', user.role).eq('resource', 'ai_content').maybeSingle(),
-    db.from('subscriptions').select('status,expires_at,renewal_date,plan_id,plan').eq('organization_id', user.organization_id).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle(),
+    db.from('subscriptions').select('status,expires_at,renewal_date,plan_id,plan').eq('organization_id', user.organization_id).order('renewal_date', { ascending: false, nullsFirst: false }).limit(10),
   ])
+
+  // A pending renewal/upgrade can have a newer renewal_date than the currently
+  // active subscription. Always prefer an active subscription for feature access.
+  const subscription = (subscriptions || []).find((item: any) => ['active', 'trialing'].includes(String(item?.status || ''))) ||
+    (subscriptions || []).find((item: any) => ['pending_payment', 'pending_review'].includes(String(item?.status || ''))) ||
+    (subscriptions || [])[0] || null
 
   if (!permission?.can_view) throw new Error('ليس لديك صلاحية استخدام استوديو المحتوى.')
   if (organization?.ai_content_enabled === false) throw new Error('استوديو المحتوى غير مفعّل لهذه الشركة.')
