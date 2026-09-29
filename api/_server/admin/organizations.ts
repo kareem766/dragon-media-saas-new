@@ -932,6 +932,20 @@ export default async function handler(
   const action =
     body.action
 
+  if (action === 'set_ai_content') {
+    const organizationId = String(body.organizationId || '')
+    const enabled = body.enabled === true
+    if (!validateOrganizationId(organizationId)) { res.status(400).json({ error: 'معرّف الشركة غير صالح' }); return }
+    const { data: organization, error: findError } = await admin.from('organizations').select('id, name, ai_content_enabled').eq('id', organizationId).maybeSingle()
+    if (findError) { res.status(500).json({ error: `تعذر قراءة الشركة: ${findError.message}` }); return }
+    if (!organization) { res.status(404).json({ error: 'الشركة غير موجودة' }); return }
+    const { error } = await admin.from('organizations').update({ ai_content_enabled: enabled }).eq('id', organizationId)
+    if (error) { res.status(500).json({ error: `تعذر تحديث حالة استوديو المحتوى: ${error.message}` }); return }
+    await writeAudit(admin, { actor_id: authData.user.id, organization_id: organizationId, action: enabled ? 'enable_ai_content_studio' : 'disable_ai_content_studio', entity: 'organizations', entity_id: organizationId, old_value: { ai_content_enabled: organization.ai_content_enabled !== false }, new_value: { ai_content_enabled: enabled }, details: { source: 'admin_organizations' } })
+    res.status(200).json({ success: true, organizationId, enabled })
+    return
+  }
+
   if (
     action === 'suspend' ||
     action === 'activate'
