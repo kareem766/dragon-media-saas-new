@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+ const {data:ryanEnabled,error:ryanEntitlementError}=await supabase.rpc('service_subscription_has_feature',{p_organization_id:organizationId,p_feature:'ryan'});if(ryanEntitlementError)return res.status(500).json({error:'Failed to verify Ryan entitlement',details:text(ryanEntitlementError.message,500)});if(ryanEnabled!==true)return res.status(403).json({error:'Ryan غير متاح في الباقة الحالية.'})import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'node:crypto'
 import { prepareRyanMultimodal } from '../_server/admin/ryan-multimodal'
