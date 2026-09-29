@@ -81,7 +81,9 @@ export default function Layout() {
   const exempt = isPathAllowedWithoutSubscription(pathname) || (pathname.startsWith('/integrations') && preSubscriptionAccess.integrations)
   const adminRoute = isAdminPath(pathname)
   const platformLocked = accessResolved && !loading && !platformControl.enabled && !adminRoute
-  const shouldLockPage = accessResolved && !loading && !isActive && !exempt && !adminRoute
+  // Pending payment is an intentional intermediate state. Do not replace the
+  // customer's current page with the plans screen while payment is being reviewed.
+  const shouldLockPage = accessResolved && !loading && !isActive && !isPendingPayment && !exempt && !adminRoute
   const showPendingBanner = accessResolved && !loading && isPendingPayment && !exempt && !adminRoute
   const isNewCompany = accessState === 'no_subscription'
 
