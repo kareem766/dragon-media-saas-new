@@ -94,19 +94,48 @@ const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
 const retryDelay=(attempt:number)=>Math.min(4000,500*Math.pow(2,attempt)+Math.floor(Math.random()*400))
 async function transcribeAudio(apiKey:string,audio:{mime:string;base64:string}){
- const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000)
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),45000)
  try{
-  const body={
-   model:'gemini-3.5-transcribe',
-   input:[{type:'audio',data:audio.base64,mime_type:audio.mime}],
-   generation_config:{transcription_config:{language_codes:['ar-EG'],mode:'smart'}}
-  }
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
-   method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},signal:controller.signal,body:JSON.stringify(body)
+  const bytes=Buffer.from(audio.base64,'base64')
+  const startResponse=await fetch('https://generativelanguage.googleapis.com/upload/v1beta/files',{
+   method:'POST',
+   headers:{
+    'x-goog-api-key':apiKey,
+    'X-Goog-Upload-Protocol':'resumable',
+    'X-Goog-Upload-Command':'start',
+    'X-Goog-Upload-Header-Content-Length':String(bytes.byteLength),
+    'X-Goog-Upload-Header-Content-Type':audio.mime,
+    'Content-Type':'application/json'
+   },
+   signal:controller.signal,
+   body:JSON.stringify({file:{display_name:'ryan-whatsapp-voice'}})
   })
-  const data=await r.json().catch(()=>({}))
-  if(!r.ok)throw new Error(text(data?.error?.message,700)||'Gemini transcription HTTP '+r.status)
-  const out=text(data?.output_text||data?.output?.map?.((item:any)=>item?.text||'').join?.(' '),5000)
+  if(!startResponse.ok)throw new Error('Gemini file upload start HTTP '+startResponse.status+' '+text(await startResponse.text(),500))
+  const uploadUrl=startResponse.headers.get('x-goog-upload-url')
+  if(!uploadUrl)throw new Error('Gemini file upload URL missing')
+  const uploadResponse=await fetch(uploadUrl,{
+   method:'POST',
+   headers:{'Content-Length':String(bytes.byteLength),'X-Goog-Upload-Offset':'0','X-Goog-Upload-Command':'upload, finalize'},
+   signal:controller.signal,
+   body:bytes
+  })
+  const fileData=await uploadResponse.json().catch(()=>({}))
+  if(!uploadResponse.ok)throw new Error(text(fileData?.error?.message,700)||'Gemini file upload HTTP '+uploadResponse.status)
+  const fileUri=text(fileData?.file?.uri,5000)
+  if(!fileUri)throw new Error('Gemini file URI missing')
+  const interactionResponse=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
+   method:'POST',
+   headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},
+   signal:controller.signal,
+   body:JSON.stringify({
+    model:'gemini-3.5-transcribe',
+    input:[{type:'audio',uri:fileUri,mime_type:audio.mime}],
+    generation_config:{transcription_config:{language_codes:['ar-EG'],mode:'smart'}}
+   })
+  })
+  const data=await interactionResponse.json().catch(()=>({}))
+  if(!interactionResponse.ok)throw new Error(text(data?.error?.message,700)||'Gemini transcription HTTP '+interactionResponse.status)
+  const out=text(data?.output_text||data?.outputs?.filter?.((item:any)=>item?.type==='text').map?.((item:any)=>item?.text||'').join?.(' '),5000)
   if(!out)throw new Error('Gemini transcription returned empty text')
   return out
  }catch(error:any){
