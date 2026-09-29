@@ -50,17 +50,40 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  const r=await fetch(url,{headers})
  if(!r.ok)return {error:'media_fetch_'+r.status}
  const buffer=Buffer.from(await r.arrayBuffer())
- const detected=(r.headers.get('content-type')||mime||'application/octet-stream').split(';')[0].toLowerCase()
+ const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
+ const declaredMime=mime||''
+ const detected=(declaredMime&&/^audio\//i.test(declaredMime))?declaredMime:(headerMime&&headerMime!=='application/octet-stream'?headerMime:(declaredMime||headerMime||'application/octet-stream'))
  return {mime:detected,base64:buffer.toString('base64'),bytes:buffer.byteLength}
 }
 
+const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
+const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
+const retryDelay=(attempt:number)=>Math.min(4000,500*Math.pow(2,attempt)+Math.floor(Math.random()*400))
 async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;base64:string}){
- const candidates=['gemini-2.5-flash',model,'gemini-3.6-flash','gemini-3.5-flash','gemini-3.8-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='audio transcription failed'
  for(const candidate of candidates){
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(apiKey),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:'استمع للتسجيل الصوتي جيداً. اكتب فقط النص المنطوق كما قاله العميل، بنفس اللغة قدر الإمكان، بدون شرح أو تلخيص أو علامات مثل النص.'},{inlineData:{mimeType:audio.mime,data:audio.base64}}]}],generationConfig:{maxOutputTokens:1200}})})
-  const data=await r.json().catch(()=>({}))
-  if(r.ok){const out=text(data?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000);if(out)return out;last='Gemini returned an empty audio transcript'}else last=text(data?.error?.message,500)||'Gemini '+r.status
+  for(let attempt=0;attempt<3;attempt++){
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000)
+   try{
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(apiKey),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({contents:[{role:'user',parts:[{text:'استمع للتسجيل الصوتي جيداً. اكتب فقط النص المنطوق كما قاله العميل، بنفس اللغة قدر الإمكان، بدون شرح أو تلخيص.'},{inlineData:{mimeType:audio.mime,data:audio.base64}}]}],generationConfig:{maxOutputTokens:1200}})})
+    const data=await r.json().catch(()=>({}))
+    if(r.ok){
+     const out=text(data?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000)
+     if(out)return out
+     last=candidate+' returned an empty audio transcript'
+     if(attempt<2){await sleep(retryDelay(attempt));continue}
+     break
+    }
+    last=text(data?.error?.message,500)||'Gemini '+r.status
+    if(transientStatus(r.status)&&attempt<2){await sleep(retryDelay(attempt));continue}
+    break
+   }catch(error:any){
+    last=error?.name==='AbortError'?candidate+' audio request timed out':text(error?.message,500)||last
+    if(attempt<2){await sleep(retryDelay(attempt));continue}
+    break
+   }finally{clearTimeout(timeout)}
+  }
  }
  throw new Error(last)
 }
@@ -76,9 +99,18 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
   if(fetched.error){summaries.push({type:'unsupported',reason:fetched.error});continue}
   if(!fetched.mime||!SUPPORTED_INLINE.test(fetched.mime)){summaries.push({type:'unsupported',mime:fetched.mime});continue}
   if(fetched.bytes>MAX_INLINE_BYTES){summaries.push({type:'too_large',mime:fetched.mime,bytes:fetched.bytes});continue}
-  if(/^audio\//iu.test(fetched.mime)){const audioText=await transcribeAudio(apiKey,model,{mime:fetched.mime,base64:fetched.base64});transcript=[transcript,audioText].filter(Boolean).join('\n');summaries.push({type:'audio',mime:fetched.mime,transcribed:true})}
-  else{parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}});summaries.push({type:/^image\//iu.test(fetched.mime)?'image':fetched.mime==='application/pdf'?'pdf':'file',mime:fetched.mime})}
+  if(/^audio\//iu.test(fetched.mime)){
+   parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}})
+   try{
+    const audioText=await transcribeAudio(apiKey,model,{mime:fetched.mime,base64:fetched.base64})
+    transcript=[transcript,audioText].filter(Boolean).join('\n')
+    summaries.push({type:'audio',mime:fetched.mime,transcribed:true})
+   }catch(error:any){
+    summaries.push({type:'audio',mime:fetched.mime,transcribed:false,error:text(error?.message,300)||'transcription_failed'})
+   }
+  }else{parts.push({inlineData:{mimeType:fetched.mime,data:fetched.base64}});summaries.push({type:/^image\//iu.test(fetched.mime)?'image':fetched.mime==='application/pdf'?'pdf':'file',mime:fetched.mime})}
  }
  const attachmentText=summaries.length?'\n[مرفقات العميل: '+summaries.map(x=>x.type+(x.mime?' ('+x.mime+')':'')).join('، ')+']':''
  return {currentText:transcript?transcript+attachmentText:attachmentText,parts,attachmentSummary:summaries,transcript}
 }
+// Meta CDN auth fix deployed
