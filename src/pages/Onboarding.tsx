@@ -42,7 +42,29 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
       setInviteError(null)
       const client = supabase
       if (!client) { setCheckingInvite(false); return }
-      const { data, error: acceptError } = await client.rpc('accept_invite_code', { p_code: code })
+      // Email confirmation can restore the browser session a moment after
+      // this page mounts. Do not call the RPC until we have a real session,
+      // and retry the RPC itself if the first attempt races the auth state.
+      let data: any = null
+      let acceptError: any = null
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const { data: sessionData } = await client.auth.getSession()
+        const currentSessionUser = sessionData.session?.user
+        if (currentSessionUser?.id) {
+          const result = await client.rpc('accept_invite_code', { p_code: code })
+          data = result.data
+          acceptError = result.error
+          if (!acceptError) break
+        } else if (user?.id) {
+          const result = await client.rpc('accept_invite_code', { p_code: code })
+          data = result.data
+          acceptError = result.error
+          if (!acceptError) break
+        } else {
+          acceptError = new Error('لم تكتمل جلسة تسجيل الدخول بعد')
+        }
+        if (attempt < 5) await new Promise((resolve) => window.setTimeout(resolve, 500))
+      }
       if (cancelled) return
 
       if (acceptError) {
