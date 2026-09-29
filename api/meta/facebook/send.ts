@@ -79,6 +79,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const senderId = provider === 'instagram' ? instagramUserId : pageId
     if (!senderId) return json(res, 422, { error: provider === 'instagram' ? 'Instagram account is not configured.' : 'Facebook Page is not configured.', code: provider === 'instagram' ? 'INSTAGRAM_NOT_READY' : 'FACEBOOK_PAGE_NOT_READY' })
     const pageToken = decryptToken(connection.config?.access_token)
+    // Verify that the stored Page token actually belongs to the Page saved for this organization.
+    // This prevents a stale/wrong token from sending Ryan messages from another Page.
+    if (provider === 'facebook') {
+      const verifyResponse = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(pageId)}?fields=id,name`, { headers: { Authorization: `Bearer ${pageToken}` } })
+      const verifyPayload = await verifyResponse.json().catch(() => ({}))
+      const verifiedPageId = String(verifyPayload?.id || '')
+      if (!verifyResponse.ok || verifiedPageId !== pageId) {
+        console.error('Facebook Page token identity mismatch', { organizationId, expectedPageId: pageId, verifiedPageId: verifiedPageId || null, graphCode: verifyPayload?.error?.code || null, graphMessage: verifyPayload?.error?.message || null })
+        return json(res, 422, { error: 'Facebook Page connection is invalid. Reconnect the exact customer Page.', code: 'FACEBOOK_PAGE_TOKEN_MISMATCH' })
+      }
+    }
     const commentId = provider === 'facebook' ? String((conversation as any)?.metadata?.facebook_comment_id || '') : ''
     let response: Response
     let payload: any
