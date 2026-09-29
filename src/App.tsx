@@ -105,6 +105,7 @@ export default function App() {
               <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<FeatureRoute feature="dashboard" featureName="الرئيسية"><Dashboard /></FeatureRoute>} />
                 <Route path="/crm" element={<PermissionRoute resource="customers"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute></PermissionRoute>} />
+                <Route path="/leads" element={<PermissionRoute resource="customers"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CRM /></FeatureRoute></PermissionRoute>} />
                 <Route path="/crm/customer/:id" element={<PermissionRoute resource="customers"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><CustomerDetail /></FeatureRoute></PermissionRoute>} />
                 <Route path="/pipeline" element={<PermissionRoute resource="deals"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><Pipeline /></FeatureRoute></PermissionRoute>} />
                 <Route path="/pipeline/deal/:id" element={<PermissionRoute resource="deals"><FeatureRoute feature="crm" featureName="إدارة العملاء CRM"><DealDetail /></FeatureRoute></PermissionRoute>} />
