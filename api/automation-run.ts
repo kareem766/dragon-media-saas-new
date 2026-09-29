@@ -942,7 +942,7 @@ export default async function handler(
     const automationList: Automation[] = []
 
     for (const automation of rawAutomationList) {
-      const { data: featureEnabled, error: featureError } = await supabase.rpc('subscription_has_feature', {
+      const { data: featureEnabled, error: featureError } = await supabase.rpc('service_subscription_has_feature', {
         p_organization_id: automation.organization_id,
         p_feature: 'automations',
       })
