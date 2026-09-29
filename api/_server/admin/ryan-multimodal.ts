@@ -94,7 +94,7 @@ const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
 const retryDelay=(attempt:number)=>Math.min(4000,500*Math.pow(2,attempt)+Math.floor(Math.random()*400))
 async function transcribeAudio(apiKey:string,audio:{mime:string;base64:string}){
- const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),45000)
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),60000)
  try{
   const bytes=Buffer.from(audio.base64,'base64')
   const startResponse=await fetch('https://generativelanguage.googleapis.com/upload/v1beta/files',{
@@ -134,10 +134,35 @@ async function transcribeAudio(apiKey:string,audio:{mime:string;base64:string}){
    })
   })
   const data=await interactionResponse.json().catch(()=>({}))
-  if(!interactionResponse.ok)throw new Error(text(data?.error?.message,700)||'Gemini transcription HTTP '+interactionResponse.status)
-  const out=text(data?.output_text||data?.outputs?.filter?.((item:any)=>item?.type==='text').map?.((item:any)=>item?.text||'').join?.(' '),5000)
-  if(!out)throw new Error('Gemini transcription returned empty text')
-  return out
+  if(interactionResponse.ok){
+   const out=text(data?.output_text||data?.outputs?.filter?.((item:any)=>item?.type==='text').map?.((item:any)=>item?.text||'').join?.(' '),5000)
+   if(out)return out
+  }
+  // Keep a second documented Gemini path as a runtime fallback. This avoids turning a
+  // transient Interactions/API-format issue into Ryan's "I can't hear audio" response.
+  const fallbackResponse=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-transcribe:generateContent?key='+encodeURIComponent(apiKey),{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   signal:controller.signal,
+   body:JSON.stringify({
+    contents:[{
+     role:'user',
+     parts:[
+      {text:'حوّل التسجيل الصوتي إلى نص فقط. اكتب الكلام المنطوق كما قاله العميل بالعربية المصرية، بدون شرح أو تلخيص.'},
+      {fileData:{fileUri,mimeType:audio.mime}}
+     ]
+    }],
+    generationConfig:{maxOutputTokens:1200}
+   })
+  })
+  const fallbackData=await fallbackResponse.json().catch(()=>({}))
+  if(fallbackResponse.ok){
+   const fallbackText=text(fallbackData?.candidates?.[0]?.content?.parts?.map?.((item:any)=>item?.text||'').join?.(''),5000)
+   if(fallbackText)return fallbackText
+  }
+  const interactionError=text(data?.error?.message,500)
+  const fallbackError=text(fallbackData?.error?.message,500)
+  throw new Error(interactionError||fallbackError||'Gemini transcription returned empty text')
  }catch(error:any){
   throw new Error(error?.name==='AbortError'?'Gemini transcription request timed out':text(error?.message,700)||'Gemini transcription failed')
  }finally{clearTimeout(timeout)}
