@@ -217,20 +217,8 @@ export default function Tickets() {
       return
     }
 
-    const { error: ticketError } = await supabase
-      .from('support_tickets')
-      .update({
-        status: 'open',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', activeId)
-
     setReply('')
     setSendingReply(false)
-
-    if (ticketError) {
-      setMessagesError('تم إرسال الرد، لكن تعذر تحديث حالة التذكرة.')
-    }
 
     await loadMessages(activeId)
     await loadTickets()
