@@ -120,15 +120,36 @@ export function useSubscription() {
         const { data, error: subscriptionError } = await supabase.from('subscriptions').select(`
           id, status, renewal_date, billing_cycle, started_at, expires_at, plan_id, features_snapshot, limits_snapshot,
           plans (id, name, price, currency, billing_cycle, features, limits, trial_days, status, sort_order, yearly_price, is_popular, tagline)
-        `).eq('organization_id', organizationId).order('renewal_date', { ascending: false, nullsFirst: false }).limit(1).maybeSingle()
+        `).eq('organization_id', organizationId).order('renewal_date', { ascending: false, nullsFirst: false }).limit(10)
         if (subscriptionError) throw subscriptionError
         if (cancelled) return
-        if (!data) {
+        if (!data || data.length === 0) {
           setRawSubscription({ id: '', status: 'no_subscription', renewal_date: null, billing_cycle: null, started_at: null, expires_at: null, plan_id: null, plan: null })
           return
         }
-        const plan = Array.isArray(data.plans) ? data.plans[0] ?? null : data.plans ?? null
-        setRawSubscription({ id: data.id, status: data.status ?? 'pending_payment', renewal_date: data.renewal_date ?? null, billing_cycle: data.billing_cycle ?? null, started_at: data.started_at ?? null, expires_at: data.expires_at ?? null, plan_id: data.plan_id, features_snapshot: data.features_snapshot ?? null, limits_snapshot: data.limits_snapshot ?? null, plan: plan ? ({ ...plan, features: data.features_snapshot ?? plan.features ?? {}, limits: data.limits_snapshot ?? plan.limits ?? {} } as PlanData) : null })
+
+        // Prefer the currently active subscription over a newer payment request.
+        // A pending upgrade/renewal must never temporarily remove the customer's
+        // existing access while the platform admin reviews the payment.
+        const rows = Array.isArray(data) ? data : [data]
+        const selected =
+          rows.find((row: any) => row?.status === 'active' || row?.status === 'trialing') ??
+          rows.find((row: any) => row?.status === 'pending_payment' || row?.status === 'pending_review') ??
+          rows[0]
+
+        const plan = Array.isArray(selected.plans) ? selected.plans[0] ?? null : selected.plans ?? null
+        setRawSubscription({
+          id: selected.id,
+          status: selected.status ?? 'pending_payment',
+          renewal_date: selected.renewal_date ?? null,
+          billing_cycle: selected.billing_cycle ?? null,
+          started_at: selected.started_at ?? null,
+          expires_at: selected.expires_at ?? null,
+          plan_id: selected.plan_id,
+          features_snapshot: selected.features_snapshot ?? null,
+          limits_snapshot: selected.limits_snapshot ?? null,
+          plan: plan ? ({ ...plan, features: selected.features_snapshot ?? plan.features ?? {}, limits: selected.limits_snapshot ?? plan.limits ?? {} } as PlanData) : null
+        })
       } catch (err: any) {
         if (cancelled) return
         setRawSubscription(null)
