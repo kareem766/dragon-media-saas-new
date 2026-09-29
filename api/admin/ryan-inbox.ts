@@ -17,6 +17,8 @@ const looksLikeName=(v:string)=>{const x=v.trim().replace(/\s+/g,' ');if(!x||x.l
 const extractName=(v:string)=>{const normalized=text(v,120).replace(/\s+/g,' ').trim();const m=normalized.match(/(?:أنا\s+اسمي|انا\s+اسمي|اسمي|my\s+name\s+is)\s+([^,،.!؟?\n]+?)(?:\s+(?:ورقمي|ورقمى|رقمي|رقمى|رقم)\b|$)/iu);if(m&&looksLikeName(m[1]))return text(m[1],120);return ''}
 const isNameReplacementRequest=(v:string)=>/(?:عايز|عاوز|محتاج|ممكن|ينفع|لو سمحت)?\s*(?:أغير|اغير|تغيير|تعديل|بدل|استبدل|استبدال)\s*(?:اسمي|الاسم|اسمى)|(?:عايز|عاوز|محتاج|ممكن|لو سمحت)\s*(?:أبدل|ابدّل|ابدل)\s*(?:اسمي|الاسم|اسمى)|(?:مش|مش عايز)\s*(?:الاسم|اسمي)\s*(?:ده|دا|الحالي)|(?:بدل|استبدل)\s*(?:الاسم|اسمي)/iu.test(text(v,300))
 const extractReplacementName=(v:string)=>{const normalized=text(v,300).replace(/\s+/g,' ').trim();const patterns=[/(?:أغير|اغير|تغيير|تعديل|بدل|استبدل|استبدال)\s*(?:اسمي|الاسم|اسمى)\s*(?:إلى|الى|لـ|ل|:)?\s*([^,،.!؟?]+?)(?:\s*$|\s+(?:بدل|من)\b)/iu,/(?:اسمي|الاسم|اسمى)\s*(?:يبقى|يكون|هو)\s*([^,،.!؟?]+)$/iu,/(?:عايز|عاوز|محتاج)\s*(?:أبدل|ابدّل|ابدل)\s*(?:اسمي|الاسم|اسمى)\s*(?:بـ|ب|إلى|الى)?\s*([^,،.!؟?]+)$/iu];for(const p of patterns){const m=normalized.match(p);if(m&&looksLikeName(m[1]))return text(m[1],120)}return ''}
+const DEFAULT_RYAN_PERSONA='مصري، طبيعي، ودود، احترافي، سريع الفهم، يركز على احتياج العميل والخطوة التالية المناسبة.'
+const DEFAULT_RYAN_SETTINGS={use_knowledge_base:true,remember_customer:true,max_history_messages:40,max_knowledge_items:50,emoji_mode:'light',custom_rules:'',fallback_on_llm_failure:true,no_repeat_questions:true,crm_context:true}
 const budgetFromText=(v:string)=>{const m=v.replace(/[,،]/g,' ').match(/(?:ميزاني(?:ة|ه)|budget)\s*(?:هي|هو|:)?\s*([0-9٠-٩][0-9٠-٩\s.,]*)/iu)||v.match(/([0-9٠-٩]+)\s*(?:جنيه|ج|EGP|الف|ألف)/iu);return m?text(m[1],60):''}
 
 type Turn={role:'user'|'model';parts:{text:string}[]}
@@ -245,7 +247,17 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  const {data:claimed,error:claimError}=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId});if(claimError)return res.status(500).json({error:'Failed to claim incoming message',details:text(claimError.message,500)});if(!claimed)return res.status(200).json({ok:true,skipped:true})
  const {data:incoming}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata,created_at').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle();if(!incoming||incoming.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle();if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
- const [{data:customer},{data:agent},{data:services}]=await Promise.all([supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)]);if(!customer||!agent)return res.status(409).json({error:'Ryan agent is not configured'})
+ const [{data:customer},{data:agentRow},{data:services}]=await Promise.all([supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)])
+if(!customer)return res.status(409).json({error:'Customer is not configured'})
+let agent:any=agentRow
+if(!agent){
+ const {data:createdAgent,error:createAgentError}=await supabase.from('ai_agents').insert({organization_id:organizationId,name:'Ryan',persona:DEFAULT_RYAN_PERSONA,language:'ar-EG',active:true,settings:DEFAULT_RYAN_SETTINGS}).select('id,name,persona,language,settings').single()
+ if(createAgentError){
+  const {data:existingAgent}=await supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle()
+  agent=existingAgent
+ }else agent=createdAgent
+}
+if(!agent)return res.status(409).json({error:'Ryan agent could not be initialized'})
  const settings=obj(agent.settings),model=(/^gemini-3\./i.test(text(settings.model,100))?text(settings.model,100):'gemini-3.1-flash-lite'),temperature=Math.min(1,Math.max(0,Number(settings.temperature)||0.45)),allowFallback=settings.fallback_on_llm_failure!==false,rememberCustomer=settings.remember_customer!==false,useKnowledge=settings.use_knowledge_base!==false,crmContext=settings.crm_context!==false,noRepeatQuestions=settings.no_repeat_questions!==false,apiKey=env('GEMINI_API_KEY','GOOGLE_GEMINI_API_KEY')
  const incomingMetadata=obj(incoming.metadata);
  const attachmentCandidates=[incomingMetadata.attachments,incomingMetadata.files,incomingMetadata.media,incomingMetadata.file,incomingMetadata.attachment];
@@ -361,6 +373,20 @@ ${knowledgeText||'لا توجد معلومات في قاعدة المعرفة ح
 const leadService=text(plan.service,160)||previousService;const leadBudget=currentBudget||text(plan.budget,120)||previousBudget;try{await ensureRyanLead(supabase,organizationId,customer,conversation,leadService,leadBudget)}catch(e:any){console.error('Ryan lead sync failed',text(e?.message,500))}
 const durableMemory={name:(isWhatsApp?(explicitName||rememberedExplicitName):text(customer.name,120))||null,name_source:(isWhatsApp ? ((explicitName||rememberedExplicitName) ? 'customer_explicit' : null) : (explicitName ? 'customer_explicit' : 'crm')),phone:validPhone(learnedPhone)?cleanPhone(learnedPhone):(validPhone(String(memory.phone||''))?cleanPhone(String(memory.phone)):null),company:text(memory.company,160)||null,email:text(memory.email,160)||null,service:text(plan.service,160)||previousService||null,budget:text(plan.budget,120)||budgetFromText(current)||previousBudget||null,intent:text(plan.intent,100)||previousIntent||null,stage:(text(plan.service,160)||previousService)?'qualification':'discovery',last_question:text(plan.reply,5000).split(/[؟?]/).slice(-2).join('؟').trim()||null,last_message:current,updated_at:new Date().toISOString()};if(rememberCustomer)await supabase.from('ai_agent_memory').upsert({agent_id:agent.id,customer_id:customer.id,memory:durableMemory,summary:`${durableMemory.name||'العميل'} — ${durableMemory.service||'الخدمة غير محددة'}${durableMemory.budget?' — '+durableMemory.budget:''}`},{onConflict:'agent_id,customer_id'})
  const {data:saved,error:saveError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:reply,metadata:{source:'ryan',ai_agent_id:agent.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success,safety_fallback:aiUnavailable,billing_run_id:runId||null}}).select('id').single();if(saveError||!saved){if(runId)await supabase.from('ai_agent_runs').update({status:'failed',metadata:{source:'ryan',error:saveError?.message||'Failed to save Ryan response'}}).eq('id',runId);throw new Error(saveError?.message||'Failed to save Ryan response')}if(runId&&!aiUnavailable)await supabase.from('ai_agent_runs').update({status:'success',model:usedModel,metadata:{source:'ryan',action:text(plan.action,60)||'continue',action_success:actionResult.success}}).eq('id',runId);await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id}}).eq('id',messageId).eq('conversation_id',conversationId)
+ if(['messenger','facebook','instagram'].includes(String(conversation.channel||'').toLowerCase())){
+  try{
+   const {data:outboundSecretRow}=await supabase.from('system_secrets').select('value').eq('key','whatsapp_outbound_webhook_secret').maybeSingle()
+   const outboundSecret=String(outboundSecretRow?.value||'').trim()
+   if(!outboundSecret)throw new Error('Meta outbound dispatch secret is missing')
+   const outboundResponse=await fetch('https://dragon-media-saas-new.vercel.app/api/meta/facebook/send',{method:'POST',headers:{'Content-Type':'application/json','x-dragon-facebook-outbound-secret':outboundSecret},body:JSON.stringify({message_id:saved.id})})
+   const outboundPayload=await outboundResponse.json().catch(()=>({}))
+   if(!outboundResponse.ok)throw new Error(String(outboundPayload?.error||'Meta outbound send failed'))
+   console.log('Ryan Meta outbound message sent',{conversationId,channel:conversation.channel,messageId:saved.id,externalId:String(outboundPayload?.message?.external_id||outboundPayload?.external_id||'')})
+  }catch(outboundError:any){
+   console.error('Ryan Meta outbound send failed',{conversationId,channel:conversation.channel,messageId:saved.id,error:text(outboundError?.message,500)})
+   await supabase.from('messages').update({metadata:{source:'ryan',outbound_status:'failed',outbound_error:text(outboundError?.message,500)}}).eq('id',saved.id).eq('conversation_id',conversationId)
+  }
+ }
  return res.status(200).json({ok:true,reply,message_id:saved.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success,safety_fallback:aiUnavailable})
 }
 
