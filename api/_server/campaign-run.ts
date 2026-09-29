@@ -97,7 +97,7 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
     if (!organizationId) organizationId = String(campaign.organization_id || '')
     if (!organizationId) return json(res, 403, { message: 'لم يتم العثور على مساحة العمل.' })
 
-    const { data: campaignFeatureEnabled, error: campaignFeatureError } = await admin.rpc('subscription_has_feature', {
+    const { data: campaignFeatureEnabled, error: campaignFeatureError } = await admin.rpc('service_subscription_has_feature', {
       p_organization_id: organizationId,
       p_feature: 'campaigns',
     })
