@@ -283,8 +283,13 @@ export default function ProtectedRoute({
     )
   }
 
+  // A payment request under review is a valid in-app state. The customer
+  // must not be redirected back to Plans while the platform admin reviews it.
+  // Feature entitlements remain locked until approval; navigation itself stays usable.
   const canUseSubscriptionArea =
-    isActive || isSubscriptionAllowedPath(location.pathname)
+    isActive ||
+    isPendingPayment ||
+    isSubscriptionAllowedPath(location.pathname)
 
   if (!canUseSubscriptionArea) {
     return (
