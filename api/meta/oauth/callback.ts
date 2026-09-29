@@ -146,9 +146,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const tokenAppId = String(tokenData?.app_id || '')
       const tokenUserId = String(tokenData?.user_id || '')
       const tokenIsValid = tokenData?.is_valid !== false
+      const granularScopes = Array.isArray(tokenData?.granular_scopes) ? tokenData.granular_scopes : []
+      const pageTargetIds = granularScopes.flatMap((scope: any) => Array.isArray(scope?.target_ids) ? scope.target_ids.map(String) : [])
       if (!tokenIsValid) throw new Error('Meta أعادت Page Access Token غير صالح أو منتهي الصلاحية.')
       if (tokenAppId && tokenAppId !== String(appId)) {
         throw new Error('Page Access Token تابع لتطبيق Meta مختلف عن تطبيق Dragon Media.')
+      }
+      if (pageTargetIds.length && !pageTargetIds.includes(pageId)) {
+        throw new Error('Page Access Token لا يخص الصفحة التي تم اختيارها. أعد ربط الصفحة الصحيحة.')
       }
       console.log('Facebook Page token verification', {
         pageId,
