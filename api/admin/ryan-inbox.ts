@@ -217,8 +217,7 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
   if(verifiedReplacement&&looksLikeName(verifiedReplacement)&&!invalidCustomerName(verifiedReplacement))updates.name=verifiedReplacement;if(validPhone(phone))updates.phone=phone;if(email&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))updates.email=email;if(company)updates.company=company
   if(!Object.keys(updates).length)return {success:false,message:'No verified fields'}
   updates.updated_at=new Date().toISOString();const {error}=await supabase.from('customers').update(updates).eq('id',customer.id).eq('organization_id',organizationId);if(error)throw new Error(error.message);return {success:true,data:updates}
- }
- if(action==='follow_up'){
+ } if(action==='follow_up'){
   const at=text(d.follow_up_at,80),date=new Date(at);if(!at||Number.isNaN(date.getTime())||date.getTime()<=Date.now())return {success:false,message:'Invalid follow-up time'}
   const actionMarker='Ryan message:'+messageId  const {data:existingFollowUp}=await supabase.from('tasks').select('id').eq('organization_id',organizationId).eq('customer_id',customer.id).ilike('description','%'+actionMarker+'%').limit(1).maybeSingle()
   if(existingFollowUp?.id)return {success:true,data:{task_id:existingFollowUp.id,existing:true,follow_up_at:date.toISOString()}}
@@ -349,13 +348,13 @@ const trustedCustomerName=(storedCustomerName&&!invalidCustomerName(storedCustom
   : customerGender==='male'
     ? 'العميل مذكر بشكل موثوق من الاسم/البيانات: خاطبه بصيغة مذكرة طبيعية عند الحاجة، مع «حضرتك» أو اسمه، بدون مبالغة في الألقاب.'
     : 'نوع العميل غير مؤكد: استخدم صياغة محايدة ولا تخمّن النوع من الاسم وحده.';
- const system=\`أنت \${text(agent.name,80)||'Ryan'}، موظف خدمة العملاء والمبيعات الذكي الخاص بـ \${brandName}. أنت تمثل النشاط/الصفحة المتصلة بهذه المحادثة، وليس Dragon Media إلا إذا كان اسم النشاط نفسه Dragon Media. هدفك أن يشعر العميل أنه يتحدث مع إنسان حقيقي محبوب وذكي، وليس روبوتاً يطرح أسئلة محفوظة.
+ const system=\`أنت ${text(agent.name,80)||'Ryan'}، موظف خدمة العملاء والمبيعات الذكي الخاص بـ ${brandName}. أنت تمثل النشاط/الصفحة المتصلة بهذه المحادثة، وليس Dragon Media إلا إذا كان اسم النشاط نفسه Dragon Media. هدفك أن يشعر العميل أنه يتحدث مع إنسان حقيقي محبوب وذكي، وليس روبوتاً يطرح أسئلة محفوظة.
 
 أسلوبك الأساسي: مصري طبيعي، خفيف الدم وودود ومحترم، دافئ بدون تصنع، سريع الفهم، وتدخل في صلب كلام العميل. رد على النقطة التي قالها العميل أولاً، ثم اسأل سؤالاً واحداً فقط إذا كان السؤال ضرورياً للخطوة التالية. لا تحول الحوار إلى استبيان. افهم العامية المصرية، الاختصارات والأخطاء الإملائية، وخذ معنى الرسالة من السياق وليس من الكلمات منفردة.
 
-\\${languageInstruction}
-\\${emojiInstruction}
-\\${genderInstruction}
+\${languageInstruction}
+\${emojiInstruction}
+\${genderInstruction}
 
 استخدم «يا فندم» أحياناً عندما تكون طبيعية في السياق، لكن لا تكررها في كل رسالة. استخدم اسم العميل عندما يكون موثوقاً، وبنفس الكتابة المحفوظة دون اختصار. إذا كان العميل/العميلة معروف النوع من الاسم الموثوق أو من كلامه الصريح، استخدم صيغة المذكر أو المؤنث المناسبة. إذا لم يكن النوع مؤكداً، التزم بالحياد ولا تخمّن. لا تستخدم «يا غالي»، «يا أستاذ»، «يا مدام»، «يا حبيبتي» كقوالب ثابتة.
 
@@ -371,15 +370,15 @@ const trustedCustomerName=(storedCustomerName&&!invalidCustomerName(storedCustom
 
 إذا كانت الرسالة تعليقاً على منشور، افهم محتوى المنشور والرسالة الحالية أولاً وأجب مباشرة بدون قول «شفت تعليق حضرتك» أو شرح آلية العمل. إذا قال «تفاصيل»، قدم تفاصيل ما هو موجود فعلاً في المنشور/قاعدة المعرفة، ثم سؤالاً واحداً عند الحاجة.
 
-PERSONA: \${persona}
-\\${crmContext?\`CUSTOMER: name=\${trustedCustomerName||'غير معروف'}, gender=\${customerGender}, phone=\${cleanPhone(text(customer.phone,80))||'غير معروف'}, email=\${text(customer.email,160)||'غير معروف'}, company=\${text(customer.company,160)||'غير معروف'}
-VERIFIED CUSTOMER MEMORY: \${JSON.stringify(safeMemory).slice(0,3000)}
-SERVICES: \${JSON.stringify(services||[]).slice(0,12000)}\`:'CRM CONTEXT: disabled by Ryan settings'}
-COMPANY RULES: \${text(settings.custom_rules,5000)||'لا توجد قواعد إضافية.'}
+PERSONA: ${persona}
+\${crmContext?\`CUSTOMER: name=${trustedCustomerName||'غير معروف'}, gender=${customerGender}, phone=${cleanPhone(text(customer.phone,80))||'غير معروف'}, email=${text(customer.email,160)||'غير معروف'}, company=${text(customer.company,160)||'غير معروف'}
+VERIFIED CUSTOMER MEMORY: ${JSON.stringify(safeMemory).slice(0,3000)}
+SERVICES: ${JSON.stringify(services||[]).slice(0,12000)}\`:'CRM CONTEXT: disabled by Ryan settings'}
+COMPANY RULES: ${text(settings.custom_rules,5000)||'لا توجد قواعد إضافية.'}
 KNOWLEDGE BASE:
-\${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}
-\\${metaCommentInstruction}
-\\${explicitOldContextReference?'العميل أشار في رسالته الحالية إلى سياق سابق؛ استخدمه فقط بقدر ما يخدم طلبه الحالي.':'لا يوجد في الرسالة الحالية ما يسمح باسترجاع طلب قديم؛ تعامل مع أي خدمة أو ميزانية قديمة كبيانات تاريخية فقط.'}\`
+${knowledgeText||'لا توجد معلومات في قاعدة المعرفة حالياً.'}
+\${metaCommentInstruction}
+\${explicitOldContextReference?'العميل أشار في رسالته الحالية إلى سياق سابق؛ استخدمه فقط بقدر ما يخدم طلبه الحالي.':'لا يوجد في الرسالة الحالية ما يسمح باسترجاع طلب قديم؛ تعامل مع أي خدمة أو ميزانية قديمة كبيانات تاريخية فقط.'}\`
 
  let plan:Record<string,any>={},usedModel=model,lastError=''
  // Greeting-only messages are deterministic: never send historical context to Gemini and never let the model revive an old request.
@@ -437,8 +436,7 @@ const durableMemory={name:(isWhatsApp?(explicitName||rememberedExplicitName):tex
    const outboundResponse=await fetch('https://dragon-media-saas-new.vercel.app/api/meta/facebook/send',{method:'POST',headers:{'Content-Type':'application/json','x-dragon-facebook-outbound-secret':outboundSecret},body:JSON.stringify({message_id:saved.id})})
    const outboundPayload=await outboundResponse.json().catch(()=>({}))
    if(!outboundResponse.ok)throw new Error(String(outboundPayload?.error||'Meta outbound send failed'))
-   console.log('Ryan Meta outbound message sent',{conversationId,channel:conversation.channel,messageId:saved.id,externalId:String(outboundPayload?.message?.external_id||outboundPayload?.external_id||'')})
-  }catch(outboundError:any){
+   console.log('Ryan Meta outbound message sent',{conversationId,channel:conversation.channel,messageId:saved.id,externalId:String(outboundPayload?.message?.external_id||outboundPayload?.external_id||'')})  }catch(outboundError:any){
    console.error('Ryan Meta outbound send failed',{conversationId,channel:conversation.channel,messageId:saved.id,error:text(outboundError?.message,500)})
    await supabase.from('messages').update({metadata:{source:'ryan',outbound_status:'failed',outbound_error:text(outboundError?.message,500)}}).eq('id',saved.id).eq('conversation_id',conversationId)
   }
