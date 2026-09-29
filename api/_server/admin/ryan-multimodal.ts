@@ -93,7 +93,7 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
 const retryDelay=(attempt:number)=>Math.min(4000,500*Math.pow(2,attempt)+Math.floor(Math.random()*400))
-async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;base64:string}){
+async function transcribeAudio(apiKey:string,audio:{mime:string;base64:string}){
  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000)
  try{
   const body={
@@ -132,7 +132,7 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
   if(/^audio\//iu.test(fetched.mime)){
    parts.push({inlineData:{mimeType:fetchedMime,data:fetchedBase64}})
    try{
-    const audioText=await transcribeAudio(apiKey,model,{mime:fetchedMime,base64:fetchedBase64})
+    const audioText=await transcribeAudio(apiKey,{mime:fetchedMime,base64:fetchedBase64})
     transcript=[transcript,audioText].filter(Boolean).join('\n')
     summaries.push({type:'audio',mime:fetchedMime,transcribed:true})
    }catch(error:any){
