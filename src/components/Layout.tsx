@@ -73,9 +73,10 @@ export default function Layout() {
     if (!supabase) return
     void supabase.from('platform_settings').select('integrations_enabled_before_subscription, platform_enabled, maintenance_message').eq('id', 1).single().then(({ data }) => { setPreSubscriptionAccess({ integrations: Boolean(data?.integrations_enabled_before_subscription) }); setPlatformControl({ enabled: data?.platform_enabled !== false, message: data?.maintenance_message || 'المنصة متوقفة مؤقتًا للصيانة. سنعود للعمل قريبًا.' }) })
   }, [])
-  const [accessResolved, setAccessResolved] = useState(false)
-
-  useEffect(() => { if (!loading) setAccessResolved(true) }, [loading])
+  // Do not evaluate subscription locks until the first subscription load has
+  // completed. This keeps new accounts on a neutral loading state instead of
+  // briefly showing the locked/expired screen before the welcome card.
+  const accessResolved = !loading
   useEffect(() => { setOpen(false) }, [pathname])
 
   const exempt = isPathAllowedWithoutSubscription(pathname) || (pathname.startsWith('/integrations') && preSubscriptionAccess.integrations)
