@@ -36,6 +36,7 @@ async function metaAccessToken(supabase:any,organizationId:string,channel:string
  const {data:integration}=await supabase.from('integrations').select('config').eq('organization_id',organizationId).eq('provider',provider).eq('connected',true).maybeSingle()
  return decryptMetaToken(obj(integration?.config).access_token)
 }
+async function fetchMetaMedia(url:string,token:string,diagnosticId:string){ let current=url; for(let hop=0;hop<4;hop++){ const response=await fetch(current,{headers:token?{Authorization:'Bearer '+token}:{},redirect:'manual'}); if(response.status>=300&&response.status<400){ const location=response.headers.get('location')||''; if(!location)return response; current=location.startsWith('http')?location:new URL(location,current).toString(); console.log('Ryan voice diagnostic: following media redirect',{diagnosticId,hop}); continue } return response } throw new Error('media_redirect_limit') }
 async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
  const diagnosticId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8)
  console.log('Ryan voice diagnostic: attachment received',{diagnosticId,channel,mime:text(attachment?.mime_type||attachment?.mimeType||attachment?.type,120),mediaIdPresent:Boolean(attachment?.media_id||attachment?.mediaId||attachment?.id),urlPresent:Boolean(attachment?.url||attachment?.media_url||attachment?.mediaUrl||attachment?.download_url),base64Present:Boolean(attachment?.base64||attachment?.data)})
@@ -54,13 +55,9 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  const headers:Record<string,string>={}
  const token=await metaAccessToken(supabase,organizationId,channel)
  if(token&&/^(whatsapp|facebook|messenger|instagram)$/iu.test(channel))headers.Authorization='Bearer '+token
- let r=await fetch(url,{headers})
- // A Meta CDN URL may reject a stale/incorrect Authorization header. Retry once without the header after 401.
- if(r.status===401&&headers.Authorization){
-  console.warn('Ryan voice diagnostic: media fetch 401 with bearer, retrying without authorization',{diagnosticId,channel})
-  r=await fetch(url)
- }
- if(!r.ok){console.error('Ryan voice diagnostic: media fetch failed',{diagnosticId,status:r.status,mime,channel});return {error:'media_fetch_'+r.status}}
+ let r:Response
+ try{r=await fetchMetaMedia(url,token,diagnosticId)}catch(error:any){console.error('Ryan voice diagnostic: media fetch exception',{diagnosticId,channel,error:text(error?.message,300)});return {error:'media_fetch_exception'}}
+ if(!r.ok){console.error('Ryan voice diagnostic: media fetch failed',{diagnosticId,status:r.status,mime,channel,redirected:r.redirected});return {error:'media_fetch_'+r.status}}
  const buffer=Buffer.from(await r.arrayBuffer())
  const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
  const declaredMime=mime||''
