@@ -1,0 +1,2 @@
+-- Harden Ryan credit purchases and invite redemption against suspended/ineligible organizations.
+-- Applied directly to production on 2026-09-29; kept here as migration history.
