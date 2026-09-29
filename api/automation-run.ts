@@ -938,9 +938,20 @@ export default async function handler(
       )
     }
 
-    const automationList =
-      (automations ??
-        []) as Automation[]
+    const rawAutomationList = (automations ?? []) as Automation[]
+    const automationList: Automation[] = []
+
+    for (const automation of rawAutomationList) {
+      const { data: featureEnabled, error: featureError } = await supabase.rpc('service_subscription_has_feature', {
+        p_organization_id: automation.organization_id,
+        p_feature: 'automations',
+      })
+      if (featureError) {
+        console.error(`[automation-run] Failed to verify entitlement for ${automation.organization_id}:`, featureError)
+        continue
+      }
+      if (featureEnabled === true) automationList.push(automation)
+    }
 
     /**
      * =====================================================

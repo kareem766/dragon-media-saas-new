@@ -95,6 +95,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const { data: membership, error: membershipError } = await db.from('users').select('id,organization_id,active,role').eq('id', stateUserId).eq('organization_id', String(stateData.organizationId)).maybeSingle()
     if (membershipError || !membership || membership.active === false) return errorRedirect(res, 'المستخدم غير مرتبط بهذه الشركة أو حسابه غير نشط.')
+    const { data:integrationsEnabled, error:integrationsEntitlementError } = await db.rpc('service_subscription_has_feature', { p_organization_id: String(stateData.organizationId), p_feature: 'integrations' })
+    if (integrationsEntitlementError || integrationsEnabled !== true) return errorRedirect(res, 'التكاملات غير متاحة في الباقة الحالية.')
     const { data: permission } = await db.from('role_permissions').select('can_edit').eq('role', membership.role).eq('resource', 'settings').maybeSingle()
     if (!permission?.can_edit) return errorRedirect(res, 'ربط Meta متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.')
     const tokenParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: REDIRECT_URI, code })

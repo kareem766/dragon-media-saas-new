@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'node:crypto'
 import { prepareRyanMultimodal } from '../_server/admin/ryan-multimodal'
@@ -258,10 +257,11 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
  return {success:false,message:'Unsupported action'}
 }
 
-export default async function main(req:VercelRequest,res:VercelResponse){
+export default async function main(req:any,res:any){
  if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'})
  const supabase=db(),secret=text(req.headers['x-ryan-inbox-secret'],300);const {data:secretRow}=await supabase.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle();if(!secret||!secretRow?.value||!sameSecret(secret,String(secretRow.value)))return res.status(401).json({error:'Unauthorized'})
  const body=obj(req.body),organizationId=text(body.organization_id,100),conversationId=text(body.conversation_id,100),messageId=text(body.message_id,100);if(!organizationId||!conversationId||!messageId)return res.status(400).json({error:'Missing agent identifiers'})
+ const {data:ryanEnabled,error:ryanEntitlementError}=await supabase.rpc('service_subscription_has_feature',{p_organization_id:organizationId,p_feature:'ryan'});if(ryanEntitlementError)return res.status(500).json({error:'Failed to verify Ryan entitlement',details:text(ryanEntitlementError.message,500)});if(ryanEnabled!==true)return res.status(403).json({error:'Ryan غير متاح في الباقة الحالية.'})
  const {data:incoming}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata,created_at').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle();if(!incoming||incoming.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle();if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
  const channelMetadata=obj(conversation.metadata);
