@@ -37,23 +37,25 @@ async function metaAccessToken(supabase:any,organizationId:string,channel:string
  return decryptMetaToken(obj(integration?.config).access_token)
 }
 async function fetchAttachment(supabase:any,organizationId:string,channel:string,attachment:any){
+ const diagnosticId=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8)
+ console.log('Ryan voice diagnostic: attachment received',{diagnosticId,channel,mime:text(attachment?.mime_type||attachment?.mimeType||attachment?.type,120),mediaIdPresent:Boolean(attachment?.media_id||attachment?.mediaId||attachment?.id),urlPresent:Boolean(attachment?.url||attachment?.media_url||attachment?.mediaUrl||attachment?.download_url),base64Present:Boolean(attachment?.base64||attachment?.data)})
  const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase().split(';')[0].trim()
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
  if(!url&&mediaId&&/^whatsapp$/iu.test(channel))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
  let base64=text(attachment.base64||attachment.data,30000000).replace(/^data:[^;]+;base64,/i,'')
  if(base64)return {mime:mime||'application/octet-stream',base64,bytes:Math.floor(base64.length*0.75)}
- if(!url)return {error:'missing_media_url'}
+ if(!url){console.error('Ryan voice diagnostic: missing media URL',{diagnosticId,channel,mediaIdPresent:Boolean(mediaId)});return {error:'missing_media_url'}}
  const headers:Record<string,string>={}
  const token=await metaAccessToken(supabase,organizationId,channel)
  if(token&&/^(whatsapp|facebook|messenger|instagram)$/iu.test(channel))headers.Authorization='Bearer '+token
  const r=await fetch(url,{headers})
- if(!r.ok)return {error:'media_fetch_'+r.status}
+ if(!r.ok){console.error('Ryan voice diagnostic: media fetch failed',{diagnosticId,status:r.status,mime,channel});return {error:'media_fetch_'+r.status}}
  const buffer=Buffer.from(await r.arrayBuffer())
  const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
  const declaredMime=mime||''
  const detected=(declaredMime&&/^audio\//i.test(declaredMime))?declaredMime:(headerMime&&headerMime!=='application/octet-stream'?headerMime:(declaredMime||headerMime||'application/octet-stream'))
- return {mime:detected,base64:buffer.toString('base64'),bytes:buffer.byteLength}
+ console.log('Ryan voice diagnostic: media fetched',{diagnosticId,status:r.status,declaredMime:mime,headerMime,detected,bytes:buffer.byteLength}); return {mime:detected,base64:buffer.toString('base64'),bytes:buffer.byteLength}
 }
 
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
