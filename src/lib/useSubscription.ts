@@ -187,8 +187,12 @@ export function useSubscription() {
   const rawIsActive = isSubscriptionStatusActive && !isDateExpired
   const rawIsExpired = rawStatus === 'expired' || (isSubscriptionStatusActive && isDateExpired)
 
+  // Never expose a concrete subscription state while the initial subscription
+  // query is still resolving. Consumers use this state to decide whether to
+  // show onboarding/welcome or a locked screen, so an early "no_subscription"
+  // value can cause a visible lock flicker for new accounts.
   let accessState: SubscriptionAccessState = 'unknown'
-  if (rawStatus === 'no_subscription') accessState = 'no_subscription'
+  if (!loading && rawStatus === 'no_subscription') accessState = 'no_subscription'
   else if (isCancelled) accessState = 'cancelled'
   else if (rawIsExpired) accessState = 'expired'
   else if (rawPendingPayment) accessState = 'pending_payment'
