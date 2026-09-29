@@ -116,11 +116,11 @@ ${text(prompt, 6000)}
         maxOutputTokens: 2200,
         responseMimeType: 'application/json',
         responseSchema: {
-          type: 'object',
+          type: 'OBJECT',
           properties: {
-            hook: { type: 'string' },
-            content: { type: 'string' },
-            cta: { type: 'string' },
+            hook: { type: 'STRING' },
+            content: { type: 'STRING' },
+            cta: { type: 'STRING' },
           },
           required: ['hook', 'content', 'cta'],
         },
@@ -133,7 +133,20 @@ ${text(prompt, 6000)}
 
   const raw = text(data?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || '').join(''), 12000)
   let parsed: any
-  try { parsed = JSON.parse(raw) } catch { throw new Error('تعذر قراءة نتيجة Gemini بشكل صحيح.') }
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    // Be tolerant if a provider wraps valid JSON in a markdown code fence.
+    const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+    try {
+      parsed = JSON.parse(cleaned)
+    } catch {
+      throw new Error('تعذر قراءة نتيجة Gemini بشكل صحيح.')
+    }
+  }
+  if (!parsed?.hook || !parsed?.content || !parsed?.cta) {
+    throw new Error('Gemini أعاد نتيجة غير مكتملة. حاول مرة أخرى.')
+  }
 
   return { hook: text(parsed?.hook, 1000), content: text(parsed?.content, 12000), cta: text(parsed?.cta, 1000) }
 }
