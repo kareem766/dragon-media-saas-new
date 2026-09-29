@@ -42,14 +42,24 @@ async function fetchAttachment(supabase:any,organizationId:string,channel:string
  const mime=text(attachment.mime_type||attachment.mimeType||attachment.type,120).toLowerCase().split(';')[0].trim()
  const mediaId=text(attachment.media_id||attachment.mediaId||attachment.id,300)
  let url=text(attachment.url||attachment.media_url||attachment.mediaUrl||attachment.download_url,5000)
- if(!url&&mediaId&&/^whatsapp$/iu.test(channel))url=await whatsappMediaUrl(supabase,organizationId,mediaId)
+ // WhatsApp media URLs can expire or be stale. When a media_id exists, always resolve a fresh Graph media URL before downloading.
+ if(mediaId&&/^whatsapp$/iu.test(channel)){
+  const freshUrl=await whatsappMediaUrl(supabase,organizationId,mediaId)
+  if(freshUrl)url=freshUrl
+  else console.error('Ryan voice diagnostic: failed to refresh WhatsApp media URL',{diagnosticId})
+ }
  let base64=text(attachment.base64||attachment.data,30000000).replace(/^data:[^;]+;base64,/i,'')
  if(base64)return {mime:mime||'application/octet-stream',base64,bytes:Math.floor(base64.length*0.75)}
  if(!url){console.error('Ryan voice diagnostic: missing media URL',{diagnosticId,channel,mediaIdPresent:Boolean(mediaId)});return {error:'missing_media_url'}}
  const headers:Record<string,string>={}
  const token=await metaAccessToken(supabase,organizationId,channel)
  if(token&&/^(whatsapp|facebook|messenger|instagram)$/iu.test(channel))headers.Authorization='Bearer '+token
- const r=await fetch(url,{headers})
+ let r=await fetch(url,{headers})
+ // A Meta CDN URL may reject a stale/incorrect Authorization header. Retry once without the header after 401.
+ if(r.status===401&&headers.Authorization){
+  console.warn('Ryan voice diagnostic: media fetch 401 with bearer, retrying without authorization',{diagnosticId,channel})
+  r=await fetch(url)
+ }
  if(!r.ok){console.error('Ryan voice diagnostic: media fetch failed',{diagnosticId,status:r.status,mime,channel});return {error:'media_fetch_'+r.status}}
  const buffer=Buffer.from(await r.arrayBuffer())
  const headerMime=(r.headers.get('content-type')||'').split(';')[0].toLowerCase().trim()
