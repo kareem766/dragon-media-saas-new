@@ -94,20 +94,33 @@ const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
 const retryDelay=(attempt:number)=>Math.min(4000,500*Math.pow(2,attempt)+Math.floor(Math.random()*400))
 async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;base64:string}){
- const candidates=[model,'gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
+ const candidates=['gemini-3.5-transcribe','gemini-3.5-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='audio transcription failed'
  for(const candidate of candidates){
   for(let attempt=0;attempt<3;attempt++){
-   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000)
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
    try{
-    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(apiKey),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({contents:[{role:'user',parts:[{text:'استمع للتسجيل الصوتي جيداً. اكتب فقط النص المنطوق كما قاله العميل، بنفس اللغة قدر الإمكان، بدون شرح أو تلخيص.'},{inlineData:{mimeType:audio.mime,data:audio.base64}}]}],generationConfig:{maxOutputTokens:1200}})})
+    const body:any={
+      contents:[{role:'user',parts:[
+        {text:'حوّل التسجيل الصوتي إلى نص فقط. التسجيل من عميل مصري على واتساب. حافظ على الكلمات والمعنى كما قيلت، ولا تلخص ولا تجب عن العميل.'},
+        {inlineData:{mimeType:audio.mime,data:audio.base64}}
+      ]}],
+      generationConfig:{maxOutputTokens:1600},
+      ...(candidate==='gemini-3.5-transcribe'?{audioTranscriptionConfig:{languageCodes:['ar-EG'],mode:'SMART'}}:{})
+    }
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(apiKey),{
+      method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify(body)
+    })
     const data=await r.json().catch(()=>({}))
     if(r.ok){
-     const out=text(data?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),5000)
-     if(out)return out
-     last=candidate+' returned an empty audio transcript'
-     if(attempt<2){await sleep(retryDelay(attempt));continue}
-     break
+      const parts=Array.isArray(data?.candidates?.[0]?.content?.parts)?data.candidates[0].content.parts:[]
+      const direct=parts.map((p:any)=>text(p?.audioTranscription?.text||'')).filter(Boolean).join(' ')
+      const plain=parts.map((p:any)=>text(p?.text||'')).filter(Boolean).join(' ')
+      const out=text(direct||plain,5000)
+      if(out)return out
+      last=candidate+' returned an empty audio transcript'
+      if(attempt<2){await sleep(retryDelay(attempt));continue}
+      break
     }
     last=text(data?.error?.message,500)||'Gemini '+r.status
     if(transientStatus(r.status)&&attempt<2){await sleep(retryDelay(attempt));continue}
