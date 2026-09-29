@@ -401,7 +401,9 @@ ${explicitOldContextReference?'العميل أشار في رسالته الحا�
  // Greeting-only messages are deterministic: never send historical context to Gemini and never let the model revive an old request.
  if(greetingOnly){
   const greetingName=trustedCustomerName
-  plan={reply:greetingName?`وعليكم السلام ${greetingName}، أهلاً وسهلاً بحضرتك. أقدر أساعدك في إيه؟`:'وعليكم السلام، أهلاً وسهلاً بحضرتك. أقدر أساعدك في إيه؟',action:'continue',action_data:{},confidence:1}
+  const greeting=text(current,400).trim()
+  const greetingPrefix=/^(?:مساء الخير|مساء النور)[.!؟!،,\s]*$/iu.test(greeting)?'مساء الخير':/^(?:صباح الخير|صباح النور)[.!؟!،,\s]*$/iu.test(greeting)?'صباح الخير':/^(?:اهلاً|أهلاً|أهلا|اهلا|هاي|hello|hi)[.!؟!،,\s]*$/iu.test(greeting)?'أهلاً وسهلاً':/^(?:السلام عليكم|سلام عليكم)[.!؟!،,\s]*$/iu.test(greeting)?'وعليكم السلام':'أهلاً وسهلاً'
+  plan={reply:greetingName?`${greetingPrefix} ${greetingName}، أهلاً وسهلاً بحضرتك. أقدر أساعدك في إيه؟`:`${greetingPrefix} بحضرتك. أقدر أساعدك في إيه؟`,action:'continue',action_data:{},confidence:1}
  } else try{const result=await callGemini(apiKey,model,system,effectiveHistory,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
  const detectedService=serviceFromText(current,services||[]);
 if(!plan.service&&detectedService)plan.service=detectedService;
