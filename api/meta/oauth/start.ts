@@ -81,6 +81,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const today = new Date().toISOString().slice(0, 10)
     const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
     if (!subscriptionActive && !allowBeforeSubscription) return json(res, 403, { error: 'ربط التكاملات متاح بعد تفعيل الاشتراك.' })
+    const { data:integrationsEnabled, error:integrationsEntitlementError } = await db.rpc('service_subscription_has_feature', { p_organization_id: organizationId, p_feature: 'integrations' })
+    if (integrationsEntitlementError) return json(res, 500, { error: 'تعذر التحقق من صلاحية التكاملات.' })
+    if (integrationsEnabled !== true) return json(res, 403, { error: 'التكاملات غير متاحة في الباقة الحالية.' })
 
     const { data: permission } = await db
       .from('role_permissions')
