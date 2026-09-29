@@ -403,7 +403,7 @@ ${explicitOldContextReference?'العميل أشار في رسالته الحا�
   const greetingName=trustedCustomerName
   const greeting=text(current,400).trim()
   const greetingPrefix=/^(?:مساء الخير|مساء النور)[.!؟!،,\s]*$/iu.test(greeting)?'مساء الخير':/^(?:صباح الخير|صباح النور)[.!؟!،,\s]*$/iu.test(greeting)?'صباح الخير':/^(?:اهلاً|أهلاً|أهلا|اهلا|هاي|hello|hi)[.!؟!،,\s]*$/iu.test(greeting)?'أهلاً وسهلاً':/^(?:السلام عليكم|سلام عليكم)[.!؟!،,\s]*$/iu.test(greeting)?'وعليكم السلام':'أهلاً وسهلاً'
-  const addressedName=greetingName?(customerGender==='male'?`يا أستاذ ${greetingName}`:customerGender==='female'?`يا أستاذة ${greetingName}`:`يا فندم ${greetingName}`):''
+  const addressedName=greetingName?(customerGender==='male'?`يا أستاذ ${greetingName}`:customerGender==='female'?`يا أستاذة ${greetingName}`:'يا فندم'):'يا فندم'
   plan={reply:addressedName?`${greetingPrefix} ${addressedName}، أهلاً وسهلاً بحضرتك. أقدر أساعدك في إيه؟`:`${greetingPrefix} يا فندم، أهلاً وسهلاً بحضرتك. أقدر أساعدك في إيه؟`,action:'continue',action_data:{},confidence:1}
  } else try{const result=await callGemini(apiKey,model,system,effectiveHistory,current,currentParts,temperature,allowFallback);plan=obj(result.plan);usedModel=result.model}catch(e:any){lastError=text(e?.message,500);console.error('Ryan Gemini reliability exhausted',JSON.stringify({model:usedModel,error:lastError,conversationId,messageId}))}
  const detectedService=serviceFromText(current,services||[]);
