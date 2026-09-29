@@ -244,12 +244,28 @@ export default async function main(req:VercelRequest,res:VercelResponse){
  if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'})
  const supabase=db(),secret=text(req.headers['x-ryan-inbox-secret'],300);const {data:secretRow}=await supabase.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle();if(!secret||!secretRow?.value||!sameSecret(secret,String(secretRow.value)))return res.status(401).json({error:'Unauthorized'})
  const body=obj(req.body),organizationId=text(body.organization_id,100),conversationId=text(body.conversation_id,100),messageId=text(body.message_id,100);if(!organizationId||!conversationId||!messageId)return res.status(400).json({error:'Missing agent identifiers'})
- const {data:claimed,error:claimError}=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId});if(claimError)return res.status(500).json({error:'Failed to claim incoming message',details:text(claimError.message,500)});if(!claimed)return res.status(200).json({ok:true,skipped:true})
  const {data:incoming}=await supabase.from('messages').select('id,conversation_id,sender_type,content,metadata,created_at').eq('id',messageId).eq('conversation_id',conversationId).maybeSingle();if(!incoming||incoming.sender_type!=='customer')return res.status(200).json({ok:true,skipped:true})
  const {data:conversation}=await supabase.from('conversations').select('id,organization_id,customer_id,channel,handled_by,metadata').eq('id',conversationId).eq('organization_id',organizationId).maybeSingle();if(!conversation||conversation.handled_by==='human')return res.status(200).json({ok:true,skipped:true})
- const [{data:customer},{data:agentRow},{data:services}]=await Promise.all([supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle(),supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)])
-if(!customer)return res.status(409).json({error:'Customer is not configured'})
-let agent:any=agentRow
+ let {data:customer}=await supabase.from('customers').select('id,name,phone,email,company,notes').eq('id',conversation.customer_id).eq('organization_id',organizationId).maybeSingle()
+ const [{data:agentRow},{data:services}]=await Promise.all([supabase.from('ai_agents').select('id,name,persona,language,settings').eq('organization_id',organizationId).eq('name','Ryan').eq('active',true).maybeSingle(),supabase.from('services').select('id,name,description,category').eq('organization_id',organizationId).order('name').limit(100)])
+ // Meta conversations can outlive a customer row after manual CRM cleanup. Re-create the customer from the stable channel identifier instead of returning 409.
+ if(!customer){
+  const channel=String(conversation.channel||'').toLowerCase()
+  const metadata=obj(conversation.metadata)
+  const externalId=text(channel==='instagram'?metadata.instagram_user_id:metadata.facebook_psid,200)
+  if(externalId){
+   const {data:createdCustomer,error:createCustomerError}=await supabase.from('customers').insert({organization_id:organizationId,name:'عميل جديد',phone:null,source:channel==='instagram'?'instagram':'messenger'}).select('id,name,phone,email,company,notes').single()
+   if(createCustomerError) return res.status(500).json({error:'Failed to restore customer for Ryan',details:text(createCustomerError.message,500)})
+   customer=createdCustomer
+   const {error:conversationRepairError}=await supabase.from('conversations').update({customer_id:customer.id,updated_at:new Date().toISOString()}).eq('id',conversationId).eq('organization_id',organizationId)
+   if(conversationRepairError) return res.status(500).json({error:'Failed to repair Ryan conversation',details:text(conversationRepairError.message,500)})
+   console.warn('Ryan repaired conversation with missing customer',{organizationId,conversationId,customerId:customer.id,channel})
+  } else {
+   return res.status(409).json({error:'Customer is not configured'})
+  }
+ }
+ const {data:claimed,error:claimError}=await supabase.rpc('claim_ryan_message',{p_message_id:messageId,p_conversation_id:conversationId});if(claimError)return res.status(500).json({error:'Failed to claim incoming message',details:text(claimError.message,500)});if(!claimed)return res.status(200).json({ok:true,skipped:true})
+ let agent:any=agentRow
 if(!agent){
  const {data:createdAgent,error:createAgentError}=await supabase.from('ai_agents').insert({organization_id:organizationId,name:'Ryan',persona:DEFAULT_RYAN_PERSONA,language:'ar-EG',active:true,settings:DEFAULT_RYAN_SETTINGS}).select('id,name,persona,language,settings').single()
  if(createAgentError){
