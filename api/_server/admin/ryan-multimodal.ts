@@ -94,45 +94,24 @@ const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
 const retryDelay=(attempt:number)=>Math.min(4000,500*Math.pow(2,attempt)+Math.floor(Math.random()*400))
 async function transcribeAudio(apiKey:string,model:string,audio:{mime:string;base64:string}){
- const candidates=['gemini-3.5-transcribe','gemini-3.5-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-2.5-flash'].filter((v,i,a)=>v&&a.indexOf(v)===i)
- let last='audio transcription failed'
- for(const candidate of candidates){
-  for(let attempt=0;attempt<3;attempt++){
-   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000)
-   try{
-    const body:any={
-      contents:[{role:'user',parts:[
-        {text:'حوّل التسجيل الصوتي إلى نص فقط. التسجيل من عميل مصري على واتساب. حافظ على الكلمات والمعنى كما قيلت، ولا تلخص ولا تجب عن العميل.'},
-        {inlineData:{mimeType:audio.mime,data:audio.base64}}
-      ]}],
-      generationConfig:{maxOutputTokens:1600},
-      ...(candidate==='gemini-3.5-transcribe'?{audioTranscriptionConfig:{languageCodes:['ar-EG'],mode:'SMART'}}:{})
-    }
-    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(apiKey),{
-      method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify(body)
-    })
-    const data=await r.json().catch(()=>({}))
-    if(r.ok){
-      const parts=Array.isArray(data?.candidates?.[0]?.content?.parts)?data.candidates[0].content.parts:[]
-      const direct=parts.map((p:any)=>text(p?.audioTranscription?.text||'')).filter(Boolean).join(' ')
-      const plain=parts.map((p:any)=>text(p?.text||'')).filter(Boolean).join(' ')
-      const out=text(direct||plain,5000)
-      if(out)return out
-      last=candidate+' returned an empty audio transcript'
-      if(attempt<2){await sleep(retryDelay(attempt));continue}
-      break
-    }
-    last=text(data?.error?.message,500)||'Gemini '+r.status
-    if(transientStatus(r.status)&&attempt<2){await sleep(retryDelay(attempt));continue}
-    break
-   }catch(error:any){
-    last=error?.name==='AbortError'?candidate+' audio request timed out':text(error?.message,500)||last
-    if(attempt<2){await sleep(retryDelay(attempt));continue}
-    break
-   }finally{clearTimeout(timeout)}
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000)
+ try{
+  const body={
+   model:'gemini-3.5-transcribe',
+   input:[{type:'audio',data:audio.base64,mime_type:audio.mime}],
+   generation_config:{transcription_config:{language_codes:['ar-EG'],mode:'smart'}}
   }
- }
- throw new Error(last)
+  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/interactions',{
+   method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},signal:controller.signal,body:JSON.stringify(body)
+  })
+  const data=await r.json().catch(()=>({}))
+  if(!r.ok)throw new Error(text(data?.error?.message,700)||'Gemini transcription HTTP '+r.status)
+  const out=text(data?.output_text||data?.output?.map?.((item:any)=>item?.text||'').join?.(' '),5000)
+  if(!out)throw new Error('Gemini transcription returned empty text')
+  return out
+ }catch(error:any){
+  throw new Error(error?.name==='AbortError'?'Gemini transcription request timed out':text(error?.message,700)||'Gemini transcription failed')
+ }finally{clearTimeout(timeout)}
 }
 
 export async function prepareRyanMultimodal(supabase:any,organizationId:string,channel:string,metadata:any,apiKey:string,model:string){
