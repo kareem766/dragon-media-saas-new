@@ -67,3 +67,29 @@ begin
  if not found then raise exception 'تعذر تأكيد استخدام كود الدعوة'; end if;
  return v_invite.organization_id;
 end; $$;
+
+create or replace function public.accept_invite_code(p_code text)
+returns table(organization_id uuid,role text)
+language plpgsql security definer set search_path=''
+as $$
+declare v_user_id uuid:=auth.uid(); v_email text; v_full_name text; v_confirmed_at timestamptz; v_org_id uuid; v_role text; v_terms_at timestamptz; v_terms_version text; v_privacy_at timestamptz; v_privacy_version text; v_suspended boolean; v_limit int; v_count int;
+begin
+ if v_user_id is null then raise exception 'يجب تسجيل الدخول أولاً'; end if;
+ select u.email,u.raw_user_meta_data->>'full_name',u.email_confirmed_at,nullif(u.raw_user_meta_data->>'terms_accepted_at','')::timestamptz,u.raw_user_meta_data->>'terms_version',nullif(u.raw_user_meta_data->>'privacy_policy_accepted_at','')::timestamptz,u.raw_user_meta_data->>'privacy_policy_version' into v_email,v_full_name,v_confirmed_at,v_terms_at,v_terms_version,v_privacy_at,v_privacy_version from auth.users u where u.id=v_user_id;
+ if v_email is null then raise exception 'تعذر الحصول على بيانات الحساب'; end if;
+ if v_confirmed_at is null then raise exception 'يجب تأكيد البريد الإلكتروني قبل قبول دعوة الشركة'; end if;
+ if exists(select 1 from public.users pu where pu.id=v_user_id and pu.organization_id is not null) then raise exception 'حسابك مرتبط بمساحة عمل بالفعل'; end if;
+ select ic.organization_id,ic.role into v_org_id,v_role from public.invite_codes ic where upper(trim(ic.code))=upper(trim(p_code)) and ic.used_by is null and ic.expires_at is not null and ic.expires_at>now() for update;
+ if v_org_id is null then raise exception 'كود الدعوة غير صالح أو منتهي الصلاحية أو مستخدم بالفعل'; end if;
+ select coalesce(o.suspended,false) into v_suspended from public.organizations o where o.id=v_org_id;
+ if v_suspended then raise exception 'المؤسسة موقوفة حالياً'; end if;
+ select (p.limits->>'users')::int into v_limit from public.subscriptions s join public.plans p on p.id=s.plan_id where s.organization_id=v_org_id and s.status in ('active','trialing') limit 1;
+ if v_limit is null then raise exception 'لا يوجد اشتراك نشط يسمح بقبول الدعوة'; end if;
+ select count(*) into v_count from public.users where organization_id=v_org_id;
+ if v_count>=v_limit then raise exception 'تم الوصول للحد الأقصى لعدد المستخدمين في باقة هذه المؤسسة (%)',v_limit; end if;
+ insert into public.users(id,organization_id,full_name,email,role,active,terms_accepted_at,terms_version,privacy_policy_accepted_at,privacy_policy_version) values(v_user_id,v_org_id,coalesce(nullif(trim(v_full_name),''),v_email),v_email,v_role,true,v_terms_at,v_terms_version,v_privacy_at,v_privacy_version)
+ on conflict(id) do update set organization_id=excluded.organization_id,full_name=excluded.full_name,email=excluded.email,role=excluded.role,active=true,terms_accepted_at=coalesce(excluded.terms_accepted_at,public.users.terms_accepted_at),terms_version=coalesce(excluded.terms_version,public.users.terms_version),privacy_policy_accepted_at=coalesce(excluded.privacy_policy_accepted_at,public.users.privacy_policy_accepted_at),privacy_policy_version=coalesce(excluded.privacy_policy_version,public.users.privacy_policy_version);
+ update public.invite_codes ic set used_by=v_user_id,used_at=now() where upper(trim(ic.code))=upper(trim(p_code)) and ic.used_by is null;
+ if not found then raise exception 'تعذر إتمام قبول دعوة الشركة، حاول مرة أخرى'; end if;
+ return query select v_org_id,v_role;
+end; $$;
