@@ -130,7 +130,7 @@ export async function prepareRyanMultimodal(supabase:any,organizationId:string,c
   const fetchedBase64=fetched.base64??''
   if(fetchedBytes>MAX_INLINE_BYTES){summaries.push({type:'too_large',mime:fetchedMime,bytes:fetchedBytes});continue}
   if(/^audio\//iu.test(fetched.mime)){
-   parts.push({inlineData:{mimeType:fetchedMime,data:fetchedBase64}})
+   // Audio is transcribed separately; never pass raw WhatsApp audio to Ryan's chat model.
    try{
     const audioText=await transcribeAudio(apiKey,{mime:fetchedMime,base64:fetchedBase64})
     transcript=[transcript,audioText].filter(Boolean).join('\n')
