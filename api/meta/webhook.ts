@@ -28,6 +28,16 @@ async function getDb() {
   if (!url || !key) throw new Error('Supabase server configuration is incomplete.')
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
+async function dispatchRyanForMetaMessage(client:any,organizationId:string,conversationId:string,messageId:string){
+  const {data:secretRow,error:secretError}=await client.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle()
+  if(secretError)throw new Error('Ryan dispatch secret lookup failed: '+secretError.message)
+  const secret=String(secretRow?.value||'').trim()
+  if(!secret)throw new Error('Ryan dispatch secret is missing')
+  const response=await fetch('https://dragon-media-saas-new.vercel.app/api/admin/ryan-inbox',{method:'POST',headers:{'Content-Type':'application/json','x-ryan-inbox-secret':secret},body:JSON.stringify({organization_id:organizationId,conversation_id:conversationId,message_id:messageId})})
+  const payload=await response.json().catch(()=>({}))
+  if(!response.ok)throw new Error(payload?.error||'Ryan inbox dispatch failed')
+  return payload
+}
 async function findIntegration(db: any, phoneNumberId: string, wabaId: string) {
   const { data: rows, error } = await db.from('integrations').select('id, organization_id, metadata').eq('provider', 'whatsapp').eq('connected', true)
   if (error) throw error
@@ -120,6 +130,11 @@ async function handleInstagramWebhook(db: any, payload: any) {
       const { error: messageError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'instagram_webhook', instagram_user_id: senderId, instagram_business_user_id: instagramUserId, instagram_message_id: externalId, attachments: normalizedAttachments }, created_at: now })
       if (messageError) throw messageError
       await db.from('conversations').update({ updated_at: now, last_message_at: now, unread_count: Number(conversation.unread_count || 0) + 1, status: 'open', handled_by: 'ai', metadata: { provider: 'instagram', instagram_user_id: senderId, instagram_business_user_id: instagramUserId, source: 'instagram_webhook' } }).eq('id', conversation.id).eq('organization_id', organizationId)
+      try {
+        await dispatchRyanForMetaMessage(db,organizationId,String(conversation.id),externalId)
+      } catch (ryanError) {
+        console.error('Instagram Ryan dispatch failed',{organizationId,instagramUserId,senderId,messageId:externalId,error:ryanError instanceof Error?ryanError.message:String(ryanError)})
+      }
     }
   }
 }
@@ -365,6 +380,11 @@ async function handleFacebookWebhook(db: any, payload: any) {
       const { error: insertError } = await db.from('messages').insert({ conversation_id: conversation.id, sender_type: 'customer', content, external_id: externalId, metadata: { source: 'facebook_webhook', facebook_page_id: pageId, facebook_psid: senderId, facebook_message_id: externalId, attachments: attachmentPayload }, created_at: now })
       if (insertError) throw insertError
       await db.from('conversations').update({ last_message_at: now, updated_at: now, unread_count: Number(conversation.unread_count || 0) + (existed ? 1 : 0), status: 'open' }).eq('id', conversation.id)
+      try {
+        await dispatchRyanForMetaMessage(db,organizationId,String(conversation.id),externalId)
+      } catch (ryanError) {
+        console.error('Facebook Messenger Ryan dispatch failed',{organizationId,pageId,senderId,messageId:externalId,error:ryanError instanceof Error?ryanError.message:String(ryanError)})
+      }
     }
   }
 }
