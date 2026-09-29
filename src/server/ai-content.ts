@@ -50,6 +50,13 @@ async function getContext(db: any, userId: string): Promise<any> {
   const activeSubscription = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
   if (!activeSubscription) throw new Error('يجب أن يكون الاشتراك فعالًا لاستخدام استوديو المحتوى.')
 
+  const { data: featureEnabled, error: featureError } = await db.rpc('subscription_has_feature', {
+    p_organization_id: user.organization_id,
+    p_feature: 'ai_content',
+  })
+  if (featureError) throw new Error('تعذر التحقق من صلاحية استوديو المحتوى.')
+  if (featureEnabled !== true) throw new Error('استوديو المحتوى غير متاح في باقتك الحالية.')
+
   let plan: any = null
   if (subscription?.plan_id) {
     const { data } = await db.from('plans').select('id,name,features').eq('id', subscription.plan_id).maybeSingle()
