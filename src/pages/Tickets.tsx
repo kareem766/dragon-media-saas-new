@@ -195,7 +195,6 @@ export default function Tickets() {
   }
 
   const handleReply = async (e: React.FormEvent) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     e.preventDefault()
 
     if (!supabase || !activeId || !reply.trim()) return
