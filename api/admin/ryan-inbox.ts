@@ -257,7 +257,7 @@ async function executeAction(supabase:any,organizationId:string,customer:any,con
  return {success:false,message:'Unsupported action'}
 }
 
-export default async function main(req:VercelRequest,res:VercelResponse){
+export default async function main(req:any,res:any){
  if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'})
  const supabase=db(),secret=text(req.headers['x-ryan-inbox-secret'],300);const {data:secretRow}=await supabase.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle();if(!secret||!secretRow?.value||!sameSecret(secret,String(secretRow.value)))return res.status(401).json({error:'Unauthorized'})
  const body=obj(req.body),organizationId=text(body.organization_id,100),conversationId=text(body.conversation_id,100),messageId=text(body.message_id,100);if(!organizationId||!conversationId||!messageId)return res.status(400).json({error:'Missing agent identifiers'})
