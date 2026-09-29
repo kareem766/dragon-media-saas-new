@@ -97,6 +97,13 @@ export async function handleCampaignRequest(req: VercelRequest, res: VercelRespo
     if (!organizationId) organizationId = String(campaign.organization_id || '')
     if (!organizationId) return json(res, 403, { message: 'لم يتم العثور على مساحة العمل.' })
 
+    const { data: campaignFeatureEnabled, error: campaignFeatureError } = await admin.rpc('subscription_has_feature', {
+      p_organization_id: organizationId,
+      p_feature: 'campaigns',
+    })
+    if (campaignFeatureError) throw campaignFeatureError
+    if (campaignFeatureEnabled !== true) return json(res, 403, { message: 'الحملات التسويقية غير متاحة في الباقة الحالية.' })
+
     // Enforce campaign permissions on the server. UI guards are not a security boundary.
     // Background worker requests are already authenticated with the worker secret and must bypass
     // tenant-user permissions so scheduled campaigns continue to run.
