@@ -104,6 +104,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tokenData = await tokenResponse.json().catch(() => ({}))
     if (!tokenResponse.ok || !tokenData.access_token) throw new Error(tokenData?.error?.message || 'فشل تبادل authorization code مع Meta.')
     const token = String(tokenData.access_token)
+    if (stateData.provider === 'instagram') {
+      const { data: existingIntegration } = await db.from('integrations').select('metadata').eq('organization_id', String(stateData.organizationId)).eq('provider', 'instagram').maybeSingle()
+      const existingInstagramId = String(existingIntegration?.metadata?.instagram_user_id || '')
+      const pages = await graph('/me/accounts?fields=id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}&limit=100', token)
+      const candidates = (Array.isArray(pages?.data) ? pages.data : [])
+        .filter((page: any) => page?.id && page?.access_token && page?.instagram_business_account?.id)
+        .map((page: any) => ({
+          pageId: String(page.id),
+          pageName: String(page.name || ''),
+          pageToken: String(page.access_token),
+          instagram: page.instagram_business_account,
+        }))
+      const selected = existingInstagramId
+        ? candidates.find((item: any) => String(item.instagram.id) === existingInstagramId)
+        : candidates.length === 1 ? candidates[0] : null
+      if (!selected) {
+        if (candidates.length > 1) throw new Error('حساب Meta يحتوي على أكثر من حساب Instagram احترافي قابل للربط. اربط حساب Instagram المطلوب بصفحة Facebook واحدة ثم أعد المحاولة.')
+        throw new Error('لم يتم العثور على حساب Instagram احترافي مرتبط بصفحة Facebook. يجب تحويل الحساب إلى Professional وربطه بصفحة Facebook ثم إعادة المحاولة.')
+      }
+
+      const instagramUserId = String(selected.instagram.id)
+      const pageToken = String(selected.pageToken)
+      let webhookSubscribed = false
+      let webhookFields: string[] = []
+      let webhookError = ''
+      try {
+        await graph('/' + encodeURIComponent(instagramUserId) + '/subscribed_apps?subscribed_fields=comments,messages,mentions', pageToken, { method: 'POST' })
+        const current = await graph('/' + encodeURIComponent(instagramUserId) + '/subscribed_apps', pageToken)
+        const apps = Array.isArray(current?.data) ? current.data : []
+        const row = apps.find((item: any) => String(item?.id || item?.app_id || '') === String(appId))
+        webhookFields = Array.isArray(row?.subscribed_fields) ? row.subscribed_fields.map(String) : []
+        webhookSubscribed = webhookFields.includes('comments') || Boolean(row)
+        if (!webhookSubscribed) webhookError = 'تم ربط Instagram لكن Meta لم تؤكد اشتراك Webhook للحساب.'
+      } catch (error) {
+        webhookError = error instanceof Error ? error.message : 'فشل اشتراك Instagram Webhook لدى Meta.'
+        console.error('Instagram webhook subscription failed', { instagramUserId, error: webhookError })
+      }
+
+      const now = new Date().toISOString()
+      const { error: saveError } = await db.from('integrations').upsert({
+        organization_id: String(stateData.organizationId),
+        provider: 'instagram',
+        connected: true,
+        status: webhookSubscribed ? 'connected' : 'error',
+        config: { access_token: encryptToken(pageToken) },
+        metadata: {
+          instagram_user_id: instagramUserId,
+          instagram_username: String(selected.instagram.username || ''),
+          instagram_name: String(selected.instagram.name || ''),
+          instagram_profile_picture_url: String(selected.instagram.profile_picture_url || ''),
+          facebook_page_id: selected.pageId,
+          facebook_page_name: selected.pageName,
+          instagram_webhook_subscribed: webhookSubscribed,
+          instagram_webhook_fields: webhookFields,
+          ready_for_messaging: webhookSubscribed,
+          connected_via: 'instagram_facebook_login',
+        },
+        connected_at: now,
+        last_verified_at: now,
+        error_message: webhookError || null,
+        updated_at: now,
+      }, { onConflict: 'organization_id,provider' })
+      if (saveError) throw new Error('تمت مصادقة Instagram لكن تعذر حفظ الاتصال في Dragon Media.')
+      return res.redirect(302, 'https://dragon-media-saas-new.vercel.app/#/integrations/meta?meta_provider=instagram&meta_status=' + (webhookSubscribed ? 'connected' : 'error') + (webhookError ? '&meta_message=' + encodeURIComponent(webhookError) : ''))
+    }
+
     if (stateData.provider === 'facebook') {
       // Resolve the exact Page instead of blindly taking the first Page returned by Meta.
       // On reconnect, prefer the Page already stored for this organization; otherwise only
