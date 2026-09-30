@@ -4,6 +4,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 
 const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 const FACEBOOK_REDIRECT_URI = REDIRECT_URI
+const INSTAGRAM_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/instagram/callback'
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 
 function json(res: VercelResponse, status: number, body: unknown) { return res.status(status).json(body) }
@@ -99,9 +100,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (provider === 'instagram') {
       const state = signState({ provider: 'instagram', organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
       const scope = ['pages_show_list','pages_read_engagement','pages_manage_metadata','instagram_basic','instagram_manage_comments','instagram_manage_messages','instagram_content_publish'].join(',')
-      const params = new URLSearchParams({ client_id: appId, redirect_uri: REDIRECT_URI, response_type: 'code', state, scope })
+      const params = new URLSearchParams({ client_id: appId, redirect_uri: INSTAGRAM_REDIRECT_URI, response_type: 'code', state, scope })
       const url = `https://www.facebook.com/dialog/oauth?${params.toString()}`
-      return json(res, 200, { url, auth_url: url, redirect_uri: REDIRECT_URI, state, app_id: appId, provider: 'instagram' })
+      return json(res, 200, { url, auth_url: url, redirect_uri: INSTAGRAM_REDIRECT_URI, state, app_id: appId, provider: 'instagram' })
     }
 
     if (provider === 'facebook') {
