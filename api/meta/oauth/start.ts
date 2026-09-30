@@ -96,6 +96,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return json(res, 403, { error: 'ربط Meta متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.' })
     }
 
+    if (provider === 'instagram') {
+      const state = signState({ provider: 'instagram', organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
+      const scope = ['pages_show_list','pages_read_engagement','pages_manage_metadata','instagram_basic','instagram_manage_comments','instagram_manage_messages','instagram_content_publish'].join(',')
+      const params = new URLSearchParams({ client_id: appId, redirect_uri: REDIRECT_URI, response_type: 'code', state, scope })
+      const url = `https://www.facebook.com/dialog/oauth?${params.toString()}`
+      return json(res, 200, { url, auth_url: url, redirect_uri: REDIRECT_URI, state, app_id: appId, provider: 'instagram' })
+    }
+
     if (provider === 'facebook') {
       const state = signState({ provider: 'facebook', organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
       const scope = ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'pages_manage_engagement', 'pages_manage_metadata', 'pages_messaging', 'pages_manage_posts'].join(',')
