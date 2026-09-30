@@ -79,9 +79,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!stateData || typeof stateData.organizationId !== 'string') return errorRedirect(res, 'جلسة Meta انتهت أو غير صالحة. ابدأ الربط من جديد.')
     const appId = env('META_APP_ID', 'FACEBOOK_APP_ID')
     const appSecret = env('META_APP_SECRET', 'FACEBOOK_APP_SECRET')
+    const instagramAppId = env('INSTAGRAM_APP_ID', 'META_INSTAGRAM_APP_ID')
+    const instagramAppSecret = env('INSTAGRAM_APP_SECRET', 'META_INSTAGRAM_APP_SECRET')
     const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
     const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY')
     if (!appId || !appSecret || !supabaseUrl || !serviceKey) return errorRedirect(res, 'إعدادات Meta أو Supabase على الخادم غير مكتملة.')
+    if (stateData.provider === 'instagram' && (!instagramAppId || !instagramAppSecret)) return errorRedirect(res, 'إعدادات Instagram App ID أو Instagram App Secret على الخادم غير مكتملة.')
     const stateUserId = typeof stateData.userId === 'string' ? stateData.userId : ''
     if (!stateUserId) return errorRedirect(res, 'جلسة Meta غير مرتبطة بمستخدم صالح.')
     if (req.method === 'POST') {
@@ -104,8 +107,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // and Embedded Signup flow remain unchanged.
     if (stateData.provider === 'instagram') {
       const instagramTokenParams = new URLSearchParams({
-        client_id: appId,
-        client_secret: appSecret,
+        client_id: instagramAppId,
+        client_secret: instagramAppSecret,
         grant_type: 'authorization_code',
         redirect_uri: REDIRECT_URI,
         code,
@@ -124,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Exchange the short-lived Instagram user token for a long-lived token.
       const longLivedParams = new URLSearchParams({
         grant_type: 'ig_exchange_token',
-        client_secret: appSecret,
+        client_secret: instagramAppSecret,
         access_token: shortLivedToken,
       })
       const longLivedResponse = await fetch(`https://graph.instagram.com/access_token?${longLivedParams.toString()}`)
@@ -162,7 +165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         )
         const current = await currentResponse.json().catch(() => ({}))
         const apps = Array.isArray(current?.data) ? current.data : []
-        const row = apps.find((item: any) => String(item?.id || item?.app_id || '') === String(appId))
+        const row = apps.find((item: any) => String(item?.id || item?.app_id || '') === String(instagramAppId))
         webhookFields = Array.isArray(row?.subscribed_fields)
           ? row.subscribed_fields.map(String)
           : []
