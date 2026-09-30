@@ -97,10 +97,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (provider === 'instagram') {
+      // Instagram uses Business Login directly. Do not route this button through
+      // Facebook Login, otherwise Meta opens the Facebook Page picker.
       const state = signState({ provider: 'instagram', organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
-      const scope = ['pages_show_list','pages_read_engagement','pages_manage_metadata','instagram_basic','instagram_manage_comments','instagram_manage_messages','instagram_content_publish'].join(',')
-      const params = new URLSearchParams({ client_id: appId, redirect_uri: REDIRECT_URI, response_type: 'code', state, scope })
-      const url = `https://www.facebook.com/dialog/oauth?${params.toString()}`
+      const scope = [
+        'instagram_business_basic',
+        'instagram_business_manage_comments',
+        'instagram_business_manage_messages',
+        'instagram_business_content_publish',
+      ].join(',')
+      const params = new URLSearchParams({
+        client_id: appId,
+        redirect_uri: REDIRECT_URI,
+        response_type: 'code',
+        state,
+        scope,
+        enable_fb_login: '0',
+        force_reauth: 'true',
+      })
+      const url = `https://www.instagram.com/oauth/authorize?${params.toString()}`
       return json(res, 200, { url, auth_url: url, redirect_uri: REDIRECT_URI, state, app_id: appId, provider: 'instagram' })
     }
 
