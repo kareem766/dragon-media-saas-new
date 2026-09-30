@@ -43,7 +43,7 @@ type PendingSignup = {
 const cards = [
   { provider: 'whatsapp', title: 'WhatsApp Business', text: 'اربط رقم WhatsApp Business مباشرة من خلال مسار Meta الرسمي.' },
   { provider: 'facebook', title: 'Facebook', text: 'اربط صفحة Facebook لإدارة رسائل الصفحة من داخل Dragon Media.' },
-  { provider: 'instagram', title: 'Instagram', text: 'ربط Instagram سيستخدم نفس طبقة Meta الرسمية بعد اكتمال Facebook.' },
+  { provider: 'instagram', title: 'Instagram', text: 'اربط حساب Instagram الاحترافي المرتبط بصفحة Facebook من خلال Meta OAuth الرسمي.' },
 ]
 
 function normalizeSessionInfo(value: any): SessionInfo | null {
@@ -241,6 +241,27 @@ export default function MetaConnections() {
     }
   }
 
+  const startInstagram = async () => {
+    if (!organizationId || !supabase) return
+    setError('')
+    setConnecting(true)
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !sessionData.session?.access_token) throw new Error('انتهت جلسة الدخول. سجّل الدخول مرة أخرى.')
+      const response = await fetch('/api/meta/oauth/start?provider=instagram', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}`, Accept: 'application/json' },
+        cache: 'no-store',
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.auth_url) throw new Error(result.error || 'تعذر تجهيز ربط Instagram.')
+      window.location.assign(String(result.auth_url))
+    } catch (err) {
+      setConnecting(false)
+      setError(err instanceof Error ? err.message : 'تعذر بدء اتصال Instagram.')
+    }
+  }
+
   const startFacebook = async () => {
     if (!organizationId || !supabase) return
     setError('')
@@ -286,7 +307,7 @@ export default function MetaConnections() {
               ) : card.provider === 'facebook' ? (
                 <button onClick={startFacebook} disabled={connecting || loading} className="mt-5 w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{connecting ? 'جارٍ فتح Facebook…' : connected ? 'إعادة ربط Facebook' : 'ربط Facebook'}</button>
               ) : (
-                <button disabled className="mt-5 w-full rounded-xl border border-ink-900/10 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-500">سيتم تفعيله بعد Facebook</button>
+                <button onClick={startInstagram} disabled={connecting || loading} className="mt-5 w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{connecting ? 'جارٍ فتح Instagram…' : connected ? 'إعادة ربط Instagram' : 'ربط Instagram'}</button>
               )}
             </div>
           )
