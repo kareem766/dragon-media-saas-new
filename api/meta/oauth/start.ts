@@ -5,28 +5,22 @@ import { createHmac, randomBytes } from 'node:crypto'
 const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 const FACEBOOK_REDIRECT_URI = REDIRECT_URI
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
-
 function json(res: VercelResponse, status: number, body: unknown) { return res.status(status).json(body) }
-function signState(payload: Record<string, unknown>) {
-  const raw = Buffer.from(JSON.stringify(payload)).toString('base64url')
-  const secret = env('META_STATE_SECRET', 'META_APP_SECRET')
-  return `${raw}.${createHmac('sha256', secret).update(raw).digest('base64url')}`
-}
+function signState(payload: Record<string, unknown>) { const raw = Buffer.from(JSON.stringify(payload)).toString('base64url'); const secret = env('META_STATE_SECRET', 'META_APP_SECRET'); return `${raw}.${createHmac('sha256', secret).update(raw).digest('base64url')}` }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST' && req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' })
   try {
     const appId = env('META_APP_ID', 'FACEBOOK_APP_ID')
-    const instagramAppId = env('INSTAGRAM_APP_ID', 'META_INSTAGRAM_APP_ID', 'META_APP_ID', 'FACEBOOK_APP_ID')
+    const instagramAppId = env('INSTAGRAM_APP_ID', 'META_INSTAGRAM_APP_ID')
     const configId = env('META_CONFIG_ID', 'META_WHATSAPP_CONFIG_ID', 'FACEBOOK_CONFIG_ID')
     const stateSecret = env('META_STATE_SECRET', 'META_APP_SECRET')
     const supabaseUrl = env('SUPABASE_URL', 'VITE_SUPABASE_URL')
     const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
     const provider = String(req.query.provider || ((typeof req.body === 'object' && req.body) ? (req.body as any).provider || '' : '')).toLowerCase()
-
     const missing: string[] = []
     if (!appId) missing.push('META_APP_ID')
-    if (provider === 'instagram' && !instagramAppId) missing.push('INSTAGRAM_APP_ID or META_INSTAGRAM_APP_ID')
+    if (provider === 'instagram' && !instagramAppId) missing.push('INSTAGRAM_APP_ID')
     if (!stateSecret) missing.push('META_STATE_SECRET or META_APP_SECRET')
     if (!supabaseUrl) missing.push('SUPABASE_URL or VITE_SUPABASE_URL')
     if (!serviceKey) missing.push('SUPABASE_SERVICE_ROLE_KEY')
@@ -36,31 +30,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authorization = String(req.headers.authorization || '')
     const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
     if (!accessToken) return json(res, 401, { error: 'جلسة الدخول غير موجودة.' })
-
     const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
     const { data: userData, error: userError } = await db.auth.getUser(accessToken)
     if (userError || !userData.user) return json(res, 401, { error: 'جلسة الدخول غير صالحة.' })
 
     let organizationId = ''
-    if (req.method === 'POST') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
-      organizationId = String(body.organizationId || '')
-    }
+    if (req.method === 'POST') { const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}); organizationId = String(body.organizationId || '') }
     let membership: { id: string; organization_id: string; active: boolean; role: string } | null = null
     if (!organizationId) {
       const { data, error } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).maybeSingle()
       if (error) return json(res, 500, { error: 'تعذر التحقق من الشركة المرتبطة بالحساب.' })
-      const row = data as unknown as { id: string; organization_id: string; active: boolean; role: string } | null
-      membership = row
-      organizationId = String(row?.organization_id || '')
+      membership = data as unknown as { id: string; organization_id: string; active: boolean; role: string } | null
+      organizationId = String(membership?.organization_id || '')
     } else {
       const { data } = await db.from('users').select('id,organization_id,active,role').eq('id', userData.user.id).eq('organization_id', organizationId).maybeSingle()
-      const row = data as unknown as { id: string; organization_id: string; active: boolean; role: string } | null
-      membership = row
+      membership = data as unknown as { id: string; organization_id: string; active: boolean; role: string } | null
     }
-    if (!membership) return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
-    const membershipRecord = membership as { id: string; organization_id: string; active: boolean; role: string }
-    if (membershipRecord.active === false || !membershipRecord.organization_id) return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
+    if (!membership || membership.active === false || !membership.organization_id) return json(res, 403, { error: 'لا تملك صلاحية ربط Meta لهذه الشركة.' })
 
     const { data: platformSettings } = await db.from('platform_settings').select('integrations_enabled_before_subscription').eq('id', 1).maybeSingle()
     const allowBeforeSubscription = Boolean(platformSettings?.integrations_enabled_before_subscription)
@@ -69,27 +55,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const today = new Date().toISOString().slice(0, 10)
     const subscriptionActive = ['active', 'trialing'].includes(String(subscription?.status || '')) && (!expiry || expiry >= today)
     if (!subscriptionActive && !allowBeforeSubscription) return json(res, 403, { error: 'ربط التكاملات متاح بعد تفعيل الاشتراك.' })
-    const { data:integrationsEnabled, error:integrationsEntitlementError } = await db.rpc('service_subscription_has_feature', { p_organization_id: organizationId, p_feature: 'integrations' })
+    const { data: integrationsEnabled, error: integrationsEntitlementError } = await db.rpc('service_subscription_has_feature', { p_organization_id: organizationId, p_feature: 'integrations' })
     if (integrationsEntitlementError) return json(res, 500, { error: 'تعذر التحقق من صلاحية التكاملات.' })
     if (integrationsEnabled !== true) return json(res, 403, { error: 'التكاملات غير متاحة في الباقة الحالية.' })
-    const { data: permission } = await db.from('role_permissions').select('can_edit').eq('role', membershipRecord.role).eq('resource', 'settings').maybeSingle()
+    const { data: permission } = await db.from('role_permissions').select('can_edit').eq('role', membership.role).eq('resource', 'settings').maybeSingle()
     if (!permission?.can_edit) return json(res, 403, { error: 'ربط Meta متاح فقط لمن لديه صلاحية تعديل إعدادات الشركة.' })
 
     if (provider === 'instagram') {
-      // Instagram Business Login MUST use the Instagram App ID from the
-      // Instagram API with Instagram Login product. It is intentionally
-      // separate from the Facebook/WhatsApp OAuth client configuration.
       const state = signState({ provider: 'instagram', organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
       const scope = ['instagram_business_basic', 'instagram_business_manage_comments', 'instagram_business_manage_messages', 'instagram_business_content_publish'].join(',')
-      const params = new URLSearchParams({
-        client_id: instagramAppId,
-        redirect_uri: REDIRECT_URI,
-        response_type: 'code',
-        state,
-        scope,
-        enable_fb_login: '0',
-        force_authentication: '1',
-      })
+      const params = new URLSearchParams({ client_id: instagramAppId, redirect_uri: REDIRECT_URI, response_type: 'code', state, scope, enable_fb_login: '0', force_reauth: 'true' })
       const url = `https://www.instagram.com/oauth/authorize?${params.toString()}`
       return json(res, 200, { url, auth_url: url, redirect_uri: REDIRECT_URI, state, app_id: instagramAppId, provider: 'instagram' })
     }
@@ -102,7 +77,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return json(res, 200, { url, auth_url: url, redirect_uri: FACEBOOK_REDIRECT_URI, state, app_id: appId, provider: 'facebook' })
     }
 
-    // WhatsApp path below is intentionally unchanged: it still uses the existing Meta Embedded Signup configuration and callback.
     const state = signState({ organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
     const params = new URLSearchParams({ client_id: appId, redirect_uri: REDIRECT_URI, response_type: 'code', config_id: configId, state, override_default_response_type: 'true' })
     const url = `https://www.facebook.com/dialog/oauth?${params.toString()}`
