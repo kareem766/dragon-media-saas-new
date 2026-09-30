@@ -859,11 +859,16 @@ export default function Settings() {
         )
       }
 
-      if (
-        !authUrl.startsWith(
-          'https://www.facebook.com/',
-        )
-      ) {
+      const allowedAuthHost =
+        provider === 'instagram'
+          ? authUrl.startsWith(
+              'https://www.instagram.com/',
+            )
+          : authUrl.startsWith(
+              'https://www.facebook.com/',
+            )
+
+      if (!allowedAuthHost) {
         throw new Error(
           'رابط مصادقة Meta غير صالح.',
         )
