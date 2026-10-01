@@ -213,6 +213,11 @@ const adminItems = [
     icon: IconShield,
   },
   {
+    to: '/admin/platform-users',
+    label: 'مديرو المنصة والحسابات',
+    icon: IconUsers,
+  },
+  {
     to: '/admin/audit-logs',
     label: 'سجل النشاط',
     icon: IconChart,
