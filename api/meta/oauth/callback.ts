@@ -130,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         client_secret: instagramAppSecret,
         access_token: shortLivedToken,
       })
-      const longLivedResponse = await fetch(`https://graph.instagram.com/access_token?${longLivedParams.toString()}`)
+      const longLivedResponse = await fetch(`https://graph.instagram.com/access_token?${longLivedParams.toString()}`, { method: 'GET' })
       const longLivedData = await longLivedResponse.json().catch(() => ({}))
       const token = String(longLivedData?.access_token || '')
       if (!longLivedResponse.ok || !token) {
@@ -138,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const profileResponse = await fetch(
-        `https://graph.instagram.com/${GRAPH_VERSION}/me?fields=id,user_id,username,name,profile_picture_url,account_type`,
+        `https://graph.instagram.com/me?fields=id,user_id,username,name,profile_picture_url,account_type`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
       const profileData = await profileResponse.json().catch(() => ({}))
@@ -152,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let webhookError = ''
       try {
         const webhookResponse = await fetch(
-          `https://graph.instagram.com/${GRAPH_VERSION}/${encodeURIComponent(instagramUserId)}/subscribed_apps?subscribed_fields=comments,messages,messaging_postbacks`,
+          `https://graph.instagram.com/${encodeURIComponent(instagramUserId)}/subscribed_apps?subscribed_fields=comments,messages,messaging_postbacks`,
           { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
         )
         const webhookPayload = await webhookResponse.json().catch(() => ({}))
@@ -160,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           throw new Error(webhookPayload?.error?.message || `فشل اشتراك Instagram Webhook لدى Meta (${webhookResponse.status}).`)
         }
         const currentResponse = await fetch(
-          `https://graph.instagram.com/${GRAPH_VERSION}/${encodeURIComponent(instagramUserId)}/subscribed_apps`,
+          `https://graph.instagram.com/${encodeURIComponent(instagramUserId)}/subscribed_apps`,
           { headers: { Authorization: `Bearer ${token}` } },
         )
         const current = await currentResponse.json().catch(() => ({}))
