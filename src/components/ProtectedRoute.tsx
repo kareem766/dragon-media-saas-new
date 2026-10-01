@@ -97,15 +97,23 @@ export default function ProtectedRoute({
   // لا نحول كل تحديث تلقائي للـsession أو إعادة جلب بيانات الشركة/الاشتراك
   // إلى شاشة تحميل كاملة. شاشة التحميل مطلوبة فقط أثناء أول تهيئة للحساب.
   useEffect(() => {
+    // A logged-out visitor must be released to the /login redirect as soon as
+    // auth initialization finishes. Waiting for organization/subscription
+    // checks here leaves a fresh browser on an infinite loading screen.
+    if (!authLoading && !user?.id) {
+      setReadyUserId(null)
+      setInitialChecksReady(true)
+      return
+    }
+
     if (
       !authLoading &&
       !orgLoading &&
       !subscriptionLoading &&
       !(organizationId && checkingSuspend) &&
       !!user?.id &&
-      readyUserId !== user.id
+      readyUserId === user.id
     ) {
-      setReadyUserId(user.id)
       setInitialChecksReady(true)
     }
   }, [
