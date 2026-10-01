@@ -151,7 +151,9 @@ export default function Inbox() {
     if (queryError) { setError(queryError.message); setConversations([]) } else {
       const normalized = (data ?? []).map(normalizeConversation)
       setConversations(normalized)
-      setActiveConversationId(current => current && normalized.some(c => c.id === current) ? current : normalized[0]?.id ?? null)
+      // Do not auto-open the first conversation. On mobile, the user should
+      // always see the conversation list first and choose which chat to open.
+      setActiveConversationId(current => current && normalized.some(c => c.id === current) ? current : null)
     }
     setLoadingConversations(false)
   }, [organizationId])
