@@ -4,31 +4,23 @@ import { SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL } from '../config.js'
 
 const json = (res: VercelResponse, status: number, body: Record<string, unknown>) => res.status(status).json(body)
 
-const getAnonKey = () =>
-  String(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim()
-
 async function authorize(req: VercelRequest, res: VercelResponse) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
-  const anon = getAnonKey()
-  if (!token || !SUPABASE_URL || !anon || !SUPABASE_SERVICE_ROLE_KEY) {
+
+  if (!token || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     json(res, 401, { error: 'غير مصرح' })
-    return null
-  }
-
-  const userClient = createClient(SUPABASE_URL, anon, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
-  const { data: auth, error: authError } = await userClient.auth.getUser(token)
-  if (authError || !auth.user) {
-    json(res, 401, { error: 'جلسة الدخول غير صالحة' })
     return null
   }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+
+  const { data: auth, error: authError } = await admin.auth.getUser(token)
+  if (authError || !auth.user) {
+    json(res, 401, { error: 'جلسة الدخول غير صالحة' })
+    return null
+  }
 
   const { data: caller, error } = await admin
     .from('users')
@@ -72,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ryan: { total: ryan.data?.length || 0, active: (ryan.data || []).filter((x: any) => x.active).length, error: ryan.error?.message || null },
     operations: { open_handoffs: handoff.data?.length || 0, pending_payments: payments.data?.length || 0 },
     environment: {
-      supabase: Boolean(SUPABASE_URL && getAnonKey() && SUPABASE_SERVICE_ROLE_KEY),
+      supabase: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY),
       gemini: Boolean(process.env.GEMINI_API_KEY),
       meta: Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET),
     },
