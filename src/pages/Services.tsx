@@ -4,6 +4,7 @@ import { Card, Badge, Button } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 
 interface DBService {
   id: string
@@ -162,6 +163,7 @@ const SkeletonCard = () => (
 )
 
 export default function Services() {
+  const { confirmAction } = useToast()
   const { can } = usePermissions()
   const canEditServices = can('services', 'edit')
   const canDeleteServices = can('services', 'delete')
@@ -246,7 +248,7 @@ export default function Services() {
 
   const handleDelete = async (service: DBService) => {
     if (!supabase || !organizationId || deletingId) return
-    if (!window.confirm('هل تريد حذف الخدمة «' + service.name + '»؟')) return
+    if (!confirmAction('هل تريد حذف الخدمة «' + service.name + '»؟')) return
     setDeletingId(service.id)
     setError(null)
     const { error: deleteError } = await supabase
