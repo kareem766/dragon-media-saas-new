@@ -178,6 +178,8 @@ export default function Dashboard() {
   const [appointments, setAppointments] =
     useState<AppointmentRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
     if (!organizationId || !supabase) {
@@ -192,6 +194,7 @@ export default function Dashboard() {
 
     const load = async () => {
       setLoading(true)
+      setLoadError(null)
 
       const [
         leadsRes,
@@ -277,6 +280,26 @@ export default function Dashboard() {
           ]),
       ])
 
+      const queryError = [
+        leadsRes.error,
+        hotLeadsRes.error,
+        customersRes.error,
+        dealsRes.error,
+        tasksRes.error,
+        pendingTasksRes.error,
+        appointmentsTodayRes.error,
+        campaignsRes.error,
+      ].find(Boolean)
+
+      if (queryError) {
+        setData(null)
+        setTasks([])
+        setAppointments([])
+        setLoadError(queryError.message)
+        setLoading(false)
+        return
+      }
+
       const deals =
         (dealsRes.data ?? []) as unknown as {
           value: number
@@ -334,14 +357,43 @@ export default function Dashboard() {
       setLoading(false)
     }
 
-    load()
-  }, [organizationId])
+    void load()
+  }, [organizationId, retryKey])
 
-  if (
-    orgLoading ||
-    loading ||
-    !data
-  ) {
+  if (orgError || !organizationId) {
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <div className="w-full max-w-md rounded-3xl border border-red-100 bg-red-50/70 p-6 text-center shadow-[0_12px_34px_rgba(15,47,107,0.05)]">
+          <p className="text-sm font-semibold text-red-700">
+            {orgError ?? 'تعذر تحديد المؤسسة الخاصة بحسابك'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-[420px] items-center justify-center">
+        <div className="w-full max-w-md rounded-3xl border border-red-100 bg-white p-6 text-center shadow-[0_12px_34px_rgba(15,47,107,0.06)]" role="alert">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+            !
+          </div>
+          <h2 className="text-sm font-bold text-ink-950">تعذر تحميل لوحة التحكم</h2>
+          <p className="mt-2 break-words text-xs leading-5 text-red-600">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => setRetryKey(value => value + 1)}
+            className="mt-4 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-800"
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (orgLoading || loading || !data) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-2">
@@ -375,50 +427,6 @@ export default function Dashboard() {
     )
   }
 
-  if (
-    orgError ||
-    !organizationId
-  ) {
-    return (
-      <div className="flex min-h-[420px] items-center justify-center">
-        <div className="w-full max-w-md rounded-3xl border border-red-100 bg-red-50/70 p-6 text-center shadow-[0_12px_34px_rgba(15,47,107,0.05)]">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100 text-red-600">
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M12 8V12"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-              <path
-                d="M12 16H12.01"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-              <path
-                d="M10.3 3.9L2.7 17C1.93 18.33 2.89 20 4.43 20H19.57C21.11 20 22.07 18.33 21.3 17L13.7 3.9C12.93 2.57 11.07 2.57 10.3 3.9Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-            </svg>
-          </div>
-
-          <p className="text-sm font-semibold text-red-700">
-            {orgError ??
-              'تعذر تحديد المؤسسة الخاصة بحسابك'}
-          </p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 sm:space-y-7">
