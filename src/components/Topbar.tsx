@@ -1003,6 +1003,18 @@ export default function Topbar({
                     <span>الإعدادات</span>
                   </Link>
 
+                  <Link
+                    to="/tickets"
+                    onClick={() =>
+                      setAccountOpen(false)
+                    }
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink-700 transition-colors hover:bg-ink-50 hover:text-ink-950"
+                    role="menuitem"
+                  >
+                    <BellIcon className="h-[18px] w-[18px]" />
+                    <span>الدعم الفني والمساعدة</span>
+                  </Link>
+
                   <div className="my-1.5 border-t border-ink-100" />
 
                   <button
