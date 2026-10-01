@@ -3,6 +3,7 @@ import { usePermissions } from '../lib/usePermissions'
 import { Card, Badge, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 
 interface DBRequest {
   id: string
@@ -13,6 +14,8 @@ interface DBRequest {
 }
 
 export default function HandoffRequests() {
+  const { showToast } = useToast()
+
   const { can } = usePermissions()
   const canEditResource = can('handoff_requests', 'edit')
   const canDeleteResource = can('handoff_requests', 'delete')
@@ -33,7 +36,7 @@ export default function HandoffRequests() {
   useEffect(() => { if (organizationId) load() }, [organizationId])
 
   const resolve = async (id: string) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase) return
     setResolvingId(id)
     await supabase.from('human_handoff_requests').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', id)
