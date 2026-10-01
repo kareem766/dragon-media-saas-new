@@ -1035,7 +1035,7 @@ export default function Settings() {
       instagram: 'Instagram',
     }
 
-    const confirmed = confirmAction(
+    const confirmed = await confirmAction(
       `هل أنت متأكد من إلغاء اتصال ${providerNames[provider]}؟\n\nسيتم إيقاف الاتصال وحذف بيانات الاتصال الخاصة به من Dragon Media، ويمكنك إعادة الربط لاحقًا.`,
     )
 
