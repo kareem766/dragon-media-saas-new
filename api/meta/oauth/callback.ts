@@ -192,7 +192,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         organization_id: String(stateData.organizationId),
         provider: 'instagram',
         connected: true,
-        status: webhookSubscribed ? 'connected' : 'error',
+        // OAuth/token/profile success means the Instagram account itself is connected.
+        // Webhook subscription is a separate readiness concern and must not turn a valid
+        // Instagram connection into a generic "error" state in the platform UI.
+        status: 'connected',
         config: { access_token: encryptToken(token) },
         metadata: {
           instagram_user_id: instagramUserId,
@@ -208,11 +211,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         connected_at: now,
         last_verified_at: now,
-        error_message: webhookError || null,
+        error_message: null,
         updated_at: now,
       }, { onConflict: 'organization_id,provider' })
       if (saveError) throw new Error('تمت مصادقة Instagram لكن تعذر حفظ الاتصال في Dragon Media.')
-      return res.redirect(302, 'https://dragon-media-saas-new.vercel.app/#/integrations/meta?meta_provider=instagram&meta_status=' + (webhookSubscribed ? 'connected' : 'error') + (webhookError ? '&meta_message=' + encodeURIComponent(webhookError) : ''))
+      const redirectParams = new URLSearchParams({
+        meta_provider: 'instagram',
+        meta_status: 'connected',
+      })
+      if (webhookError) redirectParams.set('meta_message', webhookError)
+      return res.redirect(302, 'https://dragon-media-saas-new.vercel.app/#/integrations/meta?' + redirectParams.toString())
     }
 
     const tokenParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, redirect_uri: REDIRECT_URI, code })
