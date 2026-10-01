@@ -109,6 +109,8 @@ export function useSubscription() {
       if (organizationLoading || platformAdminLoading || !roleLoaded) return
       setLoading(true)
       setLoadedUserId(null)
+      setError(null)
+      setRawSubscription(null)
       if (isAdmin) {
         if (!cancelled) { setRawSubscription(null); setLoadedUserId(user?.id ?? null); setLoading(false) }
         return
