@@ -208,7 +208,9 @@ export default function Appointments() {
     if (!supabase || !organizationId || deletingId) return
 
     const customerName = appointment.customers?.name ?? 'هذا العميل'
-    const confirmed = await confirmAction(\n      `هل تريد حذف موعد \${customerName}؟\\nلا يمكن التراجع عن هذا الإجراء.`\n    )
+    const confirmed = await confirmAction(
+      `هل تريد حذف موعد ${customerName}؟\nلا يمكن التراجع عن هذا الإجراء.`
+    )
 
     if (!confirmed) return
 
