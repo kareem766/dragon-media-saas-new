@@ -28,11 +28,26 @@ export function useOrganization() {
     setNeedsOnboarding(false)
     setError(null)
 
-    const { data, error: queryError } = await supabase
-      .from('users')
-      .select('organization_id')
-      .eq('id', userId)
-      .maybeSingle()
+    // Immediately after SIGNED_IN Supabase can finish publishing the session
+    // before the first authenticated PostgREST request is ready. Do not expose
+    // that transient failure to the UI. Retry once before declaring that the
+    // user's organization could not be loaded.
+    let queryError: { message: string } | null = null
+    let data: { organization_id: string | null } | null = null
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const result = await supabase
+        .from('users')
+        .select('organization_id')
+        .eq('id', userId)
+        .maybeSingle()
+
+      data = result.data as { organization_id: string | null } | null
+      queryError = result.error ? { message: result.error.message } : null
+
+      if (!queryError) break
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250))
+    }
 
     if (queryError) {
       setOrganizationId(null)
@@ -42,13 +57,13 @@ export function useOrganization() {
       setOrganizationId(null)
       setNeedsOnboarding(true)
     } else {
-      setOrganizationId(data.organization_id as string)
+      setOrganizationId(data.organization_id)
       setNeedsOnboarding(false)
     }
 
     setLoading(false)
     setLoadedUserId(userId)
-    return data?.organization_id ? (data.organization_id as string) : null
+    return data?.organization_id ? data.organization_id : null
   }, [userId, authLoading])
 
   useEffect(() => {
