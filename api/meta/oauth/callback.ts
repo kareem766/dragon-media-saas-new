@@ -124,15 +124,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error(instagramTokenData?.error_message || instagramTokenData?.error?.message || 'فشل تبادل authorization code مع Instagram.')
       }
 
-      // Instagram Business Login long-lived token exchange uses POST.
-      // The initial authorization-code exchange above is also POST, but this
-      // endpoint is a separate token exchange and must receive form data.
+      // The long-lived exchange has changed behavior across Instagram Login
+      // versions. Do not blindly switch methods: attempt the configured POST form
+      // exchange first, and only fall back to the documented query-string form
+      // when Meta explicitly says the POST method is unsupported. This keeps the
+      // Facebook and WhatsApp flows untouched and gives us the exact Meta error
+      // when the real problem is app/account configuration.
       const longLivedParams = new URLSearchParams({
         grant_type: 'ig_exchange_token',
         client_secret: instagramAppSecret,
         access_token: shortLivedToken,
       })
-      const longLivedResponse = await fetch('https://graph.instagram.com/access_token', {
+      const postUrl = 'https://graph.instagram.com/access_token'
+      let longLivedResponse = await fetch(postUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -140,17 +144,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: longLivedParams.toString(),
       })
-      const longLivedData = await longLivedResponse.json().catch(() => ({}))
+      let longLivedData = await longLivedResponse.json().catch(() => ({}))
+      let exchangeMethod = 'POST'
+
+      const postMessage = String(longLivedData?.error?.message || longLivedData?.error_message || '')
+      const postMethodUnsupported = /method type:\s*post|unsupported.*post/i.test(postMessage)
+      if ((!longLivedResponse.ok || !longLivedData?.access_token) && postMethodUnsupported) {
+        const getUrl = `https://graph.instagram.com/access_token?${longLivedParams.toString()}`
+        longLivedResponse = await fetch(getUrl, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        })
+        longLivedData = await longLivedResponse.json().catch(() => ({}))
+        exchangeMethod = 'GET'
+      }
+
       const token = String(longLivedData?.access_token || '')
       if (!longLivedResponse.ok || !token) {
+        const metaError = longLivedData?.error || {}
+        const message = String(metaError?.message || longLivedData?.error_message || 'تم تسجيل الدخول إلى Instagram لكن تعذر إصدار Access Token طويل المدى.')
         console.error('Instagram long-lived token exchange failed', {
           status: longLivedResponse.status,
-          method: 'POST',
-          message: String(longLivedData?.error?.message || longLivedData?.error_message || ''),
-          code: longLivedData?.error?.code ?? null,
-          type: longLivedData?.error?.type ?? null,
+          method: exchangeMethod,
+          message,
+          code: metaError?.code ?? null,
+          type: metaError?.type ?? null,
+          fbtrace_id: metaError?.fbtrace_id ?? null,
         })
-        throw new Error(longLivedData?.error?.message || longLivedData?.error_message || 'تم تسجيل الدخول إلى Instagram لكن تعذر إصدار Access Token طويل المدى.')
+        if (/method type:\s*(get|post)|unsupported.*method/i.test(message)) {
+          throw new Error(`Meta رفض طريقة طلب إصدار Instagram Access Token طويل المدى (method=${exchangeMethod}, status=${longLivedResponse.status}). راجع إعداد Instagram Login/دور Instagram Tester للحساب داخل تطبيق Meta. رمز Meta: ${String(metaError?.code ?? 'غير متاح')}.`)
+        }
+        throw new Error(message)
       }
 
       const profileResponse = await fetch(
