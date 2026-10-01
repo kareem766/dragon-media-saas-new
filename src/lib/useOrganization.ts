@@ -9,11 +9,13 @@ export function useOrganization() {
   const [needsOnboarding, setNeedsOnboarding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (authLoading) return null
 
     if (!supabase || !userId) {
+      setLoadedUserId(null)
       setOrganizationId(null)
       setNeedsOnboarding(false)
       setError(null)
@@ -22,6 +24,7 @@ export function useOrganization() {
     }
 
     setLoading(true)
+    setLoadedUserId(null)
     setNeedsOnboarding(false)
     setError(null)
 
@@ -44,6 +47,7 @@ export function useOrganization() {
     }
 
     setLoading(false)
+    setLoadedUserId(userId)
     return data?.organization_id ? (data.organization_id as string) : null
   }, [userId, authLoading])
 
@@ -51,5 +55,7 @@ export function useOrganization() {
     void refresh()
   }, [refresh])
 
-  return { organizationId, loading, error, needsOnboarding, refresh }
+  const effectiveLoading = loading || (userId ? loadedUserId !== userId : false)
+
+  return { organizationId, loading: effectiveLoading, error, needsOnboarding, refresh }
 }
