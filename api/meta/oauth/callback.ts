@@ -167,7 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let webhookError = ''
       try {
         const webhookResponse = await fetch(
-          `https://graph.instagram.com/${encodeURIComponent(instagramUserId)}/subscribed_apps?subscribed_fields=comments,messages,messaging_postbacks`,
+          `https://graph.instagram.com/${GRAPH_VERSION}/me/subscribed_apps?subscribed_fields=comments,messages,messaging_postbacks`,
           { method: 'POST', headers: { Authorization: `Bearer ${token}` } },
         )
         const webhookPayload = await webhookResponse.json().catch(() => ({}))
