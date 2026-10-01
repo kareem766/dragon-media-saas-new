@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
 import { usePermissions } from '../lib/usePermissions'
 import { IconPlus } from '../components/Icon'
+import { useToast } from '../lib/ToastContext'
 
 type TaskStatus =
   | 'جديدة'
@@ -188,6 +189,7 @@ function normalizeTask(task: DBTask): DBTask {
 }
 
 export default function Tasks() {
+  const { confirmAction } = useToast()
   const { can } = usePermissions()
   const canEditTasks = can('tasks', 'edit')
   const canDeleteTasks = can('tasks', 'delete')
@@ -627,7 +629,7 @@ export default function Tasks() {
     }
 
     const confirmed =
-      window.confirm(
+      confirmAction(
         `هل أنت متأكد من حذف المهمة "${task.title}"؟`
       )
 
