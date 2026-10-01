@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { usePermissions } from '../lib/usePermissions'
 import { Card, Badge, Button } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
@@ -11,14 +12,15 @@ interface DBRequest {
   reason: string | null
   status: string
   created_at: string
+  conversation_id: string | null
 }
 
 export default function HandoffRequests() {
   const { showToast } = useToast()
 
   const { can } = usePermissions()
-  const canEditResource = can('handoff_requests', 'edit')
-  const canDeleteResource = can('handoff_requests', 'delete')
+  const canEditResource = can('handoff', 'edit')
+  const canDeleteResource = can('handoff', 'delete')
 
   const { organizationId, loading: orgLoading } = useOrganization()
   const [requests, setRequests] = useState<DBRequest[]>([])
@@ -39,7 +41,8 @@ export default function HandoffRequests() {
     if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase) return
     setResolvingId(id)
-    await supabase.from('human_handoff_requests').update({ status: 'resolved', resolved_at: new Date().toISOString() }).eq('id', id)
+    const { data: auth } = await supabase.auth.getUser()
+    await supabase.from('human_handoff_requests').update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: auth.user?.id ?? null }).eq('id', id)
     setResolvingId(null)
     load()
   }
