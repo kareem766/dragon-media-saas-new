@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 import { usePermissions } from '../lib/usePermissions'
+import { useToast } from '../lib/ToastContext'
 
 type Post = {
   id:string; prompt:string; content_type:string; tone:string; image_style:string
@@ -15,6 +16,7 @@ const tones=[['professional','احترافي'],['friendly','ودود'],['bold','
 async function api(path:string,session:any,init?:RequestInit){const response=await fetch(path,{...init,headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`,...(init?.headers||{})}});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data?.error||'حدث خطأ أثناء تنفيذ الطلب.');return data}
 
 export default function AIContentStudio(){
+  const { confirmAction } = useToast()
  const {session}=useAuth();const {isAdmin,loading:adminLoading}=useIsPlatformAdmin();const {can,loading:permissionsLoading}=usePermissions()
  const canView=isAdmin||can('ai_content','view'),canEdit=isAdmin||can('ai_content','edit'),canDelete=isAdmin||can('ai_content','delete')
  const [posts,setPosts]=useState<Post[]>([]),[prompt,setPrompt]=useState(''),[contentType,setContentType]=useState('custom'),[tone,setTone]=useState('professional'),[active,setActive]=useState<Post|null>(null),[loading,setLoading]=useState(true),[generating,setGenerating]=useState(false),[saving,setSaving]=useState(false),[error,setError]=useState(''),[platforms,setPlatforms]=useState<string[]>(['facebook']),[publishing,setPublishing]=useState(false),[publishSuccess,setPublishSuccess]=useState(false)
@@ -23,7 +25,7 @@ export default function AIContentStudio(){
  const generate=async()=>{if(!session||!canEdit||prompt.trim().length<5)return;setGenerating(true);setError('');try{const data=await api('/api/admin/ai-content',session,{method:'POST',body:JSON.stringify({action:'generate',prompt,contentType,tone})});setPosts(prev=>[data.post,...prev.filter(p=>p.id!==data.post.id)]);setActive(data.post);setPrompt('')}catch(e){setError(e instanceof Error?e.message:'تعذر إنشاء البوست.')}finally{setGenerating(false)}}
  const update=async(patch:Partial<Post>)=>{if(!session||!active||!canEdit)return;setSaving(true);setError('');try{const data=await api('/api/admin/ai-content',session,{method:'PATCH',body:JSON.stringify({id:active.id,...patch})});setActive(data.post);setPosts(prev=>prev.map(p=>p.id===data.post.id?data.post:p))}catch(e){setError(e instanceof Error?e.message:'تعذر حفظ التعديل.')}finally{setSaving(false)}}
  const publish=async()=>{if(!session||!active||!platforms.length)return;setPublishing(true);setError('');try{const data=await api('/api/admin/ai-content-publish',session,{method:'POST',body:JSON.stringify({id:active.id,platforms})});setActive(data.post);setPosts(prev=>prev.map(p=>p.id===data.post.id?data.post:p));const failed=Object.values(data.results||{}).filter((x:any)=>x?.status==='failed') as any[];if(failed.length)setError('تم تنفيذ النشر للمنصات المتاحة، وبعض المنصات لم تنجح. راجع حالة كل منصة.');else{setPublishSuccess(true);window.setTimeout(()=>setPublishSuccess(false),4500)}}catch(e){setError(e instanceof Error?e.message:'تعذر نشر البوست.')}finally{setPublishing(false)}}
- const deletePost=async()=>{if(!session||!active||!canEdit)return;if(!window.confirm('حذف مسودة البوست؟'))return;setSaving(true);try{await api('/api/admin/ai-content',session,{method:'DELETE',body:JSON.stringify({id:active.id})});const next=posts.filter(p=>p.id!==active.id);setPosts(next);setActive(next[0]||null)}catch(e){setError(e instanceof Error?e.message:'تعذر حذف البوست.')}finally{setSaving(false)}}
+ const deletePost=async()=>{if(!session||!active||!canEdit)return;if(!confirmAction('حذف مسودة البوست؟'))return;setSaving(true);try{await api('/api/admin/ai-content',session,{method:'DELETE',body:JSON.stringify({id:active.id})});const next=posts.filter(p=>p.id!==active.id);setPosts(next);setActive(next[0]||null)}catch(e){setError(e instanceof Error?e.message:'تعذر حذف البوست.')}finally{setSaving(false)}}
  const caption=useMemo(()=>active?[active.hook,active.content,active.cta].filter(Boolean).join('\n\n'):'',[active])
  if(adminLoading||permissionsLoading)return <div dir="rtl" className="flex min-h-[40vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-ink-900/10 border-t-ink-950" /></div>
  if(!canView)return <div dir="rtl" className="p-4 sm:p-6"><div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700">ليس لديك صلاحية الوصول إلى استوديو المحتوى.</div></div>
