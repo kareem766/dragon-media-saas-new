@@ -4,7 +4,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 
 const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 const FACEBOOK_REDIRECT_URI = REDIRECT_URI
-const INSTAGRAM_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/instagram/callback'
+const INSTAGRAM_REDIRECT_URI = REDIRECT_URI
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 function json(res: VercelResponse, status: number, body: unknown) { return res.status(status).json(body) }
 function signState(payload: Record<string, unknown>) { const raw = Buffer.from(JSON.stringify(payload)).toString('base64url'); const secret = env('META_STATE_SECRET', 'META_APP_SECRET'); return `${raw}.${createHmac('sha256', secret).update(raw).digest('base64url')}` }
