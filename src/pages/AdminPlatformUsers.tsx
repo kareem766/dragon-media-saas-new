@@ -95,13 +95,12 @@ export default function AdminPlatformUsers() {
 
     const confirmed = await confirmAction(
       action === 'set_platform_admin'
-        ? nextValue ? 'منح صلاحية مدير المنصة لهذا الحساب؟' : 'إزالة صلاحية مدير المنصة من هذا الحساب؟'
-        : nextValue ? 'تفعيل هذا الحساب؟' : 'إيقاف هذا الحساب؟',
-      {
-        description: 'سيتم تطبيق التغيير مباشرة على صلاحيات الوصول إلى المنصة.',
-        confirmLabel: 'متابعة',
-        cancelLabel: 'إلغاء',
-      },
+        ? nextValue
+          ? 'منح صلاحية مدير المنصة لهذا الحساب؟'
+          : 'إزالة صلاحية مدير المنصة من هذا الحساب؟'
+        : nextValue
+          ? 'تفعيل هذا الحساب؟'
+          : 'إيقاف هذا الحساب؟',
     )
     if (!confirmed) return
 
