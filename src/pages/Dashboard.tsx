@@ -23,6 +23,8 @@ interface DashboardData {
   activeCampaignsCount: number
   tasksCount: number
   connectedChannelsCount: number
+  servicesCount: number
+  ryanActive: boolean
 }
 
 interface TaskRow {
@@ -209,6 +211,8 @@ export default function Dashboard() {
         campaignsRes,
         tasksCountRes,
         integrationsRes,
+        servicesRes,
+        ryanRes,
       ] = await Promise.all([
         sb
           .from('leads')
@@ -300,6 +304,18 @@ export default function Dashboard() {
           .eq('organization_id', orgId)
           .eq('connected', true)
           .in('provider', ['facebook', 'instagram', 'whatsapp']),
+
+        sb
+          .from('services')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', orgId),
+
+        sb
+          .from('ai_agents')
+          .select('id, active')
+          .eq('organization_id', orgId)
+          .eq('name', 'Ryan')
+          .maybeSingle(),
       ])
 
       const queryError = [
@@ -313,6 +329,8 @@ export default function Dashboard() {
         campaignsRes.error,
         tasksCountRes.error,
         integrationsRes.error,
+        servicesRes.error,
+        ryanRes.error,
       ].find(Boolean)
 
       if (queryError) {
@@ -369,6 +387,8 @@ export default function Dashboard() {
           campaignsRes.count ?? 0,
         tasksCount: tasksCountRes.count ?? 0,
         connectedChannelsCount: integrationsRes.count ?? 0,
+        servicesCount: servicesRes.count ?? 0,
+        ryanActive: Boolean(ryanRes.data?.active),
       })
 
       setTasks(
@@ -501,23 +521,25 @@ export default function Dashboard() {
       </div>
 
       {/* Quick start */}
-      {(data.customersCount === 0 || data.connectedChannelsCount === 0 || data.tasksCount === 0) && (
-        <section aria-label="ابدأ هنا" className="rounded-3xl border border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] sm:p-6">
+      {(!data.customersCount || !data.connectedChannelsCount || !data.tasksCount || !data.servicesCount || !data.ryanActive) && (
+        <section aria-label="إعداد المنصة" className="rounded-3xl border border-blue-100/80 bg-white/90 p-5 shadow-[0_12px_34px_rgba(15,47,107,0.05)] sm:p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-bold text-gold-600">ابدأ هنا</p>
-              <h3 className="mt-1 text-lg font-bold text-ink-950">جهّز منصتك في خطوات بسيطة</h3>
-              <p className="mt-1 text-sm leading-6 text-ink-500">أكمل الخطوات الأساسية لتستفيد من Dragon Media بأسرع وقت.</p>
+              <h3 className="mt-1 text-lg font-bold text-ink-950">جهّز منصتك بالكامل</h3>
+              <p className="mt-1 text-sm leading-6 text-ink-500">أكمل خطوات الإعداد الأساسية، وبعدها تكون المنصة جاهزة للاستخدام اليومي.</p>
             </div>
             <span className="text-xs font-semibold text-ink-400">
-              {[data.customersCount > 0, data.connectedChannelsCount > 0, data.tasksCount > 0].filter(Boolean).length}/3 مكتملة
+              {[data.customersCount > 0, data.connectedChannelsCount > 0, data.tasksCount > 0, data.servicesCount > 0, data.ryanActive].filter(Boolean).length}/5 مكتملة
             </span>
           </div>
-          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
             {[
-              { done: data.customersCount > 0, title: 'أضف أول عميل', description: 'ابدأ ببناء قاعدة عملائك ومتابعة بياناتهم.', to: '/crm', action: 'إضافة عميل' },
-              { done: data.connectedChannelsCount > 0, title: 'اربط قنوات التواصل', description: 'اربط Facebook أو Instagram أو WhatsApp لاستقبال المحادثات.', to: '/settings', action: 'إعداد القنوات' },
-              { done: data.tasksCount > 0, title: 'أنشئ أول متابعة', description: 'حوّل المتابعة اليومية إلى مهام واضحة حتى لا يفوتك عميل.', to: '/tasks', action: 'إضافة مهمة' },
+              { done: data.customersCount > 0, title: 'أضف أول عميل', description: 'ابدأ ببناء قاعدة عملائك.', to: '/crm', action: 'إضافة عميل' },
+              { done: data.connectedChannelsCount > 0, title: 'اربط القنوات', description: 'Facebook وInstagram وWhatsApp.', to: '/settings', action: 'إعداد القنوات' },
+              { done: data.servicesCount > 0, title: 'أضف خدماتك', description: 'عرّف الخدمات التي تبيعها.', to: '/services', action: 'إدارة الخدمات' },
+              { done: data.ryanActive, title: 'فعّل Ryan', description: 'تأكد أن مساعدك الذكي نشط.', to: '/ryan', action: 'فتح Ryan' },
+              { done: data.tasksCount > 0, title: 'أنشئ متابعة', description: 'حوّل المتابعة اليومية إلى مهام.', to: '/tasks', action: 'إضافة مهمة' },
             ].map((step) => (
               <Link key={step.title} to={step.to} className={`group rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md ${step.done ? 'border-emerald-100 bg-emerald-50/50' : 'border-sand-200 bg-sand-50/50 hover:border-blue-200 hover:bg-blue-50/40'}`}>
                 <div className="flex items-start gap-3">
