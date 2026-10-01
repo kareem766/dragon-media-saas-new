@@ -538,7 +538,7 @@ export default function Pipeline() {
   }
 
   const saveDeal = async (event: React.FormEvent) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     event.preventDefault()
 
     if (!supabase || !organizationId) return
