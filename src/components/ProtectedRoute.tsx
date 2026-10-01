@@ -8,6 +8,8 @@ import {
 import { useAuth } from '../lib/AuthContext'
 import { useOrganization } from '../lib/useOrganization'
 import { useSubscription } from '../lib/useSubscription'
+import { usePermissions } from '../lib/usePermissions'
+import { useIsPlatformAdmin } from '../lib/useIsPlatformAdmin'
 import { supabase } from '../lib/supabaseClient'
 import Onboarding from '../pages/Onboarding'
 
@@ -33,6 +35,11 @@ export default function ProtectedRoute({
   const { session, user, loading: authLoading, signOut } = useAuth()
   const { organizationId, loading: orgLoading, needsOnboarding, error: organizationError, refresh } = useOrganization()
   const { loading: subscriptionLoading, isActive, isPendingPayment, isExpired, status, error: subscriptionError } = useSubscription()
+  // Permission state must be resolved before any protected page renders.
+  // Otherwise a page can briefly see an empty permission map and show a red
+  // access-denied message before the real role permissions arrive.
+  const { loading: permissionsLoading } = usePermissions()
+  const { loading: platformAdminLoading } = useIsPlatformAdmin()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -79,6 +86,8 @@ export default function ProtectedRoute({
       !orgLoading &&
       organizationResolved &&
       !subscriptionLoading &&
+      !permissionsLoading &&
+      !platformAdminLoading &&
       !(organizationId && checkingSuspend) &&
       !!user?.id &&
       readyUserId !== user.id
@@ -86,7 +95,7 @@ export default function ProtectedRoute({
       setReadyUserId(user.id)
       setInitialChecksReady(true)
     }
-  }, [authLoading, orgLoading, subscriptionLoading, organizationId, needsOnboarding, checkingSuspend, user?.id, readyUserId])
+  }, [authLoading, orgLoading, subscriptionLoading, permissionsLoading, platformAdminLoading, organizationId, needsOnboarding, checkingSuspend, user?.id, readyUserId])
 
   useEffect(() => {
     let cancelled = false
@@ -121,7 +130,7 @@ export default function ProtectedRoute({
     return () => { cancelled = true }
   }, [organizationId])
 
-  if (authLoading || !initialChecksReady || (user?.id ? readyUserId !== user.id : false)) {
+  if (authLoading || !initialChecksReady || permissionsLoading || platformAdminLoading || (user?.id ? readyUserId !== user.id : false)) {
     return (
       <div dir="rtl" className="min-h-screen flex items-center justify-center bg-sand-50">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-ink-900/10 border-t-ink-950" />
