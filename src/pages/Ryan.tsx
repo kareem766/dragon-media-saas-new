@@ -17,17 +17,18 @@ export default function Ryan(){
 
  const load=useCallback(async()=>{
   if(!supabase)throw new Error('تعذر الاتصال بقاعدة البيانات')
-  const {data:auth}=await supabase.auth.getUser();if(!auth.user)throw new Error('يجب تسجيل الدخول')
-  const {data:user,error:ue}=await supabase.from('users').select('organization_id').eq('id',auth.user.id).maybeSingle();if(ue)throw ue;if(!user?.organization_id)throw new Error('الحساب غير مرتبط بشركة')
+  const sb = supabase
+  const {data:auth}=await sb.auth.getUser();if(!auth.user)throw new Error('يجب تسجيل الدخول')
+  const {data:user,error:ue}=await sb.from('users').select('organization_id').eq('id',auth.user.id).maybeSingle();if(ue)throw ue;if(!user?.organization_id)throw new Error('الحساب غير مرتبط بشركة')
   const org=String(user.organization_id)
-  const {data:agent,error:ae}=await supabase.from('ai_agents').select('id,active,settings').eq('organization_id',org).eq('name','Ryan').maybeSingle();if(ae)throw ae
+  const {data:agent,error:ae}=await sb.from('ai_agents').select('id,active,settings').eq('organization_id',org).eq('name','Ryan').maybeSingle();if(ae)throw ae
   const [mem,runs,u,ps,pur,ms]=await Promise.all([
-   agent?.id?supabase.from('ai_agent_memory').select('id',{count:'exact',head:true}).eq('agent_id',agent.id):Promise.resolve({count:0}),
-   agent?.id?supabase.from('ai_agent_runs').select('id',{count:'exact',head:true}).eq('agent_id',agent.id):Promise.resolve({count:0}),
-   supabase.rpc('get_ryan_ai_usage_summary',{p_organization_id:org}),
-   supabase.from('ryan_message_packages').select('id,name,messages,price,currency,description,is_popular').eq('status','active').order('sort_order',{ascending:true}),
-   supabase.from('ryan_credit_purchases').select('id,messages,consumed_messages,amount,currency,status,purchased_at,expires_at,created_at').eq('organization_id',org).order('created_at',{ascending:false}),
-   supabase.from('payment_methods').select('method_key,name,details').eq('enabled',true).order('display_order',{ascending:true})
+   agent?.id?sb.from('ai_agent_memory').select('id',{count:'exact',head:true}).eq('agent_id',agent.id):Promise.resolve({count:0}),
+   agent?.id?sb.from('ai_agent_runs').select('id',{count:'exact',head:true}).eq('agent_id',agent.id):Promise.resolve({count:0}),
+   sb.rpc('get_ryan_ai_usage_summary',{p_organization_id:org}),
+   sb.from('ryan_message_packages').select('id,name,messages,price,currency,description,is_popular').eq('status','active').order('sort_order',{ascending:true}),
+   sb.from('ryan_credit_purchases').select('id,messages,consumed_messages,amount,currency,status,purchased_at,expires_at,created_at').eq('organization_id',org).order('created_at',{ascending:false}),
+   sb.from('payment_methods').select('method_key,name,details').eq('enabled',true).order('display_order',{ascending:true})
   ])
   if(u.error)throw u.error;if(ps.error)throw ps.error;if(pur.error)throw pur.error;if(ms.error)throw ms.error
   const ur=Array.isArray(u.data)?u.data[0]:u.data;setUsage(ur as Usage||null);setPackages((ps.data||[]) as Package[]);setPurchases((pur.data||[]) as Purchase[]);setMethods((ms.data||[]) as Method[])
