@@ -171,6 +171,7 @@ function ErrorBox({
 }
 
 export default function AdminPayments() {
+  const { confirmAction } = useToast()
   const { showToast } = useToast()
 
   const [requests, setRequests] = useState<PaymentRequestRow[]>([])
@@ -483,7 +484,7 @@ export default function AdminPayments() {
   const deleteMethod = async (method: PaymentMethod) => {
     if (!supabase) return
 
-    const confirmed = window.confirm(
+    const confirmed = confirmAction(
       `هل أنت متأكد من حذف طريقة الدفع "${method.name}"؟`
     )
 
