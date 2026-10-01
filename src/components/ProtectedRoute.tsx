@@ -32,6 +32,7 @@ export default function ProtectedRoute({
 }) {
   const {
     session,
+    user,
     loading: authLoading,
     signOut,
   } = useAuth()
@@ -60,6 +61,7 @@ export default function ProtectedRoute({
   const [suspensionError, setSuspensionError] = useState<string | null>(null)
   const [checkingSuspend, setCheckingSuspend] = useState(true)
   const [initialChecksReady, setInitialChecksReady] = useState(false)
+  const [readyUserId, setReadyUserId] = useState<string | null>(null)
 
   const handleOnboardingDone = useCallback(async () => {
     // After invite acceptance, the database write and the browser auth/session
@@ -79,6 +81,19 @@ export default function ProtectedRoute({
     }
   }, [refresh, navigate])
 
+  // Reset the route gate immediately when the authenticated user changes.
+  // This is important when signing out and back in without a full page reload:
+  // otherwise the previous user's ready state can render the app for one frame
+  // before the new user's organization/permissions/subscription finish loading.
+  useEffect(() => {
+    const userId = user?.id ?? null
+    setInitialChecksReady(false)
+    setReadyUserId(null)
+    setSuspended(false)
+    setSuspensionError(null)
+    setCheckingSuspend(true)
+  }, [user?.id])
+
   // لا نحول كل تحديث تلقائي للـsession أو إعادة جلب بيانات الشركة/الاشتراك
   // إلى شاشة تحميل كاملة. شاشة التحميل مطلوبة فقط أثناء أول تهيئة للحساب.
   useEffect(() => {
@@ -86,8 +101,11 @@ export default function ProtectedRoute({
       !authLoading &&
       !orgLoading &&
       !subscriptionLoading &&
-      !(organizationId && checkingSuspend)
+      !(organizationId && checkingSuspend) &&
+      !!user?.id &&
+      readyUserId !== user.id
     ) {
+      setReadyUserId(user.id)
       setInitialChecksReady(true)
     }
   }, [
@@ -96,6 +114,8 @@ export default function ProtectedRoute({
     subscriptionLoading,
     organizationId,
     checkingSuspend,
+    user?.id,
+    readyUserId,
   ])
 
   useEffect(() => {
