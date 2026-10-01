@@ -2,11 +2,23 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { useAuth } from './AuthContext'
 
+type OrganizationCacheEntry = {
+  organizationId: string | null
+  needsOnboarding: boolean
+}
+
+// All protected pages call useOrganization independently. Keep the resolved
+// organization in a small in-memory cache so a newly mounted page does not
+// briefly see organizationId=null and render its error fallback after the
+// parent guard has already completed the check.
+const organizationCache = new Map<string, OrganizationCacheEntry>()
+
 export function useOrganization() {
   const { user, loading: authLoading } = useAuth()
   const userId = user?.id ?? null
-  const [organizationId, setOrganizationId] = useState<string | null>(null)
-  const [needsOnboarding, setNeedsOnboarding] = useState(false)
+  const cachedOrganization = userId ? organizationCache.get(userId) : undefined
+  const [organizationId, setOrganizationId] = useState<string | null>(cachedOrganization?.organizationId ?? null)
+  const [needsOnboarding, setNeedsOnboarding] = useState(cachedOrganization?.needsOnboarding ?? false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
@@ -29,10 +41,19 @@ export function useOrganization() {
       return null
     }
 
-    setLoading(true)
-    setLoadedUserId(null)
-    setNeedsOnboarding(false)
-    setError(null)
+    const cached = organizationCache.get(userId)
+    if (cached) {
+      setOrganizationId(cached.organizationId)
+      setNeedsOnboarding(cached.needsOnboarding)
+      setError(null)
+      setLoadedUserId(userId)
+      setLoading(false)
+    } else {
+      setLoading(true)
+      setLoadedUserId(null)
+      setNeedsOnboarding(false)
+      setError(null)
+    }
 
     const client = supabase
     const { data: sessionData } = await client.auth.getSession()
@@ -85,14 +106,15 @@ export function useOrganization() {
       return null
     }
 
-    if (!data || !data.organization_id) {
-      setOrganizationId(null)
-      setNeedsOnboarding(true)
-    } else {
-      setOrganizationId(data.organization_id)
-      setNeedsOnboarding(false)
-    }
+    const resolvedOrganizationId = data?.organization_id ?? null
+    const resolvedNeedsOnboarding = !resolvedOrganizationId
+    organizationCache.set(userId, {
+      organizationId: resolvedOrganizationId,
+      needsOnboarding: resolvedNeedsOnboarding,
+    })
 
+    setOrganizationId(resolvedOrganizationId)
+    setNeedsOnboarding(resolvedNeedsOnboarding)
     setError(null)
     setLoading(false)
     setLoadedUserId(userId)
