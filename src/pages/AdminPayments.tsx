@@ -400,12 +400,12 @@ export default function AdminPayments() {
     const name = methodForm.name.trim()
 
     if (!methodKey) {
-      window.alert('برجاء إدخال مفتاح طريقة الدفع.')
+      showToast('برجاء إدخال مفتاح طريقة الدفع.')
       return
     }
 
     if (!name) {
-      window.alert('برجاء إدخال اسم طريقة الدفع.')
+      showToast('برجاء إدخال اسم طريقة الدفع.')
       return
     }
 
@@ -426,7 +426,7 @@ export default function AdminPayments() {
           .eq('id', editingMethodId)
 
         if (updateError) {
-          window.alert(
+          showToast(
             updateError.message || 'تعذر تحديث طريقة الدفع.'
           )
           return
@@ -443,7 +443,7 @@ export default function AdminPayments() {
           })
 
         if (insertError) {
-          window.alert(
+          showToast(
             insertError.message || 'تعذر إضافة طريقة الدفع.'
           )
           return
@@ -453,7 +453,7 @@ export default function AdminPayments() {
       closeMethodForm()
       await loadMethods()
     } catch {
-      window.alert('حدث خطأ أثناء حفظ طريقة الدفع.')
+      showToast('حدث خطأ أثناء حفظ طريقة الدفع.')
     } finally {
       setSavingMethod(false)
     }
@@ -471,7 +471,7 @@ export default function AdminPayments() {
       .eq('id', method.id)
 
     if (updateError) {
-      window.alert(
+      showToast(
         updateError.message || 'تعذر تغيير حالة طريقة الدفع.'
       )
       return
@@ -495,7 +495,7 @@ export default function AdminPayments() {
       .eq('id', method.id)
 
     if (deleteError) {
-      window.alert(
+      showToast(
         deleteError.message || 'تعذر حذف طريقة الدفع.'
       )
       return
