@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react'
 import { Card } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
+import { useToast } from '../lib/ToastContext'
 
 type Package = { id:string; name:string; messages:number; price:number; currency:string; description:string|null; status:'active'|'inactive'; sort_order:number; is_popular:boolean }
 type Form = Omit<Package,'id'>
 const empty:Form={name:'',messages:1000,price:150,currency:'EGP',description:'',status:'active',sort_order:1,is_popular:false}
 export default function AdminRyanPackages(){
+  const { confirmAction } = useToast()
  const [items,setItems]=useState<Package[]>([]),[form,setForm]=useState<Form>(empty),[editing,setEditing]=useState<string|null>(null),[loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[error,setError]=useState(''),[success,setSuccess]=useState('')
  const load=async()=>{if(!supabase){setError('قاعدة البيانات غير متاحة.');setLoading(false);return} setLoading(true); const {data,error:e}=await supabase.from('ryan_message_packages').select('id,name,messages,price,currency,description,status,sort_order,is_popular').order('sort_order',{ascending:true}); if(e)setError('تعذر تحميل باقات Ryan.'); else setItems((data??[]) as Package[]); setLoading(false)}
  useEffect(()=>{void load()},[])
  const save=async()=>{if(!supabase)return; setError('');setSuccess(''); if(!form.name.trim()||form.messages<=0||form.price<0){setError('راجع اسم الباقة وعدد الرسائل والسعر.');return} setSaving(true); const payload={...form,name:form.name.trim(),description:form.description?.trim()||null}; const q=editing?supabase.from('ryan_message_packages').update(payload).eq('id',editing):supabase.from('ryan_message_packages').insert(payload); const {error:e}=await q; if(e)setError(e.message); else {setSuccess(editing?'تم تحديث الباقة.':'تم إنشاء الباقة.');setForm(empty);setEditing(null);await load()} setSaving(false)}
  const edit=(p:Package)=>{setEditing(p.id);setForm({name:p.name,messages:p.messages,price:Number(p.price),currency:p.currency,description:p.description||'',status:p.status,sort_order:p.sort_order,is_popular:p.is_popular})}
- const remove=async(id:string)=>{if(!supabase||!window.confirm('حذف باقة Ryan؟'))return; const {error:e}=await supabase.from('ryan_message_packages').delete().eq('id',id); if(e)setError(e.message); else await load()}
+ const remove=async(id:string)=>{if(!supabase||!confirmAction('حذف باقة Ryan؟'))return; const {error:e}=await supabase.from('ryan_message_packages').delete().eq('id',id); if(e)setError(e.message); else await load()}
  return <div dir="rtl" className="mx-auto w-full max-w-7xl space-y-6 dm-page-enter">
   <div className="rounded-3xl bg-gradient-to-l from-[#071f45] to-[#123b75] p-6 text-white shadow-xl"><div className="flex flex-wrap items-start justify-between gap-4"><div><span className="inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100">RYAN AI</span><h1 className="mt-3 text-2xl font-black">باقات رسائل Ryan</h1><p className="mt-2 max-w-2xl text-sm leading-7 text-white/65">أنشئ وعدّل باقات الرسائل التي تظهر للعملاء. السعر وعدد الرسائل مصدرهما هذه الصفحة فقط.</p></div><div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/65">إدارة من الكنترول بانل</div></div></div>
   {error&&<div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}{success&&<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{success}</div>}
