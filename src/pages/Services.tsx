@@ -248,7 +248,7 @@ export default function Services() {
 
   const handleDelete = async (service: DBService) => {
     if (!supabase || !organizationId || deletingId) return
-    if (!confirmAction('هل تريد حذف الخدمة «' + service.name + '»؟')) return
+    if (!await confirmAction('هل تريد حذف الخدمة «' + service.name + '»؟')) return
     setDeletingId(service.id)
     setError(null)
     const { error: deleteError } = await supabase
