@@ -130,7 +130,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         client_secret: instagramAppSecret,
         access_token: shortLivedToken,
       })
-      const longLivedResponse = await fetch(`https://graph.instagram.com/access_token?${longLivedParams.toString()}`, { method: 'GET' })
+      const longLivedResponse = await fetch('https://graph.instagram.com/access_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: longLivedParams,
+      })
       const longLivedData = await longLivedResponse.json().catch(() => ({}))
       const token = String(longLivedData?.access_token || '')
       if (!longLivedResponse.ok || !token) {
