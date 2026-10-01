@@ -10,6 +10,7 @@ import {
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 import { useSubscription } from '../lib/useSubscription'
 import FeatureLocked from '../components/FeatureLocked'
 import CampaignTemplatePreview from '../components/CampaignTemplatePreview'
@@ -198,6 +199,8 @@ function EmptyState({
 }
 
 export default function Campaigns() {
+  const { showToast } = useToast()
+
   const { can } = usePermissions()
   const canEditResource = can('campaigns', 'edit')
   const canDeleteResource = can('campaigns', 'delete')
@@ -465,7 +468,7 @@ export default function Campaigns() {
   const handleAdd = async (
     e: React.FormEvent<HTMLFormElement>
   ) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     e.preventDefault()
 
     if (!supabase || !organizationId) {
@@ -718,7 +721,7 @@ export default function Campaigns() {
   const prepareCampaign = async (
     campaign: DBCampaign
   ) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     setPreparingId(campaign.id)
     setError(null)
     setSuccess(null)
@@ -810,7 +813,7 @@ export default function Campaigns() {
   const retryFailed = async (
     campaignId: string
   ) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     setActionId(campaignId)
     setActionType('retry')
     setError(null)
@@ -844,7 +847,7 @@ export default function Campaigns() {
   const cancelCampaign = async (
     campaignId: string
   ) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     const confirmed =
       window.confirm(
         'هل أنت متأكد من إلغاء هذه الحملة؟ سيتم تخطي الرسائل التي لم يتم إرسالها.'
