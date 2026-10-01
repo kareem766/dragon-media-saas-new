@@ -17,23 +17,27 @@ export function usePermissions() {
   const [permissions, setPermissions] = useState<Record<string, Permission>>({})
   const [role, setRole] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     if (!supabase || !user) {
       setRole(null)
       setPermissions({})
+      setLoadedUserId(null)
       setLoading(false)
       return
     }
 
     setLoading(true)
+    setLoadedUserId(null)
     const sb = supabase
     sb.from('users').select('role, is_platform_admin').eq('id', user.id).maybeSingle().then(async ({ data: userRow, error }) => {
       if (cancelled) return
       if (error || !userRow) {
         setRole(null)
         setPermissions({})
+        setLoadedUserId(user.id)
         setLoading(false)
         return
       }
@@ -46,6 +50,7 @@ export function usePermissions() {
         map[permission.resource] = { can_view: Boolean(permission.can_view), can_edit: Boolean(permission.can_edit), can_delete: Boolean(permission.can_delete) }
       })
       setPermissions(map)
+      setLoadedUserId(user.id)
       setLoading(false)
     })
     return () => { cancelled = true }
@@ -99,5 +104,6 @@ export function usePermissions() {
   }
 
   const canManageSubscription = role === 'admin' || role === 'super_admin'
-  return { can, loading, role, canManageSubscription }
+  const permissionsLoading = loading || (user?.id ? loadedUserId !== user.id : false)
+  return { can, loading: permissionsLoading, role, canManageSubscription }
 }
