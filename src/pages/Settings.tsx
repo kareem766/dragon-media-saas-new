@@ -116,6 +116,45 @@ const integrationProviders = [
   },
 ]
 
+const integrationLogoUrls: Record<string, string> = {
+  whatsapp: 'https://cdn.simpleicons.org/whatsapp/25D366',
+  facebook: 'https://cdn.simpleicons.org/facebook/1877F2',
+  instagram: 'https://cdn.simpleicons.org/instagram/E4405F',
+  tiktok: 'https://cdn.simpleicons.org/tiktok/000000',
+  telegram: 'https://cdn.simpleicons.org/telegram/229ED9',
+}
+
+function IntegrationLogo({
+  provider,
+  name,
+}: {
+  provider: string
+  name: string
+}) {
+  const src = integrationLogoUrls[provider]
+
+  return (
+    <div
+      className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-sand-200 bg-white shadow-sm sm:h-12 sm:w-12"
+      aria-hidden="true"
+    >
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          className="h-7 w-7 object-contain sm:h-8 sm:w-8"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <span className="text-[11px] font-black text-ink-900/60">
+          {name.slice(0, 2).toUpperCase()}
+        </span>
+      )}
+    </div>
+  )
+}
+
 const getMetaErrorMessage = (
   error: unknown,
   fallback: string,
@@ -2067,21 +2106,10 @@ function IntegrationsSection({
                 >
                   <div className="flex min-w-0 items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[11px] font-black sm:h-11 sm:w-11 ${
-                          connected
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : status.label.includes(
-                                  'إكمال الإعداد',
-                                )
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-sand-100 text-ink-900/60'
-                        }`}
-                      >
-                        {item.provider
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </div>
+                      <IntegrationLogo
+                        provider={item.provider}
+                        name={item.name}
+                      />
 
                       <div className="min-w-0">
                         <h3 className="break-words text-sm font-bold text-ink-950">
