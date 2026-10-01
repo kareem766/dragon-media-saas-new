@@ -11,6 +11,7 @@ import {
   Button,
 } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
+import { useToast } from '../lib/ToastContext'
 
 interface OrgRow {
   id: string
@@ -431,6 +432,7 @@ function SectionTitle({
 }
 
 export default function AdminDashboard() {
+  const { confirmAction } = useToast()
   const [data, setData] =
     useState<Overview | null>(null)
 
@@ -986,7 +988,7 @@ export default function AdminDashboard() {
       !Boolean(org.suspended)
 
     const confirmed =
-      window.confirm(
+      confirmAction(
         willSuspend
           ? 'هل أنت متأكد من تعليق هذه الشركة؟'
           : 'هل أنت متأكد من تفعيل هذه الشركة؟'
