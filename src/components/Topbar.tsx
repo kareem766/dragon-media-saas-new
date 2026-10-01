@@ -674,6 +674,17 @@ export default function Topbar({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to="/search"
+            aria-label="البحث الشامل"
+            title="البحث الشامل"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-ink-100 bg-white text-ink-700 shadow-sm transition-all hover:border-ink-200 hover:bg-ink-50 active:scale-[0.97] sm:h-11 sm:w-11"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4.5 4.5" />
+            </svg>
+          </Link>
           <div
             ref={notificationsRef}
             className="relative z-40"
