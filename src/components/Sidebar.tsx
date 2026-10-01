@@ -218,6 +218,11 @@ const adminItems = [
     icon: IconUsers,
   },
   {
+    to: '/admin/platform-health',
+    label: 'صحة المنصة والتشغيل',
+    icon: IconChart,
+  },
+  {
     to: '/admin/audit-logs',
     label: 'سجل النشاط',
     icon: IconChart,
