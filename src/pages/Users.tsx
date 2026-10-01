@@ -71,7 +71,7 @@ export default function Users() {
   const handleRemoveMember = async (member: TeamUser) => {
     if (!supabase || !session?.access_token) return
 
-    const confirmed = confirmAction(
+    const confirmed = await confirmAction(
       `هل أنت متأكد من حذف ${member.full_name} من الشركة؟\\n\\nسيتم إلغاء وصوله للشركة ولن يتم حذف حساب تسجيل الدخول نهائيًا.`
     )
     if (!confirmed) return
