@@ -32,6 +32,7 @@ type SidebarItem = {
   end?: boolean
   feature?: FeatureKey
   resource?: string
+  section?: string
 }
 
 const items: SidebarItem[] = [
@@ -48,6 +49,7 @@ const items: SidebarItem[] = [
     icon: IconUsers,
     feature: 'crm',
     resource: 'customers',
+    section: 'المبيعات',
   },
   {
     to: '/pipeline',
@@ -55,6 +57,7 @@ const items: SidebarItem[] = [
     icon: IconFunnel,
     feature: 'crm',
     resource: 'deals',
+    section: 'المبيعات',
   },
   {
     to: '/services',
@@ -62,6 +65,7 @@ const items: SidebarItem[] = [
     icon: IconLayers,
     feature: 'services',
     resource: 'services',
+    section: 'التسويق',
   },
   {
     to: '/campaigns',
@@ -69,6 +73,7 @@ const items: SidebarItem[] = [
     icon: IconMegaphone,
     feature: 'campaigns',
     resource: 'campaigns',
+    section: 'التسويق',
   },
   {
     to: '/ai-content',
@@ -76,6 +81,7 @@ const items: SidebarItem[] = [
     icon: IconSpark,
     feature: 'ai_content',
     resource: 'ai_content',
+    section: 'التسويق',
   },
   {
     to: '/inbox',
@@ -83,6 +89,7 @@ const items: SidebarItem[] = [
     icon: IconChat,
     feature: 'inbox',
     resource: 'inbox',
+    section: 'المحادثات',
   },
   {
     to: '/ryan',
@@ -90,6 +97,7 @@ const items: SidebarItem[] = [
     icon: IconSpark,
     feature: 'ryan',
     resource: 'ryan',
+    section: 'المحادثات',
   },
   {
     to: '/automations',
@@ -97,6 +105,7 @@ const items: SidebarItem[] = [
     icon: IconSettings,
     feature: 'automations',
     resource: 'automations',
+    section: 'التسويق',
   },
   {
     to: '/tasks',
@@ -104,6 +113,7 @@ const items: SidebarItem[] = [
     icon: IconCheck,
     feature: 'tasks',
     resource: 'tasks',
+    section: 'المبيعات',
   },
   {
     to: '/appointments',
@@ -111,6 +121,7 @@ const items: SidebarItem[] = [
     icon: IconCalendar,
     feature: 'appointments',
     resource: 'appointments',
+    section: 'المبيعات',
   },
   {
     to: '/billing',
@@ -118,6 +129,7 @@ const items: SidebarItem[] = [
     icon: IconCard,
     feature: 'billing',
     resource: 'billing',
+    section: 'الحساب',
   },
   {
     to: '/reports',
@@ -125,6 +137,7 @@ const items: SidebarItem[] = [
     icon: IconChart,
     feature: 'advanced_reports',
     resource: 'reports',
+    section: 'التقارير',
   },
   {
     to: '/users',
@@ -132,6 +145,7 @@ const items: SidebarItem[] = [
     icon: IconShield,
     feature: 'users',
     resource: 'users',
+    section: 'الفريق',
   },
   {
     to: '/tickets',
@@ -139,6 +153,7 @@ const items: SidebarItem[] = [
     icon: IconChat,
     feature: 'tickets',
     resource: 'tickets',
+    section: 'الدعم',
   },
   {
     to: '/settings',
@@ -146,6 +161,7 @@ const items: SidebarItem[] = [
     icon: IconSettings,
     feature: 'settings',
     resource: 'settings',
+    section: 'الحساب',
   },
 ]
 
@@ -464,14 +480,19 @@ export default function Sidebar({
               end,
               feature,
               resource,
-            }) => {
+              section,
+            }, index) => {
               // Never render permission-controlled items before permissions are
               // resolved; otherwise restricted items briefly flash and disappear.
               if (resource && !isAdmin && (permissionsLoading || !can(resource, 'view'))) return null
               // Avoid showing temporary lock icons while subscription data is loading.
+              const previousVisible = items.slice(0, index).reverse().find(item => !item.resource || isAdmin || (!permissionsLoading && can(item.resource, 'view')))
+              const showSection = Boolean(section && section !== previousVisible?.section)
               const locked = !subscriptionLoading && isFeatureLocked(feature)
 
               return (
+                <React.Fragment key={to}>
+                  {showSection && <div className="px-3 pt-4 pb-1 text-[10px] font-bold tracking-wide text-sand-100/30">{section}</div>}
                 <NavLink
                   key={to}
                   to={to}
@@ -548,6 +569,7 @@ export default function Sidebar({
                     </>
                   )}
                 </NavLink>
+                </React.Fragment>
               )
             }
           )}
