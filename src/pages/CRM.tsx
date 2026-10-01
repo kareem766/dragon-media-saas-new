@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 import { usePermissions } from '../lib/usePermissions'
 
 type Lead = {
@@ -342,6 +343,8 @@ function LoadingState() {
 }
 
 export default function CRM() {
+  const { showToast } = useToast()
+
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canEditLeads = can('leads', 'edit')
@@ -530,16 +533,16 @@ export default function CRM() {
   }, [leads, customers])
 
   const handleAddLead = async (event: React.FormEvent) => {
-    if (!canEditLeads) { alert('ليس لديك صلاحية إضافة العملاء المحتملين.'); return }
+    if (!canEditLeads) { showToast('ليس لديك صلاحية إضافة العملاء المحتملين.'); return }
     event.preventDefault()
 
     if (!supabase || !organizationId) {
-      alert('لا يمكن الاتصال بقاعدة البيانات حاليًا')
+      showToast('لا يمكن الاتصال بقاعدة البيانات حاليًا')
       return
     }
 
     if (!newLead.name.trim()) {
-      alert('اكتب اسم العميل المحتمل')
+      showToast('اكتب اسم العميل المحتمل')
       return
     }
 
@@ -601,7 +604,7 @@ export default function CRM() {
     } catch (error) {
       console.error('Add lead error:', error)
 
-      alert(
+      showToast(
         error instanceof Error
           ? error.message
           : 'حدث خطأ أثناء إضافة العميل المحتمل'
@@ -615,7 +618,7 @@ export default function CRM() {
     leadId: string,
     status: string
   ) => {
-    if (!canEditLeads) { alert('ليس لديك صلاحية تعديل العملاء المحتملين.'); return }
+    if (!canEditLeads) { showToast('ليس لديك صلاحية تعديل العملاء المحتملين.'); return }
     if (!supabase || !organizationId) return
 
     const previous = leads
@@ -677,7 +680,7 @@ export default function CRM() {
 
       setLeads(previous)
 
-      alert('تعذر تحديث حالة العميل المحتمل')
+      showToast('تعذر تحديث حالة العميل المحتمل')
     }
   }
 
@@ -729,12 +732,12 @@ export default function CRM() {
       if (customerId) {
         navigate(`/crm/customer/${customerId}`)
       } else {
-        alert('تم تحويل العميل المحتمل إلى عميل بنجاح')
+        showToast('تم تحويل العميل المحتمل إلى عميل بنجاح')
       }
     } catch (error) {
       console.error('Convert lead error:', error)
 
-      alert(
+      showToast(
         error instanceof Error
           ? error.message
           : 'حدث خطأ أثناء تحويل العميل المحتمل'
@@ -745,7 +748,7 @@ export default function CRM() {
   }
 
   const handleDeleteLead = async (lead: Lead) => {
-    if (!canDeleteLeads) { alert('ليس لديك صلاحية حذف العملاء المحتملين.'); return }
+    if (!canDeleteLeads) { showToast('ليس لديك صلاحية حذف العملاء المحتملين.'); return }
     if (!supabase || !organizationId) return
 
     const confirmed = window.confirm(
@@ -777,7 +780,7 @@ export default function CRM() {
 
       setLeads(previous)
 
-      alert('حدث خطأ أثناء حذف العميل المحتمل')
+      showToast('حدث خطأ أثناء حذف العميل المحتمل')
     }
   }
 
