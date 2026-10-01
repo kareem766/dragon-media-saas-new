@@ -95,13 +95,24 @@ const integrationProviders = [
     meta: true,
   },
   {
-    provider: 'telegram',
-    name: 'تليجرام',
+    provider: 'tiktok',
+    name: 'TikTok',
     description:
-      'ربط Telegram Bot وإدارة المحادثات.',
-    actionLabel: 'إعداد Telegram',
-    connectedActionLabel: 'إدارة Telegram',
+      'سيتم توفير تكامل TikTok داخل المنصة قريبًا.',
+    actionLabel: '',
+    connectedActionLabel: '',
     meta: false,
+    comingSoon: true,
+  },
+  {
+    provider: 'telegram',
+    name: 'Telegram',
+    description:
+      'سيتم توفير تكامل Telegram داخل المنصة قريبًا.',
+    actionLabel: '',
+    connectedActionLabel: '',
+    meta: false,
+    comingSoon: true,
   },
 ]
 
@@ -2040,16 +2051,18 @@ function IntegrationsSection({
                 <div
                   key={item.provider}
                   className={`relative flex min-h-[190px] min-w-0 flex-col overflow-hidden rounded-2xl border p-4 transition-all duration-200 sm:p-5 ${
-                    connected
-                      ? 'border-emerald-200 bg-emerald-50/40'
-                      : status.label.includes(
-                            'إكمال الإعداد',
-                          )
-                        ? 'border-amber-200 bg-amber-50/40'
-                        : status.label ===
-                            'يوجد خطأ'
-                          ? 'border-red-200 bg-red-50/30'
-                          : 'border-sand-200 bg-white hover:border-sand-300 hover:shadow-sm'
+                    item.comingSoon
+                      ? 'border-amber-200 bg-gradient-to-br from-white to-amber-50/50'
+                      : connected
+                        ? 'border-emerald-200 bg-emerald-50/40'
+                        : status.label.includes(
+                              'إكمال الإعداد',
+                            )
+                          ? 'border-amber-200 bg-amber-50/40'
+                          : status.label ===
+                              'يوجد خطأ'
+                            ? 'border-red-200 bg-red-50/30'
+                            : 'border-sand-200 bg-white hover:border-sand-300 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex min-w-0 items-start justify-between gap-3">
@@ -2081,32 +2094,44 @@ function IntegrationsSection({
                       </div>
                     </div>
 
-                    <StatusBadge
-                      label={status.label}
-                      tone={
-                        status.label.includes(
-                          'إكمال الإعداد',
-                        )
-                          ? 'warning'
-                          : status.tone
-                      }
-                    />
+                    {item.comingSoon ? (
+                      <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                        قريبًا
+                      </span>
+                    ) : (
+                      <StatusBadge
+                        label={status.label}
+                        tone={
+                          status.label.includes(
+                            'إكمال الإعداد',
+                          )
+                            ? 'warning'
+                            : status.tone
+                        }
+                      />
+                    )}
                   </div>
 
                   <div className="mt-auto flex flex-col gap-3 border-t border-sand-200/70 pt-4">
                     <div className="text-xs leading-5 text-ink-900/40">
-                      {connected
-                        ? 'الاتصال مفعل'
-                        : status.label.includes(
-                              'إكمال الإعداد',
-                            )
-                          ? 'الاتصال موجود ولكن إعداد Messaging لم يكتمل بعد'
-                          : item.meta
-                            ? 'يتطلب اتصال Meta الرسمي'
-                            : 'إعداد التكامل من لوحة الإدارة'}
+                      {item.comingSoon
+                        ? 'سيتم توفيره داخل المنصة قريبًا'
+                        : connected
+                          ? 'الاتصال مفعل'
+                          : status.label.includes(
+                                'إكمال الإعداد',
+                              )
+                            ? 'الاتصال موجود ولكن إعداد Messaging لم يكتمل بعد'
+                            : item.meta
+                              ? 'يتطلب اتصال Meta الرسمي'
+                              : 'إعداد التكامل من لوحة الإدارة'}
                     </div>
 
-                    {item.meta ? (
+                    {item.comingSoon ? (
+                      <div className="flex min-h-11 w-full items-center justify-center rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-2.5 text-center text-xs font-bold text-amber-800 sm:w-auto sm:self-end">
+                        سيتم توفيره داخل المنصة قريبًا
+                      </div>
+                    ) : item.meta ? (
                       <div className="flex w-full flex-col gap-2 sm:w-auto sm:self-end">
                         <button
                           type="button"
