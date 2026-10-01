@@ -1,29 +1,46 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
+import { SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL } from '../config.js'
 
 const json = (res: VercelResponse, status: number, body: Record<string, unknown>) => res.status(status).json(body)
 
+const getAnonKey = () =>
+  String(process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '').trim()
+
 async function authorize(req: VercelRequest, res: VercelResponse) {
   const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
-  const url = process.env.VITE_SUPABASE_URL
-  const anon = process.env.VITE_SUPABASE_ANON_KEY
-  const service = process.env.SUPABASE_SERVICE_KEY
-  if (!token || !url || !anon || !service) {
+  const anon = getAnonKey()
+  if (!token || !SUPABASE_URL || !anon || !SUPABASE_SERVICE_ROLE_KEY) {
     json(res, 401, { error: 'غير مصرح' })
     return null
   }
-  const userClient = createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { autoRefreshToken: false, persistSession: false } })
+
+  const userClient = createClient(SUPABASE_URL, anon, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+
   const { data: auth, error: authError } = await userClient.auth.getUser(token)
   if (authError || !auth.user) {
     json(res, 401, { error: 'جلسة الدخول غير صالحة' })
     return null
   }
-  const admin = createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } })
-  const { data: caller, error } = await admin.from('users').select('is_platform_admin, active').eq('id', auth.user.id).maybeSingle()
+
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+
+  const { data: caller, error } = await admin
+    .from('users')
+    .select('is_platform_admin, active')
+    .eq('id', auth.user.id)
+    .maybeSingle()
+
   if (error || !caller?.is_platform_admin || caller.active === false) {
     json(res, 403, { error: 'هذه الصفحة مخصصة لمدير المنصة فقط' })
     return null
   }
+
   return admin
 }
 
@@ -55,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ryan: { total: ryan.data?.length || 0, active: (ryan.data || []).filter((x: any) => x.active).length, error: ryan.error?.message || null },
     operations: { open_handoffs: handoff.data?.length || 0, pending_payments: payments.data?.length || 0 },
     environment: {
-      supabase: Boolean(process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY && process.env.SUPABASE_SERVICE_KEY),
+      supabase: Boolean(SUPABASE_URL && getAnonKey() && SUPABASE_SERVICE_ROLE_KEY),
       gemini: Boolean(process.env.GEMINI_API_KEY),
       meta: Boolean(process.env.META_APP_ID && process.env.META_APP_SECRET),
     },
