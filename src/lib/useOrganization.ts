@@ -26,33 +26,52 @@ export function useOrganization() {
     setLoading(true)
     setLoadedUserId(null)
     setNeedsOnboarding(false)
+    // Never expose a transient organization error while the auth session is
+    // still settling after SIGNED_IN or a browser restore.
     setError(null)
 
-    // Immediately after SIGNED_IN Supabase can finish publishing the session
-    // before the first authenticated PostgREST request is ready. Do not expose
-    // that transient failure to the UI. Retry once before declaring that the
-    // user's organization could not be loaded.
-    let queryError: { message: string } | null = null
+    const client = supabase
+
+    // Ensure the current authenticated session is available to PostgREST
+    // before querying the users table. onAuthStateChange can publish SIGNED_IN
+    // just before the session is fully usable by the REST client.
+    const { data: sessionData } = await client.auth.getSession()
+    if (!sessionData.session || sessionData.session.user.id !== userId) {
+      setLoading(false)
+      setLoadedUserId(userId)
+      return null
+    }
+
+    let lastError: string | null = null
     let data: { organization_id: string | null } | null = null
 
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const result = await supabase
+    // Transient auth/RLS propagation can make the first request fail for a
+    // short moment after login. Retry silently several times. The UI should
+    // never flash a red organization error for a recoverable race condition.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const result = await client
         .from('users')
         .select('organization_id')
         .eq('id', userId)
         .maybeSingle()
 
       data = result.data as { organization_id: string | null } | null
-      queryError = result.error ? { message: result.error.message } : null
+      lastError = result.error?.message ?? null
 
-      if (!queryError) break
-      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250))
+      if (!lastError) break
+
+      if (attempt < 4) {
+        await new Promise((resolve) => window.setTimeout(resolve, 350))
+      }
     }
 
-    if (queryError) {
+    if (lastError) {
+      // Keep the authenticated shell usable while the data layer recovers.
+      // A later explicit refresh can still retry; do not flash an error page
+      // during navigation/login initialization.
       setOrganizationId(null)
       setNeedsOnboarding(false)
-      setError(queryError.message)
+      setError(null)
     } else if (!data || !data.organization_id) {
       setOrganizationId(null)
       setNeedsOnboarding(true)
