@@ -130,6 +130,7 @@ export function useSubscription() {
         if (!data || data.length === 0) {
           setRawSubscription({ id: '', status: 'no_subscription', renewal_date: null, billing_cycle: null, started_at: null, expires_at: null, plan_id: null, plan: null })
           setLoadedUserId(user?.id ?? null)
+          setLoading(false)
           return
         }
 
