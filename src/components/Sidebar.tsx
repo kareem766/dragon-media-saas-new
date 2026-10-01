@@ -625,7 +625,7 @@ export default function Sidebar({
                 className={[
                   'overflow-hidden transition-all duration-200 ease-out',
                   adminOpen
-                    ? 'max-h-[520px] opacity-100'
+                    ? 'max-h-[720px] opacity-100'
                     : 'max-h-0 opacity-0',
                 ].join(' ')}
               >
