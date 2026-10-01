@@ -4,6 +4,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 
 const REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/oauth/callback'
 const FACEBOOK_REDIRECT_URI = REDIRECT_URI
+const INSTAGRAM_REDIRECT_URI = 'https://dragon-media-saas-new.vercel.app/api/meta/instagram/callback'
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 function json(res: VercelResponse, status: number, body: unknown) { return res.status(status).json(body) }
 function signState(payload: Record<string, unknown>) { const raw = Buffer.from(JSON.stringify(payload)).toString('base64url'); const secret = env('META_STATE_SECRET', 'META_APP_SECRET'); return `${raw}.${createHmac('sha256', secret).update(raw).digest('base64url')}` }
@@ -64,9 +65,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (provider === 'instagram') {
       const state = signState({ provider: 'instagram', organizationId, userId: userData.user.id, nonce: randomBytes(16).toString('hex'), iat: Date.now() })
       const scope = ['instagram_business_basic', 'instagram_business_manage_comments', 'instagram_business_manage_messages', 'instagram_business_content_publish'].join(',')
-      const params = new URLSearchParams({ client_id: instagramAppId, redirect_uri: REDIRECT_URI, response_type: 'code', state, scope, enable_fb_login: '0', force_reauth: 'true' })
+      const params = new URLSearchParams({ client_id: instagramAppId, redirect_uri: INSTAGRAM_REDIRECT_URI, response_type: 'code', state, scope, enable_fb_login: '0', force_reauth: 'true' })
       const url = `https://www.instagram.com/oauth/authorize?${params.toString()}`
-      return json(res, 200, { url, auth_url: url, redirect_uri: REDIRECT_URI, state, app_id: instagramAppId, provider: 'instagram' })
+      return json(res, 200, { url, auth_url: url, redirect_uri: INSTAGRAM_REDIRECT_URI, state, app_id: instagramAppId, provider: 'instagram' })
     }
 
     if (provider === 'facebook') {
