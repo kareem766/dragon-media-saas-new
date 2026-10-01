@@ -11,7 +11,7 @@ const money=(v:number,c:string)=>`${n(v)} ${c==='EGP'?'ج.م':c}`
 const countdown=(ms:number)=>{if(ms<=0)return'انتهت';const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;return`${d} يوم · ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`}
 
 export default function Ryan(){
- const [state,setState]=useState({loading:true,active:false,memory:0,runs:0,model:'—',error:''})
+ const [state,setState]=useState({loading:true,active:false,memory:0,runs:0,error:''})
  const [usage,setUsage]=useState<Usage|null>(null),[packages,setPackages]=useState<Package[]>([]),[purchases,setPurchases]=useState<Purchase[]>([]),[methods,setMethods]=useState<Method[]>([])
  const [selected,setSelected]=useState(''),[method,setMethod]=useState(''),[reference,setReference]=useState(''),[date,setDate]=useState(()=>new Date().toISOString().slice(0,10)),[note,setNote]=useState(''),[open,setOpen]=useState(false),[saving,setSaving]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[now,setNow]=useState(Date.now())
 
@@ -32,7 +32,7 @@ export default function Ryan(){
   if(u.error)throw u.error;if(ps.error)throw ps.error;if(pur.error)throw pur.error;if(ms.error)throw ms.error
   const ur=Array.isArray(u.data)?u.data[0]:u.data;setUsage(ur as Usage||null);setPackages((ps.data||[]) as Package[]);setPurchases((pur.data||[]) as Purchase[]);setMethods((ms.data||[]) as Method[])
   setSelected(x=>x||String(ps.data?.[0]?.id||''));setMethod(x=>x||String(ms.data?.[0]?.method_key||''))
-  setState({loading:false,active:Boolean(agent?.active),memory:mem.count||0,runs:runs.count||0,model:String((agent as any)?.settings?.model||'gemini-3.1-flash-lite'),error:''})
+  setState({loading:false,active:Boolean(agent?.active),memory:mem.count||0,runs:runs.count||0,error:''})
  },[])
 
  useEffect(()=>{let on=true;void load().catch((e:any)=>on&&setState(s=>({...s,loading:false,error:e?.message||'تعذر تحميل Ryan'})));return()=>{on=false}},[load])
@@ -64,6 +64,6 @@ export default function Ryan(){
    {pending.length>0&&<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><b>طلب شراء قيد المراجعة.</b> سيبدأ عداد الـ30 يومًا فور اعتماد الدفع.</div>}
    {!active.length&&!pending.length&&<div className="rounded-2xl border border-dashed border-ink-900/10 bg-white p-8 text-center text-sm text-ink-900/45">لا توجد باقات Ryan إضافية مفعّلة حاليًا.</div>}
   </section>
-  <section className="grid gap-4 sm:grid-cols-3">{[['الذاكرة المحفوظة',n(state.memory)],['إجمالي التشغيلات',n(state.runs)],['الموديل',state.model]].map(([a,b])=><div key={a} className="rounded-2xl border border-ink-900/10 bg-white p-5 shadow-sm"><div className="text-xs text-ink-900/45">{a}</div><div className="mt-1 text-2xl font-bold">{b}</div></div>)}</section>
+  <section className="grid gap-4 sm:grid-cols-2">{[['الذاكرة المحفوظة',n(state.memory)],['إجمالي التشغيلات',n(state.runs)]].map(([a,b])=><div key={a} className="rounded-2xl border border-ink-900/10 bg-white p-5 shadow-sm"><div className="text-xs text-ink-900/45">{a}</div><div className="mt-1 text-2xl font-bold">{b}</div></div>)}</section>
  </div>
 }
