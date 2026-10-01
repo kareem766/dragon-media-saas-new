@@ -3,6 +3,7 @@ import { Card, Badge, Button, Table, statusTone } from '../components/ui'
 import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 
 interface DBAppointment {
   id: string
@@ -118,6 +119,8 @@ export default function Appointments() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const { confirmAction, showToast } = useToast()
 
   const loadData = async () => {
     if (!supabase || !organizationId) return
@@ -199,6 +202,38 @@ export default function Appointments() {
     setShowForm(false)
 
     await loadData()
+  }
+
+  const handleDelete = async (appointment: DBAppointment) => {
+    if (!supabase || !organizationId || deletingId) return
+
+    const customerName = appointment.customers?.name ?? 'هذا العميل'
+    const confirmed = await confirmAction(
+      \`هل تريد حذف موعد \${customerName}؟\\\\nلا يمكن التراجع عن هذا الإجراء.\`
+    )
+
+    if (!confirmed) return
+
+    setDeletingId(appointment.id)
+    setError(null)
+
+    const { error: deleteError } = await supabase
+      .from('appointments')
+      .delete()
+      .eq('id', appointment.id)
+      .eq('organization_id', organizationId)
+
+    setDeletingId(null)
+
+    if (deleteError) {
+      setError('تعذر حذف الموعد حاليًا. حاول مرة أخرى.')
+      return
+    }
+
+    setAppointments((current) =>
+      current.filter((item) => item.id !== appointment.id)
+    )
+    showToast('تم حذف الموعد بنجاح.')
   }
 
   if (orgLoading || loading) {
@@ -619,9 +654,21 @@ export default function Appointments() {
                       </div>
                     </div>
 
-                    <Badge tone={statusTone(appointment.status)}>
-                      {appointment.status}
-                    </Badge>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge tone={statusTone(appointment.status)}>
+                        {appointment.status}
+                      </Badge>
+
+                      <button type="button" onClick={() => void handleDelete(appointment)} disabled={deletingId === appointment.id} aria-label={`حذف موعد ${appointment.customers?.name ?? 'العميل'}`} title="حذف الموعد" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+                        {deletingId === appointment.id ? (
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-red-200 border-t-red-600" />
+                        ) : (
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path strokeLinecap="round" d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2">
@@ -647,7 +694,7 @@ export default function Appointments() {
 
             <div className="hidden overflow-x-auto sm:block">
               <Table
-                head={['العميل', 'الخدمة', 'التاريخ', 'الوقت', 'الحالة']}
+                head={['العميل', 'الخدمة', 'التاريخ', 'الوقت', 'الحالة', 'الإجراء']}
               >
                 {appointments.map((appointment) => (
                   <tr
@@ -682,6 +729,18 @@ export default function Appointments() {
                       <Badge tone={statusTone(appointment.status)}>
                         {appointment.status}
                       </Badge>
+                    </td>
+
+                    <td className="px-4 py-3.5 text-left">
+                      <button type="button" onClick={() => void handleDelete(appointment)} disabled={deletingId === appointment.id} aria-label={`حذف موعد ${appointment.customers?.name ?? 'العميل'}`} title="حذف الموعد" className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+                        {deletingId === appointment.id ? (
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-red-200 border-t-red-600" />
+                        ) : (
+                          <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <path strokeLinecap="round" d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+                          </svg>
+                        )}
+                      </button>
                     </td>
                   </tr>
                 ))}
