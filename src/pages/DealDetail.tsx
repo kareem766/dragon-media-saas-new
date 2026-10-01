@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Card, Badge, Button, Skeleton } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 
 interface Stage {
   id: string
@@ -174,6 +175,8 @@ const formatDate = (
 }
 
 export default function DealDetail() {
+  const { showToast } = useToast()
+
   const { can } = usePermissions()
   const canEditResource = can('deals', 'edit')
   const canDeleteResource = can('deals', 'delete')
@@ -296,7 +299,7 @@ export default function DealDetail() {
       : 0
 
   const handleStageChange = async () => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (
       !supabase ||
       !organizationId ||
