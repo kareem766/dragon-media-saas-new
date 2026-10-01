@@ -84,6 +84,14 @@ const items: SidebarItem[] = [
     section: 'التسويق',
   },
   {
+    to: '/automations',
+    label: 'الأتمتة',
+    icon: IconSettings,
+    feature: 'automations',
+    resource: 'automations',
+    section: 'التسويق',
+  },
+  {
     to: '/inbox',
     label: 'صندوق المحادثات',
     icon: IconChat,
@@ -98,14 +106,6 @@ const items: SidebarItem[] = [
     feature: 'ryan',
     resource: 'ryan',
     section: 'المحادثات',
-  },
-  {
-    to: '/automations',
-    label: 'الأتمتة',
-    icon: IconSettings,
-    feature: 'automations',
-    resource: 'automations',
-    section: 'التسويق',
   },
   {
     to: '/tasks',
