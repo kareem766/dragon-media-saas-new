@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Badge, Button, Skeleton } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
+import { useToast } from '../lib/ToastContext'
 
 interface PaymentRequestRow {
   id: string
@@ -170,6 +171,8 @@ function ErrorBox({
 }
 
 export default function AdminPayments() {
+  const { showToast } = useToast()
+
   const [requests, setRequests] = useState<PaymentRequestRow[]>([])
   const [methods, setMethods] = useState<PaymentMethod[]>([])
 
@@ -286,7 +289,7 @@ export default function AdminPayments() {
       const token = sessionData.session?.access_token
 
       if (!token) {
-        window.alert('انتهت جلسة تسجيل الدخول.')
+        showToast('انتهت جلسة تسجيل الدخول.')
         return
       }
 
@@ -306,13 +309,13 @@ export default function AdminPayments() {
       const json = await res.json()
 
       if (!res.ok) {
-        window.alert(json.error || 'تعذر تنفيذ العملية.')
+        showToast(json.error || 'تعذر تنفيذ العملية.')
         return
       }
 
       await loadRequests()
     } catch {
-      window.alert('حدث خطأ أثناء تنفيذ العملية.')
+      showToast('حدث خطأ أثناء تنفيذ العملية.')
     } finally {
       setActingId(null)
     }
