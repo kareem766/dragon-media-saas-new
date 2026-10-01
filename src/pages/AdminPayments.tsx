@@ -484,7 +484,7 @@ export default function AdminPayments() {
   const deleteMethod = async (method: PaymentMethod) => {
     if (!supabase) return
 
-    const confirmed = confirmAction(
+    const confirmed = await confirmAction(
       `هل أنت متأكد من حذف طريقة الدفع "${method.name}"؟`
     )
 
