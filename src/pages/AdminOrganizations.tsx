@@ -13,6 +13,7 @@ import {
 } from '../components/ui'
 
 import { supabase } from '../lib/supabaseClient'
+import { useToast } from '../lib/ToastContext'
 
 interface Plan {
   id: string
@@ -458,6 +459,7 @@ function UsageWarning({
 }
 
 export default function AdminOrganizations() {
+  const { confirmAction } = useToast()
   const [organizations, setOrganizations] =
     useState<Organization[]>([])
 
@@ -805,7 +807,7 @@ export default function AdminOrganizations() {
       return
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `سيتم إرسال رسالة WhatsApp تجريبية إلى رقم الشركة "${organization.name}". هل تريد المتابعة؟`,
     )
 
@@ -1253,7 +1255,7 @@ export default function AdminOrganizations() {
         !org.suspended
 
       const confirmed =
-        window.confirm(
+        await confirmAction(
           willSuspend
             ? `هل أنت متأكد من تعليق شركة "${org.name}"؟`
             : `هل أنت متأكد من إعادة تفعيل شركة "${org.name}"؟`,
@@ -1385,14 +1387,14 @@ export default function AdminOrganizations() {
       if (!supabase) return
 
       const confirmed =
-        window.confirm(
+        await confirmAction(
           `سيتم حذف شركة "${org.name}" وحسابات مستخدميها وبياناتها المرتبطة. هذا الإجراء لا يمكن التراجع عنه.\n\nهل تريد المتابعة؟`,
         )
 
       if (!confirmed) return
 
       const secondConfirm =
-        window.confirm(
+        await confirmAction(
           `تأكيد نهائي: حذف "${org.name}" نهائيًا؟`,
         )
 
