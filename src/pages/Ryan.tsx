@@ -1,53 +1,69 @@
-import React, { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
+import React,{useCallback,useEffect,useMemo,useState} from 'react'
+import {supabase} from '../lib/supabaseClient'
 
-export default function Ryan() {
-  const [state, setState] = useState({ loading: true, active: false, memory: 0, runs: 0, model: '—', error: '' })
+type Usage={used_messages:number;plan_messages:number;purchased_messages:number;total_limit:number;remaining_messages:number;usage_percent:number;reset_at:string|null}
+type Package={id:string;name:string;messages:number;price:number;currency:string;description:string|null;is_popular:boolean}
+type Purchase={id:string;messages:number;consumed_messages:number;amount:number;currency:string;status:string;purchased_at:string|null;expires_at:string|null;created_at:string}
+type Method={method_key:string;name:string;details:Record<string,unknown>|null}
 
-  useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        const client = supabase
-        if (!client) throw new Error('تعذر الاتصال بقاعدة البيانات')
-        const { data: auth } = await client.auth.getUser()
-        if (!auth.user) throw new Error('يجب تسجيل الدخول')
-        const { data: user, error: userError } = await client.from('users').select('organization_id').eq('id', auth.user.id).maybeSingle()
-        if (userError) throw userError
-        if (!user?.organization_id) throw new Error('الحساب غير مرتبط بشركة')
-        const { data: agent, error: agentError } = await client.from('ai_agents').select('id,active,settings').eq('organization_id', user.organization_id).eq('name', 'Ryan').maybeSingle()
-        if (agentError) throw agentError
-        const [{ count: memory }, { count: runs }] = await Promise.all([
-          agent?.id ? client.from('ai_agent_memory').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id) : Promise.resolve({ count: 0 }),
-          agent?.id ? client.from('ai_agent_runs').select('id', { count: 'exact', head: true }).eq('agent_id', agent.id) : Promise.resolve({ count: 0 }),
-        ])
-        if (mounted) setState({ loading: false, active: Boolean(agent?.active), memory: memory || 0, runs: runs || 0, model: String((agent as any)?.settings?.model || 'gemini-3.1-flash-lite'), error: '' })
-      } catch (error: any) {
-        if (mounted) setState((s) => ({ ...s, loading: false, error: error?.message || 'تعذر تحميل حالة Ryan' }))
-      }
-    })()
-    return () => { mounted = false }
-  }, [])
+const n=(v:number)=>Number(v||0).toLocaleString('ar-EG')
+const money=(v:number,c:string)=>`${n(v)} ${c==='EGP'?'ج.م':c}`
+const countdown=(ms:number)=>{if(ms<=0)return'انتهت';const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60;return`${d} يوم · ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`}
 
-  if (state.loading) return <div className="rounded-2xl border border-ink-900/10 bg-white p-6 text-sm text-ink-900/55">جاري تحميل حالة Ryan…</div>
-  if (state.error) return <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-700">{state.error}</div>
+export default function Ryan(){
+ const [state,setState]=useState({loading:true,active:false,memory:0,runs:0,model:'—',error:''})
+ const [usage,setUsage]=useState<Usage|null>(null),[packages,setPackages]=useState<Package[]>([]),[purchases,setPurchases]=useState<Purchase[]>([]),[methods,setMethods]=useState<Method[]>([])
+ const [selected,setSelected]=useState(''),[method,setMethod]=useState(''),[reference,setReference]=useState(''),[date,setDate]=useState(()=>new Date().toISOString().slice(0,10)),[note,setNote]=useState(''),[open,setOpen]=useState(false),[saving,setSaving]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[now,setNow]=useState(Date.now())
 
-  return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-ink-900/10 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-ink-950">Ryan AI Agent</h2>
-            <p className="mt-1 text-sm text-ink-900/50">محرك محادثة جديد يفهم السياق، يحفظ الذاكرة، وينفذ إجراءات CRM عند الحاجة.</p>
-          </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${state.active ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{state.active ? 'نشط' : 'متوقف'}</span>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-ink-900/10 bg-white p-5"><div className="text-xs text-ink-900/45">الذاكرة المحفوظة</div><div className="mt-1 text-2xl font-bold">{state.memory}</div></div>
-        <div className="rounded-2xl border border-ink-900/10 bg-white p-5"><div className="text-xs text-ink-900/45">تشغيلات الوكيل</div><div className="mt-1 text-2xl font-bold">{state.runs}</div></div>
-        <div className="rounded-2xl border border-ink-900/10 bg-white p-5"><div className="text-xs text-ink-900/45">الموديل</div><div className="mt-1 text-lg font-bold">{state.model}</div></div>
-      </div>
-    </div>
-  )
+ const load=useCallback(async()=>{
+  if(!supabase)throw new Error('تعذر الاتصال بقاعدة البيانات')
+  const {data:auth}=await supabase.auth.getUser();if(!auth.user)throw new Error('يجب تسجيل الدخول')
+  const {data:user,error:ue}=await supabase.from('users').select('organization_id').eq('id',auth.user.id).maybeSingle();if(ue)throw ue;if(!user?.organization_id)throw new Error('الحساب غير مرتبط بشركة')
+  const org=String(user.organization_id)
+  const {data:agent,error:ae}=await supabase.from('ai_agents').select('id,active,settings').eq('organization_id',org).eq('name','Ryan').maybeSingle();if(ae)throw ae
+  const [mem,runs,u,ps,pur,ms]=await Promise.all([
+   agent?.id?supabase.from('ai_agent_memory').select('id',{count:'exact',head:true}).eq('agent_id',agent.id):Promise.resolve({count:0}),
+   agent?.id?supabase.from('ai_agent_runs').select('id',{count:'exact',head:true}).eq('agent_id',agent.id):Promise.resolve({count:0}),
+   supabase.rpc('get_ryan_ai_usage_summary',{p_organization_id:org}),
+   supabase.from('ryan_message_packages').select('id,name,messages,price,currency,description,is_popular').eq('status','active').order('sort_order',{ascending:true}),
+   supabase.from('ryan_credit_purchases').select('id,messages,consumed_messages,amount,currency,status,purchased_at,expires_at,created_at').eq('organization_id',org).order('created_at',{ascending:false}),
+   supabase.from('payment_methods').select('method_key,name,details').eq('enabled',true).order('display_order',{ascending:true})
+  ])
+  if(u.error)throw u.error;if(ps.error)throw ps.error;if(pur.error)throw pur.error;if(ms.error)throw ms.error
+  const ur=Array.isArray(u.data)?u.data[0]:u.data;setUsage(ur as Usage||null);setPackages((ps.data||[]) as Package[]);setPurchases((pur.data||[]) as Purchase[]);setMethods((ms.data||[]) as Method[])
+  setSelected(x=>x||String(ps.data?.[0]?.id||''));setMethod(x=>x||String(ms.data?.[0]?.method_key||''))
+  setState({loading:false,active:Boolean(agent?.active),memory:mem.count||0,runs:runs.count||0,model:String((agent as any)?.settings?.model||'gemini-3.1-flash-lite'),error:''})
+ },[])
+
+ useEffect(()=>{let on=true;void load().catch((e:any)=>on&&setState(s=>({...s,loading:false,error:e?.message||'تعذر تحميل Ryan'})));return()=>{on=false}},[load])
+ useEffect(()=>{const t=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(t)},[])
+
+ const active=useMemo(()=>purchases.filter(p=>p.status==='approved'&&Number(p.messages)>Number(p.consumed_messages)&&p.expires_at&&new Date(p.expires_at).getTime()>now),[purchases,now])
+ const pending=useMemo(()=>purchases.filter(p=>p.status==='pending_review'),[purchases])
+
+ const buy=async(e:React.FormEvent)=>{e.preventDefault();setMessage('');setError('');const pkg=packages.find(p=>p.id===selected);if(!pkg)return setError('اختر باقة رسائل Ryan.');if(!method)return setError('اختر طريقة الدفع.');if(!reference.trim())return setError('أدخل رقم العملية أو المرجع.');setSaving(true);try{const m=methods.find(x=>x.method_key===method);const {error}=await supabase.rpc('create_ryan_credit_purchase',{p_package_id:pkg.id,p_method:method,p_reference:reference.trim(),p_payment_date:date,p_note:note.trim()||null,p_payment_method_snapshot:m?{method_key:m.method_key,name:m.name,details:m.details??{}}:{}});if(error)throw error;setMessage('تم إرسال طلب شراء الباقة، وستُضاف الرسائل بعد اعتماد الدفع من الإدارة.');setReference('');setNote('');setOpen(false);await load()}catch(e:any){setError(e?.message||'تعذر إرسال طلب الشراء.')}finally{setSaving(false)}}
+
+ if(state.loading)return <div dir="rtl" className="rounded-2xl border border-ink-900/10 bg-white p-6 text-sm">جاري تحميل Ryan…</div>
+ if(state.error)return <div dir="rtl" className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-700">{state.error}</div>
+ const used=Number(usage?.used_messages||0),plan=Number(usage?.plan_messages||0),remain=Number(usage?.remaining_messages||0),extra=Number(usage?.purchased_messages||0),pct=Math.min(100,Math.max(0,Number(usage?.usage_percent||0)))
+
+ return <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-6 pb-10">
+  <section className="overflow-hidden rounded-3xl border border-blue-100/80 bg-white shadow-sm"><div className="bg-gradient-to-l from-blue-950 via-blue-900 to-slate-900 p-6 text-white sm:p-8"><div className="flex items-center justify-between gap-4"><div><h1 className="text-2xl font-bold">Ryan AI</h1><p className="mt-1 text-sm text-white/65">الاستخدام الفعلي وباقات الرسائل الإضافية</p></div><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${state.active?'bg-emerald-400/15 text-emerald-200':'bg-red-400/15 text-red-200'}`}>{state.active?'Ryan نشط':'Ryan متوقف'}</span></div></div></section>
+  {message&&<div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{message}</div>}{error&&<div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</div>}
+  <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   {[[`رسائل Ryan المستخدمة هذا الشهر`,n(used),`من ${n(plan)} رسالة ضمن الباقة`],[`المتبقي حاليًا`,n(remain),'الباقة الأساسية + الرصيد الإضافي'],[`الرصيد الإضافي`,n(extra),'رسائل مشتراة ومتاحة'],[`تجديد حد الباقة`,usage?.reset_at?new Date(usage.reset_at).toLocaleDateString('ar-EG'):'—','يتجدد العداد مع بداية الشهر']].map(([a,b,c])=><div key={a} className="rounded-2xl border border-ink-900/10 bg-white p-5 shadow-sm"><div className="text-xs text-ink-900/45">{a}</div><div className="mt-2 text-3xl font-black text-ink-950">{b}</div><div className="mt-1 text-xs text-ink-900/45">{c}</div></div>)}
+  </section>
+  <section className="rounded-2xl border border-ink-900/10 bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-4"><div><h2 className="font-bold">استهلاك Ryan الفعلي</h2><p className="mt-1 text-xs text-ink-900/45">العداد مرتبط بتشغيلات Ryan المسجلة فعليًا.</p></div><b>{n(used)} / {n(plan+extra)}</b></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-l from-blue-700 to-cyan-400" style={{width:`${pct}%`}}/></div></section>
+  <section className="rounded-2xl border border-amber-100 bg-gradient-to-l from-amber-50/80 to-white p-5 shadow-sm">
+   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-bold">باقات رسائل Ryan الإضافية</h2><p className="mt-1 text-sm text-ink-900/55">رصيد إضافي عند اقتراب استهلاك الباقة الأساسية.</p></div><button type="button" onClick={()=>setOpen(v=>!v)} className="rounded-xl bg-ink-950 px-4 py-2.5 text-sm font-bold text-white">{open?'إغلاق الشراء':'شراء باقة رسائل'}</button></div>
+   <div className="mt-5 grid gap-4 md:grid-cols-3">{packages.map(p=><button key={p.id} type="button" onClick={()=>{setSelected(p.id);setOpen(true)}} className={`relative rounded-2xl border bg-white p-5 text-right transition hover:shadow-md ${selected===p.id&&open?'border-blue-500 ring-2 ring-blue-100':'border-ink-900/10'}`}>{p.is_popular&&<span className="absolute left-4 top-4 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-800">الأكثر طلبًا</span>}<div className="text-sm font-bold">{p.name}</div><div className="mt-3 text-3xl font-black text-blue-950">{n(p.messages)}</div><div className="text-xs text-ink-900/45">رسالة</div><div className="mt-4 text-lg font-black">{money(p.price,p.currency)}</div>{p.description&&<p className="mt-2 text-xs leading-5 text-ink-900/50">{p.description}</p>}</button>)}</div>
+   {open&&packages.length>0&&<form onSubmit={buy} className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/40 p-5"><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-semibold">الباقة<select value={selected} onChange={e=>setSelected(e.target.value)} className="mt-2 w-full rounded-xl border bg-white px-3 py-2.5">{packages.map(p=><option key={p.id} value={p.id}>{p.name} — {n(p.messages)} رسالة — {money(p.price,p.currency)}</option>)}</select></label><label className="text-sm font-semibold">طريقة الدفع<select value={method} onChange={e=>setMethod(e.target.value)} className="mt-2 w-full rounded-xl border bg-white px-3 py-2.5">{methods.map(m=><option key={m.method_key} value={m.method_key}>{m.name}</option>)}</select></label><label className="text-sm font-semibold">رقم العملية / المرجع<input value={reference} onChange={e=>setReference(e.target.value)} className="mt-2 w-full rounded-xl border bg-white px-3 py-2.5" placeholder="أدخل رقم العملية"/></label><label className="text-sm font-semibold">تاريخ التحويل<input type="date" value={date} onChange={e=>setDate(e.target.value)} className="mt-2 w-full rounded-xl border bg-white px-3 py-2.5"/></label></div><label className="mt-4 block text-sm font-semibold">ملاحظة اختيارية<textarea value={note} onChange={e=>setNote(e.target.value)} className="mt-2 min-h-20 w-full rounded-xl border bg-white px-3 py-2.5"/></label><button disabled={saving} className="mt-4 rounded-xl bg-blue-900 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{saving?'جاري إرسال الطلب…':'إرسال طلب الشراء'}</button></form>}
+  </section>
+  <section className="space-y-4"><div><h2 className="font-bold">اشتراكات Ryan الإضافية</h2><p className="mt-1 text-xs text-ink-900/45">الباقة المعتمدة صالحة 30 يومًا من اعتماد الدفع.</p></div>
+   {active.map(p=>{const left=Math.max(0,Number(p.messages)-Number(p.consumed_messages)),exp=new Date(p.expires_at as string).getTime(),pc=Number(p.messages)>0?Math.round(left/Number(p.messages)*100):0;return <div key={p.id} className="rounded-2xl border border-ink-900/10 bg-white p-5 shadow-sm"><div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"><div><div className="text-xs text-ink-900/45">باقة رسائل إضافية</div><div className="mt-1 text-xl font-black">{n(p.messages)} رسالة</div><div className="mt-1 text-xs text-ink-900/45">تم الاعتماد: {p.purchased_at?new Date(p.purchased_at).toLocaleDateString('ar-EG'):'—'}</div></div><div className="rounded-2xl bg-blue-50 px-5 py-3 text-center"><div className="text-[10px] font-bold text-blue-700">الوقت المتبقي</div><div className="mt-1 text-lg font-black tabular-nums text-blue-950">{countdown(exp-now)}</div></div></div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-l from-amber-500 to-amber-300" style={{width:`${pc}%`}}/></div><div className="mt-2 flex justify-between text-xs text-ink-900/45"><span>متبقي {n(left)} رسالة</span><span>ينتهي {new Date(p.expires_at as string).toLocaleDateString('ar-EG')}</span></div></div>})}
+   {pending.length>0&&<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"><b>طلب شراء قيد المراجعة.</b> سيبدأ عداد الـ30 يومًا فور اعتماد الدفع.</div>}
+   {!active.length&&!pending.length&&<div className="rounded-2xl border border-dashed border-ink-900/10 bg-white p-8 text-center text-sm text-ink-900/45">لا توجد باقات Ryan إضافية مفعّلة حاليًا.</div>}
+  </section>
+  <section className="grid gap-4 sm:grid-cols-3">{[['الذاكرة المحفوظة',n(state.memory)],['إجمالي التشغيلات',n(state.runs)],['الموديل',state.model]].map(([a,b])=><div key={a} className="rounded-2xl border border-ink-900/10 bg-white p-5 shadow-sm"><div className="text-xs text-ink-900/45">{a}</div><div className="mt-1 text-2xl font-bold">{b}</div></div>)}</section>
+ </div>
 }
