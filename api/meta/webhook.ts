@@ -8,11 +8,14 @@ export const config = { api: { bodyParser: false } }
 const env = (...names: string[]) => names.map((name) => process.env[name]).find((value) => value && value.trim())?.trim() || ''
 function json(res: VercelResponse, status: number, body: unknown) { return res.status(status).json(body) }
 function verifySignature(req: VercelRequest, rawBody: string) {
-  const signature = String(req.headers['x-hub-signature-256'] || ''), secret = env('META_APP_SECRET', 'FACEBOOK_APP_SECRET')
-  if (!signature || !secret) return false
-  const expected = `sha256=${createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex')}`
-  const a = Buffer.from(signature), b = Buffer.from(expected)
-  return a.length === b.length && timingSafeEqual(a, b)
+  const signature = String(req.headers['x-hub-signature-256'] || '')
+  if (!signature) return false
+  const secrets = [env('INSTAGRAM_APP_SECRET'), env('META_INSTAGRAM_APP_SECRET'), env('META_APP_SECRET'), env('FACEBOOK_APP_SECRET')].filter(Boolean)
+  const provided = Buffer.from(signature)
+  return secrets.some((secret) => {
+    const expected = Buffer.from(`sha256=${createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex')}`)
+    return provided.length === expected.length && timingSafeEqual(provided, expected)
+  })
 }
 function normalizePhone(value: unknown) { return String(value || '').replace(/[^0-9+]/g, '').replace(/^\+/, '') }
 function readRawBody(req: VercelRequest) {
@@ -421,7 +424,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const db = await getDb()
     if (payload.object === 'page') { await handleFacebookWebhook(db, payload); await handleFacebookCommentChanges(db, payload); return json(res, 200, { ok: true, provider: 'facebook' }) }
-    if (payload.object === 'instagram') { await handleInstagramWebhook(db, payload); return json(res, 200, { ok: true, provider: 'instagram' }) }
+    if (payload.object === 'instagram') {
+      await handleInstagramWebhook(db, payload)
+      for (const entry of Array.isArray(payload?.entry) ? payload.entry : []) {
+        const igUserId = String(entry?.id || '').trim()
+        if (!igUserId) continue
+        const { data: integration } = await db.from('integrations').select('organization_id,metadata').eq('provider','instagram').eq('connected',true).filter('metadata->>instagram_user_id','eq',igUserId).maybeSingle()
+        if (!integration) continue
+        const organizationId = String(integration.organization_id)
+        for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
+          if (String(change?.field || '') !== 'comments') continue
+          const value = change?.value || {}
+          const commentId = String(value?.id || value?.comment_id || '').trim()
+          const authorId = String(value?.from?.id || '').trim()
+          const comment = String(value?.text || value?.message || '').trim()
+          const postId = String(value?.media?.id || value?.media_id || '').trim()
+          const accountName = String(value?.from?.username || value?.from?.name || '').trim()
+          if (!commentId || !authorId || !comment || authorId === igUserId) continue
+          try { await handleComment(db,'instagram',organizationId,igUserId,commentId,authorId,comment,postId,accountName) }
+          catch (error) { console.error('Instagram comment/Ryan processing failed',{organizationId,igUserId,commentId,error:error instanceof Error?error.message:String(error)}) }
+        }
+      }
+      return json(res, 200, { ok: true, provider: 'instagram' })
+    }
     if (payload.object !== 'whatsapp_business_account') return json(res, 200, { ok: true, ignored: true })
     for (const entry of Array.isArray(payload.entry) ? payload.entry : []) {
       const wabaId = String(entry?.id || '')
