@@ -100,9 +100,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Current Meta flow for a private reply to a Facebook comment: send through
     // the Page's /messages endpoint and identify the recipient by comment_id.
-    const sendUrl = commentId
-      ? `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(senderId)}/messages`
-      : `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(senderId)}/messages`
+    const messagingHost = provider === 'instagram' ? 'graph.instagram.com' : 'graph.facebook.com'
+    const sendUrl = `https://${messagingHost}/${GRAPH_VERSION}/${encodeURIComponent(senderId)}/messages`
     const sendBody = commentId
       ? { recipient: { comment_id: commentId }, message: { text: content } }
       : { recipient: { id: recipientId }, message: { text: content } }
@@ -131,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
     }
-    if (!response.ok) return json(res, 502, { error: payload?.error?.message || 'Facebook Messenger send failed.', code: 'FACEBOOK_SEND_FAILED' })
+    if (!response.ok) return json(res, 502, { error: payload?.error?.message || (provider === 'instagram' ? 'Instagram message send failed.' : 'Facebook Messenger send failed.'), code: provider === 'instagram' ? 'INSTAGRAM_SEND_FAILED' : 'FACEBOOK_SEND_FAILED' })
     const externalId = String(payload?.message_id || payload?.id || payload?.messages?.[0]?.id || '')
     const outboundMetadata = { source: sourceSenderType === 'ai' ? 'ryan' : 'inbox', outbound_status: 'accepted', sent_by: authenticatedUserId || null, meta_message_id: externalId || null, facebook_page_id: pageId, facebook_outbound: true, facebook_recipient_id: recipientId, dispatch: internalDispatch ? 'database_trigger' : 'inbox', delivery_mode: deliveryMode }
     if (messageId) {
