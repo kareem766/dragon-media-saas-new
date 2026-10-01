@@ -124,21 +124,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error(instagramTokenData?.error_message || instagramTokenData?.error?.message || 'فشل تبادل authorization code مع Instagram.')
       }
 
-      // Exchange the short-lived Instagram user token for a long-lived token.
+      // Instagram Business Login long-lived token exchange.
+      // Keep this request on the documented GET endpoint for the current API behavior.
       const longLivedParams = new URLSearchParams({
         grant_type: 'ig_exchange_token',
         client_secret: instagramAppSecret,
         access_token: shortLivedToken,
       })
-      const longLivedResponse = await fetch('https://graph.instagram.com/access_token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: longLivedParams,
-      })
+      const longLivedResponse = await fetch(
+        `https://graph.instagram.com/access_token?${longLivedParams.toString()}`,
+        { method: 'GET' },
+      )
       const longLivedData = await longLivedResponse.json().catch(() => ({}))
       const token = String(longLivedData?.access_token || '')
       if (!longLivedResponse.ok || !token) {
-        throw new Error(longLivedData?.error?.message || 'تم تسجيل الدخول إلى Instagram لكن تعذر إصدار Access Token طويل المدى.')
+        console.error('Instagram long-lived token exchange failed', {
+          status: longLivedResponse.status,
+          method: 'GET',
+          message: String(longLivedData?.error?.message || longLivedData?.error_message || ''),
+          code: longLivedData?.error?.code ?? null,
+          type: longLivedData?.error?.type ?? null,
+        })
+        throw new Error(longLivedData?.error?.message || longLivedData?.error_message || 'تم تسجيل الدخول إلى Instagram لكن تعذر إصدار Access Token طويل المدى.')
       }
 
       const profileResponse = await fetch(
