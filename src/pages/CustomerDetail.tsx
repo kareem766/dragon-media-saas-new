@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge, Button, Card, statusTone } from '../components/ui'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
+import { useToast } from '../lib/ToastContext'
 
 interface Customer {
   id: string
@@ -177,6 +178,8 @@ const formatTaskDueDate = (value: string | null | undefined) => {
 }
 
 export default function CustomerDetail() {
+  const { showToast } = useToast()
+
   const { can } = usePermissions()
   const canEditResource = can('customers', 'edit')
   const canDeleteResource = can('customers', 'delete')
@@ -567,7 +570,7 @@ export default function CustomerDetail() {
   const updateMarketingConsent = async (
     nextOptIn: boolean
   ) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (
       !supabase ||
       !organizationId ||
@@ -698,7 +701,7 @@ export default function CustomerDetail() {
   }
 
   const createTask = async () => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id || !customer) {
       return
     }
@@ -785,7 +788,7 @@ export default function CustomerDetail() {
     task: Task,
     status: string
   ) => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
@@ -863,7 +866,7 @@ export default function CustomerDetail() {
   }
 
   const deleteTask = async (task: Task) => {
-    if (!can('tasks', 'delete')) { alert('ليس لديك صلاحية حذف المهام.'); return }
+    if (!can('tasks', 'delete')) { showToast('ليس لديك صلاحية حذف المهام.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
@@ -934,7 +937,7 @@ export default function CustomerDetail() {
   }
 
   const saveCustomer = async () => {
-    if (!canEditResource) { alert('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
+    if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     if (!supabase || !organizationId || !id || !customer) {
       return
     }
@@ -1020,7 +1023,7 @@ export default function CustomerDetail() {
   }
 
   const deleteCustomer = async () => {
-    if (!canDeleteResource) { alert('ليس لديك صلاحية أرشفة العميل.'); return }
+    if (!canDeleteResource) { showToast('ليس لديك صلاحية أرشفة العميل.'); return }
     if (!supabase || !organizationId || !id) {
       return
     }
