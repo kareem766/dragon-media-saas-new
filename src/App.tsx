@@ -42,6 +42,7 @@ const AdminFeatures = lazy(() => import('./pages/AdminFeatures'))
 const AdminRyanPackages = lazy(() => import('./pages/AdminRyanPackages'))
 const AdminRoles = lazy(() => import('./pages/AdminRoles'))
 const AdminTickets = lazy(() => import('./pages/AdminTickets'))
+const AdminPlatformUsers = lazy(() => import('./pages/AdminPlatformUsers'))
 const Tickets = lazy(() => import('./pages/Tickets'))
 const Search = lazy(() => import('./pages/Search'))
 const Plans = lazy(() => import('./pages/Plans'))
@@ -142,6 +143,7 @@ export default function App() {
                 <Route path="/admin/ryan-credits" element={<AdminRoute><AdminRyanPackages /></AdminRoute>} />
                 <Route path="/admin/roles" element={<AdminRoute><AdminRoles /></AdminRoute>} />
                 <Route path="/admin/tickets" element={<AdminRoute><AdminTickets /></AdminRoute>} />
+                <Route path="/admin/platform-users" element={<AdminRoute><AdminPlatformUsers /></AdminRoute>} />
               </Route>
             </Routes>
           </Suspense>
