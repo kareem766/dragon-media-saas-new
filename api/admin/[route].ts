@@ -9,6 +9,7 @@ import ryanAssistant from '../_server/admin/ryan-assistant.js'
 import platformFeatures from '../_server/admin/platform-features.js'
 import testSubscriptionWhatsapp from '../_server/admin/test-subscription-whatsapp.js'
 import platformUsers from '../_server/admin/platform-users.js'
+import platformHealth from '../_server/admin/platform-health.js'
 import rollbackSignup from '../../src/server/admin/rollback-signup.js'
 import removeMember from '../_server/company/remove-member.js'
 
@@ -25,6 +26,7 @@ const handlers: Record<string, Handler> = {
   'platform-features': platformFeatures,
   'test-subscription-whatsapp': testSubscriptionWhatsapp,
   'platform-users': platformUsers,
+  'platform-health': platformHealth,
   'rollback-signup': rollbackSignup,
   'remove-member': removeMember,
 }
