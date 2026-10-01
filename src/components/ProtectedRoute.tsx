@@ -112,8 +112,9 @@ export default function ProtectedRoute({
       !subscriptionLoading &&
       !(organizationId && checkingSuspend) &&
       !!user?.id &&
-      readyUserId === user.id
+      readyUserId !== user.id
     ) {
+      setReadyUserId(user.id)
       setInitialChecksReady(true)
     }
   }, [
