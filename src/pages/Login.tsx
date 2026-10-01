@@ -317,7 +317,7 @@ export default function Login() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.06),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.05),transparent_25%)] bg-slate-50 text-slate-900"
+      className="min-h-screen bg-[linear-gradient(180deg,#f8faff_0%,#ffffff_42%,#f8fafc_100%)] text-slate-900"
     >
       <style>{`
         @keyframes dragonHeroLogoFade {
@@ -429,28 +429,39 @@ export default function Login() {
           </div>
         </section>
 
-        <main className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-8">
-          <div className="w-full max-w-xl">
-            <div className="mb-8 flex items-center justify-between lg:hidden">
+        <main className="flex min-h-screen items-start justify-center px-4 pb-8 pt-5 sm:px-8 sm:pt-8 lg:items-center lg:py-8">
+          <div className="w-full max-w-xl lg:max-w-xl">
+            <div className="mb-6 flex items-center justify-between lg:hidden">
               <Link
                 to="/home"
-                className="flex items-center gap-3"
+                className="group flex items-center gap-2.5"
+                aria-label="العودة إلى الرئيسية"
               >
-                <img
-                  src={logoUrl}
-                  alt={platformName}
-                  className="h-10 w-auto rounded-full object-contain"
-                />
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <img
+                    src={logoUrl}
+                    alt={platformName}
+                    className="h-9 w-9 rounded-full object-contain"
+                  />
+                </span>
 
-                <span className="font-bold">
-                  {platformName}
+                <span className="leading-tight">
+                  <span className="block text-[15px] font-black tracking-tight text-slate-950">
+                    {platformName}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] font-semibold text-slate-400">
+                    إدارة أعمالك من مكان واحد
+                  </span>
                 </span>
               </Link>
 
               <Link
                 to="/home"
-                className="text-sm text-slate-500 hover:text-slate-900"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-950"
               >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
                 الرئيسية
               </Link>
             </div>
@@ -468,19 +479,23 @@ export default function Login() {
               />
             )}
 
-            <div className="mb-7">
-              <h2 className="text-3xl font-black tracking-tight">
+            <div className="mb-6 text-center lg:text-right">
+              <div className="mb-3 inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-black text-blue-700">
+                مساحة عملك في انتظارك
+              </div>
+
+              <h2 className="text-[30px] font-black tracking-tight text-slate-950 sm:text-3xl">
                 {mode === 'login'
-                  ? 'مرحبًا بعودتك'
+                  ? 'مرحبًا بعودتك 👋'
                   : signupStep ===
                       'verification'
                     ? 'تأكيد البريد الإلكتروني'
                     : 'أنشئ حسابك'}
               </h2>
 
-              <p className="mt-2 leading-7 text-slate-500">
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500 lg:mx-0">
                 {mode === 'login'
-                  ? 'سجّل دخولك للوصول إلى مساحة عملك.'
+                  ? 'سجّل دخولك للوصول إلى عملائك ومبيعاتك وأدواتك من مكان واحد.'
                   : signupStep ===
                       'verification'
                     ? 'خطوة بسيطة ونكمل إعداد مساحة عملك.'
@@ -501,9 +516,10 @@ export default function Login() {
             )}
 
             {mode === 'login' && (
+              <div className="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_18px_55px_rgba(15,23,42,0.08)] backdrop-blur sm:p-6">
               <form
                 onSubmit={handleLogin}
-                className="space-y-5"
+                className="space-y-4"
               >
                 <InputField
                   label="البريد الإلكتروني"
@@ -540,6 +556,7 @@ export default function Login() {
                   loadingLabel="جاري تسجيل الدخول..."
                 />
               </form>
+              </div>
             )}
 
             {mode === 'signup' &&
@@ -647,6 +664,7 @@ export default function Login() {
                 />
               )}
 
+            <div className="mt-4">
             <button
               type="button"
               onClick={async () => {
@@ -685,15 +703,16 @@ export default function Login() {
                 }
               }}
               disabled={submitting || authLoading}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-black text-slate-800 shadow-[0_8px_25px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-black">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-black">
                 G
               </span>
               <span>المتابعة باستخدام Google</span>
             </button>
+            </div>
 
-            <div className="my-7 flex items-center gap-4">
+            <div className="my-5 flex items-center gap-3">
               <div className="h-px flex-1 bg-slate-200" />
 
               <span className="text-xs font-semibold text-slate-400">
@@ -712,14 +731,21 @@ export default function Login() {
                     : 'login'
                 )
               }
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3.5 text-sm font-bold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 px-5 py-4 text-sm font-black text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
             >
               {mode === 'login'
                 ? 'إنشاء حساب جديد'
                 : 'لدي حساب بالفعل'}
             </button>
 
-            <p className="mt-7 text-center text-xs leading-6 text-slate-400">
+            <div className="mt-5 flex items-center justify-center gap-2 text-[10px] font-semibold text-slate-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span>اتصال آمن ومحمي</span>
+              <span className="text-slate-300">•</span>
+              <span>بياناتك تظل خاصة</span>
+            </div>
+
+            <p className="mt-4 text-center text-[11px] leading-5 text-slate-400">
               باستخدام{' '}
               {mode === 'login'
                 ? 'تسجيل الدخول'
@@ -851,7 +877,9 @@ function InputField({
         }
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+        dir={type === 'email' ? 'ltr' : 'rtl'}
+        inputMode={type === 'email' ? 'email' : undefined}
+        className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
       />
     </label>
   );
@@ -889,7 +917,8 @@ function PasswordField({
           }
           placeholder="6 أحرف على الأقل"
           autoComplete="current-password"
-          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 pl-20 text-sm outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+          dir="ltr"
+          className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 pl-20 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
         />
 
         <button
@@ -955,7 +984,7 @@ function SubmitButton({
     <button
       type="submit"
       disabled={loading}
-      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-blue-700 via-blue-600 to-indigo-600 px-5 text-sm font-black text-white shadow-[0_12px_30px_rgba(37,99,235,0.25)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_35px_rgba(37,99,235,0.30)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
     >
       {loading
         ? loadingLabel
