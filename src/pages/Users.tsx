@@ -4,6 +4,7 @@ import { IconPlus } from '../components/Icon'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
 import { useAuth } from '../lib/AuthContext'
+import { useToast } from '../lib/ToastContext'
 
 interface TeamUser {
   id: string
@@ -39,6 +40,7 @@ const roles = [
 ]
 
 export default function Users() {
+  const { confirmAction } = useToast()
   const { organizationId, loading: orgLoading, error: orgError } = useOrganization()
   const { session } = useAuth()
   const [teamUsers, setTeamUsers] = useState<TeamUser[]>([])
@@ -69,7 +71,7 @@ export default function Users() {
   const handleRemoveMember = async (member: TeamUser) => {
     if (!supabase || !session?.access_token) return
 
-    const confirmed = window.confirm(
+    const confirmed = confirmAction(
       `هل أنت متأكد من حذف ${member.full_name} من الشركة؟\\n\\nسيتم إلغاء وصوله للشركة ولن يتم حذف حساب تسجيل الدخول نهائيًا.`
     )
     if (!confirmed) return
