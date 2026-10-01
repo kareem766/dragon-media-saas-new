@@ -343,6 +343,7 @@ function LoadingState() {
 }
 
 export default function CRM() {
+  const { confirmAction } = useToast()
   const { showToast } = useToast()
 
   const navigate = useNavigate()
@@ -687,7 +688,7 @@ export default function CRM() {
   const handleConvert = async (lead: Lead) => {
     if (!supabase || !organizationId) return
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `هل تريد تحويل "${lead.name}" إلى عميل فعلي؟`
     )
 
@@ -751,7 +752,7 @@ export default function CRM() {
     if (!canDeleteLeads) { showToast('ليس لديك صلاحية حذف العملاء المحتملين.'); return }
     if (!supabase || !organizationId) return
 
-    const confirmed = window.confirm(
+    const confirmed = await confirmAction(
       `هل أنت متأكد من حذف "${lead.name}"؟`
     )
 
