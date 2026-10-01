@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
+import { createHash, createDecipheriv } from 'node:crypto'
 import { handleComment } from './comment-webhook.js'
 
 // meta webhook
@@ -25,6 +26,20 @@ function readRawBody(req: VercelRequest) {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
     req.on('error', reject)
   })
+}
+function decryptIntegrationToken(value:any){if(typeof value==='string')return value;if(!value?.iv||!value?.tag||!value?.data)return '';const seed=env('META_TOKEN_ENCRYPTION_KEY','META_APP_SECRET');if(!seed)return '';try{const key=createHash('sha256').update(seed).digest();const decipher=createDecipheriv('aes-256-gcm',key,Buffer.from(String(value.iv),'base64'));decipher.setAuthTag(Buffer.from(String(value.tag),'base64'));return Buffer.concat([decipher.update(Buffer.from(String(value.data),'base64')),decipher.final()]).toString('utf8')}catch{return ''}}
+async function repairInstagramWebhook(req:VercelRequest,res:VercelResponse){
+  const authorization=String(req.headers.authorization||''); const accessToken=authorization.startsWith('Bearer ')?authorization.slice(7).trim():''
+  if(!accessToken)return json(res,401,{error:'Unauthorized'})
+  const url=env('SUPABASE_URL','VITE_SUPABASE_URL'), key=env('SUPABASE_SERVICE_ROLE_KEY'); if(!url||!key)return json(res,500,{error:'Supabase server configuration is incomplete.'})
+  const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}}); const {data:userData}=await db.auth.getUser(accessToken); if(!userData?.user)return json(res,401,{error:'Unauthorized'})
+  const {data:membership}=await db.from('users').select('organization_id,active').eq('id',userData.user.id).maybeSingle(); if(!membership?.organization_id||membership.active===false)return json(res,403,{error:'Forbidden'})
+  const {data:integration}=await db.from('integrations').select('config,metadata').eq('organization_id',String(membership.organization_id)).eq('provider','instagram').eq('connected',true).maybeSingle(); if(!integration)return json(res,404,{error:'Instagram integration not found.'})
+  const token=decryptIntegrationToken(integration.config?.access_token), igUserId=String(integration.metadata?.instagram_user_id||''); if(!token||!igUserId)return json(res,400,{error:'Instagram connection data is incomplete.'})
+  const response=await fetch('https://graph.instagram.com/'+encodeURIComponent(igUserId)+'/subscribed_apps?subscribed_fields=comments,messages,messaging_postbacks',{method:'POST',headers:{Authorization:'Bearer '+token}}); const payload=await response.json().catch(()=>({})); if(!response.ok)return json(res,502,{error:String(payload?.error?.message||'Meta rejected Instagram webhook subscription.'),meta_code:payload?.error?.code??null})
+  const currentResponse=await fetch('https://graph.instagram.com/'+encodeURIComponent(igUserId)+'/subscribed_apps',{headers:{Authorization:'Bearer '+token}}); const current=await currentResponse.json().catch(()=>({})); const apps=Array.isArray(current?.data)?current.data:[]; const row=apps.find((item:any)=>String(item?.id||item?.app_id||'')===String(env('INSTAGRAM_APP_ID','META_INSTAGRAM_APP_ID'))); const fields=Array.isArray(row?.subscribed_fields)?row.subscribed_fields.map(String):[]; const ready=fields.includes('comments')&&fields.includes('messages')
+  await db.from('integrations').update({metadata:{...integration.metadata,instagram_webhook_subscribed:ready,instagram_webhook_fields:fields,ready_for_messaging:ready},last_verified_at:new Date().toISOString(),updated_at:new Date().toISOString(),error_message:ready?null:'Meta لم تؤكد اشتراك comments/messages.'}).eq('organization_id',String(membership.organization_id)).eq('provider','instagram')
+  return json(res,200,{ok:true,subscribed:ready,fields})
 }
 async function getDb() {
   const url = env('SUPABASE_URL', 'VITE_SUPABASE_URL'), key = env('SUPABASE_SERVICE_ROLE_KEY')
@@ -402,6 +417,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed.' })
   try {
+    if(req.method==='POST' && String(req.headers['x-dragon-action']||'')==='repair-instagram-webhook') return await repairInstagramWebhook(req,res)
     const rawBody = await readRawBody(req)
     if (!verifySignature(req, rawBody)) return json(res, 401, { error: 'Invalid webhook signature.' })
     const payload = JSON.parse(rawBody)
