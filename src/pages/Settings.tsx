@@ -103,15 +103,6 @@ const integrationProviders = [
     connectedActionLabel: 'إدارة Telegram',
     meta: false,
   },
-  {
-    provider: 'paymob',
-    name: 'بوابة الدفع',
-    description:
-      'حالة تكامل بوابة الدفع والعمليات المالية.',
-    actionLabel: 'إعداد Paymob',
-    connectedActionLabel: 'إدارة Paymob',
-    meta: false,
-  },
 ]
 
 const getMetaErrorMessage = (
