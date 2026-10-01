@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useOrganization } from '../lib/useOrganization'
 import { useSubscription } from '../lib/useSubscription'
+import { useToast } from '../lib/ToastContext'
 
 const tabs = [
   'بيانات الشركة',
@@ -207,6 +208,7 @@ const getMetadataString = (
 }
 
 export default function Settings() {
+  const { confirmAction } = useToast()
   const {
     organizationId,
     loading: orgLoading,
@@ -1033,7 +1035,7 @@ export default function Settings() {
       instagram: 'Instagram',
     }
 
-    const confirmed = window.confirm(
+    const confirmed = confirmAction(
       `هل أنت متأكد من إلغاء اتصال ${providerNames[provider]}؟\n\nسيتم إيقاف الاتصال وحذف بيانات الاتصال الخاصة به من Dragon Media، ويمكنك إعادة الربط لاحقًا.`,
     )
 
