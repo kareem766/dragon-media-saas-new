@@ -178,6 +178,7 @@ const formatTaskDueDate = (value: string | null | undefined) => {
 }
 
 export default function CustomerDetail() {
+  const { confirmAction } = useToast()
   const { showToast } = useToast()
 
   const { can } = usePermissions()
@@ -871,7 +872,7 @@ export default function CustomerDetail() {
       return
     }
 
-    const confirmed = window.confirm(
+    const confirmed = confirmAction(
       `هل أنت متأكد من حذف المهمة "${task.title}"؟`
     )
 
