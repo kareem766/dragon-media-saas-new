@@ -988,7 +988,7 @@ export default function AdminDashboard() {
       !Boolean(org.suspended)
 
     const confirmed =
-      confirmAction(
+      await confirmAction(
         willSuspend
           ? 'هل أنت متأكد من تعليق هذه الشركة؟'
           : 'هل أنت متأكد من تفعيل هذه الشركة؟'
