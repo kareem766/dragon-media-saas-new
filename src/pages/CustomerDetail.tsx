@@ -872,7 +872,7 @@ export default function CustomerDetail() {
       return
     }
 
-    const confirmed = confirmAction(
+    const confirmed = await confirmAction(
       `هل أنت متأكد من حذف المهمة "${task.title}"؟`
     )
 
