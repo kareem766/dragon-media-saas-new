@@ -629,7 +629,7 @@ export default function Tasks() {
     }
 
     const confirmed =
-      confirmAction(
+      await confirmAction(
         `هل أنت متأكد من حذف المهمة "${task.title}"؟`
       )
 
