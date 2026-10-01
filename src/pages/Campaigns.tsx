@@ -199,6 +199,7 @@ function EmptyState({
 }
 
 export default function Campaigns() {
+  const { confirmAction } = useToast()
   const { showToast } = useToast()
 
   const { can } = usePermissions()
@@ -755,7 +756,7 @@ export default function Campaigns() {
   }
 
   const runCampaign = async (campaign: DBCampaign) => {
-    const confirmed = window.confirm(
+    const confirmed = confirmAction(
       `سيتم بدء إرسال حملة «${campaign.name}» عبر ${channelLabels[campaign.channel] ?? campaign.channel} على دفعات. هل تريد المتابعة؟`
     )
     if (!confirmed) return
@@ -849,7 +850,7 @@ export default function Campaigns() {
   ) => {
     if (!canEditResource) { showToast('ليس لديك صلاحية تنفيذ هذا الإجراء.'); return }
     const confirmed =
-      window.confirm(
+      confirmAction(
         'هل أنت متأكد من إلغاء هذه الحملة؟ سيتم تخطي الرسائل التي لم يتم إرسالها.'
       )
 
