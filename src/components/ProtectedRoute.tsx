@@ -30,30 +30,9 @@ export default function ProtectedRoute({
 }: {
   children: React.ReactNode
 }) {
-  const {
-    session,
-    user,
-    loading: authLoading,
-    signOut,
-  } = useAuth()
-
-  const {
-    organizationId,
-    loading: orgLoading,
-    needsOnboarding,
-    error: organizationError,
-    refresh,
-  } = useOrganization()
-
-  const {
-    loading: subscriptionLoading,
-    isActive,
-    isPendingPayment,
-    isExpired,
-    status,
-    error: subscriptionError,
-  } = useSubscription()
-
+  const { session, user, loading: authLoading, signOut } = useAuth()
+  const { organizationId, loading: orgLoading, needsOnboarding, error: organizationError, refresh } = useOrganization()
+  const { loading: subscriptionLoading, isActive, isPendingPayment, isExpired, status, error: subscriptionError } = useSubscription()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -64,29 +43,17 @@ export default function ProtectedRoute({
   const [readyUserId, setReadyUserId] = useState<string | null>(null)
 
   const handleOnboardingDone = useCallback(async () => {
-    // After invite acceptance, the database write and the browser auth/session
-    // state can settle a moment apart. Retry the organization lookup before
-    // deciding that the employee still needs onboarding.
     for (let attempt = 0; attempt < 6; attempt += 1) {
-      const organizationId = await refresh()
-
-      if (organizationId) {
+      const nextOrganizationId = await refresh()
+      if (nextOrganizationId) {
         navigate('/', { replace: true })
         return
       }
-
-      if (attempt < 5) {
-        await new Promise((resolve) => window.setTimeout(resolve, 350))
-      }
+      if (attempt < 5) await new Promise((resolve) => window.setTimeout(resolve, 350))
     }
   }, [refresh, navigate])
 
-  // Reset the route gate immediately when the authenticated user changes.
-  // This is important when signing out and back in without a full page reload:
-  // otherwise the previous user's ready state can render the app for one frame
-  // before the new user's organization/permissions/subscription finish loading.
   useEffect(() => {
-    const userId = user?.id ?? null
     setInitialChecksReady(false)
     setReadyUserId(null)
     setSuspended(false)
@@ -94,21 +61,23 @@ export default function ProtectedRoute({
     setCheckingSuspend(true)
   }, [user?.id])
 
-  // لا نحول كل تحديث تلقائي للـsession أو إعادة جلب بيانات الشركة/الاشتراك
-  // إلى شاشة تحميل كاملة. شاشة التحميل مطلوبة فقط أثناء أول تهيئة للحساب.
+  // Do not render child pages until the current user's organization has been
+  // resolved. Child pages otherwise see organizationId=null for one render
+  // and show their red "تعذر تحميل المؤسسة" state even though the lookup is
+  // still in progress.
   useEffect(() => {
-    // A logged-out visitor must be released to the /login redirect as soon as
-    // auth initialization finishes. Waiting for organization/subscription
-    // checks here leaves a fresh browser on an infinite loading screen.
     if (!authLoading && !user?.id) {
       setReadyUserId(null)
       setInitialChecksReady(true)
       return
     }
 
+    const organizationResolved = Boolean(organizationId) || needsOnboarding
+
     if (
       !authLoading &&
       !orgLoading &&
+      organizationResolved &&
       !subscriptionLoading &&
       !(organizationId && checkingSuspend) &&
       !!user?.id &&
@@ -117,19 +86,10 @@ export default function ProtectedRoute({
       setReadyUserId(user.id)
       setInitialChecksReady(true)
     }
-  }, [
-    authLoading,
-    orgLoading,
-    subscriptionLoading,
-    organizationId,
-    checkingSuspend,
-    user?.id,
-    readyUserId,
-  ])
+  }, [authLoading, orgLoading, subscriptionLoading, organizationId, needsOnboarding, checkingSuspend, user?.id, readyUserId])
 
   useEffect(() => {
     let cancelled = false
-
     async function checkSuspension() {
       if (!organizationId || !supabase) {
         if (!cancelled) {
@@ -142,200 +102,80 @@ export default function ProtectedRoute({
 
       setCheckingSuspend(true)
       setSuspensionError(null)
-
       const { data, error } = await supabase
         .from('organizations')
         .select('suspended')
         .eq('id', organizationId)
         .maybeSingle()
 
-      if (cancelled) {
-        return
-      }
-
+      if (cancelled) return
       if (error) {
         setSuspensionError(error.message)
         setSuspended(false)
       } else {
         setSuspended(Boolean(data?.suspended))
       }
-
       setCheckingSuspend(false)
     }
-
     checkSuspension()
-
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [organizationId])
 
   if (authLoading || !initialChecksReady || (user?.id ? readyUserId !== user.id : false)) {
     return (
-      <div
-        dir="rtl"
-        className="min-h-screen flex items-center justify-center bg-sand-50"
-      >
+      <div dir="rtl" className="min-h-screen flex items-center justify-center bg-sand-50">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-ink-900/10 border-t-ink-950" />
       </div>
     )
   }
 
-  if (!session) {
-    return <Navigate to="/login" replace />
-  }
+  if (!session) return <Navigate to="/login" replace />
 
   if (organizationError) {
     return (
-      <div
-        dir="rtl"
-        className="h-screen flex items-center justify-center bg-sand-50 p-6"
-      >
+      <div dir="rtl" className="h-screen flex items-center justify-center bg-sand-50 p-6">
         <div className="text-center max-w-md">
-          <h2 className="font-bold text-lg text-ink-950">
-            تعذر تحميل بيانات الحساب
-          </h2>
-
-          <p className="text-sm text-ink-900/60 mt-2">
-            حدث خطأ أثناء تحميل بيانات الشركة. حاول مرة أخرى.
-          </p>
-
-          <button
-            type="button"
-            onClick={refresh}
-            className="mt-5 inline-flex items-center justify-center rounded-lg bg-ink-900 text-sand-50 px-5 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors"
-          >
-            إعادة المحاولة
-          </button>
+          <h2 className="font-bold text-lg text-ink-950">تعذر تحميل بيانات الحساب</h2>
+          <p className="text-sm text-ink-900/60 mt-2">حدث خطأ أثناء تحميل بيانات الشركة. حاول مرة أخرى.</p>
+          <button type="button" onClick={refresh} className="mt-5 inline-flex items-center justify-center rounded-lg bg-ink-900 text-sand-50 px-5 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors">إعادة المحاولة</button>
         </div>
       </div>
     )
   }
 
-  if (needsOnboarding) {
-    return <Onboarding onDone={handleOnboardingDone} />
-  }
+  if (needsOnboarding) return <Onboarding onDone={handleOnboardingDone} />
 
   if (suspensionError) {
     return (
-      <div
-        dir="rtl"
-        className="h-screen flex items-center justify-center bg-sand-50 p-6"
-      >
+      <div dir="rtl" className="h-screen flex items-center justify-center bg-sand-50 p-6">
         <div className="text-center max-w-md">
-          <h2 className="font-bold text-lg text-ink-950">
-            تعذر التحقق من حالة الحساب
-          </h2>
-
-          <p className="text-sm text-ink-900/60 mt-2">
-            لم نتمكن من التحقق من حالة حساب الشركة. حاول مرة أخرى.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-5 inline-flex items-center justify-center rounded-lg bg-ink-900 text-sand-50 px-5 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors"
-          >
-            إعادة المحاولة
-          </button>
+          <h2 className="font-bold text-lg text-ink-950">تعذر التحقق من حالة المؤسسة</h2>
+          <p className="text-sm text-ink-900/60 mt-2">حاول مرة أخرى بعد لحظات.</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-5 inline-flex items-center justify-center rounded-lg bg-ink-900 text-sand-50 px-5 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors">إعادة المحاولة</button>
         </div>
       </div>
     )
   }
 
   if (suspended) {
-    const handleLogout = async () => {
-      await signOut()
-      navigate('/login', { replace: true })
-    }
-
     return (
-      <div
-        dir="rtl"
-        className="h-screen flex flex-col items-center justify-center bg-sand-50 p-6 relative"
-      >
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="absolute top-6 left-6 flex items-center gap-1.5 text-sm text-ink-900/60 hover:text-ink-900 transition-colors"
-        >
-          <span>→</span>
-          تسجيل الخروج
-        </button>
-
-        <div className="text-center max-w-sm">
-          <div className="text-4xl mb-3">⛔</div>
-
-          <h2 className="font-bold text-lg text-ink-950">
-            تم تعليق هذا الحساب
-          </h2>
-
-          <p className="text-sm text-ink-900/55 mt-2">
-            لمزيد من التفاصيل حول سبب التعليق أو لإعادة تفعيل حسابك، تواصل مع فريق الدعم.
-          </p>
-
-          <Link
-            to="/support"
-            className="inline-block mt-4 bg-ink-900 text-sand-50 rounded-lg px-5 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors"
-          >
-            تواصل مع فريق الدعم
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (subscriptionError) {
-    return (
-      <div
-        dir="rtl"
-        className="h-screen flex items-center justify-center bg-sand-50 p-6"
-      >
+      <div dir="rtl" className="h-screen flex items-center justify-center bg-sand-50 p-6">
         <div className="text-center max-w-md">
-          <h2 className="font-bold text-lg text-ink-950">
-            تعذر التحقق من الاشتراك
-          </h2>
-
-          <p className="text-sm text-ink-900/60 mt-2 leading-7">
-            لم نتمكن من التحقق من حالة اشتراك حسابك. حاول مرة أخرى.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-5 inline-flex items-center justify-center rounded-lg bg-ink-900 text-sand-50 px-5 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors"
-          >
-            إعادة المحاولة
-          </button>
+          <h2 className="font-bold text-lg text-ink-950">المؤسسة موقوفة مؤقتًا</h2>
+          <p className="text-sm text-ink-900/60 mt-2">تواصل مع مسؤول المنصة لمعرفة التفاصيل.</p>
+          <button type="button" onClick={signOut} className="mt-5 inline-flex items-center justify-center rounded-lg bg-ink-900 text-sand-50 px-5 py-2.5 text-sm font-semibold hover:bg-ink-800 transition-colors">تسجيل الخروج</button>
         </div>
       </div>
     )
   }
 
-  // A payment request under review is a valid in-app state. The customer
-  // must not be redirected back to Plans while the platform admin reviews it.
-  // Feature entitlements remain locked until approval; navigation itself stays usable.
-  const canUseSubscriptionArea =
-    isActive ||
-    isPendingPayment ||
-    isSubscriptionAllowedPath(location.pathname)
-
-  if (!canUseSubscriptionArea) {
-    return (
-      <Navigate
-        to="/plans"
-        replace
-        state={{
-          reason:
-            isPendingPayment
-              ? 'pending_payment'
-              : isExpired || status === 'expired'
-                ? 'expired'
-                : 'no_subscription',
-        }}
-      />
-    )
+  const subscriptionAllowed = isSubscriptionAllowedPath(location.pathname)
+  if (!subscriptionLoading && !subscriptionAllowed && !isActive) {
+    if (isPendingPayment) return <Navigate to="/billing" replace />
+    if (isExpired || status === 'no_subscription' || status === 'rejected') return <Navigate to="/plans" replace />
   }
+
+  if (subscriptionError && !subscriptionAllowed) return <Navigate to="/billing" replace />
 
   return <>{children}</>
 }
