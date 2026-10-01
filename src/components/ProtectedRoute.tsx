@@ -161,7 +161,7 @@ export default function ProtectedRoute({
     }
   }, [organizationId])
 
-  if (authLoading || !initialChecksReady) {
+  if (authLoading || !initialChecksReady || (user?.id ? readyUserId !== user.id : false)) {
     return (
       <div
         dir="rtl"
