@@ -11,6 +11,10 @@ interface UsageSummary {
   remaining_messages: number
   usage_percent: number
   reset_at: string
+  plan_remaining: number
+  purchased_remaining: number
+  next_credit_expiry_at: string | null
+  next_credit_expires_in_seconds: number | null
 }
 
 function formatCountdown(ms: number) {
@@ -46,11 +50,15 @@ export default function AiUsageAlert() {
   }, [])
 
   if (!usage || usage.total_limit <= 0) return null
-  const shouldWarn = usage.usage_percent >= 80 || usage.remaining_messages <= 10
+  const baseExhausted = usage.plan_remaining <= 0
+  const extraExhausted = usage.purchased_remaining <= 0
+  const extraActive = usage.purchased_remaining > 0
+  const shouldWarn = usage.usage_percent >= 80 || usage.remaining_messages <= 10 || (baseExhausted && extraActive)
   if (!shouldWarn) return null
   const exhausted = usage.remaining_messages <= 0
-  const critical = exhausted || usage.usage_percent >= 90 || usage.remaining_messages <= 10
+  const critical = exhausted || usage.usage_percent >= 90 || usage.remaining_messages <= 10 || baseExhausted
   const resetMs = new Date(usage.reset_at).getTime() - now
+  const creditExpiryMs = usage.next_credit_expiry_at ? new Date(usage.next_credit_expiry_at).getTime() - now : 0
 
   return (
     <div dir="rtl" className={`rounded-2xl border px-4 py-3.5 shadow-sm dm-fade-up ${exhausted ? 'border-red-200 bg-red-50' : critical ? 'border-amber-200 bg-amber-50' : 'border-gold-200 bg-gold-50'}`}>
@@ -58,12 +66,12 @@ export default function AiUsageAlert() {
         <div className="flex min-w-0 items-start gap-3">
           <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${exhausted ? 'bg-red-100 text-red-700' : critical ? 'bg-amber-100 text-amber-700' : 'bg-gold-100 text-gold-700'}`}>!</div>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-ink-900">{exhausted ? 'رصيد رسائل Ryan انتهى' : 'رصيد رسائل Ryan يقترب من النفاد'}</p>
-            <p className="mt-0.5 text-xs leading-5 text-ink-600">{exhausted ? `استهلكت ${usage.used_messages.toLocaleString('ar-EG')} من أصل ${usage.total_limit.toLocaleString('ar-EG')} رسالة هذا الشهر.` : `متبقي ${usage.remaining_messages.toLocaleString('ar-EG')} رسالة من أصل ${usage.total_limit.toLocaleString('ar-EG')} هذا الشهر (${usage.usage_percent}%).`}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-ink-600"><span>إعادة الضبط خلال</span><span className="rounded-lg bg-white/70 px-2 py-1 font-mono tabular-nums" aria-live="polite">{resetMs > 0 ? formatCountdown(resetMs) : 'جارٍ التحديث'}</span></div>
+            <p className="text-sm font-bold text-ink-900"{exhausted ? 'رصيد رسائل Ryan انتهى' : baseExhausted ? 'الباقة الأساسية انتهت — يتم استخدام الرصيد الإضافي' : 'رصيد رسائل Ryan يقترب من النفاد'}</p>
+            <p className="mt-0.5 text-xs leading-5 text-ink-600">{exhausted ? `استهلكت جميع الرسائل المتاحة حاليًا (${usage.total_limit.toLocaleString('ar-EG')} رسالة).` : baseExhausted ? `اكتملت الباقة الأساسية، والمتبقي ${usage.purchased_remaining.toLocaleString('ar-EG')} رسالة من الرصيد الإضافي.` : `متبقي ${usage.remaining_messages.toLocaleString('ar-EG')} رسالة (${usage.usage_percent}%).`}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-ink-600"><span>{baseExhausted && extraActive ? 'تجديد الباقة الأساسية خلال' : 'إعادة الضبط خلال'}</span><span className="rounded-lg bg-white/70 px-2 py-1 font-mono tabular-nums" aria-live="polite">{resetMs > 0 ? formatCountdown(resetMs) : 'جارٍ التحديث'}</span>{usage.next_credit_expiry_at && <><span>· انتهاء الإضافي</span><span className="rounded-lg bg-white/70 px-2 py-1 font-mono tabular-nums" aria-live="polite">{creditExpiryMs > 0 ? formatCountdown(creditExpiryMs) : 'منتهية'}</span></>}</div>
           </div>
         </div>
-        <Link to="/billing" className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl bg-ink-950 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-ink-800">{exhausted ? 'ترقية أو شراء رصيد' : 'إدارة رصيد Ryan'}</Link>
+        <Link to="/ryan" className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl bg-ink-950 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-ink-800">{exhausted ? 'شراء رصيد Ryan' : 'إدارة Ryan'}</Link>
       </div>
     </div>
   )
