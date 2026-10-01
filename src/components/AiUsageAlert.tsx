@@ -23,7 +23,7 @@ function formatCountdown(ms: number) {
   const hours = Math.floor((totalSeconds % 86400) / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
-  return `${days}ي ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`
+  return `${days}ي ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 export default function AiUsageAlert() {
@@ -51,7 +51,6 @@ export default function AiUsageAlert() {
 
   if (!usage || usage.total_limit <= 0) return null
   const baseExhausted = usage.plan_remaining <= 0
-  const extraExhausted = usage.purchased_remaining <= 0
   const extraActive = usage.purchased_remaining > 0
   const shouldWarn = usage.usage_percent >= 80 || usage.remaining_messages <= 10 || (baseExhausted && extraActive)
   if (!shouldWarn) return null
@@ -66,7 +65,7 @@ export default function AiUsageAlert() {
         <div className="flex min-w-0 items-start gap-3">
           <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${exhausted ? 'bg-red-100 text-red-700' : critical ? 'bg-amber-100 text-amber-700' : 'bg-gold-100 text-gold-700'}`}>!</div>
           <div className="min-w-0">
-            <p className="text-sm font-bold text-ink-900"{exhausted ? 'رصيد رسائل Ryan انتهى' : baseExhausted ? 'الباقة الأساسية انتهت — يتم استخدام الرصيد الإضافي' : 'رصيد رسائل Ryan يقترب من النفاد'}</p>
+            <p className="text-sm font-bold text-ink-900">{exhausted ? 'رصيد رسائل Ryan انتهى' : baseExhausted ? 'الباقة الأساسية انتهت — يتم استخدام الرصيد الإضافي' : 'رصيد رسائل Ryan يقترب من النفاد'}</p>
             <p className="mt-0.5 text-xs leading-5 text-ink-600">{exhausted ? `استهلكت جميع الرسائل المتاحة حاليًا (${usage.total_limit.toLocaleString('ar-EG')} رسالة).` : baseExhausted ? `اكتملت الباقة الأساسية، والمتبقي ${usage.purchased_remaining.toLocaleString('ar-EG')} رسالة من الرصيد الإضافي.` : `متبقي ${usage.remaining_messages.toLocaleString('ar-EG')} رسالة (${usage.usage_percent}%).`}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-ink-600"><span>{baseExhausted && extraActive ? 'تجديد الباقة الأساسية خلال' : 'إعادة الضبط خلال'}</span><span className="rounded-lg bg-white/70 px-2 py-1 font-mono tabular-nums" aria-live="polite">{resetMs > 0 ? formatCountdown(resetMs) : 'جارٍ التحديث'}</span>{usage.next_credit_expiry_at && <><span>· انتهاء الإضافي</span><span className="rounded-lg bg-white/70 px-2 py-1 font-mono tabular-nums" aria-live="polite">{creditExpiryMs > 0 ? formatCountdown(creditExpiryMs) : 'منتهية'}</span></>}</div>
           </div>
