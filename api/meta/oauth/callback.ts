@@ -124,24 +124,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error(instagramTokenData?.error_message || instagramTokenData?.error?.message || 'فشل تبادل authorization code مع Instagram.')
       }
 
-      // Instagram Business Login long-lived token exchange.
-      // Meta currently expects the token exchange parameters as form data.
+      // Instagram Business Login long-lived token exchange uses POST.
+      // The initial authorization-code exchange above is also POST, but this
+      // endpoint is a separate token exchange and must receive form data.
       const longLivedParams = new URLSearchParams({
         grant_type: 'ig_exchange_token',
         client_secret: instagramAppSecret,
         access_token: shortLivedToken,
       })
-      // Instagram Business Login uses GET for the short-lived -> long-lived
-      // token exchange. Keeping this as GET is critical: Meta returns
-      // "Unsupported request - method type: post" when this endpoint is called
-      // with POST. The initial authorization-code exchange above remains POST.
-      const longLivedUrl = new URL('https://graph.instagram.com/access_token')
-      longLivedUrl.searchParams.set('grant_type', 'ig_exchange_token')
-      longLivedUrl.searchParams.set('client_secret', instagramAppSecret)
-      longLivedUrl.searchParams.set('access_token', shortLivedToken)
-      const longLivedResponse = await fetch(longLivedUrl.toString(), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
+      const longLivedResponse = await fetch('https://graph.instagram.com/access_token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
+        },
+        body: longLivedParams.toString(),
       })
       const longLivedData = await longLivedResponse.json().catch(() => ({}))
       const token = String(longLivedData?.access_token || '')
