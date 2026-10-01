@@ -47,6 +47,7 @@ export function useSubscription() {
   const [platformFeaturesLoaded, setPlatformFeaturesLoaded] = useState(false)
   const [rawSubscription, setRawSubscription] = useState<SubscriptionData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const canManageSubscription = isAdmin || managerRoles.has(role || '')
 
@@ -106,15 +107,16 @@ export function useSubscription() {
     let cancelled = false
     const loadSubscription = async () => {
       if (organizationLoading || platformAdminLoading || !roleLoaded) return
+      setLoading(true)
+      setLoadedUserId(null)
       if (isAdmin) {
-        if (!cancelled) { setRawSubscription(null); setLoading(false) }
+        if (!cancelled) { setRawSubscription(null); setLoadedUserId(user?.id ?? null); setLoading(false) }
         return
       }
       if (!supabase || !organizationId) {
-        if (!cancelled) { setRawSubscription(null); setLoading(false) }
+        if (!cancelled) { setRawSubscription(null); setLoadedUserId(user?.id ?? null); setLoading(false) }
         return
       }
-      setLoading(true)
       setError(null)
       try {
         const { data, error: subscriptionError } = await supabase.from('subscriptions').select(`
@@ -125,6 +127,7 @@ export function useSubscription() {
         if (cancelled) return
         if (!data || data.length === 0) {
           setRawSubscription({ id: '', status: 'no_subscription', renewal_date: null, billing_cycle: null, started_at: null, expires_at: null, plan_id: null, plan: null })
+          setLoadedUserId(user?.id ?? null)
           return
         }
 
@@ -150,10 +153,12 @@ export function useSubscription() {
           limits_snapshot: selected.limits_snapshot ?? null,
           plan: plan ? ({ ...plan, features: selected.features_snapshot ?? plan.features ?? {}, limits: selected.limits_snapshot ?? plan.limits ?? {} } as PlanData) : null
         })
+        setLoadedUserId(user?.id ?? null)
       } catch (err: any) {
         if (cancelled) return
         setRawSubscription(null)
         setError(err?.message || 'تعذر تحميل بيانات الاشتراك.')
+        setLoadedUserId(user?.id ?? null)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -161,6 +166,8 @@ export function useSubscription() {
     void loadSubscription()
     return () => { cancelled = true }
   }, [organizationId, organizationLoading, isAdmin, platformAdminLoading, roleLoaded])
+
+  const effectiveLoading = loading || (user?.id ? loadedUserId !== user.id : false)
 
   const rawStatus = rawSubscription?.status ?? 'no_subscription'
   const effectiveExpiryDate = rawSubscription?.expires_at ?? rawSubscription?.renewal_date ?? null
@@ -192,7 +199,7 @@ export function useSubscription() {
   // show onboarding/welcome or a locked screen, so an early "no_subscription"
   // value can cause a visible lock flicker for new accounts.
   let accessState: SubscriptionAccessState = 'unknown'
-  if (!loading && rawStatus === 'no_subscription') accessState = 'no_subscription'
+  if (!effectiveLoading && rawStatus === 'no_subscription') accessState = 'no_subscription'
   else if (isCancelled) accessState = 'cancelled'
   else if (rawIsExpired) accessState = 'expired'
   else if (rawPendingPayment) accessState = 'pending_payment'
@@ -222,7 +229,7 @@ export function useSubscription() {
 
   return {
     subscription: rawSubscription,
-    loading,
+    loading: effectiveLoading,
     error,
     status: rawStatus,
     accessState,
