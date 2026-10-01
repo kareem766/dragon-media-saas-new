@@ -37,7 +37,7 @@ export default function Search() {
     try {
       const term = `%${cleanQuery}%`
 
-      const [custRes, leadRes, dealRes, taskRes] = await Promise.all([
+      const [custRes, leadRes, dealRes, taskRes, conversationRes, serviceRes, appointmentRes] = await Promise.all([
         supabase
           .from('customers')
           .select('id, name, phone')
@@ -65,13 +65,37 @@ export default function Search() {
           .eq('organization_id', organizationId)
           .ilike('title', term)
           .limit(5),
+
+        supabase
+          .from('conversations')
+          .select('id, subject, channel, customer_id')
+          .eq('organization_id', organizationId)
+          .ilike('subject', term)
+          .limit(5),
+
+        supabase
+          .from('services')
+          .select('id, name, description')
+          .eq('organization_id', organizationId)
+          .ilike('name', term)
+          .limit(5),
+
+        supabase
+          .from('appointments')
+          .select('id, appointment_date, appointment_time, notes')
+          .eq('organization_id', organizationId)
+          .ilike('notes', term)
+          .limit(5),
       ])
 
       const firstError =
         custRes.error ||
         leadRes.error ||
         dealRes.error ||
-        taskRes.error
+        taskRes.error ||
+        conversationRes.error ||
+        serviceRes.error ||
+        appointmentRes.error
 
       if (firstError) {
         throw firstError
@@ -117,11 +141,38 @@ export default function Search() {
         })
       )
 
+      const conversationResults: Result[] = (conversationRes.data ?? []).map((conversation: any) => ({
+        id: conversation.id,
+        label: conversation.subject || 'محادثة بدون عنوان',
+        sub: conversation.channel || '',
+        href: `#/inbox?conversation=${conversation.id}`,
+        type: 'محادثة',
+      }))
+
+      const serviceResults: Result[] = (serviceRes.data ?? []).map((service: any) => ({
+        id: service.id,
+        label: service.name || 'خدمة',
+        sub: service.description || '',
+        href: '#/services',
+        type: 'خدمة',
+      }))
+
+      const appointmentResults: Result[] = (appointmentRes.data ?? []).map((appointment: any) => ({
+        id: appointment.id,
+        label: `موعد ${appointment.appointment_date || ''}`.trim(),
+        sub: appointment.appointment_time || appointment.notes || '',
+        href: '#/appointments',
+        type: 'موعد',
+      }))
+
       setResults([
         ...customerResults,
         ...leadResults,
         ...dealResults,
         ...taskResults,
+        ...conversationResults,
+        ...serviceResults,
+        ...appointmentResults,
       ])
     } catch (err) {
       console.error('Search error:', err)
@@ -147,7 +198,7 @@ export default function Search() {
           البحث
         </h1>
         <p className="text-sm text-ink-900/55 mt-1">
-          ابحث بسرعة داخل العملاء والصفقات والمهام.
+          ابحث بسرعة داخل العملاء والعملاء المحتملين والصفقات والمحادثات والخدمات والمهام والمواعيد.
         </p>
       </div>
 
@@ -158,7 +209,7 @@ export default function Search() {
           <input
             value={q}
             onChange={(e) => runSearch(e.target.value)}
-            placeholder="ابحث في العملاء، الصفقات، المهام..."
+            placeholder="ابحث في العملاء، المحادثات، الصفقات، الخدمات، المهام..."
             className="bg-transparent outline-none text-sm sm:text-base w-full text-ink-950 placeholder:text-ink-900/35"
             autoFocus
             aria-label="البحث"
