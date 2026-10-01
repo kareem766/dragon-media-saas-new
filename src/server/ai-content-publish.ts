@@ -23,8 +23,8 @@ function decryptToken(value:any){
   }
   throw new Error('تعذر فك تشفير اتصال Facebook. مفتاح تشفير Meta الحالي لا يطابق المفتاح المستخدم عند حفظ الاتصال. أعد ربط Facebook من إعدادات Meta.')
 }
-async function graph(path:string,token:string,body:Record<string,unknown>){
-  const response=await fetch(`https://graph.facebook.com/${GRAPH_VERSION}${path}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)})
+async function graph(path:string,token:string,body:Record<string,unknown>,host='graph.facebook.com'){
+  const response=await fetch(`https://${host}/${GRAPH_VERSION}${path}`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(body)})
   const data=await response.json().catch(()=>({}))
   if(!response.ok) throw new Error(text(data?.error?.message,500)||`Meta request failed (${response.status})`)
   return data
@@ -76,10 +76,10 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
           if(!igUserId) throw new Error('حساب Instagram غير مؤهل للنشر أو لم يتم حفظ Instagram User ID.')
           const token=decryptToken(integration.config?.access_token)
           if(!post.image_url) throw new Error('Instagram يحتاج صورة للبوست، وستتوفر خدمة توليد الصور قريبًا على منصة دراجون ميديا.')
-          const container=await graph(`/${encodeURIComponent(igUserId)}/media`,token,{image_url:post.image_url,caption,media_type:'IMAGE'})
+          const container=await graph(`/${encodeURIComponent(igUserId)}/media`,token,{image_url:post.image_url,caption,media_type:'IMAGE'},'graph.instagram.com')
           const creationId=text(container?.id,200)
           if(!creationId) throw new Error('تعذر إنشاء حاوية Instagram.')
-          const published=await graph(`/${encodeURIComponent(igUserId)}/media_publish`,token,{creation_id:creationId})
+          const published=await graph(`/${encodeURIComponent(igUserId)}/media_publish`,token,{creation_id:creationId},'graph.instagram.com')
           results.instagram={status:'published',id:text(published?.id,200),creation_id:creationId,published_at:new Date().toISOString()}
         }else throw new Error('المنصة غير مدعومة.')
       }catch(error){results[platform]={status:'failed',error:error instanceof Error?error.message:'فشل النشر'}}
