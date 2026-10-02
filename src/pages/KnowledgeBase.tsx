@@ -64,19 +64,24 @@ export default function KnowledgeBase() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 pb-8">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-xl font-bold text-ink-950">قاعدة معرفة RYAN</h2>
-          <p className="text-sm text-ink-900/50 mt-1">أضف معلومات عن شركتك عشان ريان يستخدمها في الرد على العملاء — أسئلة شائعة، سياسات، تفاصيل خدمات.</p>
+    <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-5 pb-8">
+      <div className="rounded-3xl bg-gradient-to-l from-blue-700 via-blue-800 to-blue-950 p-5 text-white shadow-[0_18px_50px_rgba(30,64,175,.16)]">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-bold tracking-wide text-blue-100">RYAN AI</p>
+            <h2 className="text-xl font-black">قاعدة معرفة Ryan</h2>
+            <p className="text-sm text-blue-100/80 mt-1">أضف معلومات عن شركتك عشان ريان يستخدمها في الرد على العملاء — أسئلة شائعة، سياسات، تفاصيل خدمات.</p>
+          </div>
+          {canEditKnowledge && (
+            <Button onClick={() => setShowForm(v => !v)} className="bg-white text-blue-800 hover:bg-blue-50">
+              <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة معلومة</span>
+            </Button>
+          )}
         </div>
-        {canEditKnowledge && <Button onClick={() => setShowForm(v => !v)}>
-          <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة معلومة</span>
-        </Button>}
       </div>
 
       {showForm && (
-        <Card className="p-5">
+        <Card className="rounded-3xl border border-blue-100 bg-white p-5 shadow-sm">
           <form onSubmit={handleAdd} className="space-y-3">
             <input required placeholder="العنوان (مثال: سياسة الاسترجاع)" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="w-full border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
             <textarea required placeholder="المحتوى بالتفصيل..." rows={4} value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} className="w-full border border-sand-200 rounded-lg px-3.5 py-2.5 text-sm outline-none focus:border-ink-700" />
@@ -93,7 +98,7 @@ export default function KnowledgeBase() {
       ) : (
         <div className="space-y-3">
           {entries.map(e => (
-            <Card key={e.id} className="p-4">
+            <Card key={e.id} className="rounded-3xl border border-blue-100 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold text-sm text-ink-950">{e.title}</h3>

@@ -85,16 +85,16 @@ export default function Ryan() {
 
   return (
     <div dir="rtl" className="space-y-5 pb-8">
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-l from-blue-700 to-blue-900 p-6 text-white shadow-lg">
+      <section className="overflow-hidden rounded-3xl bg-gradient-to-l from-blue-700 via-blue-800 to-blue-950 p-6 text-white shadow-[0_18px_50px_rgba(30,64,175,.18)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="mb-2 text-xs font-bold text-blue-100">المساعد الذكي</div>
             <h1 className="text-2xl font-black">Ryan</h1>
             <p className="mt-2 text-sm text-blue-100">تابع استهلاك Ryan لكل تفاعل من مكان واحد.</p>
           </div>
-          <span className={`rounded-full px-4 py-2 text-xs font-bold ${state.active ? 'bg-white/15 text-white' : 'bg-red-400/20 text-red-100'}`}>
+          <div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => window.location.hash = '/ryan/assistant'} className="rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-800 shadow-sm transition hover:bg-blue-50">المساعد الداخلي</button><button type="button" onClick={() => window.location.hash = '/ryan/knowledge'} className="rounded-xl bg-blue-500/30 px-4 py-2 text-xs font-bold text-white ring-1 ring-white/20 transition hover:bg-blue-500/45">قاعدة المعرفة</button><button type="button" onClick={() => window.location.hash = '/ryan/settings'} className="rounded-xl bg-blue-500/30 px-4 py-2 text-xs font-bold text-white ring-1 ring-white/20 transition hover:bg-blue-500/45">الإعدادات</button></div><span className={`rounded-full px-4 py-2 text-xs font-bold ${state.active ? 'bg-emerald-400/20 text-emerald-50 ring-1 ring-emerald-200/20' : 'bg-red-400/20 text-red-100'}`}>
             {state.active ? 'نشط' : 'متوقف'}
-          </span>
+          </span></div>
         </div>
       </section>
 
