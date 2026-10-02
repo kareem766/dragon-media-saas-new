@@ -59,14 +59,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true
 
     const initializeAuth = async () => {
-      const code = new URLSearchParams(window.location.search).get('code')
+      // Supabase PKCE recovery/signup links append ?code=... to the
+      // configured redirect URL. Because this app uses HashRouter, the query
+      // string can live inside the hash (/#/reset-password?code=...), so
+      // window.location.search alone is not enough.
+      const searchParams = new URLSearchParams(window.location.search)
+      const routeHash = window.location.hash || ''
+      const routeQueryIndex = routeHash.indexOf('?')
+      const hashParams =
+        routeQueryIndex >= 0
+          ? new URLSearchParams(routeHash.slice(routeQueryIndex + 1))
+          : null
+      const code = searchParams.get('code') || hashParams?.get('code')
 
       if (code) {
         const { error } = await client.auth.exchangeCodeForSession(code)
-        if (error) console.error('[auth] code exchange failed', error)
-
-        const cleanUrl = window.location.origin + window.location.pathname + (window.location.hash || '#/')
-        window.history.replaceState({}, document.title, cleanUrl)
+        if (error) {
+          console.error('[auth] code exchange failed', error)
+        } else {
+          // Remove the one-time PKCE code without changing the HashRouter route.
+          const routePath =
+            routeQueryIndex >= 0
+              ? routeHash.slice(0, routeQueryIndex)
+              : routeHash || '#/'
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.origin + window.location.pathname + routePath
+          )
+        }
       }
 
       const { data, error } = await client.auth.getSession()
