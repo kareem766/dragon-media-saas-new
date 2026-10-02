@@ -7,7 +7,7 @@ const json = (res: VercelResponse, status: number, body: Record<string, unknown>
 export default async function removeMember(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' })
 
-  const accessToken = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '').trim()
+  const accessToken = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
   const supabaseUrl = String(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim()
   const serviceKey = String(
     process.env.SUPABASE_SERVICE_KEY ||
