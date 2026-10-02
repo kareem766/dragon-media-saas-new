@@ -262,6 +262,8 @@ export default function Settings() {
 
   const [metaDisconnecting, setMetaDisconnecting] =
     useState<MetaProvider | null>(null)
+  const [telegramBusy, setTelegramBusy] = useState(false)
+  const [telegramMessage, setTelegramMessage] = useState('')
 
   const updateOrg = (
     field: keyof OrgData,
@@ -1092,6 +1094,58 @@ export default function Settings() {
     }
   }
 
+  const handleTelegramConnect = async () => {
+    if (!supabase || !organizationId || telegramBusy) return
+    const botToken = window.prompt('أدخل Bot Token من @BotFather:')
+    if (!botToken?.trim()) return
+    setTelegramBusy(true)
+    setTelegramMessage('')
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) throw new Error('يرجى تسجيل الدخول مرة أخرى.')
+      const response = await fetch('/api/telegram?action=connect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ bot_token: botToken.trim() }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(String(data?.error || 'تعذر ربط Telegram.'))
+      setTelegramMessage(`تم ربط Telegram بنجاح @${String(data?.bot?.username || '')}.`)
+      await loadIntegrations()
+    } catch (err: unknown) {
+      setTelegramMessage(getMetaErrorMessage(err, 'تعذر ربط Telegram.'))
+    } finally {
+      setTelegramBusy(false)
+    }
+  }
+
+  const handleTelegramDisconnect = async () => {
+    if (!supabase || !telegramBusy) return
+    if (!window.confirm('هل أنت متأكد من إلغاء اتصال Telegram؟')) return
+    setTelegramBusy(true)
+    setTelegramMessage('')
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) throw new Error('يرجى تسجيل الدخول مرة أخرى.')
+      const response = await fetch('/api/telegram?action=disconnect', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(String(data?.error || 'تعذر إلغاء اتصال Telegram.'))
+      setTelegramMessage('تم إلغاء اتصال Telegram بنجاح.')
+      await loadIntegrations()
+    } catch (err: unknown) {
+      setTelegramMessage(getMetaErrorMessage(err, 'تعذر إلغاء اتصال Telegram.'))
+    } finally {
+      setTelegramBusy(false)
+    }
+  }
+
   const validate = () => {
     if (!org.name.trim()) {
       return 'اسم الشركة مطلوب.'
@@ -1436,6 +1490,10 @@ export default function Settings() {
               metaDisconnecting={
                 metaDisconnecting
               }
+              telegramBusy={telegramBusy}
+              telegramMessage={telegramMessage}
+              onTelegramConnect={handleTelegramConnect}
+              onTelegramDisconnect={handleTelegramDisconnect}
             />
           )}
 
@@ -1923,6 +1981,10 @@ function IntegrationsSection({
     provider: MetaProvider,
   ) => void
   metaDisconnecting: MetaProvider | null
+  telegramBusy: boolean
+  telegramMessage: string
+  onTelegramConnect: () => void
+  onTelegramDisconnect: () => void
 }) {
   return (
     <section>
@@ -2191,6 +2253,33 @@ function IntegrationsSection({
                             </button>
                           )}
                       </div>
+                    ) : item.provider === 'telegram' ? (
+                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:self-end">
+                        <button
+                          type="button"
+                          onClick={onTelegramConnect}
+                          disabled={telegramBusy}
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-ink-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px]"
+                        >
+                          {telegramBusy && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
+                          {telegramBusy ? 'جاري التنفيذ...' : connected ? 'إعادة ربط Telegram' : 'ربط Telegram'}
+                        </button>
+                        {connected && (
+                          <button
+                            type="button"
+                            onClick={onTelegramDisconnect}
+                            disabled={telegramBusy}
+                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-60 sm:w-auto sm:min-w-[150px]"
+                          >
+                            إلغاء الاتصال
+                          </button>
+                        )}
+                        {telegramMessage && (
+                          <div className={`rounded-xl border px-3 py-2 text-xs leading-5 ${telegramMessage.startsWith('تم') ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                            {telegramMessage}
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <button
                         type="button"
@@ -2198,9 +2287,7 @@ function IntegrationsSection({
                         title="سيتم تفعيل تدفق الربط الخاص بهذا التكامل بعد اكتمال الـAPI الخاص به."
                         className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50 px-4 py-2.5 text-xs font-bold text-ink-900/40 sm:w-auto sm:self-end"
                       >
-                        {connected
-                          ? item.connectedActionLabel
-                          : item.actionLabel}
+                        {connected ? item.connectedActionLabel : item.actionLabel}
                       </button>
                     )}
                   </div>
