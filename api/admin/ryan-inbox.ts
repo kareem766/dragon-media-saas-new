@@ -326,16 +326,6 @@ if(!agent)return res.status(409).json({error:'Ryan agent could not be initialize
    return res.status(500).json({error:'Failed to create human handoff for image',details:text(e?.message,500)});
   }
  }
- const {data:quota,error:quotaError}=await supabase.rpc('consume_ryan_message',{p_organization_id:organizationId,p_agent_id:agent.id,p_conversation_id:conversationId,p_customer_id:customer.id,p_model:model})
- if(quotaError)return res.status(500).json({error:'Failed to verify Ryan message quota',details:text(quotaError.message,500)})
- const quotaRow=Array.isArray(quota)?quota[0]:quota
- if(!quotaRow?.allowed){
-  const quotaReply='رصيد رسائل Ryan في الباقة الحالية اكتمل، ومش هقدر أكمل المحادثة دلوقتي. تقدر تختار أو تجدد باقة من صفحة الباقات داخل المنصة.'
-  const {data:savedQuota,error:savedQuotaError}=await supabase.from('messages').insert({conversation_id:conversationId,sender_type:'ai',content:quotaReply,metadata:{source:'ryan',ai_agent_id:agent.id,type:'quota_exhausted',plan_path:'/plans',used_messages:Number(quotaRow?.used_messages||0),total_limit:Number(quotaRow?.total_limit||0),reset_at:quotaRow?.reset_at||null}}).select('id').single()
-  await supabase.from('messages').update({metadata:{...obj(incoming.metadata),ai_agent_processed_at:new Date().toISOString(),ai_agent_id:agent.id,ai_agent_quota_exhausted:true}}).eq('id',messageId).eq('conversation_id',conversationId)
-  if(savedQuotaError||!savedQuota)return res.status(500).json({error:'Failed to save Ryan quota notice'})
-  return res.status(200).json({ok:true,reply:quotaReply,message_id:savedQuota.id,quota_exhausted:true,plan_path:'/plans',reset_at:quotaRow?.reset_at||null})
- }
  const runId=text(quotaRow?.run_id,100)
  if(!apiKey)return res.status(500).json({error:'Gemini is not configured'})
  const historyLimit=Math.min(Math.max(Number(settings.max_history_messages)||40,1),80),knowledgeLimit=Math.min(Math.max(Number(settings.max_knowledge_items)||50,1),80)
