@@ -9,7 +9,6 @@ export default async function removeMember(req: VercelRequest, res: VercelRespon
 
   const accessToken = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '').trim()
   const supabaseUrl = String(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim()
-  const anonKey = String(process.env.VITE_SUPABASE_ANON_KEY || '').trim()
   const serviceKey = String(
     process.env.SUPABASE_SERVICE_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -17,22 +16,21 @@ export default async function removeMember(req: VercelRequest, res: VercelRespon
     ''
   ).trim()
 
-  if (!accessToken || !supabaseUrl || !anonKey || !serviceKey) {
+  if (!accessToken || !supabaseUrl || !serviceKey) {
     return json(res, 401, { error: 'غير مصرح' })
   }
 
   const targetUserId = String(req.body?.user_id || '').trim()
   if (!targetUserId) return json(res, 400, { error: 'معرف الموظف مطلوب' })
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
+  // Verify the caller's access token with the service client. This avoids
+  // depending on the browser publishable/anon key for a sensitive company
+  // management action and keeps authorization checks server-side.
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const { data: authData, error: authError } = await userClient.auth.getUser()
+  const { data: authData, error: authError } = await admin.auth.getUser(accessToken)
   if (authError || !authData.user) return json(res, 401, { error: 'انتهت جلسة تسجيل الدخول' })
 
   const actorId = authData.user.id
