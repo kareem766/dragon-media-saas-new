@@ -457,7 +457,7 @@ const durableMemory={name:(isWhatsApp?(explicitName||rememberedExplicitName):tex
    const {data:outboundSecretRow}=await supabase.from('system_secrets').select('value').eq('key','whatsapp_outbound_webhook_secret').maybeSingle()
    const outboundSecret=String(outboundSecretRow?.value||'').trim()
    if(!outboundSecret)throw new Error('Meta outbound dispatch secret is missing')
-   const outboundResponse=await fetch('https://dragon-media-saas-new.vercel.app/api/meta/facebook/send',{method:'POST',headers:{'Content-Type':'application/json','x-dragon-facebook-outbound-secret':outboundSecret},body:JSON.stringify({message_id:saved.id})})
+   const outboundResponse=await fetch('https://dragon-media-saas-new.vercel.app/api/meta/facebook/send',{method:'POST',headers:{'Content-Type':'application/json','x-dragon-facebook-outbound-secret':outboundSecret},body:JSON.stringify({message_id:saved.id,organization_id:organizationId})})
    const outboundPayload=await outboundResponse.json().catch(()=>({}))
    if(!outboundResponse.ok)throw new Error(String(outboundPayload?.error||'Meta outbound send failed'))
    console.log('Ryan Meta outbound message sent',{conversationId,channel:conversation.channel,messageId:saved.id,externalId:String(outboundPayload?.message?.external_id||outboundPayload?.external_id||'')})  }catch(outboundError:any){
