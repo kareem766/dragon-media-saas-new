@@ -78,16 +78,37 @@ export default function Users() {
     setRemoveError(null)
 
     try {
-      const response = await fetch('/api/admin/remove-member', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ user_id: member.id }),
-      })
+      // Use a fresh access token for destructive account-management actions.
+      // The page can remain open long enough for the original JWT to expire;
+      // retry once after an explicit session refresh instead of reporting a
+      // misleading "session expired" error while the employee remains active.
+      let currentSession = session
+      const { data: currentSessionData } = await supabase.auth.getSession()
+      if (currentSessionData.session) {
+        currentSession = currentSessionData.session
+      }
 
-      const body = await response.json().catch(() => ({}))
+      const callRemoveMember = async (accessToken: string) =>
+        fetch('/api/admin/remove-member', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ user_id: member.id }),
+        })
+
+      let response = await callRemoveMember(currentSession.access_token)
+      let body = await response.json().catch(() => ({}))
+
+      if (response.status === 401) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+        if (!refreshError && refreshed.session) {
+          response = await callRemoveMember(refreshed.session.access_token)
+          body = await response.json().catch(() => ({}))
+        }
+      }
+
       if (!response.ok) {
         setRemoveError(body.error || 'تعذر إزالة الموظف. حاول مرة أخرى.')
         return
