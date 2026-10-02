@@ -323,13 +323,7 @@ export default function Plans() {
                   <div className="text-xs text-red-600 mt-1">
                     الاشتراك السنوي غير متاح لهذه الباقة
                   </div>
-                ) : (
-                  plan.trial_days > 0 && (
-                    <div className="text-xs text-ink-900/45 mt-1">
-                      تجربة مجانية {plan.trial_days} أيام
-                    </div>
-                  )
-                )}
+                ) : null}
               </div>
 
               <ul className="mt-5 space-y-2 text-sm text-ink-900/70 flex-1">
