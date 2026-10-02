@@ -79,7 +79,7 @@ export default function RyanAssistant() {
   }
 
   return (
-    <div dir="rtl" className="space-y-5 pb-8">
+    <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-5 pb-8">
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#071f45] via-[#0b315f] to-[#155eef] text-white shadow-[0_20px_55px_rgba(7,31,69,.18)]">
         <div className="p-6 md:p-8">
           <div className="flex items-start gap-4">
@@ -105,7 +105,7 @@ export default function RyanAssistant() {
                 type="button"
                 onClick={() => void send(question)}
                 disabled={sending}
-                className="rounded-xl border border-ink-900/10 bg-white px-3 py-2 text-xs font-semibold text-ink-900 transition hover:bg-ink-50 disabled:opacity-50"
+                className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800 transition hover:bg-blue-100 disabled:opacity-50"
               >
                 {question}
               </button>
@@ -116,7 +116,7 @@ export default function RyanAssistant() {
         <div className="min-h-[430px] max-h-[58vh] overflow-y-auto space-y-4 bg-gradient-to-b from-[#f7faff] to-white p-4 md:p-6" aria-live="polite">
           {messages.map((message, index) => (
             <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-              <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-7 ${message.role === 'user' ? 'bg-white border border-ink-900/10 text-ink-900' : 'bg-ink-950 text-white'}`}>
+              <div className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-7 ${message.role === 'user' ? 'bg-blue-50 border border-blue-100 text-blue-950' : 'bg-blue-700 text-white shadow-sm'}`}>
                 {message.text}
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function RyanAssistant() {
             value={input}
             onChange={(event) => setInput(event.target.value)}
             placeholder="اسأل Ryan: أعمل المهمة دي إزاي؟"
-            className="min-w-0 flex-1 rounded-xl border border-ink-900/10 bg-white px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gold-500/30"
+            className="min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             disabled={sending}
           />
           <Button type="submit" disabled={sending || !input.trim()}>
