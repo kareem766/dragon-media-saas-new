@@ -1,0 +1,39 @@
+name: patch-settings-ui
+on:
+  push:
+    paths:
+      - .github/workflows/patch-settings-ui.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch settings page
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/pages/Settings.tsx')
+          s = p.read_text()
+          s = s.replace("  const [org, setOrg] = useState<OrgData>(initialOrg)\n", "  const [org, setOrg] = useState<OrgData>(initialOrg)\n  const [ownerName, setOwnerName] = useState('')\n", 1)
+          old = """        if (data) {\n          setOrg({\n            name: data.name ?? '',\n            manager_name: data.manager_name ?? '',\n            phone: data.phone ?? '',\n            email: data.email ?? '',\n            address: data.address ?? '',\n            timezone:\n              data.timezone ?? 'Africa/Cairo',\n            business_type:\n              data.business_type ?? '',\n            logo_url: data.logo_url ?? '',\n          })\n        }\n"""
+          new = """        if (data) {\n          const { data: owner } = await supabase\n            .from('users')\n            .select('full_name')\n            .eq('organization_id', organizationId)\n            .eq('role', 'super_admin')\n            .eq('active', true)\n            .order('created_at', { ascending: true })\n            .limit(1)\n            .maybeSingle()\n\n          const resolvedOwnerName =\n            owner?.full_name?.trim() || data.manager_name?.trim() || ''\n\n          setOwnerName(resolvedOwnerName)\n          setOrg({\n            name: data.name ?? '',\n            manager_name: resolvedOwnerName,\n            phone: data.phone ?? '',\n            email: data.email ?? '',\n            address: data.address ?? '',\n            timezone:\n              data.timezone ?? 'Africa/Cairo',\n            business_type:\n              data.business_type ?? '',\n            logo_url: data.logo_url ?? '',\n          })\n        }\n"""
+          if old not in s: raise SystemExit('load block not found')
+          s = s.replace(old, new, 1)
+          s = s.replace("              handleSave={handleSave}\n            />", "              handleSave={handleSave}\n              ownerName={ownerName}\n            />", 1)
+          s = s.replace("  handleSave: () => void\n})", "  handleSave: () => void\n  ownerName: string\n})", 1)
+          needle = """        <div className=\"space-y-5 p-4 sm:space-y-6 sm:p-8\">\n          <div className=\"rounded-2xl border border-sand-200 bg-gradient-to-l from-amber-50/70 via-white to-sand-50 p-4 sm:p-5\">"""
+          insert = """        <div className=\"space-y-5 p-4 sm:space-y-6 sm:p-8\">\n          <div className=\"overflow-hidden rounded-3xl bg-gradient-to-l from-blue-950 via-blue-800 to-blue-600 p-5 text-white shadow-[0_18px_45px_rgba(15,76,129,0.20)] sm:p-6\">\n            <div className=\"flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between\">\n              <div className=\"min-w-0\">\n                <span className=\"inline-flex rounded-full bg-white/15 px-3 py-1 text-[11px] font-bold text-blue-50 ring-1 ring-white/15\">\n                  ملف الشركة\n                </span>\n                <h3 className=\"mt-3 truncate text-xl font-extrabold sm:text-2xl\">\n                  {org.name || 'اسم الشركة'}\n                </h3>\n                <p className=\"mt-1 text-sm text-blue-100/90\">\n                  إدارة بيانات المؤسسة والمسؤول عنها من مكان واحد.\n                </p>\n              </div>\n              <div className=\"grid grid-cols-2 gap-2 sm:min-w-[300px]\">\n                <div className=\"rounded-2xl bg-white/10 p-3 ring-1 ring-white/10\">\n                  <p className=\"text-[11px] text-blue-100/70\">اسم المسؤول</p>\n                  <p className=\"mt-1 truncate text-sm font-bold\">{ownerName || org.manager_name || 'غير محدد'}</p>\n                </div>\n                <div className=\"rounded-2xl bg-white/10 p-3 ring-1 ring-white/10\">\n                  <p className=\"text-[11px] text-blue-100/70\">نوع النشاط</p>\n                  <p className=\"mt-1 truncate text-sm font-bold\">{org.business_type || 'غير محدد'}</p>\n                </div>\n              </div>\n            </div>\n          </div>\n\n          <div className=\"rounded-2xl border border-sand-200 bg-gradient-to-l from-amber-50/70 via-white to-sand-50 p-4 sm:p-5\">"""
+          if needle not in s: raise SystemExit('company card needle not found')
+          s = s.replace(needle, insert, 1)
+          s = s.replace('label=\"اسم المسؤول / المدير\"', 'label=\"اسم المسؤول\"', 1)
+          s = s.replace("value={org.manager_name}\n            onChange={(value) =>\n              updateOrg(\n                'manager_name',\n                value,\n              )\n            }", "value={ownerName || org.manager_name}\n            onChange={() => undefined}", 1)
+          p.write_text(s)
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/Settings.tsx
+          git diff --cached --quiet || git commit -m 'feat: polish company settings card and owner name'
+          git push
