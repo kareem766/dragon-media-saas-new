@@ -2149,7 +2149,6 @@ function IntegrationsSection({
                 >
                   <div className="pointer-events-none absolute -left-12 -top-12 h-36 w-36 rounded-full bg-white/10 blur-2xl" />
                   <div className="pointer-events-none absolute -bottom-16 -right-10 h-44 w-44 rounded-full bg-blue-300/20 blur-3xl" />
-
                   <div className="relative flex min-w-0 items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <IntegrationBrandIcon
@@ -2157,7 +2156,6 @@ function IntegrationsSection({
                         imageUrl={getIntegrationPresentation(item.provider, integration).imageUrl}
                         connected={connected}
                       />
-
                       <div className="min-w-0">
                         <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-100/75">
                           {getIntegrationPresentation(item.provider, integration).eyebrow}
@@ -2167,7 +2165,6 @@ function IntegrationsSection({
                         </h3>
                       </div>
                     </div>
-
                     <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">
                       {status.label}
                     </span>
@@ -2175,18 +2172,13 @@ function IntegrationsSection({
 
                   {connected ? (
                     <div className="relative mt-6 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
-                      <div className="text-[10px] font-semibold text-blue-100/70">
-                        الحساب المتصل
-                      </div>
-
+                      <div className="text-[10px] font-semibold text-blue-100/70">الحساب المتصل</div>
                       <div className="mt-1 break-words text-lg font-extrabold tracking-tight text-white">
                         {getIntegrationPresentation(item.provider, integration).title}
                       </div>
-
                       <div className="mt-1 break-words text-xs font-medium leading-5 text-blue-100/80">
                         {getIntegrationPresentation(item.provider, integration).detail}
                       </div>
-
                       {item.provider === 'whatsapp' && getMetadataString(integration?.metadata, ['phone_number_id']) && (
                         <div className="mt-3 flex items-center gap-2 text-[10px] font-semibold text-blue-100/65">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
@@ -2196,12 +2188,8 @@ function IntegrationsSection({
                     </div>
                   ) : (
                     <div className="relative mt-6 rounded-2xl border border-white/15 bg-black/10 p-4">
-                      <div className="text-sm font-bold text-white">
-                        لم يتم ربط هذا التكامل بعد
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-blue-100/75">
-                        {item.description}
-                      </p>
+                      <div className="text-sm font-bold text-white">لم يتم ربط هذا التكامل بعد</div>
+                      <p className="mt-1 text-xs leading-5 text-blue-100/75">{item.description}</p>
                     </div>
                   )}
 
@@ -2215,23 +2203,13 @@ function IntegrationsSection({
                             ? onMetaSync(itemProvider)
                             : onMetaConnect(itemProvider as MetaProvider)
                         }
-                        disabled={
-                          metaConnecting !== null ||
-                          metaSyncing !== null ||
-                          metaDisconnecting !== null
-                        }
+                        disabled={metaConnecting !== null || metaSyncing !== null || metaDisconnecting !== null}
                         className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-extrabold text-blue-900 shadow-lg transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {(isConnecting || isSyncing) && (
                           <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-900/20 border-t-blue-900" />
                         )}
-                        {isConnecting
-                          ? 'جاري الربط...'
-                          : isSyncing
-                            ? 'جاري مزامنة الأصول...'
-                            : connected
-                              ? 'مزامنة البيانات'
-                              : item.actionLabel}
+                        {isConnecting ? 'جاري الربط...' : isSyncing ? 'جاري مزامنة الأصول...' : connected ? 'مزامنة البيانات' : item.actionLabel}
                       </button>
                     ) : (
                       <button
@@ -2247,11 +2225,7 @@ function IntegrationsSection({
                       <button
                         type="button"
                         onClick={() => onMetaDisconnect(itemProvider)}
-                        disabled={
-                          metaDisconnecting !== null ||
-                          metaConnecting !== null ||
-                          metaSyncing !== null
-                        }
+                        disabled={metaDisconnecting !== null || metaConnecting !== null || metaSyncing !== null}
                         className="inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-[11px] font-bold text-white/75 transition hover:bg-red-500/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {isDisconnecting ? 'جاري إلغاء الاتصال...' : 'إلغاء الاتصال'}
@@ -2262,77 +2236,18 @@ function IntegrationsSection({
                   {integration?.connected_at && (
                     <div className="relative mt-4 flex items-center justify-between border-t border-white/10 pt-3 text-[10px] text-blue-100/55">
                       <span>متصل منذ</span>
-                      <span dir="ltr">
-                        {new Date(integration.connected_at).toLocaleDateString('ar-EG')}
-                      </span>
+                      <span dir="ltr">{new Date(integration.connected_at).toLocaleDateString('ar-EG')}</span>
                     </div>
                   )}
 
                   {integration?.error_message && (
-                    <div
-                      className="relative mt-3 rounded-xl border border-red-200/30 bg-red-500/15 px-3 py-2 text-xs font-medium leading-5 text-red-50"
-                      role="alert"
-                    >
+                    <div className="relative mt-3 rounded-xl border border-red-200/30 bg-red-500/15 px-3 py-2 text-xs font-medium leading-5 text-red-50" role="alert">
                       {integration.error_message}
                     </div>
                   )}
 
                   {!integration && (
-                    <div className="relative mt-3 text-[10px] text-blue-100/50">
-                      لا يوجد سجل اتصال لهذا التكامل.
-                    </div>
-                  )}
-                </div>                  {integration?.connected_at && (
-                    <div className="mt-4">
-                      <div className="text-[11px] font-semibold text-ink-900/40">
-                        تاريخ الاتصال
-                      </div>
-
-                      <div
-                        dir="ltr"
-                        className="mt-1 break-words text-xs font-medium text-ink-900/65"
-                      >
-                        {new Date(
-                          integration.connected_at,
-                        ).toLocaleString(
-                          'ar-EG',
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {integration?.last_verified_at && (
-                    <div className="mt-3">
-                      <div className="text-[11px] font-semibold text-ink-900/40">
-                        آخر تحقق
-                      </div>
-
-                      <div
-                        dir="ltr"
-                        className="mt-1 break-words text-xs font-medium text-ink-900/65"
-                      >
-                        {new Date(
-                          integration.last_verified_at,
-                        ).toLocaleString(
-                          'ar-EG',
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {integration?.error_message && (
-                    <div
-                      className="mt-4 break-words rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium leading-5 text-red-700"
-                      role="alert"
-                    >
-                      {integration.error_message}
-                    </div>
-                  )}
-
-                  {!integration && (
-                    <div className="mt-4 text-xs leading-5 text-ink-900/40">
-                      لم يتم إنشاء سجل لهذا التكامل بعد.
-                    </div>
+                    <div className="relative mt-3 text-[10px] text-blue-100/50">لا يوجد سجل اتصال لهذا التكامل.</div>
                   )}
                 </div>
               )}
