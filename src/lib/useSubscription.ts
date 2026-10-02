@@ -205,6 +205,9 @@ export function useSubscription() {
   const effectivePendingPayment = isAdmin ? false : canManageSubscription ? rawPendingPayment : false
 
   const hasFeature = (key: string) => {
+    // User management is a company-admin capability. It is controlled by
+    // role_permissions, not by the customer's commercial plan feature list.
+    if (key === 'users' && managerRoles.has(role || '')) return true
     if (isAdmin) return true
     if (platformFeaturesLoaded) {
       const requiredPlatformKeys = key === 'advanced_reports' ? ['reports', 'advanced_reports'] : [key]
