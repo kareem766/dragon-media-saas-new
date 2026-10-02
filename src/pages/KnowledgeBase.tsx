@@ -65,14 +65,19 @@ export default function KnowledgeBase() {
 
   return (
     <div dir="rtl" className="mx-auto w-full max-w-6xl space-y-5 pb-8">
-      <div className="rounded-3xl bg-gradient-to-l from-blue-700 via-blue-800 to-blue-950 p-5 text-white shadow-[0_18px_50px_rgba(30,64,175,.16)]"><div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div><p className="text-xs font-bold tracking-wide text-blue-100">RYAN AI</p><h2 className="text-xl font-black">قاعدة معرفة Ryan</h2>
-          <p className="text-sm text-blue-100/80 mt-1">أضف معلومات عن شركتك عشان ريان يستخدمها في الرد على العملاء — أسئلة شائعة، سياسات، تفاصيل خدمات.</p>
-        </div></div>
-        {canEditKnowledge && <Button onClick={() => setShowForm(v => !v)} className="bg-white text-blue-800 hover:bg-blue-50">
-          <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة معلومة</span>
-        </Button>}
+      <div className="rounded-3xl bg-gradient-to-l from-blue-700 via-blue-800 to-blue-950 p-5 text-white shadow-[0_18px_50px_rgba(30,64,175,.16)]">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-bold tracking-wide text-blue-100">RYAN AI</p>
+            <h2 className="text-xl font-black">قاعدة معرفة Ryan</h2>
+            <p className="text-sm text-blue-100/80 mt-1">أضف معلومات عن شركتك عشان ريان يستخدمها في الرد على العملاء — أسئلة شائعة، سياسات، تفاصيل خدمات.</p>
+          </div>
+          {canEditKnowledge && (
+            <Button onClick={() => setShowForm(v => !v)} className="bg-white text-blue-800 hover:bg-blue-50">
+              <span className="inline-flex items-center gap-2"><IconPlus className="w-4 h-4" /> إضافة معلومة</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {showForm && (
