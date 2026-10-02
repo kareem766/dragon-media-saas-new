@@ -97,19 +97,21 @@ const integrationProviders = [
     provider: 'telegram',
     name: 'تليجرام',
     description:
-      'ربط Telegram Bot وإدارة المحادثات.',
-    actionLabel: 'إعداد Telegram',
-    connectedActionLabel: 'إدارة Telegram',
+      'تكامل Telegram لإدارة المحادثات والتواصل مع العملاء.',
+    actionLabel: 'متوفر قريبًا',
+    connectedActionLabel: 'متوفر قريبًا',
     meta: false,
+    comingSoon: true,
   },
   {
-    provider: 'paymob',
-    name: 'بوابة الدفع',
+    provider: 'tiktok',
+    name: 'تيك توك',
     description:
-      'حالة تكامل بوابة الدفع والعمليات المالية.',
-    actionLabel: 'إعداد Paymob',
-    connectedActionLabel: 'إدارة Paymob',
+      'تكامل TikTok لإدارة التواصل والمحتوى من داخل المنصة.',
+    actionLabel: 'متوفر قريبًا',
+    connectedActionLabel: 'متوفر قريبًا',
     meta: false,
+    comingSoon: true,
   },
 ]
 
@@ -1900,7 +1902,7 @@ function IntegrationBrandIcon({
     )
   }
 
-  const labels: Record<string, string> = { facebook: 'f', instagram: '◎', whatsapp: 'WA' }
+  const labels: Record<string, string> = { facebook: 'f', instagram: '◎', whatsapp: 'WA', telegram: '✈', tiktok: '♪' }
   return (
     <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/25 bg-white/10 text-lg font-black text-white shadow-lg ring-1 ring-white/15 sm:h-16 sm:w-16 sm:text-xl ${connected ? '' : 'opacity-80'}`} aria-hidden="true">
       {labels[provider] || 'M'}
@@ -2098,6 +2100,10 @@ function IntegrationsSection({
                     )
                   : null
 
+              const comingSoon = Boolean(
+                (item as { comingSoon?: boolean }).comingSoon,
+              )
+
               const isConnecting =
                 itemProvider !== null &&
                 metaConnecting === itemProvider
@@ -2122,9 +2128,25 @@ function IntegrationsSection({
                         <h3 className="mt-1 truncate text-base font-extrabold text-white sm:text-lg">{item.name}</h3>
                       </div>
                     </div>
-                    <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">{status.label}</span>
+                    <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">
+                      {comingSoon ? 'قريبًا' : status.label}
+                    </span>
                   </div>
-                  {connected ? (
+                  {comingSoon ? (
+                    <div className="relative mt-6 flex flex-1 flex-col items-center justify-center rounded-2xl border border-white/15 bg-white/10 p-5 text-center backdrop-blur-md">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-xl font-black text-white shadow-lg">
+                        {item.provider === 'telegram' ? '✈' : '♪'}
+                      </div>
+                      <div className="mt-4 text-base font-extrabold text-white">
+                        قريبًا على Dragon Media
+                      </div>
+                      <p className="mt-2 max-w-xs text-xs leading-6 text-blue-100/80">
+                        {item.provider === 'telegram'
+                          ? 'تكامل Telegram قيد التجهيز وسيكون متاحًا قريبًا داخل المنصة.'
+                          : 'تكامل TikTok قيد التجهيز وسيكون متاحًا قريبًا داخل المنصة.'}
+                      </p>
+                    </div>
+                  ) : connected ? (
                     <div className="relative mt-6 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
                       <div className="text-[10px] font-semibold text-blue-100/70">الحساب المتصل</div>
                       <div className="mt-1 break-words text-lg font-extrabold tracking-tight text-white">{getIntegrationPresentation(item.provider, integration).title}</div>
@@ -2140,7 +2162,11 @@ function IntegrationsSection({
                     </div>
                   )}
                   <div className="relative mt-auto flex flex-col gap-2 pt-5">
-                    {item.meta ? (
+                    {comingSoon ? (
+                      <div className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-xs font-extrabold text-white/90">
+                        التكامل سيتوفر قريبًا
+                      </div>
+                    ) : item.meta ? (
                       <button type="button" aria-label={connected ? 'مزامنة أصول Meta' : item.actionLabel} onClick={() => connected && itemProvider ? onMetaSync(itemProvider) : onMetaConnect(itemProvider as MetaProvider)} disabled={metaConnecting !== null || metaSyncing !== null || metaDisconnecting !== null} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-extrabold text-blue-900 shadow-lg transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60">
                         {(isConnecting || isSyncing) && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-900/20 border-t-blue-900" />}
                         {isConnecting ? 'جاري الربط...' : isSyncing ? 'جاري مزامنة الأصول...' : connected ? 'مزامنة البيانات' : item.actionLabel}
