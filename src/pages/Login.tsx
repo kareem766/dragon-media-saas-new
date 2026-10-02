@@ -455,6 +455,26 @@ export default function Login() {
               </Link>
             </div>
 
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <Link
+                to="/home"
+                className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+              >
+                <span aria-hidden="true">→</span>
+                الرئيسية
+              </Link>
+
+              {mode === 'signup' && (
+                <button
+                  type="button"
+                  onClick={() => switchMode('login')}
+                  className="inline-flex items-center rounded-xl px-3 py-2 text-sm font-bold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+                >
+                  تسجيل الدخول
+                </button>
+              )}
+            </div>
+
             {mode === 'signup' && (
               <SignupStepper
                 verificationDone={
