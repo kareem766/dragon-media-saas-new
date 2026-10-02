@@ -82,10 +82,14 @@ export default function Users() {
       // The page can remain open long enough for the original JWT to expire;
       // retry once after an explicit session refresh instead of reporting a
       // misleading "session expired" error while the employee remains active.
+      // Refresh first so a long-open Users page never sends an expired JWT.
       let currentSession = session
-      const { data: currentSessionData } = await supabase.auth.getSession()
-      if (currentSessionData.session) {
-        currentSession = currentSessionData.session
+      const { data: refreshedSession, error: refreshError } = await supabase.auth.refreshSession()
+      if (!refreshError && refreshedSession.session) {
+        currentSession = refreshedSession.session
+      } else {
+        const { data: currentSessionData } = await supabase.auth.getSession()
+        if (currentSessionData.session) currentSession = currentSessionData.session
       }
 
       const callRemoveMember = async (accessToken: string) =>
