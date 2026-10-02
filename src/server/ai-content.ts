@@ -2,7 +2,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 
 const env = (...names: string[]) => names.map((n) => process.env[n]).find((v) => v?.trim())?.trim() || ''
-const GEMINI_TEXT_MODEL = env('AI_CONTENT_GEMINI_MODEL') || 'gemini-3.5-flash'
+const configuredModel = env('AI_CONTENT_GEMINI_MODEL')
+// Use currently supported production models. Keep the env override only when it is a known supported model.
+const GEMINI_TEXT_MODELS = [
+  configuredModel && ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'].includes(configuredModel)
+    ? configuredModel
+    : 'gemini-3.8-flash',
+  'gemini-3.5-flash-lite',
+].filter((model, index, list) => list.indexOf(model) === index)
+const GEMINI_TEXT_MODEL = GEMINI_TEXT_MODELS[0]
 
 function json(res: VercelResponse, status: number, body: unknown) {
   return res.status(status).json(body)
@@ -36,8 +44,6 @@ async function getContext(db: any, userId: string): Promise<any> {
     db.from('subscriptions').select('status,expires_at,renewal_date,plan_id,plan').eq('organization_id', user.organization_id).order('renewal_date', { ascending: false, nullsFirst: false }).limit(10),
   ])
 
-  // A pending renewal/upgrade can have a newer renewal_date than the currently
-  // active subscription. Always prefer an active subscription for feature access.
   const subscription = (subscriptions || []).find((item: any) => ['active', 'trialing'].includes(String(item?.status || ''))) ||
     (subscriptions || []).find((item: any) => ['pending_payment', 'pending_review'].includes(String(item?.status || ''))) ||
     (subscriptions || [])[0] || null
@@ -66,8 +72,6 @@ async function getContext(db: any, userId: string): Promise<any> {
     plan = data || null
   }
 
-  const canGenerateImages: boolean = false
-
   return {
     user,
     organization,
@@ -76,7 +80,7 @@ async function getContext(db: any, userId: string): Promise<any> {
     canDelete: Boolean(permission?.can_delete),
     organizationId: user.organization_id,
     plan,
-    canGenerateImages,
+    canGenerateImages: false,
   }
 }
 
@@ -113,49 +117,76 @@ ${text(prompt, 6000)}
 
 أنشئ بوستًا احترافيًا متكاملًا.`
 
-  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(GEMINI_TEXT_MODEL) + ':generateContent?key=' + encodeURIComponent(key), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        maxOutputTokens: 2200,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            hook: { type: 'STRING' },
-            content: { type: 'STRING' },
-            cta: { type: 'STRING' },
-          },
-          required: ['hook', 'content', 'cta'],
-        },
-      },
-    }),
-  })
-
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(text(data?.error?.message, 500) || 'فشل توليد المحتوى.')
-
-  const raw = text(data?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || '').join(''), 12000)
-  let parsed: any
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    // Be tolerant if a provider wraps valid JSON in a markdown code fence.
-    const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+  let lastProviderError = ''
+  for (const model of GEMINI_TEXT_MODELS) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
     try {
-      parsed = JSON.parse(cleaned)
-    } catch {
-      throw new Error('تعذر قراءة نتيجة Gemini بشكل صحيح.')
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent?key=' + encodeURIComponent(key), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+          generationConfig: {
+            maxOutputTokens: 2200,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'OBJECT',
+              properties: {
+                hook: { type: 'STRING' },
+                content: { type: 'STRING' },
+                cta: { type: 'STRING' },
+              },
+              required: ['hook', 'content', 'cta'],
+            },
+          },
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        lastProviderError = text(data?.error?.message, 500)
+        // High demand / transient provider capacity: immediately try the lightweight fallback.
+        if ([429, 500, 502, 503, 504].includes(response.status)) continue
+        throw new Error('تعذر إنشاء المحتوى من خدمة الذكاء الاصطناعي. حاول مرة أخرى.')
+      }
+
+      const raw = text(data?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || '').join(''), 12000)
+      let parsed: any
+      try {
+        parsed = JSON.parse(raw)
+      } catch {
+        const cleaned = raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+        try {
+          parsed = JSON.parse(cleaned)
+        } catch {
+          throw new Error('تعذر قراءة نتيجة الذكاء الاصطناعي بشكل صحيح.')
+        }
+      }
+      if (!parsed?.hook || !parsed?.content || !parsed?.cta) throw new Error('الذكاء الاصطناعي أعاد نتيجة غير مكتملة. حاول مرة أخرى.')
+
+      return {
+        hook: text(parsed.hook, 1000),
+        content: text(parsed.content, 12000),
+        cta: text(parsed.cta, 1000),
+        model,
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        lastProviderError = 'انتهت مهلة الاستجابة.'
+        continue
+      }
+      if (error instanceof Error && !error.message.includes('تعذر إنشاء المحتوى')) throw error
+      if (model === GEMINI_TEXT_MODELS[GEMINI_TEXT_MODELS.length - 1]) throw error
+    } finally {
+      clearTimeout(timeout)
     }
   }
-  if (!parsed?.hook || !parsed?.content || !parsed?.cta) {
-    throw new Error('Gemini أعاد نتيجة غير مكتملة. حاول مرة أخرى.')
-  }
 
-  return { hook: text(parsed?.hook, 1000), content: text(parsed?.content, 12000), cta: text(parsed?.cta, 1000) }
+  console.error('Gemini capacity/model error', { models: GEMINI_TEXT_MODELS, provider: lastProviderError })
+  throw new Error('خدمة إنشاء المحتوى مشغولة حاليًا. حاول مرة أخرى بعد لحظات.')
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -204,7 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         image_url: null,
         image_path: null,
         status: 'ready',
-        generation_model: GEMINI_TEXT_MODEL,
+        generation_model: generated.model,
         image_model: null,
         metadata: {
           image_generation_failed: true,
