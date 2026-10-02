@@ -317,7 +317,7 @@ export default function Login() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-[linear-gradient(180deg,#f8faff_0%,#ffffff_42%,#f8fafc_100%)] text-slate-900"
+      className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,#f4f8ff_0%,#ffffff_38%,#f8fbff_100%)] text-slate-900"
     >
       <style>{`
         @keyframes dragonHeroLogoFade {
@@ -349,8 +349,49 @@ export default function Login() {
             filter: none !important;
           }
         }
+
+        .login-mobile-orb {
+          position: absolute;
+          border-radius: 9999px;
+          filter: blur(42px);
+          opacity: .55;
+        }
+        .login-mobile-orb-blue {
+          width: 210px;
+          height: 210px;
+          top: 72px;
+          right: -100px;
+          background: rgba(59,130,246,.16);
+        }
+        .login-mobile-orb-cyan {
+          width: 180px;
+          height: 180px;
+          bottom: 120px;
+          left: -90px;
+          background: rgba(34,211,238,.12);
+        }
+        .login-mobile-grid {
+          position: absolute;
+          inset: 0;
+          opacity: .28;
+          background-image: linear-gradient(rgba(59,130,246,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,.035) 1px, transparent 1px);
+          background-size: 28px 28px;
+          mask-image: linear-gradient(to bottom, black, transparent 72%);
+          -webkit-mask-image: linear-gradient(to bottom, black, transparent 72%);
+        }
+        @media (max-width: 1023px) {
+          .login-mobile-heading h2 { text-wrap: balance; }
+          .login-mobile-card { box-shadow: 0 22px 60px rgba(15,23,42,.10), 0 1px 0 rgba(255,255,255,.95) inset; }
+          .login-submit-button, .login-google-button, .login-switch-button { -webkit-tap-highlight-color: transparent; }
+          .login-submit-button:active, .login-google-button:active, .login-switch-button:active { transform: scale(.992); }
+        }
       `}</style>
-      <div className="min-h-screen lg:grid lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden lg:hidden" aria-hidden="true">
+        <div className="login-mobile-orb login-mobile-orb-blue" />
+        <div className="login-mobile-orb login-mobile-orb-cyan" />
+        <div className="login-mobile-grid" />
+      </div>
+      <div className="relative z-10 min-h-screen lg:grid lg:grid-cols-[0.9fr_1.1fr]">
         <section className="relative hidden overflow-hidden bg-slate-950 p-10 text-white lg:flex">
           <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl" />
 
@@ -429,27 +470,27 @@ export default function Login() {
           </div>
         </section>
 
-        <main className="flex min-h-screen items-start justify-center px-4 pb-8 pt-5 sm:px-8 sm:pt-8 lg:items-center lg:py-8">
+        <main className="relative flex min-h-screen items-start justify-center px-4 pb-6 pt-3 sm:px-8 sm:pt-8 lg:items-center lg:py-8">
           <div className="w-full max-w-xl lg:max-w-xl">
-            <div className="mb-6 flex items-center justify-between lg:hidden">
+            <div className="mb-5 flex items-center justify-between lg:hidden">
               <Link
                 to="/home"
                 className="group flex items-center gap-2.5"
                 aria-label="العودة إلى الرئيسية"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/80 bg-white/90 shadow-[0_8px_24px_rgba(15,23,42,.08)]">
                   <img
                     src={logoUrl}
                     alt={platformName}
-                    className="h-9 w-9 rounded-full object-contain"
+                    className="h-8 w-8 rounded-full object-contain"
                   />
                 </span>
 
                 <span className="leading-tight">
-                  <span className="block text-[15px] font-black tracking-tight text-slate-950">
+                  <span className="block text-[14px] font-black tracking-tight text-slate-950">
                     {platformName}
                   </span>
-                  <span className="mt-0.5 block text-[10px] font-semibold text-slate-400">
+                  <span className="mt-0.5 block text-[9px] font-semibold text-slate-400">
                     إدارة أعمالك من مكان واحد
                   </span>
                 </span>
@@ -457,7 +498,7 @@ export default function Login() {
 
               <Link
                 to="/home"
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-slate-950"
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/90 px-3 text-[11px] font-black text-slate-600 shadow-[0_6px_20px_rgba(15,23,42,.05)] transition hover:border-slate-300 hover:text-slate-950"
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -479,12 +520,12 @@ export default function Login() {
               />
             )}
 
-            <div className="mb-6 text-center lg:text-right">
-              <div className="mb-3 inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-black text-blue-700">
+            <div className="login-mobile-heading mb-5 text-center lg:text-right">
+              <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-full border border-blue-100/90 bg-blue-50/90 px-3 py-1.5 text-[10px] font-black text-blue-700 shadow-sm">
                 مساحة عملك في انتظارك
               </div>
 
-              <h2 className="text-[30px] font-black tracking-tight text-slate-950 sm:text-3xl">
+              <h2 className="text-[28px] font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">
                 {mode === 'login'
                   ? 'مرحبًا بعودتك 👋'
                   : signupStep ===
@@ -493,7 +534,7 @@ export default function Login() {
                     : 'أنشئ حسابك'}
               </h2>
 
-              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500 lg:mx-0">
+              <p className="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-slate-500 lg:mx-0">
                 {mode === 'login'
                   ? 'سجّل دخولك للوصول إلى عملائك ومبيعاتك وأدواتك من مكان واحد.'
                   : signupStep ===
@@ -516,10 +557,10 @@ export default function Login() {
             )}
 
             {mode === 'login' && (
-              <div className="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_18px_55px_rgba(15,23,42,0.08)] backdrop-blur sm:p-6">
+              <div className="login-mobile-card rounded-[26px] border border-white/90 bg-white/95 p-3.5 shadow-[0_22px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6">
               <form
                 onSubmit={handleLogin}
-                className="space-y-4"
+                className="space-y-3.5"
               >
                 <InputField
                   label="البريد الإلكتروني"
@@ -539,10 +580,10 @@ export default function Login() {
                   }
                 />
 
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-between">
                   <Link
                     to="/forgot-password"
-                    className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    className="text-[13px] font-black text-blue-600 transition hover:text-blue-700"
                   >
                     نسيت كلمة المرور؟
                   </Link>
@@ -703,7 +744,7 @@ export default function Login() {
                 }
               }}
               disabled={submitting || authLoading}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-black text-slate-800 shadow-[0_8px_25px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="login-google-button flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-5 py-3.5 text-[13px] font-black text-slate-800 shadow-[0_8px_25px_rgba(15,23,42,0.055)] transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-sm font-black">
                 G
@@ -731,21 +772,21 @@ export default function Login() {
                     : 'login'
                 )
               }
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 px-5 py-4 text-sm font-black text-blue-700 transition hover:border-blue-200 hover:bg-blue-50"
+              className="login-switch-button flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/75 px-5 py-3.5 text-[13px] font-black text-blue-700 shadow-[0_8px_24px_rgba(37,99,235,.06)] transition hover:border-blue-200 hover:bg-blue-50"
             >
               {mode === 'login'
                 ? 'إنشاء حساب جديد'
                 : 'لدي حساب بالفعل'}
             </button>
 
-            <div className="mt-5 flex items-center justify-center gap-2 text-[10px] font-semibold text-slate-400">
+            <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-bold text-slate-400">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               <span>اتصال آمن ومحمي</span>
               <span className="text-slate-300">•</span>
               <span>بياناتك تظل خاصة</span>
             </div>
 
-            <p className="mt-4 text-center text-[11px] leading-5 text-slate-400">
+            <p className="mt-3 text-center text-[10px] leading-5 text-slate-400">
               باستخدام{' '}
               {mode === 'login'
                 ? 'تسجيل الدخول'
@@ -879,7 +920,7 @@ function InputField({
         autoComplete={autoComplete}
         dir={type === 'email' ? 'ltr' : 'rtl'}
         inputMode={type === 'email' ? 'email' : undefined}
-        className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+        className="h-[52px] w-full rounded-[17px] border border-slate-200/90 bg-slate-50/80 px-4 text-[13px] font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
       />
     </label>
   );
@@ -918,7 +959,7 @@ function PasswordField({
           placeholder="6 أحرف على الأقل"
           autoComplete="current-password"
           dir="ltr"
-          className="h-14 w-full rounded-2xl border border-slate-200 bg-slate-50/70 px-4 pl-20 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+          className="h-[52px] w-full rounded-[17px] border border-slate-200/90 bg-slate-50/80 px-4 pl-20 text-[13px] font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
         />
 
         <button
@@ -928,7 +969,7 @@ function PasswordField({
               !showPassword
             )
           }
-          className="absolute left-3 top-1/2 -translate-y-1/2 rounded-xl px-3 py-2 text-xs font-bold text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 rounded-xl px-3 py-2 text-[11px] font-black text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
           aria-label={
             showPassword
               ? 'إخفاء كلمة المرور'
@@ -984,7 +1025,7 @@ function SubmitButton({
     <button
       type="submit"
       disabled={loading}
-      className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-blue-700 via-blue-600 to-indigo-600 px-5 text-sm font-black text-white shadow-[0_12px_30px_rgba(37,99,235,0.25)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_35px_rgba(37,99,235,0.30)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+      className="login-submit-button flex h-[53px] w-full items-center justify-center gap-2 rounded-[17px] bg-gradient-to-l from-blue-700 via-blue-600 to-indigo-600 px-5 text-[13px] font-black text-white shadow-[0_13px_30px_rgba(37,99,235,0.24)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_35px_rgba(37,99,235,0.30)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
     >
       {loading
         ? loadingLabel
