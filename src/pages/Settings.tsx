@@ -1346,6 +1346,29 @@ export default function Settings() {
         </p>
       </div>
 
+      <div className="overflow-hidden rounded-2xl border border-blue-200/70 bg-gradient-to-l from-blue-700 via-blue-600 to-blue-500 p-5 text-white shadow-[0_14px_36px_rgba(37,99,235,0.18)] sm:rounded-3xl sm:p-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-xl font-black shadow-inner">
+              {org.name ? org.name.trim().slice(0, 1) : 'D'}
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-blue-100">ملف الشركة</div>
+              <div className="mt-1 truncate text-lg font-black sm:text-xl">
+                {org.name || 'اسم الشركة'}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-blue-100/90">
+                <span>صاحب الشركة: {org.manager_name || 'لم يتم تحديده'}</span>
+                {org.business_type && <span>النشاط: {org.business_type}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="shrink-0 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-xs font-bold text-white backdrop-blur-sm">
+            بيانات الحساب والمؤسسة
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-[230px_minmax(0,1fr)]">
         <div className="min-w-0 lg:sticky lg:top-6 lg:self-start">
           <nav
@@ -1574,7 +1597,7 @@ function CompanySection({
           />
 
           <Field
-            label="اسم المسؤول / المدير"
+            label="اسم صاحب الشركة"
             value={org.manager_name}
             onChange={(value) =>
               updateOrg(
