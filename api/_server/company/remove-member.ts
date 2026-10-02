@@ -17,7 +17,13 @@ export default async function removeMember(req: VercelRequest, res: VercelRespon
   ).trim()
 
   if (!accessToken || !supabaseUrl || !serviceKey) {
-    return json(res, 401, { error: 'غير مصرح' })
+    console.error('[remove-member] configuration/auth header missing', {
+      hasAccessToken: Boolean(accessToken),
+      accessTokenLength: accessToken.length,
+      hasSupabaseUrl: Boolean(supabaseUrl),
+      hasServiceKey: Boolean(serviceKey),
+    })
+    return json(res, 500, { error: 'تعذر التحقق من جلسة تسجيل الدخول. حاول مرة أخرى.' })
   }
 
   const targetUserId = String(req.body?.user_id || '').trim()
@@ -31,7 +37,15 @@ export default async function removeMember(req: VercelRequest, res: VercelRespon
   })
 
   const { data: authData, error: authError } = await admin.auth.getUser(accessToken)
-  if (authError || !authData.user) return json(res, 401, { error: 'انتهت جلسة تسجيل الدخول' })
+  if (authError || !authData.user) {
+    console.error('[remove-member] token verification failed', {
+      message: authError?.message || 'no user returned',
+      status: authError?.status || null,
+      code: authError?.code || null,
+      accessTokenLength: accessToken.length,
+    })
+    return json(res, 401, { error: 'انتهت جلسة تسجيل الدخول' })
+  }
 
   const actorId = authData.user.id
 
