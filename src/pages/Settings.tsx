@@ -1880,6 +1880,105 @@ function NotificationsSection({
   )
 }
 
+
+function IntegrationBrandIcon({
+  provider,
+  imageUrl,
+  connected,
+}: {
+  provider: string
+  imageUrl?: string
+  connected: boolean
+}) {
+  const [imageFailed, setImageFailed] = useState(false)
+
+  if (imageUrl && !imageFailed) {
+    return (
+      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-white/25 bg-white/10 shadow-lg ring-1 ring-white/15 sm:h-16 sm:w-16">
+        <img
+          src={imageUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      </div>
+    )
+  }
+
+  const labels: Record<string, string> = {
+    facebook: 'f',
+    instagram: '◎',
+    whatsapp: 'WA',
+  }
+
+  return (
+    <div
+      className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/25 bg-white/10 text-lg font-black text-white shadow-lg ring-1 ring-white/15 sm:h-16 sm:w-16 sm:text-xl ${connected ? '' : 'opacity-80'}`}
+      aria-hidden="true"
+    >
+      {labels[provider] || 'M'}
+    </div>
+  )
+}
+
+function getIntegrationPresentation(
+  provider: string,
+  integration?: Integration,
+) {
+  const metadata = integration?.metadata || {}
+
+  const get = (...keys: string[]) =>
+    getMetadataString(metadata, keys)
+
+  if (provider === 'facebook') {
+    const name = get('facebook_page_name') || 'صفحة Facebook'
+    const pageId = get('facebook_page_id')
+    return {
+      eyebrow: 'Facebook Page',
+      title: name,
+      detail: pageId ? `صفحة Facebook • ${pageId}` : 'صفحة Facebook متصلة',
+      imageUrl:
+        get('facebook_page_picture_url') ||
+        (pageId
+          ? `https://graph.facebook.com/${encodeURIComponent(pageId)}/picture?type=large`
+          : ''),
+      icon: 'facebook',
+    }
+  }
+
+  if (provider === 'instagram') {
+    const username = get('instagram_username')
+    const name = get('instagram_name')
+    return {
+      eyebrow: 'Instagram Professional',
+      title: name || (username ? `@${username}` : 'حساب Instagram'),
+      detail: username ? `@${username}` : 'حساب Instagram متصل',
+      imageUrl: get('instagram_profile_picture_url'),
+      icon: 'instagram',
+    }
+  }
+
+  if (provider === 'whatsapp') {
+    const phone = get('display_phone_number')
+    const verifiedName = get('verified_name')
+    return {
+      eyebrow: 'WhatsApp Business',
+      title: phone || 'رقم WhatsApp Business',
+      detail: verifiedName || get('waba_name') || 'WhatsApp Business متصل',
+      imageUrl: '',
+      icon: 'whatsapp',
+    }
+  }
+
+  return {
+    eyebrow: 'Integration',
+    title: 'تكامل متصل',
+    detail: 'تم حفظ اتصال التكامل',
+    imageUrl: '',
+    icon: provider,
+  }
+}
+
 function IntegrationsSection({
   integrations,
   loading,
@@ -2046,166 +2145,144 @@ function IntegrationsSection({
               return (
                 <div
                   key={item.provider}
-                  className={`relative flex min-h-[190px] min-w-0 flex-col overflow-hidden rounded-2xl border p-4 transition-all duration-200 sm:p-5 ${
-                    connected
-                      ? 'border-emerald-200 bg-emerald-50/40'
-                      : status.label.includes(
-                            'إكمال الإعداد',
-                          )
-                        ? 'border-amber-200 bg-amber-50/40'
-                        : status.label ===
-                            'يوجد خطأ'
-                          ? 'border-red-200 bg-red-50/30'
-                          : 'border-sand-200 bg-white hover:border-sand-300 hover:shadow-sm'
-                  }`}
+                  className="group relative flex min-h-[330px] min-w-0 flex-col overflow-hidden rounded-[28px] border border-blue-300/30 bg-gradient-to-br from-[#0b3b8f] via-[#1458b8] to-[#0a2f73] p-5 text-white shadow-[0_18px_50px_rgba(15,76,170,0.20)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,76,170,0.28)] sm:p-6"
                 >
-                  <div className="flex min-w-0 items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[11px] font-black sm:h-11 sm:w-11 ${
-                          connected
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : status.label.includes(
-                                  'إكمال الإعداد',
-                                )
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-sand-100 text-ink-900/60'
-                        }`}
-                      >
-                        {item.provider
-                          .slice(0, 2)
-                          .toUpperCase()}
-                      </div>
+                  <div className="pointer-events-none absolute -left-12 -top-12 h-36 w-36 rounded-full bg-white/10 blur-2xl" />
+                  <div className="pointer-events-none absolute -bottom-16 -right-10 h-44 w-44 rounded-full bg-blue-300/20 blur-3xl" />
+
+                  <div className="relative flex min-w-0 items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <IntegrationBrandIcon
+                        provider={item.provider}
+                        imageUrl={getIntegrationPresentation(item.provider, integration).imageUrl}
+                        connected={connected}
+                      />
 
                       <div className="min-w-0">
-                        <h3 className="break-words text-sm font-bold text-ink-950">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-100/75">
+                          {getIntegrationPresentation(item.provider, integration).eyebrow}
+                        </div>
+                        <h3 className="mt-1 truncate text-base font-extrabold text-white sm:text-lg">
                           {item.name}
                         </h3>
-
-                        <p className="mt-1 text-xs leading-5 text-ink-900/50">
-                          {item.description}
-                        </p>
                       </div>
                     </div>
 
-                    <StatusBadge
-                      label={status.label}
-                      tone={
-                        status.label.includes(
-                          'إكمال الإعداد',
-                        )
-                          ? 'warning'
-                          : status.tone
-                      }
-                    />
+                    <span className="shrink-0 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur">
+                      {status.label}
+                    </span>
                   </div>
 
-                  <div className="mt-auto flex flex-col gap-3 border-t border-sand-200/70 pt-4">
-                    <div className="text-xs leading-5 text-ink-900/40">
-                      {connected
-                        ? 'الاتصال مفعل'
-                        : status.label.includes(
-                              'إكمال الإعداد',
-                            )
-                          ? 'الاتصال موجود ولكن إعداد Messaging لم يكتمل بعد'
-                          : item.meta
-                            ? 'يتطلب اتصال Meta الرسمي'
-                            : 'إعداد التكامل من لوحة الإدارة'}
-                    </div>
-
-                    {item.meta ? (
-                      <div className="flex w-full flex-col gap-2 sm:w-auto sm:self-end">
-                        <button
-                          type="button"
-                          aria-label={
-                            connected
-                              ? 'مزامنة أصول Meta'
-                              : item.actionLabel
-                          }
-                          onClick={() =>
-                            connected &&
-                            itemProvider
-                              ? onMetaSync(
-                                  itemProvider,
-                                )
-                              : onMetaConnect(
-                                  itemProvider as MetaProvider,
-                                )
-                          }
-                          disabled={
-                            metaConnecting !== null ||
-                            metaSyncing !== null ||
-                            metaDisconnecting !== null
-                          }
-                          className={`inline-flex min-h-11 w-full cursor-pointer touch-manipulation items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px] ${
-                            connected
-                              ? 'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-                              : 'bg-ink-950 text-white hover:bg-ink-900'
-                          }`}
-                        >
-                          {(isConnecting ||
-                            isSyncing) && (
-                            <span
-                              className={`h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 ${
-                                connected
-                                  ? 'border-blue-700/20 border-t-blue-700'
-                                  : 'border-white/30 border-t-white'
-                              }`}
-                            />
-                          )}
-
-                          {isConnecting
-                            ? 'جاري الربط...'
-                            : isSyncing
-                              ? 'جاري مزامنة الأصول...'
-                              : connected
-                                ? 'مزامنة الأصول'
-                                : item.actionLabel}
-                        </button>
-
-                        {connected &&
-                          itemProvider && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onMetaDisconnect(
-                                  itemProvider,
-                                )
-                              }
-                              disabled={
-                                metaDisconnecting !==
-                                  null ||
-                                metaConnecting !==
-                                  null ||
-                                metaSyncing !== null
-                              }
-                              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[150px]"
-                            >
-                              {isDisconnecting && (
-                                <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-red-700/20 border-t-red-700" />
-                              )}
-
-                              {isDisconnecting
-                                ? 'جاري إلغاء الاتصال...'
-                                : 'إلغاء الاتصال'}
-                            </button>
-                          )}
+                  {connected ? (
+                    <div className="relative mt-6 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
+                      <div className="text-[10px] font-semibold text-blue-100/70">
+                        الحساب المتصل
                       </div>
+
+                      <div className="mt-1 break-words text-lg font-extrabold tracking-tight text-white">
+                        {getIntegrationPresentation(item.provider, integration).title}
+                      </div>
+
+                      <div className="mt-1 break-words text-xs font-medium leading-5 text-blue-100/80">
+                        {getIntegrationPresentation(item.provider, integration).detail}
+                      </div>
+
+                      {item.provider === 'whatsapp' && getMetadataString(integration?.metadata, ['phone_number_id']) && (
+                        <div className="mt-3 flex items-center gap-2 text-[10px] font-semibold text-blue-100/65">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                          WhatsApp Messaging جاهز
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="relative mt-6 rounded-2xl border border-white/15 bg-black/10 p-4">
+                      <div className="text-sm font-bold text-white">
+                        لم يتم ربط هذا التكامل بعد
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-blue-100/75">
+                        {item.description}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="relative mt-auto flex flex-col gap-2 pt-5">
+                    {item.meta ? (
+                      <button
+                        type="button"
+                        aria-label={connected ? 'مزامنة أصول Meta' : item.actionLabel}
+                        onClick={() =>
+                          connected && itemProvider
+                            ? onMetaSync(itemProvider)
+                            : onMetaConnect(itemProvider as MetaProvider)
+                        }
+                        disabled={
+                          metaConnecting !== null ||
+                          metaSyncing !== null ||
+                          metaDisconnecting !== null
+                        }
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-extrabold text-blue-900 shadow-lg transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {(isConnecting || isSyncing) && (
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-900/20 border-t-blue-900" />
+                        )}
+                        {isConnecting
+                          ? 'جاري الربط...'
+                          : isSyncing
+                            ? 'جاري مزامنة الأصول...'
+                            : connected
+                              ? 'مزامنة البيانات'
+                              : item.actionLabel}
+                      </button>
                     ) : (
                       <button
                         type="button"
                         disabled
-                        title="سيتم تفعيل تدفق الربط الخاص بهذا التكامل بعد اكتمال الـAPI الخاص به."
-                        className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-sand-200 bg-sand-50 px-4 py-2.5 text-xs font-bold text-ink-900/40 sm:w-auto sm:self-end"
+                        className="inline-flex min-h-11 w-full cursor-not-allowed items-center justify-center rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-xs font-bold text-white/55"
                       >
-                        {connected
-                          ? item.connectedActionLabel
-                          : item.actionLabel}
+                        {connected ? item.connectedActionLabel : item.actionLabel}
+                      </button>
+                    )}
+
+                    {connected && itemProvider && (
+                      <button
+                        type="button"
+                        onClick={() => onMetaDisconnect(itemProvider)}
+                        disabled={
+                          metaDisconnecting !== null ||
+                          metaConnecting !== null ||
+                          metaSyncing !== null
+                        }
+                        className="inline-flex min-h-10 w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-[11px] font-bold text-white/75 transition hover:bg-red-500/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isDisconnecting ? 'جاري إلغاء الاتصال...' : 'إلغاء الاتصال'}
                       </button>
                     )}
                   </div>
 
                   {integration?.connected_at && (
+                    <div className="relative mt-4 flex items-center justify-between border-t border-white/10 pt-3 text-[10px] text-blue-100/55">
+                      <span>متصل منذ</span>
+                      <span dir="ltr">
+                        {new Date(integration.connected_at).toLocaleDateString('ar-EG')}
+                      </span>
+                    </div>
+                  )}
+
+                  {integration?.error_message && (
+                    <div
+                      className="relative mt-3 rounded-xl border border-red-200/30 bg-red-500/15 px-3 py-2 text-xs font-medium leading-5 text-red-50"
+                      role="alert"
+                    >
+                      {integration.error_message}
+                    </div>
+                  )}
+
+                  {!integration && (
+                    <div className="relative mt-3 text-[10px] text-blue-100/50">
+                      لا يوجد سجل اتصال لهذا التكامل.
+                    </div>
+                  )}
+                </div>                  {integration?.connected_at && (
                     <div className="mt-4">
                       <div className="text-[11px] font-semibold text-ink-900/40">
                         تاريخ الاتصال
@@ -2258,8 +2335,7 @@ function IntegrationsSection({
                     </div>
                   )}
                 </div>
-              )
-            })}
+              )}
           </div>
         )}
       </div>
