@@ -32,6 +32,7 @@ type SidebarItem = {
   end?: boolean
   feature?: FeatureKey
   resource?: string
+  section?: string
 }
 
 const items: SidebarItem[] = [
@@ -41,6 +42,7 @@ const items: SidebarItem[] = [
     icon: IconGrid,
     end: true,
     feature: 'dashboard',
+    section: 'نظرة عامة',
   },
   {
     to: '/crm',
@@ -48,6 +50,7 @@ const items: SidebarItem[] = [
     icon: IconUsers,
     feature: 'crm',
     resource: 'customers',
+    section: 'العملاء والمبيعات',
   },
   {
     to: '/pipeline',
@@ -55,6 +58,7 @@ const items: SidebarItem[] = [
     icon: IconFunnel,
     feature: 'crm',
     resource: 'deals',
+    section: 'العملاء والمبيعات',
   },
   {
     to: '/services',
@@ -62,6 +66,7 @@ const items: SidebarItem[] = [
     icon: IconLayers,
     feature: 'services',
     resource: 'services',
+    section: 'العملاء والمبيعات',
   },
   {
     to: '/campaigns',
@@ -69,6 +74,7 @@ const items: SidebarItem[] = [
     icon: IconMegaphone,
     feature: 'campaigns',
     resource: 'campaigns',
+    section: 'التسويق والمحتوى',
   },
   {
     to: '/ai-content',
@@ -76,6 +82,7 @@ const items: SidebarItem[] = [
     icon: IconSpark,
     feature: 'ai_content',
     resource: 'ai_content',
+    section: 'التسويق والمحتوى',
   },
   {
     to: '/inbox',
@@ -83,6 +90,7 @@ const items: SidebarItem[] = [
     icon: IconChat,
     feature: 'inbox',
     resource: 'inbox',
+    section: 'التواصل والذكاء الاصطناعي',
   },
   {
     to: '/ryan',
@@ -90,6 +98,7 @@ const items: SidebarItem[] = [
     icon: IconSpark,
     feature: 'ryan',
     resource: 'ryan',
+    section: 'التواصل والذكاء الاصطناعي',
   },
   {
     to: '/automations',
@@ -97,6 +106,7 @@ const items: SidebarItem[] = [
     icon: IconSettings,
     feature: 'automations',
     resource: 'automations',
+    section: 'التشغيل والمتابعة',
   },
   {
     to: '/tasks',
@@ -104,6 +114,7 @@ const items: SidebarItem[] = [
     icon: IconCheck,
     feature: 'tasks',
     resource: 'tasks',
+    section: 'التشغيل والمتابعة',
   },
   {
     to: '/appointments',
@@ -111,13 +122,14 @@ const items: SidebarItem[] = [
     icon: IconCalendar,
     feature: 'appointments',
     resource: 'appointments',
+    section: 'التشغيل والمتابعة',
   },
   {
     to: '/billing',
     label: 'الفواتير والاشتراكات',
     icon: IconCard,
     feature: 'billing',
-    resource: 'billing',
+    resource: 'الحساب والإدارة',
   },
   {
     to: '/reports',
@@ -125,6 +137,7 @@ const items: SidebarItem[] = [
     icon: IconChart,
     feature: 'advanced_reports',
     resource: 'reports',
+    section: 'الحساب والإدارة',
   },
   {
     to: '/users',
@@ -132,6 +145,7 @@ const items: SidebarItem[] = [
     icon: IconShield,
     feature: 'users',
     resource: 'users',
+    section: 'الحساب والإدارة',
   },
   {
     to: '/tickets',
@@ -139,6 +153,7 @@ const items: SidebarItem[] = [
     icon: IconChat,
     feature: 'tickets',
     resource: 'tickets',
+    section: 'الحساب والإدارة',
   },
   {
     to: '/settings',
@@ -146,6 +161,7 @@ const items: SidebarItem[] = [
     icon: IconSettings,
     feature: 'settings',
     resource: 'settings',
+    section: 'الحساب والإدارة',
   },
 ]
 
@@ -464,15 +480,32 @@ export default function Sidebar({
               end,
               feature,
               resource,
-            }) => {
+              section,
+            }, index) => {
               // Never render permission-controlled items before permissions are
               // resolved; otherwise restricted items briefly flash and disappear.
               if (resource && !isAdmin && (permissionsLoading || !can(resource, 'view'))) return null
               // Avoid showing temporary lock icons while subscription data is loading.
               const locked = !subscriptionLoading && isFeatureLocked(feature)
 
+              const previousSection = index > 0 ? items[index - 1]?.section : undefined
+              const showSection = section && section !== previousSection
+
               return (
-                <NavLink
+                <React.Fragment key={to}>
+                  {showSection && (
+                    <div
+                      className={[
+                        'px-3 pt-4 pb-2',
+                        index === 0 ? 'pt-1' : '',
+                        'text-[10px] font-bold tracking-[0.08em]',
+                        'text-sand-100/35 uppercase',
+                      ].join(' ')}
+                    >
+                      {section}
+                    </div>
+                  )}
+                  <NavLink
                   key={to}
                   to={to}
                   end={end}
@@ -548,6 +581,7 @@ export default function Sidebar({
                     </>
                   )}
                 </NavLink>
+                </React.Fragment>
               )
             }
           )}
