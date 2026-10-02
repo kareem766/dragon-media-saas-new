@@ -47,7 +47,14 @@ async function disconnect(req:VercelRequest,res:VercelResponse){
   return json(res,200,{ok:true,disconnected:true})
 }
 async function send(req:VercelRequest,res:VercelResponse){
-  let auth;try{auth=await authUser(req)}catch(e){return json(res,String(e).includes('UNAUTHORIZED')?401:403,{error:String(e).includes('UNAUTHORIZED')?'Unauthorized':'Forbidden'})}
+  let auth:any
+  try{auth=await authUser(req)}catch(e){
+    const internal=text(req.headers['x-ryan-inbox-secret'],500)
+    const client=db(); const {data:row}=await client.from('system_secrets').select('value').eq('key','ai_agent_inbox_secret').maybeSingle()
+    if(!internal||!row?.value||!constantTime(internal,String(row.value))) return json(res,String(e).includes('UNAUTHORIZED')?401:403,{error:String(e).includes('UNAUTHORIZED')?'Unauthorized':'Forbidden'})
+    const organizationId=text(req.body?.organization_id,100); if(!organizationId)return json(res,400,{error:'organization_id مطلوب.'})
+    auth={organizationId}
+  }
   const messageId=text(req.body?.message_id,100)
   if(!messageId)return json(res,400,{error:'message_id مطلوب.'})
   const client=db()
