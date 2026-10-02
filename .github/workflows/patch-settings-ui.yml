@@ -37,3 +37,4 @@ jobs:
           git add src/pages/Settings.tsx
           git diff --cached --quiet || git commit -m 'feat: polish company settings card and owner name'
           git push
+# one-shot preview patch
