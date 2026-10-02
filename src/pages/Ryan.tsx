@@ -92,7 +92,7 @@ export default function Ryan() {
             <h1 className="text-2xl font-black">Ryan</h1>
             <p className="mt-2 text-sm text-blue-100">تابع استهلاك Ryan لكل تفاعل من مكان واحد.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap gap-2"><button type="button" onClick={() => window.location.hash = '/ryan/assistant'} className="rounded-xl bg-white px-4 py-2 text-xs font-bold text-blue-800 shadow-sm transition hover:bg-blue-50">المساعد الداخلي</button><button type="button" onClick={() => window.location.hash = '/ryan/knowledge'} className="rounded-xl bg-blue-500/30 px-4 py-2 text-xs font-bold text-white ring-1 ring-white/20 transition hover:bg-blue-500/45">قاعدة المعرفة</button><button type="button" onClick={() => window.location.hash = '/ryan/settings'} className="rounded-xl bg-blue-500/30 px-4 py-2 text-xs font-bold text-white ring-1 ring-white/20 transition hover:bg-blue-500/45">الإعدادات</button></div><span className={`rounded-full px-4 py-2 text-xs font-bold ${state.active ? 'bg-emerald-400/20 text-emerald-50 ring-1 ring-emerald-200/20' : 'bg-red-400/20 text-red-100'}`}>
+          <div className="flex items-center"><span className={`rounded-full px-4 py-2 text-xs font-bold ${state.active ? 'bg-emerald-400/20 text-emerald-50 ring-1 ring-emerald-200/20' : 'bg-red-400/20 text-red-100'}`}>
             {state.active ? 'نشط' : 'متوقف'}
           </span></div>
         </div>
