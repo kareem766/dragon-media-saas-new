@@ -260,3 +260,155 @@ button.bg-ink-950:hover, a.bg-ink-950:hover, button.bg-gold-500:hover, a.bg-gold
     -webkit-backdrop-filter: none;
   }
 }
+
+
+/* Premium Dragon Media page loader */
+@keyframes dm-loader-logo-in {
+  0% { opacity: 0; transform: scale(.72); filter: blur(8px); }
+  55% { opacity: 1; transform: scale(1.04); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+@keyframes dm-loader-ring {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes dm-loader-ring-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+@keyframes dm-loader-glow {
+  0%,100% { opacity: .42; transform: scale(.96); }
+  50% { opacity: .8; transform: scale(1.04); }
+}
+@keyframes dm-loader-progress {
+  0% { transform: translateX(105%); }
+  55% { transform: translateX(8%); }
+  100% { transform: translateX(-105%); }
+}
+@keyframes dm-loader-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.dm-loader-screen {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(37,99,235,.12), transparent 25%),
+    radial-gradient(circle at 50% 52%, rgba(0,207,255,.08), transparent 34%),
+    linear-gradient(145deg, #f8fbff 0%, #eef6ff 48%, #f8fbff 100%);
+}
+.dm-loader-screen::before,
+.dm-loader-screen::after {
+  content: '';
+  position: absolute;
+  width: 34rem;
+  height: 34rem;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+  filter: blur(10px);
+  background: radial-gradient(circle, rgba(37,99,235,.07), transparent 68%);
+  animation: dm-loader-glow 5s ease-in-out infinite;
+}
+.dm-loader-screen::before { top: -20rem; inset-inline-end: -10rem; }
+.dm-loader-screen::after { bottom: -20rem; inset-inline-start: -10rem; animation-delay: -2.5s; }
+.dm-loader-brand {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: dm-loader-fade-in .55s cubic-bezier(.22,1,.36,1) both;
+}
+.dm-loader-logo-wrap {
+  position: relative;
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+}
+.dm-loader-logo {
+  position: relative;
+  z-index: 3;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 22px;
+  animation: dm-loader-logo-in .9s cubic-bezier(.22,1,.36,1) both, dm-loader-glow 2.6s ease-in-out .9s infinite;
+}
+.dm-loader-fallback {
+  position: absolute;
+  z-index: 2;
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #155eef, #0b3b8f);
+  color: white;
+  font-size: 30px;
+  font-weight: 900;
+  box-shadow: 0 18px 44px rgba(21,94,239,.24);
+}
+.dm-loader-logo:not([style*="display: none"]) + .dm-loader-fallback { opacity: 0; }
+.dm-loader-logo-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(37,99,235,.18);
+  border-top-color: rgba(0,207,255,.9);
+  border-right-color: rgba(37,99,235,.5);
+  animation: dm-loader-ring 1.9s linear infinite;
+}
+.dm-loader-logo-ring-inner {
+  inset: 9px;
+  border-color: rgba(0,207,255,.18);
+  border-bottom-color: rgba(37,99,235,.75);
+  border-left-color: rgba(0,207,255,.7);
+  animation: dm-loader-ring-reverse 1.45s linear infinite;
+}
+.dm-loader-name {
+  margin-top: 17px;
+  color: #0f2f6b;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -.02em;
+}
+.dm-loader-progress {
+  width: 132px;
+  height: 3px;
+  margin-top: 15px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(37,99,235,.10);
+}
+.dm-loader-progress span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #155eef, #00cfff, #155eef);
+  animation: dm-loader-progress 1.35s cubic-bezier(.65,0,.35,1) infinite;
+}
+.dm-loader-caption {
+  margin-top: 10px;
+  color: rgba(15,47,107,.48);
+  font-size: 11px;
+  font-weight: 700;
+}
+@media (max-width: 640px) {
+  .dm-loader-logo-wrap { width: 96px; height: 96px; }
+  .dm-loader-logo { width: 64px; height: 64px; }
+  .dm-loader-fallback { width: 60px; height: 60px; font-size: 26px; }
+  .dm-loader-name { font-size: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dm-loader-brand, .dm-loader-logo, .dm-loader-logo-ring, .dm-loader-screen::before, .dm-loader-screen::after, .dm-loader-progress span {
+    animation: none !important;
+  }
+}
