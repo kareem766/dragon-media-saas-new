@@ -8,6 +8,7 @@ import PermissionRoute from './components/PermissionRoute'
 import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
 import SiteFooter from './components/SiteFooter'
+import { useBranding } from './hooks/useBranding'
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))
 const ConfirmSignup = lazy(() => import('./pages/ConfirmSignup'))
@@ -66,7 +67,35 @@ function PublicShell() {
 }
 
 function PageLoading() {
-  return <div dir="rtl" className="min-h-[40vh] flex items-center justify-center p-6"><div className="rounded-2xl border border-blue-100 bg-white/90 px-5 py-4 text-sm font-semibold text-ink-700 shadow-sm">جاري تحميل الصفحة...</div></div>
+  const { branding, logoUrl } = useBranding()
+  const platformName = branding?.platform_name || 'Dragon Media'
+
+  return (
+    <div dir="rtl" className="dm-loader-screen" role="status" aria-live="polite" aria-label={`جاري تحميل ${platformName}`}>
+      <div className="dm-loader-orbit dm-loader-orbit-one" aria-hidden="true" />
+      <div className="dm-loader-orbit dm-loader-orbit-two" aria-hidden="true" />
+      <div className="dm-loader-brand">
+        <div className="dm-loader-logo-wrap">
+          <span className="dm-loader-logo-ring" aria-hidden="true" />
+          <span className="dm-loader-logo-ring dm-loader-logo-ring-inner" aria-hidden="true" />
+          <img
+            src={logoUrl}
+            alt=""
+            className="dm-loader-logo"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none'
+            }}
+          />
+          <span className="dm-loader-fallback" aria-hidden="true">D</span>
+        </div>
+        <div className="dm-loader-name">{platformName}</div>
+        <div className="dm-loader-progress" aria-hidden="true">
+          <span />
+        </div>
+        <div className="dm-loader-caption">جاري تجهيز المنصة...</div>
+      </div>
+    </div>
+  )
 }
 
 function RyanPageShell() {
