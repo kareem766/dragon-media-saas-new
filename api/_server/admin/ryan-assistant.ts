@@ -87,6 +87,35 @@ export default async function handler(req: any, res: any) {
     const message = clean(req.body?.message)
     if (!message) return json(res, 400, { error: 'اكتب سؤالك أولًا' })
 
+    const { data: ryanAgent, error: ryanAgentError } = await admin
+      .from('ai_agents')
+      .select('id')
+      .eq('organization_id', user.organization_id)
+      .eq('name', 'Ryan')
+      .maybeSingle()
+    if (ryanAgentError) throw new Error(ryanAgentError.message)
+    if (!ryanAgent?.id) return json(res, 403, { error: 'Ryan غير متاح حاليًا لهذه الشركة.' })
+
+    const billingModel = env('RYAN_GEMINI_MODEL') || 'gemini-3.1-flash-lite'
+    const { data: quota, error: quotaError } = await admin.rpc('consume_ryan_message', {
+      p_organization_id: user.organization_id,
+      p_agent_id: ryanAgent.id,
+      p_conversation_id: null,
+      p_customer_id: null,
+      p_model: billingModel,
+    })
+    if (quotaError) throw new Error(quotaError.message)
+    const quotaRow = Array.isArray(quota) ? quota[0] : quota
+    if (!quotaRow?.allowed) {
+      return json(res, 200, {
+        ok: true,
+        reply: 'رصيد استخدام Ryan في الباقة الحالية اكتمل. تقدر تراجع الباقات وتجدد أو تضيف رصيد من داخل المنصة.',
+        quota_exhausted: true,
+        reset_at: quotaRow?.reset_at || null,
+      })
+    }
+    const billingRunId = String(quotaRow.run_id || '')
+
     const history = Array.isArray(req.body?.history)
       ? req.body.history.slice(-16)
         .map((item: any) => ({
@@ -230,6 +259,8 @@ ${knowledgeText}
     if (/^\s*[\[{]/.test(reply) || /functionCall|functionResponse|service_name/.test(reply)) {
       reply = 'ممكن توضّح لي إيه المهمة اللي عايز تعرف تعملها داخل Dragon Media؟'
     }
+
+    if (billingRunId) await admin.from('ai_agent_runs').update({ status: 'success', model: usedModel || billingModel, metadata: { source: 'ryan', channel: 'internal_assistant', action: 'internal_assistant', action_success: Boolean(reply) } }).eq('id', billingRunId)
 
     return json(res, 200, {
       ok: true,

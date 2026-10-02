@@ -90,7 +90,7 @@ export default function Ryan() {
           <div>
             <div className="mb-2 text-xs font-bold text-blue-100">المساعد الذكي</div>
             <h1 className="text-2xl font-black">Ryan</h1>
-            <p className="mt-2 text-sm text-blue-100">تابع استهلاك رسائلك وحالة اشتراكك من مكان واحد.</p>
+            <p className="mt-2 text-sm text-blue-100">تابع استهلاك Ryan لكل تفاعل من مكان واحد.</p>
           </div>
           <span className={`rounded-full px-4 py-2 text-xs font-bold ${state.active ? 'bg-white/15 text-white' : 'bg-red-400/20 text-red-100'}`}>
             {state.active ? 'نشط' : 'متوقف'}
@@ -100,16 +100,16 @@ export default function Ryan() {
 
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
-          <div className="flex items-center justify-between"><span className="text-xs font-bold text-blue-800">الباقة الحالية</span><span className="rounded-xl bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white">رسائل</span></div>
+          <div className="flex items-center justify-between"><span className="text-xs font-bold text-blue-800">الباقة الحالية</span><span className="rounded-xl bg-blue-600 px-2.5 py-1 text-[10px] font-bold text-white">استخدام</span></div>
           <div className="mt-4 text-3xl font-black text-blue-950">{number(planRemaining)}</div>
-          <div className="mt-1 text-xs text-blue-900/55">متبقي من {number(usage?.plan_messages || 0)} رسالة</div>
+          <div className="mt-1 text-xs text-blue-900/55">متبقي من {number(usage?.plan_messages || 0)} استخدام</div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600" style={{ width: `${usage?.plan_messages ? Math.min(100, ((usage?.used_messages || 0) / usage.plan_messages) * 100) : 0}%` }} /></div>
         </div>
 
         <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
-          <div className="flex items-center justify-between"><span className="text-xs font-bold text-blue-800">الباقة الإضافية</span><span className="rounded-xl bg-blue-700 px-2.5 py-1 text-[10px] font-bold text-white">إضافي</span></div>
+          <div className="flex items-center justify-between"><span className="text-xs font-bold text-blue-800">الباقة الإضافية</span><span className="rounded-xl bg-blue-700 px-2.5 py-1 text-[10px] font-bold text-white">استخدام إضافي</span></div>
           <div className="mt-4 text-3xl font-black text-blue-950">{number(extraRemaining)}</div>
-          <div className="mt-1 text-xs text-blue-900/55">رسالة إضافية متاحة للاستخدام</div>
+          <div className="mt-1 text-xs text-blue-900/55">استخدامات إضافية متاحة</div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-500" style={{ width: extraRemaining > 0 ? '100%' : '0%' }} /></div>
         </div>
 
@@ -123,7 +123,7 @@ export default function Ryan() {
       <section className="rounded-3xl border border-blue-100 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div><h2 className="text-lg font-black text-ink-950">ملخص الاستخدام</h2><p className="mt-1 text-xs text-ink-900/45">يتم تحديث البيانات تلقائيًا كل 30 ثانية.</p></div>
-          <div className="text-left"><div className="text-2xl font-black text-blue-800">{number(usage?.remaining_messages || 0)}</div><div className="text-[10px] text-ink-900/40">إجمالي الرسائل المتبقية</div></div>
+          <div className="text-left"><div className="text-2xl font-black text-blue-800">{number(usage?.remaining_messages || 0)}</div><div className="text-[10px] text-ink-900/40">إجمالي استخدامات Ryan المتبقية</div></div>
         </div>
         <div className="mt-5 h-3 overflow-hidden rounded-full bg-blue-50"><div className="h-full rounded-full bg-gradient-to-l from-blue-500 to-blue-800" style={{ width: `${usagePercent}%` }} /></div>
         <div className="mt-2 flex justify-between text-[10px] font-bold text-ink-900/40"><span>الاستخدام الحالي</span><span>{number(Math.round(usagePercent))}%</span></div>
