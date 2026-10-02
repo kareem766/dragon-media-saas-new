@@ -38,6 +38,46 @@ export default function ResetPassword() {
     let mounted = true
 
     const checkSession = async () => {
+      // HashRouter uses the first "#" for routing, while Supabase recovery
+      // tokens are also delivered in a hash fragment. This produces:
+      // /#/reset-password#access_token=...&refresh_token=...
+      // Bridge the nested fragment into the auth session explicitly.
+      const fullHash = window.location.hash || ''
+      const nestedHashIndex = fullHash.indexOf('#', 1)
+
+      if (nestedHashIndex !== -1) {
+        const recoveryParams = new URLSearchParams(
+          fullHash.slice(nestedHashIndex + 1)
+        )
+        const accessToken = recoveryParams.get('access_token')
+        const refreshToken = recoveryParams.get('refresh_token')
+        const type = recoveryParams.get('type')
+
+        if (type === 'recovery' && accessToken && refreshToken) {
+          const { error: sessionError } = await client.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+
+          if (sessionError) {
+            if (mounted) {
+              setError(
+                'رابط إعادة تعيين كلمة المرور غير صالح أو انتهت صلاحيته. اطلب رابطًا جديدًا.'
+              )
+            }
+            return
+          }
+
+          // Remove recovery tokens from the visible URL after the session
+          // has been established.
+          window.history.replaceState(
+            null,
+            document.title,
+            window.location.origin + '/#/reset-password'
+          )
+        }
+      }
+
       const {
         data: { session },
       } = await client.auth.getSession()
@@ -46,6 +86,7 @@ export default function ResetPassword() {
 
       if (session) {
         setReady(true)
+        setError('')
       } else {
         setError(
           'رابط إعادة تعيين كلمة المرور غير صالح أو انتهت صلاحيته. اطلب رابطًا جديدًا.'
