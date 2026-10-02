@@ -317,7 +317,7 @@ export default function Login() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.06),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(245,158,11,0.05),transparent_25%)] bg-slate-50 text-slate-900"
+      className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,0.08),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(34,211,238,0.06),transparent_28%)] bg-slate-50 text-slate-900"
     >
       <style>{`
         @keyframes dragonHeroLogoFade {
@@ -342,15 +342,29 @@ export default function Login() {
 
         @media (prefers-reduced-motion: reduce) {
           .hero-logo-fade,
-          .hero-type-text {
+          .hero-type-text,
+          .login-mobile-orb,
+          .login-mobile-grid {
             animation: none !important;
             opacity: 1 !important;
             transform: none !important;
             filter: none !important;
           }
         }
+
+        .login-mobile-orb { position:absolute; border-radius:9999px; filter:blur(42px); opacity:.55; }
+        .login-mobile-orb-blue { width:210px; height:210px; top:72px; right:-100px; background:rgba(59,130,246,.16); }
+        .login-mobile-orb-cyan { width:180px; height:180px; bottom:120px; left:-90px; background:rgba(34,211,238,.12); }
+        .login-mobile-grid { position:absolute; inset:0; opacity:.28; background-image:linear-gradient(rgba(59,130,246,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(59,130,246,.035) 1px,transparent 1px); background-size:28px 28px; mask-image:linear-gradient(to bottom,black,transparent 72%); -webkit-mask-image:linear-gradient(to bottom,black,transparent 72%); }
+        @media (max-width:1023px) {
+          .login-mobile-heading h2 { text-wrap:balance; }
+          .login-mobile-card { box-shadow:0 22px 60px rgba(15,23,42,.10),0 1px 0 rgba(255,255,255,.95) inset; }
+          .login-submit-button,.login-google-button,.login-switch-button { -webkit-tap-highlight-color:transparent; }
+          .login-submit-button:active,.login-google-button:active,.login-switch-button:active { transform:scale(.992); }
+        }
       `}</style>
-      <div className="min-h-screen lg:grid lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden lg:hidden" aria-hidden="true"><div className="login-mobile-orb login-mobile-orb-blue" /><div className="login-mobile-orb login-mobile-orb-cyan" /><div className="login-mobile-grid" /></div>
+      <div className="relative z-10 min-h-screen lg:grid lg:grid-cols-[0.9fr_1.1fr]">
         <section className="relative hidden overflow-hidden bg-slate-950 p-10 text-white lg:flex">
           <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-blue-500/20 blur-3xl" />
 
@@ -429,9 +443,9 @@ export default function Login() {
           </div>
         </section>
 
-        <main className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-8">
+        <main className="relative flex min-h-screen items-start justify-center px-4 pb-6 pt-3 sm:px-8 sm:pt-8 lg:items-center lg:py-8">
           <div className="w-full max-w-xl">
-            <div className="mb-8 flex items-center justify-between lg:hidden">
+            <div className="mb-5 flex items-center justify-between lg:hidden">
               <Link
                 to="/home"
                 className="flex items-center gap-3"
@@ -439,23 +453,23 @@ export default function Login() {
                 <img
                   src={logoUrl}
                   alt={platformName}
-                  className="h-10 w-auto rounded-full object-contain"
+                  className="h-8 w-8 rounded-full object-contain"
                 />
 
-                <span className="font-bold">
+                <span className="text-[14px] font-black tracking-tight">
                   {platformName}
                 </span>
               </Link>
 
               <Link
                 to="/home"
-                className="text-sm text-slate-500 hover:text-slate-900"
+                className="inline-flex h-9 items-center rounded-xl border border-slate-200/80 bg-white/90 px-3 text-[11px] font-black text-slate-600 shadow-sm transition hover:text-slate-950"
               >
                 الرئيسية
               </Link>
             </div>
 
-            <div className="mb-6 flex items-center justify-between gap-3">
+            <div className="mb-5 flex items-center justify-between gap-3">
               <Link
                 to="/home"
                 className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
@@ -488,8 +502,8 @@ export default function Login() {
               />
             )}
 
-            <div className="mb-7">
-              <h2 className="text-3xl font-black tracking-tight">
+            <div className="login-mobile-heading mb-5 text-center lg:text-right">
+              <h2 className="text-[28px] font-black tracking-[-0.035em] text-slate-950 sm:text-3xl">
                 {mode === 'login'
                   ? 'مرحبًا بعودتك'
                   : signupStep ===
@@ -498,7 +512,7 @@ export default function Login() {
                     : 'أنشئ حسابك'}
               </h2>
 
-              <p className="mt-2 leading-7 text-slate-500">
+              <p className="mx-auto mt-2 max-w-[330px] text-[13px] leading-6 text-slate-500 lg:mx-0">
                 {mode === 'login'
                   ? 'سجّل دخولك للوصول إلى مساحة عملك.'
                   : signupStep ===
@@ -521,10 +535,8 @@ export default function Login() {
             )}
 
             {mode === 'login' && (
-              <form
-                onSubmit={handleLogin}
-                className="space-y-5"
-              >
+              <div className="login-mobile-card rounded-[26px] border border-white/90 bg-white/95 p-3.5 shadow-[0_22px_60px_rgba(15,23,42,0.10)] backdrop-blur sm:p-6">
+              <form onSubmit={handleLogin} className="space-y-3.5">
                 <InputField
                   label="البريد الإلكتروني"
                   type="email"
@@ -543,10 +555,10 @@ export default function Login() {
                   }
                 />
 
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-between">
                   <Link
                     to="/forgot-password"
-                    className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+                    className="text-[13px] font-black text-blue-600 transition hover:text-blue-700"
                   >
                     نسيت كلمة المرور؟
                   </Link>
@@ -560,13 +572,14 @@ export default function Login() {
                   loadingLabel="جاري تسجيل الدخول..."
                 />
               </form>
+              </div>
             )}
 
             {mode === 'signup' &&
               signupStep === 'account' && (
                 <form
                   onSubmit={handleSignup}
-                  className="space-y-5"
+                  className="space-y-4"
                 >
                   <InputField
                     label="الاسم بالكامل"
@@ -919,7 +932,7 @@ function PasswordField({
               !showPassword
             )
           }
-          className="absolute left-3 top-1/2 -translate-y-1/2 rounded-xl px-3 py-2 text-xs font-bold text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 rounded-xl px-3 py-2 text-[11px] font-black text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
           aria-label={
             showPassword
               ? 'إخفاء كلمة المرور'
