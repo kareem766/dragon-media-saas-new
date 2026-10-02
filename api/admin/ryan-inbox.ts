@@ -465,5 +465,16 @@ const durableMemory={name:(isWhatsApp?(explicitName||rememberedExplicitName):tex
    await supabase.from('messages').update({metadata:{source:'ryan',outbound_status:'failed',outbound_error:text(outboundError?.message,500)}}).eq('id',saved.id).eq('conversation_id',conversationId)
   }
  }
+ if(String(conversation.channel||'').toLowerCase()==='telegram'){
+  try{
+   const outboundResponse=await fetch('https://dragon-media-saas-new.vercel.app/api/telegram?action=send',{method:'POST',headers:{'Content-Type':'application/json','x-ryan-inbox-secret':env('RYAN_INBOX_SECRET')},body:JSON.stringify({message_id:saved.id})})
+   const outboundPayload=await outboundResponse.json().catch(()=>({}))
+   if(!outboundResponse.ok)throw new Error(String(outboundPayload?.error||'Telegram outbound send failed'))
+   console.log('Ryan Telegram outbound message sent',{conversationId,messageId:saved.id,externalId:String(outboundPayload?.message?.message_id||'')})
+  }catch(outboundError:any){
+   console.error('Ryan Telegram outbound send failed',{conversationId,messageId:saved.id,error:text(outboundError?.message,500)})
+   await supabase.from('messages').update({metadata:{source:'ryan',outbound_status:'failed',outbound_error:text(outboundError?.message,500)}}).eq('id',saved.id).eq('conversation_id',conversationId)
+  }
+ }
  return res.status(200).json({ok:true,reply,message_id:saved.id,provider:'gemini',model:usedModel,action:text(plan.action,60)||'continue',action_success:actionResult.success,safety_fallback:aiUnavailable})
 }
