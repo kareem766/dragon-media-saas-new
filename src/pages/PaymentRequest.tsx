@@ -609,9 +609,9 @@ export default function PaymentRequest() {
         </div>
       </Card>
 
-      <Card className="overflow-hidden border border-blue-200/70 bg-gradient-to-br from-white via-white to-blue-50/60 p-0 shadow-[0_18px_50px_rgba(15,47,107,0.08)]">
+      <Card data-payment-method="paymob" className="overflow-hidden border-2 border-blue-200 bg-gradient-to-br from-white via-white to-blue-50/60 p-0 shadow-[0_18px_50px_rgba(15,47,107,0.08)]">
         <div className="bg-ink-950 px-6 py-5 text-sand-100">
-          <div className="text-xs text-sand-100/55">الدفع الإلكتروني</div>
+          <div className="flex items-center justify-between gap-3"><div className="text-xs text-sand-100/55">الدفع الإلكتروني</div><span className="rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-black text-ink-950">متاح الآن</span></div>
           <h2 className="mt-1 text-xl font-black">ادفع بأمان عبر Paymob</h2>
           <p className="mt-1 text-sm text-sand-100/65">سيتم تحويلك إلى بوابة الدفع الآمنة، وتفعيل الباقة تلقائيًا بعد تأكيد العملية.</p>
         </div>
