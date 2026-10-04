@@ -326,6 +326,34 @@ export default function PaymentRequest() {
     setReceipt(file)
   }
 
+  const startPaymobPayment = async () => {
+    if (!selectedPlan || !amount) return
+    setPaymobSaving(true)
+    setError(null)
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !sessionData.session?.access_token) {
+        throw new Error('تعذر التحقق من جلسة الدخول.')
+      }
+      const response = await fetch('/api/payments/paymob/create-intention', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({ plan_id: selectedPlan.id, billing_cycle: billingCycle }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload?.checkout_url) {
+        throw new Error(payload?.error || 'تعذر تجهيز الدفع عبر Paymob.')
+      }
+      window.location.href = payload.checkout_url
+    } catch (paymobError) {
+      setError(paymobError instanceof Error ? paymobError.message : 'تعذر بدء الدفع الإلكتروني.')
+      setPaymobSaving(false)
+    }
+  }
+
   const handleSubmit = async (
     e: React.FormEvent
   ) => {
