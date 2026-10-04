@@ -131,6 +131,7 @@ export default function PaymentRequest() {
   const [receipt, setReceipt] = useState<File | null>(null)
 
   const [saving, setSaving] = useState(false)
+  const [paymobSaving, setPaymobSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const amount = useMemo(() => {
