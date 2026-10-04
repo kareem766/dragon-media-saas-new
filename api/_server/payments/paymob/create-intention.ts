@@ -8,6 +8,7 @@ function env(name: string, fallback?: string) {
   return process.env[name] || (fallback ? process.env[fallback] : '') || ''
 }
 
+// Paymob live checkout requires a real Egyptian billing phone; no placeholder numbers.
 function normalizeEgyptianPhone(value: string) {
   const raw = value.replace(/[\s()-]/g, '')
   if (/^01\d{9}$/.test(raw)) return '+20' + raw.slice(1)
