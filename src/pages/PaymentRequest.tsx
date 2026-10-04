@@ -327,7 +327,7 @@ export default function PaymentRequest() {
   }
 
   const startPaymobPayment = async () => {
-    if (!selectedPlan || !amount) return
+    if (!supabase || !selectedPlan || !amount) return
     setPaymobSaving(true)
     setError(null)
     try {
