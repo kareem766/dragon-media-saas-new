@@ -66,7 +66,8 @@ if (source.includes(oldPrompt)) {
 }
 
 const marker = `// Hard safety guard: a new customer must be asked for their name before Ryan moves into qualification.`
-if (source.includes(marker)) {
+const geminiNameMarker = `const candidateName=extractName(current)||(modelNameTrusted?modelIdentityName:'');`
+if (source.includes(marker) || source.includes(geminiNameMarker)) {
   if (changed) writeFileSync(path, source, 'utf8')
   process.exit(0)
 }
