@@ -45,7 +45,7 @@ const AdminTickets = lazy(() => import('./pages/AdminTickets'))
 const Tickets = lazy(() => import('./pages/Tickets'))
 const Search = lazy(() => import('./pages/Search'))
 const Plans = lazy(() => import('./pages/Plans'))
-const PaymentRequest = lazy(() => import('./pages/PaymentRequest'))
+import PaymentRequest from './pages/PaymentRequest'
 const Tasks = lazy(() => import('./pages/Tasks'))
 const Appointments = lazy(() => import('./pages/Appointments'))
 const Billing = lazy(() => import('./pages/Billing'))
