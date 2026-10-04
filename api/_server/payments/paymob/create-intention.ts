@@ -8,6 +8,14 @@ function env(name: string, fallback?: string) {
   return process.env[name] || (fallback ? process.env[fallback] : '') || ''
 }
 
+function normalizeEgyptianPhone(value: string) {
+  const raw = value.replace(/[\s()-]/g, '')
+  if (/^01\d{9}$/.test(raw)) return '+20' + raw.slice(1)
+  if (/^00201\d{9}$/.test(raw)) return '+' + raw.slice(2)
+  if (/^\+201\d{9}$/.test(raw)) return raw
+  return ''
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed.' })
 
@@ -114,7 +122,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const firstName = String(userRow.full_name || org.name || 'Dragon').trim().split(/\s+/)[0] || 'Dragon'
     const lastName = String(userRow.full_name || org.name || 'Media').trim().split(/\s+/).slice(1).join(' ') || 'Media'
-    const phone = String(org.phone || '').trim() || '01000000000'
+    const phone = normalizeEgyptianPhone(String(org.phone || '').trim())
+    if (!phone) {
+      return json(res, 400, { error: 'رقم هاتف الشركة غير صالح. أضف رقمًا مصريًا صحيحًا قبل إتمام الدفع.' })
+    }
     const email = String(userRow.email || org.email || '').trim() || 'billing@dragon-media.com'
 
     const intentionPayload = {
