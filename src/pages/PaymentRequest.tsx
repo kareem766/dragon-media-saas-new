@@ -609,6 +609,28 @@ export default function PaymentRequest() {
         </div>
       </Card>
 
+      <Card className="overflow-hidden border border-blue-200/70 bg-gradient-to-br from-white via-white to-blue-50/60 p-0 shadow-[0_18px_50px_rgba(15,47,107,0.08)]">
+        <div className="bg-ink-950 px-6 py-5 text-sand-100">
+          <div className="text-xs text-sand-100/55">الدفع الإلكتروني</div>
+          <h2 className="mt-1 text-xl font-black">ادفع بأمان عبر Paymob</h2>
+          <p className="mt-1 text-sm text-sand-100/65">سيتم تحويلك إلى بوابة الدفع الآمنة، وتفعيل الباقة تلقائيًا بعد تأكيد العملية.</p>
+        </div>
+        <div className="p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm text-ink-900/55">إجمالي الدفع</div>
+              <div className="mt-1 text-2xl font-black text-ink-950">{amount?.toLocaleString('ar-EG')} {currency}</div>
+            </div>
+            <Button type="button" onClick={startPaymobPayment} disabled={paymobSaving || !amount} className="w-full sm:w-auto">
+              {paymobSaving ? 'جاري تجهيز الدفع...' : 'الدفع الآن عبر Paymob'}
+            </Button>
+          </div>
+          <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-6 text-blue-900/75">
+            لا تحتاج لإرسال إيصال أو انتظار مراجعة الإدارة عند الدفع الإلكتروني. التفعيل يتم تلقائيًا بعد نجاح الدفع المؤكد من Paymob.
+          </div>
+        </div>
+      </Card>
+
       <Card className="p-6">
         <div className="mb-4">
           <div className="text-xs font-semibold text-ink-900/45">الخطوة 1</div>
