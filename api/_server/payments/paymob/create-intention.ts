@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       amount,
       currency: plan.currency || 'EGP',
       billing_cycle: billingCycle,
-      integration_id: integrationId,
+      integration_id: integrationIds[0],
       merchant_reference: merchantReference,
       status: 'initiated',
     })
