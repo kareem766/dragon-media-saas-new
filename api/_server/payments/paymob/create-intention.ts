@@ -13,7 +13,7 @@ function getPaymobCallbackBaseUrl() {
   const host = process.env.VERCEL_ENV === 'production'
     ? (process.env.VERCEL_PROJECT_PRODUCTION_URL || 'dragon-media-saas-new.vercel.app')
     : (process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || 'dragon-media-saas-new.vercel.app')
-  return `https://${host.replace(/^https?:\\/\\//, '')}`
+  return `https://${host.replace(/^https?:\/\//, '')}`
 }
 
 function normalizeEgyptianPhone(value: string) {
