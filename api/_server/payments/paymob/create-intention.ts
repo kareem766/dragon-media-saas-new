@@ -30,9 +30,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_KEY')
     const secretKey = env('PAYMOB_SECRET_KEY')
     const publicKey = env('PAYMOB_PUBLIC_KEY')
-    const integrationId = Number(env('PAYMOB_INTEGRATION_ID'))
+    const integrationIds = (env('PAYMOB_INTEGRATION_IDS') || env('PAYMOB_INTEGRATION_ID'))
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isInteger(value) && value > 0)
 
-    if (!supabaseUrl || !anonKey || !serviceKey || !secretKey || !publicKey || !integrationId) {
+    if (!supabaseUrl || !anonKey || !serviceKey || !secretKey || !publicKey || integrationIds.length === 0) {
       return json(res, 500, { error: 'إعدادات Paymob غير مكتملة.' })
     }
 
@@ -93,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payment_method_snapshot: {
         method_key: 'paymob',
         name: 'Paymob',
-        integration_id: integrationId,
+        integration_id: integrationIds[0],
       },
       billing_cycle: billingCycle,
       request_type: 'subscription',
@@ -133,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const intentionPayload = {
       amount: Math.round(amount * 100),
       currency: plan.currency || 'EGP',
-      payment_methods: [integrationId],
+      payment_methods: integrationIds,
       items: [{
         name: `Dragon Media - ${plan.name} - ${billingCycle === 'yearly' ? 'سنوي' : 'شهري'}`,
         amount: Math.round(amount * 100),
