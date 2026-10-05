@@ -85,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reference: merchantReference,
       payment_date: new Date().toISOString().slice(0, 10),
       note: 'طلب دفع إلكتروني عبر Paymob',
-      status: 'pending_review',
+      status: 'pending_payment',
       item_snapshot: {
         type: 'subscription',
         plan_id: plan.id,
