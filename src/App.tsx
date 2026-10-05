@@ -9,7 +9,6 @@ import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
 import SiteFooter from './components/SiteFooter'
 import PaymobVisibleBanner from './components/PaymobVisibleBanner'
-
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))
 const ConfirmSignup = lazy(() => import('./pages/ConfirmSignup'))
@@ -57,7 +56,6 @@ const Settings = lazy(() => import('./pages/Settings'))
 const MetaConnections = lazy(() => import('./pages/MetaConnections'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
-
 function PublicShell() {
   return (
     <div dir="rtl" className="min-h-screen bg-sand-50 text-ink-950 flex flex-col">
@@ -66,11 +64,9 @@ function PublicShell() {
     </div>
   )
 }
-
 function PageLoading() {
   return <div dir="rtl" className="min-h-[40vh] flex items-center justify-center p-6"><div className="rounded-2xl border border-blue-100 bg-white/90 px-5 py-4 text-sm font-semibold text-ink-700 shadow-sm">جاري تحميل الصفحة...</div></div>
 }
-
 function RyanPageShell() {
   return (
     <div className="space-y-4">
@@ -85,7 +81,6 @@ function RyanPageShell() {
     </div>
   )
 }
-
 export default function App() {
   return (
     <ToastProvider>
@@ -128,7 +123,7 @@ export default function App() {
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/tasks" element={<PermissionRoute resource="tasks"><FeatureRoute feature="tasks" featureName="المهام والمتابعات"><Tasks /></FeatureRoute></PermissionRoute>} />
                 <Route path="/appointments" element={<PermissionRoute resource="appointments"><FeatureRoute feature="appointments" featureName="المواعيد"><Appointments /></FeatureRoute></PermissionRoute>} />
-                <Route path="/reports" element={<PermissionRoute resource="reports"><PermissionRoute resource="reports"><FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute></PermissionRoute></PermissionRoute>} />
+                <Route path="/reports" element={<PermissionRoute resource="reports"><FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute></PermissionRoute>} />
                 <Route path="/users" element={<PermissionRoute resource="users"><FeatureRoute feature="users" featureName="المستخدمون والصلاحيات"><Users /></FeatureRoute></PermissionRoute>} />
                 <Route path="/account" element={<Account />} />
                 <Route path="/settings" element={<PermissionRoute resource="settings"><FeatureRoute feature="settings" featureName="الإعدادات"><Settings /></FeatureRoute></PermissionRoute>} />
@@ -138,7 +133,7 @@ export default function App() {
                 <Route path="/admin/payments" element={<AdminRoute><AdminPayments /></AdminRoute>} />
                 <Route path="/admin/audit-logs" element={<AdminRoute><AdminAuditLogs /></AdminRoute>} />
                 <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
-                <Route path="/admin/branding" element={<AdminRoute><AdminBranding /></AdminRoute>} />
+                <Route path="/admin/branding" element={<AdminRoute><AdminBranding /></AdminBranding>} />
                 <Route path="/admin/plans" element={<AdminRoute><AdminPlans /></AdminRoute>} />
                 <Route path="/admin/features" element={<AdminRoute><AdminFeatures /></AdminRoute>} />
                 <Route path="/admin/ryan-credits" element={<AdminRoute><AdminRyanPackages /></AdminRoute>} />
