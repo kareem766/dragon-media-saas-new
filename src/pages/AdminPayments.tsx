@@ -89,6 +89,7 @@ function getCycleLabel(cycle: PaymentRequestRow['billing_cycle']) {
 
 function getStatusLabel(status: string) {
   if (status === 'pending_review') return 'بانتظار المراجعة'
+  if (status === 'pending_payment') return 'بانتظار إتمام الدفع'
   if (status === 'approved') return 'تمت الموافقة'
   if (status === 'rejected') return 'مرفوض'
   return status
@@ -938,7 +939,7 @@ export default function AdminPayments() {
       <section className="space-y-4">
         <SectionHeader
           title="مراجعة طلبات الدفع"
-          description="مراجعة تفاصيل الدفع والمرفقات قبل تفعيل الاشتراك."
+          description="مراجعة التحويلات اليدوية فقط. مدفوعات Paymob تُفعّل تلقائيًا بعد نجاح الدفع وتأكيد Paymob."
         />
 
         {error && (
