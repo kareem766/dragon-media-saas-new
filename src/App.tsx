@@ -8,6 +8,8 @@ import PermissionRoute from './components/PermissionRoute'
 import FeatureRoute from './components/FeatureRoute'
 import Layout from './components/Layout'
 import SiteFooter from './components/SiteFooter'
+import PaymobVisibleBanner from './components/PaymobVisibleBanner'
+
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))
 const ConfirmSignup = lazy(() => import('./pages/ConfirmSignup'))
@@ -122,11 +124,11 @@ export default function App() {
                 <Route path="/tickets" element={<PermissionRoute resource="tickets"><FeatureRoute feature="tickets" featureName="الدعم الفني"><Tickets /></FeatureRoute></PermissionRoute>} />
                 <Route path="/search" element={<FeatureRoute feature="dashboard" featureName="البحث"><Search /></FeatureRoute>} />
                 <Route path="/plans" element={<Plans />} />
-                <Route path="/billing/pay" element={<PaymentRequest />} />
+                <Route path="/billing/pay" element={<div><PaymobVisibleBanner /><PaymentRequest /></div>} />
                 <Route path="/billing" element={<Billing />} />
                 <Route path="/tasks" element={<PermissionRoute resource="tasks"><FeatureRoute feature="tasks" featureName="المهام والمتابعات"><Tasks /></FeatureRoute></PermissionRoute>} />
                 <Route path="/appointments" element={<PermissionRoute resource="appointments"><FeatureRoute feature="appointments" featureName="المواعيد"><Appointments /></FeatureRoute></PermissionRoute>} />
-                <Route path="/reports" element={<PermissionRoute resource="reports"><FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute></PermissionRoute>} />
+                <Route path="/reports" element={<PermissionRoute resource="reports"><PermissionRoute resource="reports"><FeatureRoute feature="advanced_reports" featureName="التقارير المتقدمة"><Reports /></FeatureRoute></PermissionRoute></PermissionRoute>} />
                 <Route path="/users" element={<PermissionRoute resource="users"><FeatureRoute feature="users" featureName="المستخدمون والصلاحيات"><Users /></FeatureRoute></PermissionRoute>} />
                 <Route path="/account" element={<Account />} />
                 <Route path="/settings" element={<PermissionRoute resource="settings"><FeatureRoute feature="settings" featureName="الإعدادات"><Settings /></FeatureRoute></PermissionRoute>} />
