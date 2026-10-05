@@ -10,7 +10,8 @@ function env(name: string, fallback?: string) {
 
 // Paymob live checkout requires a real Egyptian billing phone; no placeholder numbers.
 function normalizeEgyptianPhone(value: string) {
-  const raw = value.replace(/[\s()-]/g, '')
+  // Remove spaces, punctuation, and invisible/bidi Unicode marks that can be stored with phone values.
+  const raw = value.replace(/[^\d+]/g, '')
   if (/^01\d{9}$/.test(raw)) return '+20' + raw.slice(1)
   if (/^00201\d{9}$/.test(raw)) return '+' + raw.slice(2)
   if (/^\+201\d{9}$/.test(raw)) return raw
