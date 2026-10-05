@@ -133,7 +133,7 @@ export default function App() {
                 <Route path="/admin/payments" element={<AdminRoute><AdminPayments /></AdminRoute>} />
                 <Route path="/admin/audit-logs" element={<AdminRoute><AdminAuditLogs /></AdminRoute>} />
                 <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
-                <Route path="/admin/branding" element={<AdminRoute><AdminBranding /></AdminBranding>} />
+                <Route path="/admin/branding" element={<AdminRoute><AdminBranding /></AdminRoute>} />
                 <Route path="/admin/plans" element={<AdminRoute><AdminPlans /></AdminRoute>} />
                 <Route path="/admin/features" element={<AdminRoute><AdminFeatures /></AdminRoute>} />
                 <Route path="/admin/ryan-credits" element={<AdminRoute><AdminRyanPackages /></AdminRoute>} />
