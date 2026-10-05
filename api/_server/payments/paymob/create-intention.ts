@@ -9,6 +9,13 @@ function env(name: string, fallback?: string) {
 }
 
 // Paymob live checkout requires a real Egyptian billing phone; no placeholder numbers.
+function getPaymobCallbackBaseUrl() {
+  const host = process.env.VERCEL_ENV === 'production'
+    ? (process.env.VERCEL_PROJECT_PRODUCTION_URL || 'dragon-media-saas-new.vercel.app')
+    : (process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL || 'dragon-media-saas-new.vercel.app')
+  return `https://${host.replace(/^https?:\\/\\//, '')}`
+}
+
 function normalizeEgyptianPhone(value: string) {
   // Remove spaces, punctuation, and invisible/bidi Unicode marks that can be stored with phone values.
   const raw = value.replace(/[^\d+]/g, '')
@@ -159,6 +166,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         shipping_method: 'UNK',
       },
       special_reference: merchantReference,
+      notification_url: `${getPaymobCallbackBaseUrl()}/api/payments/paymob/webhook`,
+      redirection_url: `${getPaymobCallbackBaseUrl()}/api/payments/paymob/redirect`,
     }
 
     const paymobResponse = await fetch('https://accept.paymob.com/v1/intention/', {
