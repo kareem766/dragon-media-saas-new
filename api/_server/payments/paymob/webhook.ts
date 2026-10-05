@@ -61,8 +61,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Invalid HMAC.' })
     }
 
-    const integrationId = Number(env('PAYMOB_INTEGRATION_ID'))
-    if (integrationId && Number(obj.integration_id) !== integrationId) {
+    const integrationIds = (env('PAYMOB_INTEGRATION_IDS') || env('PAYMOB_INTEGRATION_ID'))
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isInteger(value) && value > 0)
+    if (integrationIds.length > 0 && !integrationIds.includes(Number(obj.integration_id))) {
       return res.status(400).json({ error: 'Integration mismatch.' })
     }
 
