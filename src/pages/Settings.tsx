@@ -2567,14 +2567,14 @@ function AISection() {
               </h3>
 
               <p className="mt-2 max-w-2xl text-sm leading-7 text-ink-900/60">
-                RYAN يعمل حاليًا باستخدام Google Gemini.
+                RYAN يعمل حاليًا بتقنيات الذكاء الاصطناعي.
                 الإعدادات المتقدمة الخاصة بالمساعد وإدارة
                 حدود الاستخدام سيتم التعامل معها من خلال
                 نظام AI والإدارة المركزي في المنصة.
               </p>
 
               <div className="mt-4 inline-flex rounded-full bg-emerald-100 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                Gemini متصل
+                الذكاء الاصطناعي متصل
               </div>
             </div>
           </div>
