@@ -380,7 +380,7 @@ export default function Billing() {
       if (ryanMethod === 'paymob') {
         const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession()
         if (sessionError || !sessionData.session?.access_token) throw new Error('تعذر التحقق من جلسة الحساب الحالية.')
-        const response = await fetch('/api/paymob/ryan/create', {
+        const response = await fetch('/api/admin/ryan-paymob', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session.access_token}` },
           body: JSON.stringify({ package_id: selectedPackage.id }),
