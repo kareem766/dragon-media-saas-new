@@ -85,7 +85,7 @@ async function createCheckout(req: VercelRequest, res: VercelResponse) {
   await admin.from('ryan_credit_purchases').update({ payment_request_id: paymentRequest.id }).eq('id', purchase.id)
   const { data: tx, error: txError } = await admin.from('paymob_transactions').insert({
     organization_id: org.id, payment_request_id: paymentRequest.id, plan_id: null, amount,
-    currency: pkg.currency || 'EGP', integration_id: integrations[0], merchant_reference: merchantReference, status: 'initiated'
+    currency: pkg.currency || 'EGP', integration_id: null, merchant_reference: merchantReference, status: 'initiated'
   }).select('id').single()
   if (txError || !tx) return res.status(400).json({ error: txError?.message || 'تعذر تسجيل عملية Paymob.' })
 
