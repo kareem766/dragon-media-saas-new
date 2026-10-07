@@ -10,6 +10,7 @@ import platformFeatures from '../_server/admin/platform-features.js'
 import testSubscriptionWhatsapp from '../_server/admin/test-subscription-whatsapp.js'
 import rollbackSignup from '../../src/server/admin/rollback-signup.js'
 import removeMember from '../_server/company/remove-member.js'
+import ryanPaymob from '../_server/paymob/ryan.js'
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 
@@ -25,6 +26,7 @@ const handlers: Record<string, Handler> = {
   'test-subscription-whatsapp': testSubscriptionWhatsapp,
   'rollback-signup': rollbackSignup,
   'remove-member': removeMember,
+  'ryan-paymob': ryanPaymob,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
