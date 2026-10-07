@@ -46,7 +46,7 @@ async function createCheckout(req: VercelRequest, res: VercelResponse) {
 
   const { data: org } = await admin.from('organizations').select('id,name,phone,suspended').eq('id', userRow.organization_id).maybeSingle()
   if (!org || org.suspended) return res.status(403).json({ error: 'الشركة موقوفة أو غير متاحة حاليًا.' })
-  const { data: hasRyan } = await admin.rpc('subscription_has_feature', { p_organization_id: org.id, p_feature: 'ryan' })
+  const { data: hasRyan } = await admin.rpc('service_subscription_has_feature', { p_organization_id: org.id, p_feature: 'ryan' })
   if (hasRyan !== true) return res.status(403).json({ error: 'Ryan غير متاح في الباقة الحالية.' })
 
   const amount = Number(pkg.price), amountCents = Math.round(amount * 100)
