@@ -99,6 +99,54 @@ interface UsageDashboard {
   totals: UsageTotals
 }
 
+interface CompanyBillingTransaction {
+  id: string
+  amount: number
+  currency: string
+  integration_id: number | null
+  merchant_reference: string | null
+  order_id: number | null
+  transaction_id: number | null
+  status: string
+  paid_at: string | null
+  created_at: string
+  failure_reason: string | null
+}
+
+interface CompanyRyanPurchase {
+  id: string
+  messages: number
+  amount: number
+  currency: string
+  status: string
+  payment_request_id: string | null
+  purchased_at: string | null
+  created_at: string
+  consumed_messages: number
+  expires_at: string | null
+  reviewed_at: string | null
+  rejection_reason: string | null
+}
+
+interface CompanyBillingPayment {
+  id: string
+  amount: number
+  method: string
+  method_label: string
+  reference: string | null
+  payment_date: string | null
+  note: string | null
+  status: string
+  rejection_reason: string | null
+  reviewed_at: string | null
+  created_at: string
+  request_type: string
+  billing_cycle: string | null
+  item_snapshot: Record<string, any>
+  ryan_purchase: CompanyRyanPurchase | null
+  transaction: CompanyBillingTransaction | null
+}
+
 type FormState = {
   name: string
   businessType: string
@@ -520,6 +568,9 @@ export default function AdminOrganizations() {
   const [newCompanyNote, setNewCompanyNote] = useState('')
   const [notesLoading, setNotesLoading] = useState(false)
   const [noteSaving, setNoteSaving] = useState(false)
+  const [companyBillingPayments, setCompanyBillingPayments] = useState<CompanyBillingPayment[]>([])
+  const [companyRyanPurchases, setCompanyRyanPurchases] = useState<CompanyRyanPurchase[]>([])
+  const [billingLoading, setBillingLoading] = useState(false)
 
   const loadData = async () => {
     if (!supabase) {
@@ -1051,8 +1102,11 @@ export default function AdminOrganizations() {
     if (!supabase) return
     setNotesOrganization(org)
     setCompanyNotes([])
+    setCompanyBillingPayments([])
+    setCompanyRyanPurchases([])
     setNewCompanyNote('')
     setNotesLoading(true)
+    setBillingLoading(true)
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
@@ -1065,10 +1119,25 @@ export default function AdminOrganizations() {
       const json = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(json.error || 'تعذر تحميل ملف الشركة')
       setCompanyNotes(Array.isArray(json.notes) ? json.notes : [])
+
+      try {
+        const billingResponse = await fetch('/api/admin/organizations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: 'list_company_billing_activity', organizationId: org.id }),
+        })
+        const billingJson = await billingResponse.json().catch(() => ({}))
+        if (!billingResponse.ok) throw new Error(billingJson.error || 'تعذر تحميل سجل المدفوعات')
+        setCompanyBillingPayments(Array.isArray(billingJson.payments) ? billingJson.payments : [])
+        setCompanyRyanPurchases(Array.isArray(billingJson.ryanPurchases) ? billingJson.ryanPurchases : [])
+      } catch (billingError: any) {
+        setToast(billingError?.message || 'تعذر تحميل سجل المدفوعات')
+      }
     } catch (err: any) {
       setToast(err?.message || 'تعذر تحميل ملف الشركة')
     } finally {
       setNotesLoading(false)
+      setBillingLoading(false)
     }
   }
 
@@ -2561,6 +2630,84 @@ export default function AdminOrganizations() {
                 <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">تاريخ إنشاء الشركة</div><div className="mt-1 font-semibold">{formatDate(notesOrganization.created_at)}</div></div>
                 <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">حالة الحساب</div><div className="mt-1 font-semibold">{notesOrganization.suspended ? 'معلّق' : 'نشط'}{notesOrganization.active_subscription ? ' · اشتراك نشط' : ' · لا يوجد اشتراك نشط'}</div></div>
               </div>
+              <section className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-bold text-ink-950">سجل مشتريات باقات ريان</h3>
+                    <p className="mt-1 text-xs text-ink-900/55">سجل تلقائي من طلبات الشراء والمدفوعات المسجلة، وليس ملاحظات يدوية.</p>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-blue-700">{companyRyanPurchases.length.toLocaleString('ar-EG')} عملية شراء</span>
+                </div>
+                {billingLoading ? <p className="text-sm text-ink-900/55">جارٍ تحميل سجل المشتريات...</p> : companyRyanPurchases.length ? (
+                  <div className="space-y-3">
+                    {companyRyanPurchases.map(purchase => {
+                      const relatedPayment = companyBillingPayments.find(payment => payment.ryan_purchase?.id === purchase.id || payment.id === purchase.payment_request_id)
+                      const packageName = relatedPayment?.item_snapshot?.package_name || (purchase.messages ? `${purchase.messages.toLocaleString('ar-EG')} رسالة ريان` : 'باقة ريان')
+                      const purchaseStatus = purchase.status === 'approved' ? 'تمت الموافقة' : purchase.status === 'pending_review' ? 'قيد المراجعة' : purchase.status === 'rejected' ? 'مرفوضة' : purchase.status
+                      return (
+                        <div key={purchase.id} className="rounded-xl border border-sand-200 bg-white p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="font-bold">{packageName}</div>
+                              <div className="mt-1 text-xs text-ink-900/55">{Number(purchase.messages || 0).toLocaleString('ar-EG')} رسالة ريان</div>
+                            </div>
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${purchase.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : purchase.status === 'rejected' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>{purchaseStatus}</span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                            <div><span className="text-ink-900/50">المبلغ:</span> <strong>{formatMoney(Number(purchase.amount || 0), purchase.currency || 'EGP')}</strong></div>
+                            <div><span className="text-ink-900/50">طريقة الدفع:</span> <strong>{relatedPayment?.method_label || 'غير مسجلة'}</strong></div>
+                            <div><span className="text-ink-900/50">تاريخ الطلب:</span> <strong>{new Date(purchase.created_at).toLocaleString('ar-EG')}</strong></div>
+                            <div><span className="text-ink-900/50">تاريخ التفعيل/الشراء:</span> <strong>{purchase.purchased_at ? new Date(purchase.purchased_at).toLocaleString('ar-EG') : 'لم يتم تسجيله بعد'}</strong></div>
+                            <div><span className="text-ink-900/50">الاستخدام:</span> <strong>{Number(purchase.consumed_messages || 0).toLocaleString('ar-EG')} / {Number(purchase.messages || 0).toLocaleString('ar-EG')}</strong></div>
+                            <div><span className="text-ink-900/50">تاريخ الانتهاء:</span> <strong>{purchase.expires_at ? new Date(purchase.expires_at).toLocaleDateString('ar-EG') : 'بدون تاريخ مسجل'}</strong></div>
+                            {relatedPayment?.transaction?.transaction_id && <div className="sm:col-span-2"><span className="text-ink-900/50">رقم عملية Paymob:</span> <strong>{relatedPayment.transaction.transaction_id}</strong></div>}
+                            {purchase.rejection_reason && <div className="sm:col-span-2 text-red-700"><span className="font-semibold">سبب الرفض:</span> {purchase.rejection_reason}</div>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : <p className="text-sm text-ink-900/55">لا توجد مشتريات مسجلة لباقات ريان لهذه الشركة.</p>}
+              </section>
+
+              <section className="space-y-3 rounded-2xl border border-sand-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-bold text-ink-950">سجل المدفوعات وطلبات الاشتراك</h3>
+                  <span className="text-xs text-ink-900/50">{companyBillingPayments.length.toLocaleString('ar-EG')} سجل</span>
+                </div>
+                {billingLoading ? <p className="text-sm text-ink-900/55">جارٍ تحميل سجل المدفوعات...</p> : companyBillingPayments.length ? (
+                  <div className="space-y-2">
+                    {companyBillingPayments.map(payment => {
+                      const isRyan = payment.request_type === 'ryan_credits'
+                      const itemName = payment.item_snapshot?.package_name || payment.item_snapshot?.name || (isRyan ? 'باقة ريان' : 'اشتراك المنصة')
+                      const statusLabel = payment.status === 'approved' ? 'مقبول' : payment.status === 'pending_payment' ? 'بانتظار الدفع' : payment.status === 'pending_review' ? 'قيد المراجعة' : payment.status === 'rejected' ? 'مرفوض' : payment.status
+                      return (
+                        <div key={payment.id} className="rounded-xl border border-sand-200 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="font-semibold">{isRyan ? `شراء باقة ريان — ${itemName}` : `اشتراك المنصة — ${itemName}`}</div>
+                              <div className="mt-1 text-xs text-ink-900/50">تاريخ إنشاء الطلب: {new Date(payment.created_at).toLocaleString('ar-EG')}</div>
+                            </div>
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${payment.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : payment.status === 'rejected' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>{statusLabel}</span>
+                          </div>
+                          <div className="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                            <div><span className="text-ink-900/50">المبلغ:</span> <strong>{formatMoney(payment.amount)}</strong></div>
+                            <div><span className="text-ink-900/50">طريقة الدفع:</span> <strong>{payment.method_label || 'غير مسجلة'}</strong></div>
+                            <div><span className="text-ink-900/50">تاريخ الدفع المسجل:</span> <strong>{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('ar-EG') : payment.transaction?.paid_at ? new Date(payment.transaction.paid_at).toLocaleString('ar-EG') : 'لم يتم تأكيد الدفع'}</strong></div>
+                            <div><span className="text-ink-900/50">مرجع الدفع:</span> <strong>{payment.reference || payment.transaction?.merchant_reference || '—'}</strong></div>
+                            {payment.transaction?.transaction_id && <div><span className="text-ink-900/50">رقم العملية:</span> <strong>{payment.transaction.transaction_id}</strong></div>}
+                            {payment.transaction?.status && <div><span className="text-ink-900/50">حالة Paymob:</span> <strong>{payment.transaction.status}</strong></div>}
+                            {payment.reviewed_at && <div><span className="text-ink-900/50">تاريخ المراجعة:</span> <strong>{new Date(payment.reviewed_at).toLocaleString('ar-EG')}</strong></div>}
+                            {payment.rejection_reason && <div className="sm:col-span-2 text-red-700"><span className="font-semibold">سبب الرفض:</span> {payment.rejection_reason}</div>}
+                            {payment.note && <div className="sm:col-span-2"><span className="text-ink-900/50">ملاحظة الدفع:</span> {payment.note}</div>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : <p className="text-sm text-ink-900/55">لا توجد طلبات دفع أو اشتراك مسجلة لهذه الشركة.</p>}
+              </section>
+
               <div className="space-y-2">
                 <label className="block text-sm font-bold">إضافة ملاحظة داخلية</label>
                 <textarea value={newCompanyNote} onChange={event => setNewCompanyNote(event.target.value)} rows={3} maxLength={5000} placeholder="اكتب متابعة العميل أو تفاصيل التجديد أو أي ملاحظات إدارية..." className="w-full rounded-xl border border-sand-200 bg-white p-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
