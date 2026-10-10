@@ -2537,49 +2537,39 @@ export default function AdminOrganizations() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="mt-5 grid grid-cols-2 gap-2.5 border-t border-sand-100 pt-4">
                   <Button
                     variant="secondary"
-                    className="min-h-11"
-                    onClick={() =>
-                      openEdit(
-                        org,
-                      )
-                    }
+                    className="min-h-12 w-full justify-center rounded-xl border border-blue-200 bg-blue-50 font-bold text-blue-800 shadow-sm transition hover:border-blue-300 hover:bg-blue-100 focus:ring-2 focus:ring-blue-200"
+                    onClick={() => openEdit(org)}
                   >
-                    تعديل
+                    تعديل البيانات
                   </Button>
 
                   <Button
                     variant="secondary"
-                    className="col-span-2 min-h-11"
+                    className="min-h-12 w-full justify-center rounded-xl border border-blue-600 bg-blue-600 font-bold text-white shadow-sm transition hover:border-blue-700 hover:bg-blue-700 focus:ring-2 focus:ring-blue-200"
                     onClick={() => void openCompanyNotes(org)}
                   >
-                    ملف الشركة والملاحظات
+                    ملف الشركة
                   </Button>
 
                   <Button
-                    variant="ghost"
-                    className="min-h-11"
-                    onClick={() =>
-                      toggleSuspension(
-                        org,
-                      )
-                    }
+                    variant="secondary"
+                    className={`col-span-2 min-h-11 w-full justify-center rounded-xl border font-semibold transition focus:ring-2 ${
+                      org.suspended
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 focus:ring-emerald-100'
+                        : 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:ring-amber-100'
+                    }`}
+                    onClick={() => toggleSuspension(org)}
                   >
-                    {org.suspended
-                      ? 'تفعيل'
-                      : 'تعليق'}
+                    {org.suspended ? 'تفعيل الشركة' : 'تعليق الشركة'}
                   </Button>
 
                   <Button
-                    variant="ghost"
-                    className="col-span-2 min-h-11 text-red-600 hover:bg-red-50"
-                    onClick={() =>
-                      deleteOrganization(
-                        org,
-                      )
-                    }
+                    variant="secondary"
+                    className="col-span-2 min-h-11 w-full justify-center rounded-xl border border-red-200 bg-white font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 focus:ring-2 focus:ring-red-100"
+                    onClick={() => deleteOrganization(org)}
                   >
                     حذف الشركة
                   </Button>
