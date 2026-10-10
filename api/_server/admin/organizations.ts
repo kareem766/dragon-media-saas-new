@@ -1047,9 +1047,9 @@ export default async function handler(
         .limit(100),
     ])
 
-    if (requestsResult.error || purchasesResult.error || transactionsResult.error) {
-      const error = requestsResult.error || purchasesResult.error || transactionsResult.error
-      res.status(500).json({ error: 'تعذر تحميل سجل المشتريات والمدفوعات: ' + error.message })
+    const queryError = requestsResult.error ?? purchasesResult.error ?? transactionsResult.error
+    if (queryError) {
+      res.status(500).json({ error: 'تعذر تحميل سجل المشتريات والمدفوعات: ' + queryError.message })
       return
     }
 
