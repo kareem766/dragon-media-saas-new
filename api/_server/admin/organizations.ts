@@ -1004,6 +1004,125 @@ export default async function handler(
     return
   }
 
+  if (action === 'list_company_billing_activity') {
+    const organizationId = String(body.organizationId || '')
+    if (!validateOrganizationId(organizationId)) {
+      res.status(400).json({ error: 'معرّف الشركة غير صالح' })
+      return
+    }
+
+    const { data: organization, error: organizationError } = await admin
+      .from('organizations')
+      .select('id')
+      .eq('id', organizationId)
+      .maybeSingle()
+
+    if (organizationError) {
+      res.status(500).json({ error: 'تعذر التحقق من الشركة: ' + organizationError.message })
+      return
+    }
+    if (!organization) {
+      res.status(404).json({ error: 'الشركة غير موجودة' })
+      return
+    }
+
+    const [requestsResult, purchasesResult, transactionsResult] = await Promise.all([
+      admin
+        .from('payment_requests')
+        .select('id, amount, method, reference, payment_date, note, status, rejection_reason, reviewed_at, created_at, item_snapshot, payment_method_snapshot, request_type, ryan_credit_purchase_id, billing_cycle, plan_id')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      admin
+        .from('ryan_credit_purchases')
+        .select('id, messages, amount, currency, status, payment_request_id, purchased_at, created_at, consumed_messages, expires_at, reviewed_at, rejection_reason')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      admin
+        .from('paymob_transactions')
+        .select('id, payment_request_id, amount, currency, integration_id, merchant_reference, order_id, transaction_id, status, paid_at, created_at, failure_reason')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(100),
+    ])
+
+    const queryError = requestsResult.error ?? purchasesResult.error ?? transactionsResult.error
+    if (queryError) {
+      res.status(500).json({ error: 'تعذر تحميل سجل المشتريات والمدفوعات: ' + queryError.message })
+      return
+    }
+
+    const transactionsByRequest = new Map<string, AnyRecord>()
+    for (const transaction of transactionsResult.data ?? []) {
+      const requestId = String(transaction.payment_request_id || '')
+      if (requestId && !transactionsByRequest.has(requestId)) {
+        transactionsByRequest.set(requestId, transaction)
+      }
+    }
+
+    const purchasesById = new Map<string, AnyRecord>()
+    for (const purchase of purchasesResult.data ?? []) {
+      purchasesById.set(String(purchase.id), purchase)
+    }
+
+    const requests = (requestsResult.data ?? []).map((request: AnyRecord) => {
+      const transaction = transactionsByRequest.get(String(request.id)) ?? null
+      const purchase = request.ryan_credit_purchase_id
+        ? purchasesById.get(String(request.ryan_credit_purchase_id)) ?? null
+        : null
+      const snapshot = request.payment_method_snapshot && typeof request.payment_method_snapshot === 'object'
+        ? request.payment_method_snapshot
+        : {}
+      const item = request.item_snapshot && typeof request.item_snapshot === 'object'
+        ? request.item_snapshot
+        : {}
+      let methodLabel = String(snapshot.name || request.method || 'غير محددة')
+      if (transaction?.integration_id === 5935461) methodLabel = 'Paymob — محفظة إلكترونية'
+      else if (transaction?.integration_id === 5935462) methodLabel = 'Paymob — بطاقة بنكية'
+      else if (String(request.method || '').toLowerCase() === 'paymob') methodLabel = 'Paymob'
+      return {
+        id: request.id,
+        amount: Number(request.amount || 0),
+        method: request.method,
+        method_label: methodLabel,
+        reference: request.reference,
+        payment_date: request.payment_date,
+        note: request.note,
+        status: request.status,
+        rejection_reason: request.rejection_reason,
+        reviewed_at: request.reviewed_at,
+        created_at: request.created_at,
+        request_type: request.request_type,
+        billing_cycle: request.billing_cycle,
+        item_snapshot: item,
+        ryan_purchase: purchase,
+        transaction: transaction ? {
+          id: transaction.id,
+          amount: Number(transaction.amount || 0),
+          currency: transaction.currency,
+          integration_id: transaction.integration_id,
+          merchant_reference: transaction.merchant_reference,
+          order_id: transaction.order_id,
+          transaction_id: transaction.transaction_id,
+          status: transaction.status,
+          paid_at: transaction.paid_at,
+          created_at: transaction.created_at,
+          failure_reason: transaction.failure_reason,
+        } : null,
+      }
+    })
+
+    res.status(200).json({
+      payments: requests,
+      ryanPurchases: (purchasesResult.data ?? []).map((purchase: AnyRecord) => ({
+        ...purchase,
+        amount: Number(purchase.amount || 0),
+      })),
+    })
+    return
+  }
+
   if (action === 'set_ai_content') {
     const organizationId = String(body.organizationId || '')
     const enabled = body.enabled === true
