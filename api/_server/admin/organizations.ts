@@ -932,6 +932,78 @@ export default async function handler(
   const action =
     body.action
 
+  if (action === 'list_company_notes' || action === 'add_company_note') {
+    const organizationId = String(body.organizationId || '')
+    if (!validateOrganizationId(organizationId)) {
+      res.status(400).json({ error: 'معرّف الشركة غير صالح' })
+      return
+    }
+
+    const { data: organization, error: organizationError } = await admin
+      .from('organizations')
+      .select('id')
+      .eq('id', organizationId)
+      .maybeSingle()
+
+    if (organizationError) {
+      res.status(500).json({ error: 'تعذر التحقق من الشركة: ' + organizationError.message })
+      return
+    }
+    if (!organization) {
+      res.status(404).json({ error: 'الشركة غير موجودة' })
+      return
+    }
+
+    if (action === 'list_company_notes') {
+      const { data, error } = await admin
+        .from('organization_admin_notes')
+        .select('id, note, created_at, created_by')
+        .eq('organization_id', organizationId)
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (error) {
+        res.status(500).json({ error: error.message.includes('organization_admin_notes') ? 'جدول ملاحظات الشركات غير موجود بعد. يجب تطبيق ملف الترحيل SQL قبل استخدام هذه الميزة.' : 'تعذر تحميل الملاحظات: ' + error.message })
+        return
+      }
+      res.status(200).json({ notes: data ?? [] })
+      return
+    }
+
+    const note = String(body.note || '').trim()
+    if (!note || note.length > 5000) {
+      res.status(400).json({ error: 'اكتب ملاحظة من 1 إلى 5000 حرف' })
+      return
+    }
+
+    const { data, error } = await admin
+      .from('organization_admin_notes')
+      .insert({
+        organization_id: organizationId,
+        note,
+        created_by: authData.user.id,
+      })
+      .select('id, note, created_at, created_by')
+      .single()
+
+    if (error) {
+      res.status(500).json({ error: error.message.includes('organization_admin_notes') ? 'جدول ملاحظات الشركات غير موجود بعد. يجب تطبيق ملف الترحيل SQL قبل استخدام هذه الميزة.' : 'تعذر حفظ الملاحظة: ' + error.message })
+      return
+    }
+
+    await writeAudit(admin, {
+      actor_id: authData.user.id,
+      organization_id: organizationId,
+      action: 'add_organization_admin_note',
+      entity: 'organization_admin_notes',
+      entity_id: data.id,
+      details: { source: 'admin_organizations' },
+    })
+
+    res.status(201).json({ note: data })
+    return
+  }
+
   if (action === 'set_ai_content') {
     const organizationId = String(body.organizationId || '')
     const enabled = body.enabled === true
