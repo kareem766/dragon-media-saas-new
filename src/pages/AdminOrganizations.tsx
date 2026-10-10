@@ -2680,7 +2680,7 @@ export default function AdminOrganizations() {
                     {companyBillingPayments.map(payment => {
                       const isRyan = payment.request_type === 'ryan_credits'
                       const itemName = payment.item_snapshot?.package_name || payment.item_snapshot?.name || (isRyan ? 'باقة ريان' : 'اشتراك المنصة')
-                      const statusLabel = payment.status === 'approved' ? 'مقبول' : payment.status === 'pending_payment' ? 'بانتظار الدفع' : payment.status === 'pending_review' ? 'قيد المراجعة' : payment.status === 'rejected' ? 'مرفوض' : payment.status
+                      const statusLabel = payment.status === 'approved' ? 'مقبول' : payment.status === 'pending_payment' ? 'بانتظار الدفع' : payment.status === 'pending_review' ? 'قيد المراجعة' : payment.status === 'rejected' ? 'مرفوض' : payment.status === 'paid' ? 'مدفوع' : payment.status === 'failed' ? 'فشل الدفع' : payment.status
                       return (
                         <div key={payment.id} className="rounded-xl border border-sand-200 p-3">
                           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -2693,10 +2693,12 @@ export default function AdminOrganizations() {
                           <div className="mt-2 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
                             <div><span className="text-ink-900/50">المبلغ:</span> <strong>{formatMoney(payment.amount)}</strong></div>
                             <div><span className="text-ink-900/50">طريقة الدفع:</span> <strong>{payment.method_label || 'غير مسجلة'}</strong></div>
-                            <div><span className="text-ink-900/50">تاريخ الدفع المسجل:</span> <strong>{payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('ar-EG') : payment.transaction?.paid_at ? new Date(payment.transaction.paid_at).toLocaleString('ar-EG') : 'لم يتم تأكيد الدفع'}</strong></div>
+                            <div><span className="text-ink-900/50">تاريخ الدفع المسجل:</span> <strong>{payment.transaction?.paid_at ? new Date(payment.transaction.paid_at).toLocaleString('ar-EG') : payment.method?.toLowerCase() !== 'paymob' && payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('ar-EG') : 'لم يتم تأكيد الدفع'}</strong></div>
                             <div><span className="text-ink-900/50">مرجع الدفع:</span> <strong>{payment.reference || payment.transaction?.merchant_reference || '—'}</strong></div>
                             {payment.transaction?.transaction_id && <div><span className="text-ink-900/50">رقم العملية:</span> <strong>{payment.transaction.transaction_id}</strong></div>}
                             {payment.transaction?.status && <div><span className="text-ink-900/50">حالة Paymob:</span> <strong>{payment.transaction.status}</strong></div>}
+                            {payment.transaction?.failure_reason && <div className="sm:col-span-2 text-red-700"><span className="font-semibold">تفاصيل فشل الدفع:</span> {payment.transaction.failure_reason}</div>}
+                            {payment.billing_cycle && <div><span className="text-ink-900/50">دورة الاشتراك:</span> <strong>{payment.billing_cycle === 'monthly' ? 'شهري' : payment.billing_cycle === 'yearly' ? 'سنوي' : payment.billing_cycle}</strong></div>}
                             {payment.reviewed_at && <div><span className="text-ink-900/50">تاريخ المراجعة:</span> <strong>{new Date(payment.reviewed_at).toLocaleString('ar-EG')}</strong></div>}
                             {payment.rejection_reason && <div className="sm:col-span-2 text-red-700"><span className="font-semibold">سبب الرفض:</span> {payment.rejection_reason}</div>}
                             {payment.note && <div className="sm:col-span-2"><span className="text-ink-900/50">ملاحظة الدفع:</span> {payment.note}</div>}
