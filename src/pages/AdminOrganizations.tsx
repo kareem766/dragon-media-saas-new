@@ -513,6 +513,14 @@ export default function AdminOrganizations() {
       emptyForm,
     )
 
+  const [notesOrganization, setNotesOrganization] =
+    useState<Organization | null>(null)
+  const [companyNotes, setCompanyNotes] =
+    useState<Array<{ id: string; note: string; created_at: string; created_by: string | null }>>([])
+  const [newCompanyNote, setNewCompanyNote] = useState('')
+  const [notesLoading, setNotesLoading] = useState(false)
+  const [noteSaving, setNoteSaving] = useState(false)
+
   const loadData = async () => {
     if (!supabase) {
       setError(
@@ -1038,6 +1046,59 @@ export default function AdminOrganizations() {
     }, [
       usageTotals,
     ])
+
+  const openCompanyNotes = async (org: Organization) => {
+    if (!supabase) return
+    setNotesOrganization(org)
+    setCompanyNotes([])
+    setNewCompanyNote('')
+    setNotesLoading(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('جلسة الدخول غير صالحة')
+      const response = await fetch('/api/admin/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'list_company_notes', organizationId: org.id }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(json.error || 'تعذر تحميل ملف الشركة')
+      setCompanyNotes(Array.isArray(json.notes) ? json.notes : [])
+    } catch (err: any) {
+      setToast(err?.message || 'تعذر تحميل ملف الشركة')
+    } finally {
+      setNotesLoading(false)
+    }
+  }
+
+  const saveCompanyNote = async () => {
+    if (!supabase || !notesOrganization || !newCompanyNote.trim()) return
+    setNoteSaving(true)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('جلسة الدخول غير صالحة')
+      const response = await fetch('/api/admin/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: 'add_company_note',
+          organizationId: notesOrganization.id,
+          note: newCompanyNote.trim(),
+        }),
+      })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(json.error || 'تعذر حفظ الملاحظة')
+      setCompanyNotes(previous => [json.note, ...previous])
+      setNewCompanyNote('')
+      setToast('تم حفظ الملاحظة')
+    } catch (err: any) {
+      setToast(err?.message || 'تعذر حفظ الملاحظة')
+    } finally {
+      setNoteSaving(false)
+    }
+  }
 
   const openCreate = () => {
     setEditing(null)
@@ -2140,6 +2201,13 @@ export default function AdminOrganizations() {
                           </Button>
 
                           <Button
+                            variant="secondary"
+                            onClick={() => void openCompanyNotes(org)}
+                          >
+                            ملف الشركة
+                          </Button>
+
+                          <Button
                             variant="ghost"
                             onClick={() =>
                               toggleSuspension(
@@ -2414,6 +2482,14 @@ export default function AdminOrganizations() {
                   </Button>
 
                   <Button
+                    variant="secondary"
+                    className="col-span-2 min-h-11"
+                    onClick={() => void openCompanyNotes(org)}
+                  >
+                    ملف الشركة والملاحظات
+                  </Button>
+
+                  <Button
                     variant="ghost"
                     className="min-h-11"
                     onClick={() =>
@@ -2460,6 +2536,49 @@ export default function AdminOrganizations() {
       </div>
 
       {/* Modal */}
+
+      {notesOrganization && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-3 backdrop-blur-[2px] sm:p-5" role="presentation">
+          <div className="absolute inset-0" onClick={() => { if (!noteSaving) setNotesOrganization(null) }} />
+          <Card className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
+            <div className="flex items-start justify-between gap-4 border-b border-sand-100 px-4 py-4 sm:px-6">
+              <div>
+                <h2 className="text-lg font-bold text-ink-950">ملف الشركة: {notesOrganization.name}</h2>
+                <p className="mt-1 text-sm text-ink-900/55">بيانات الشركة والاشتراك وسجل الملاحظات الإدارية.</p>
+              </div>
+              <button type="button" onClick={() => { if (!noteSaving) setNotesOrganization(null) }} className="rounded-lg bg-sand-100 px-3 py-2 text-sm">إغلاق</button>
+            </div>
+            <div className="min-h-0 space-y-5 overflow-y-auto p-4 sm:p-6">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">المسؤول</div><div className="mt-1 font-semibold">{notesOrganization.manager_name || notesOrganization.admin_name || '—'}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">البريد الإلكتروني</div><div className="mt-1 break-all font-semibold">{notesOrganization.email || notesOrganization.admin_email || '—'}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">رقم الهاتف</div><div className="mt-1 font-semibold">{notesOrganization.phone || '—'}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">النشاط</div><div className="mt-1 font-semibold">{notesOrganization.business_type || '—'}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">الباقة الحالية</div><div className="mt-1 font-semibold">{notesOrganization.plan_name || notesOrganization.plan || 'لا توجد باقة مسجلة'}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">حالة الاشتراك</div><div className="mt-1 font-semibold">{notesOrganization.subscription_status || 'غير مسجل'}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">تاريخ التجديد</div><div className="mt-1 font-semibold">{formatDate(notesOrganization.renewal_date)}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">الأيام المتبقية</div><div className="mt-1 font-semibold">{notesOrganization.renewal_date ? Math.max(0, Math.ceil((new Date(notesOrganization.renewal_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000)).toLocaleString('ar-EG') : '—'}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">تاريخ إنشاء الشركة</div><div className="mt-1 font-semibold">{formatDate(notesOrganization.created_at)}</div></div>
+                <div className="rounded-xl border border-sand-200 p-3"><div className="text-xs text-ink-900/50">حالة الحساب</div><div className="mt-1 font-semibold">{notesOrganization.suspended ? 'معلّق' : 'نشط'}{notesOrganization.active_subscription ? ' · اشتراك نشط' : ' · لا يوجد اشتراك نشط'}</div></div>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-bold">إضافة ملاحظة داخلية</label>
+                <textarea value={newCompanyNote} onChange={event => setNewCompanyNote(event.target.value)} rows={3} maxLength={5000} placeholder="اكتب متابعة العميل أو تفاصيل التجديد أو أي ملاحظات إدارية..." className="w-full rounded-xl border border-sand-200 bg-white p-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                <div className="flex justify-end"><Button variant="primary" disabled={noteSaving || !newCompanyNote.trim()} onClick={() => void saveCompanyNote()}>{noteSaving ? 'جارٍ الحفظ...' : 'حفظ الملاحظة'}</Button></div>
+              </div>
+              <div className="space-y-3">
+                <h3 className="font-bold">سجل الملاحظات</h3>
+                {notesLoading ? <p className="text-sm text-ink-900/55">جارٍ تحميل الملاحظات...</p> : companyNotes.length ? companyNotes.map(note => (
+                  <div key={note.id} className="rounded-xl border border-sand-200 bg-sand-50/50 p-3">
+                    <p className="whitespace-pre-wrap break-words text-sm leading-6">{note.note}</p>
+                    <p className="mt-2 text-xs text-ink-900/45">{new Date(note.created_at).toLocaleString('ar-EG')} · {note.created_by ? 'مدير المنصة' : 'النظام'}</p>
+                  </div>
+                )) : <p className="text-sm text-ink-900/50">لا توجد ملاحظات مسجلة لهذه الشركة حتى الآن.</p>}
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {modalOpen && (
         <div
