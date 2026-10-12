@@ -30,25 +30,25 @@ type Turn={role:'user'|'model';parts:{text:string}[]}
 
 const sleep=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms))
 const transientStatus=(status:number)=>status===408||status===425||status===429||status>=500
-const retryDelay=(attempt:number)=>Math.min(5000,600*Math.pow(2,attempt)+Math.floor(Math.random()*500))
+const retryDelay=(attempt:number)=>Math.min(1000,250*Math.pow(2,attempt)+Math.floor(Math.random()*200))
 const parseGeminiJson=(raw:string)=>{
  const clean=text(raw,14000).replace(/^\`\`\`(?:json)?/i,'').replace(/\`\`\`$/,'').trim()
  const start=clean.indexOf('{'),end=clean.lastIndexOf('}')
  return obj(JSON.parse(start>=0&&end>start?clean.slice(start,end+1):clean))
 }
 async function callGemini(key:string,model:string,system:string,history:Turn[],current:string,currentParts:any[]=[],temperature=0.45,allowFallback=true){
- const deadline=Date.now()+45000
+ const deadline=Date.now()+30000
  const fallbackModels=allowFallback?['gemini-3.5-flash-lite','gemini-2.5-flash','gemini-2.5-flash-lite']:[]
  const candidates=[model,...fallbackModels].filter((v,i,a)=>v&&a.indexOf(v)===i)
  let last='Gemini unavailable',errors:string[]=[]
  for(const candidate of candidates){
-  for(let attempt=0;attempt<3;attempt++){
+  for(let attempt=0;attempt<2;attempt++){
    if(Date.now()>=deadline)break
-   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),Math.min(12000,Math.max(1000,deadline-Date.now())))
+   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),Math.min(9000,Math.max(1000,deadline-Date.now())))
    try{
     const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(candidate)+':generateContent?key='+encodeURIComponent(key),{method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,body:JSON.stringify({systemInstruction:{parts:[{text:system+'\
 \
-إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:4096,responseMimeType:'application/json',responseSchema:{type:'object',properties:{reply:{type:'string'},action:{type:'string',enum:['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation']},action_data:{type:'object'},customer_identity:{type:'object',properties:{name:{type:'string'},confidence:{type:'number'},source:{type:'string',enum:['explicit','answer_to_name_question','correction','none']}},required:['name','confidence','source']},learned_name:{type:'string'},learned_phone:{type:'string'},service:{type:'string'},activity:{type:'string'},goal:{type:'string'},budget:{type:'string'},governorate:{type:'string'},urgency:{type:'boolean'},intent:{type:'string'},confidence:{type:'number'}},required:['reply','action','customer_identity']},...( /^gemini-3\\./i.test(candidate) ? {thinkingConfig:{thinkingLevel:'minimal'}} : {}),...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
+إخراجك يجب أن يكون JSON صالحاً فقط، بدون markdown أو أي نص خارجه.'}]},contents:[...history,{role:'user',parts:[{text:current},...currentParts]}],generationConfig:{maxOutputTokens:1400,responseMimeType:'application/json',responseSchema:{type:'object',properties:{reply:{type:'string'},action:{type:'string',enum:['continue','handoff_human','create_lead','create_task','update_customer','follow_up','schedule_appointment','create_automation']},action_data:{type:'object'},customer_identity:{type:'object',properties:{name:{type:'string'},confidence:{type:'number'},source:{type:'string',enum:['explicit','answer_to_name_question','correction','none']}},required:['name','confidence','source']},learned_name:{type:'string'},learned_phone:{type:'string'},service:{type:'string'},activity:{type:'string'},goal:{type:'string'},budget:{type:'string'},governorate:{type:'string'},urgency:{type:'boolean'},intent:{type:'string'},confidence:{type:'number'}},required:['reply','action','customer_identity']},...( /^gemini-3\\./i.test(candidate) ? {thinkingConfig:{thinkingLevel:'minimal'}} : {}),...( /^gemini-2\\./i.test(candidate) ? {temperature:Math.min(1,Math.max(0,Number(temperature)||0.45))} : {})}})})
     const d=await r.json().catch(()=>({}))
     if(r.ok){
      const raw=text(d?.candidates?.[0]?.content?.parts?.map((p:any)=>p?.text||'').join(''),14000)
