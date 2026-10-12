@@ -411,7 +411,7 @@ const budgetQuestionPending=/(?:الميزاني(?:ة|تي|ه)|ميزانية|خ
 const normalizedAmount=text(current,120).replace(/[٠-٩]/g,d=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[,،]/g,'.').trim();
 const bareBudgetMatch=normalizedAmount.match(/^(\\d{2,7}(?:\\.\\d{1,2})?)\\s*(?:جنيه(?:ات)?|جنية|ج|egp)?$/iu);
 const currentBudget=customerBudgetIsExplicit(current)?budgetFromText(current):(budgetQuestionPending&&bareBudgetMatch?bareBudgetMatch[1]:'');
-if(currentBudget&&budgetQuestionPending&&!aiUnavailable){
+if(currentBudget&&budgetQuestionPending&&Boolean(text(plan.reply,5000))){
  plan.budget=currentBudget;
  plan.action='continue';
  plan.action_data={};
