@@ -415,7 +415,7 @@ if(currentBudget&&budgetQuestionPending&&!aiUnavailable){
  plan.budget=currentBudget;
  plan.action='continue';
  plan.action_data={};
- plan.reply='تمام يا فندم، سجلت إن ميزانية الإعلانات حوالي '+currentBudget+' جنيه شهريًا. تحب نبدأ بخطة لزيادة العملاء وانتشار صفحة نشاط السوشي؟';
+ plan.reply='تمام يا فندم، وصلتني ميزانية الإعلانات الشهرية: '+currentBudget+' جنيه. هاعتمد الرقم ده في ترشيح الخطوة المناسبة، وده مش معناه إن فيه تعاقد أو متابعة اتأكدت بالفعل.';
 }
 const detectedService=serviceFromText(current,services||[]);
 if(!plan.service&&detectedService)plan.service=detectedService;
